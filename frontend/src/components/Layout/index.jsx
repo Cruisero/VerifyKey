@@ -122,7 +122,7 @@ export default function Layout({ children }) {
 
             <footer className="footer">
                 <div className="footer-content">
-                    <p>© 2026 VerifyKey. All rights reserved.</p>
+                    <p>© 2026 OnePASS. All rights reserved.</p>
                     <div className="footer-links">
                         <a href="#">使用条款</a>
                         <a href="#">隐私政策</a>

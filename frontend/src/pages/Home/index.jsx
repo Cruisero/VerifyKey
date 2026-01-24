@@ -193,7 +193,7 @@ export default function Home() {
 
                 {/* Features Section */}
                 <section className="features-section">
-                    <h2 className="section-title">为什么选择 VerifyKey？</h2>
+                    <h2 className="section-title">为什么选择 OnePASS？</h2>
                     <div className="features-grid">
                         {features.map((feature, index) => (
                             <div key={index} className="feature-card card animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>

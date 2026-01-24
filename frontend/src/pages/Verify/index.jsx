@@ -314,7 +314,7 @@ export default function Verify() {
                             {user ? (
                                 <>欢迎回来，<span className="gradient-text">{user.username}</span> 👋</>
                             ) : (
-                                <>欢迎使用 <span className="gradient-text">VerifyKey</span> 🚀</>
+                                <>欢迎使用 <span className="gradient-text">OnePASS</span> 🚀</>
                             )}
                         </h1>
                         <p className="welcome-desc">

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import logoImg from '../../assets/logo.png';
 import './Home.css';
@@ -12,6 +13,7 @@ export default function Home() {
     const [error, setError] = useState('');
 
     const { login, register } = useAuth();
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -24,8 +26,8 @@ export default function Home() {
             } else {
                 await register(email, password, username);
             }
-            // 登录/注册成功后，AuthContext 会更新 user 状态
-            // HomePage 组件会自动检测到状态变化并切换显示 Verify 页面
+            // 登录/注册成功后跳转到首页
+            navigate('/');
         } catch (err) {
             setError(err.message);
         } finally {
@@ -193,7 +195,7 @@ export default function Home() {
 
                 {/* Features Section */}
                 <section className="features-section">
-                    <h2 className="section-title">为什么选择 OnePASS？</h2>
+
                     <div className="features-grid">
                         {features.map((feature, index) => (
                             <div key={index} className="feature-card card animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>

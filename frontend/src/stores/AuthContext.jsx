@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
                 if (email && password && username) {
-                    const userData = { ...mockUser, email, username };
+                    const userData = createUserData(email, username, false);
                     setUser(userData);
                     localStorage.setItem('verifykey-user', JSON.stringify(userData));
                     resolve(userData);

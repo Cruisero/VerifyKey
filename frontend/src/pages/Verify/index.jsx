@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import './Verify.css';
 
+// API base URL - 开发环境使用 localhost:3002，生产环境使用相对路径
+const API_BASE = import.meta.env.DEV ? 'http://localhost:3002' : '';
+
 // 生成随机状态 (pass为主, 每20个允许2个fail/timeout)
 const generateStatus = () => {
     const rand = Math.random();
@@ -125,7 +128,7 @@ export default function Verify() {
 
         try {
             // 调用后端代理 API
-            const response = await fetch('http://localhost:3002/api/verify', {
+            const response = await fetch(`${API_BASE}/api/verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -205,7 +208,7 @@ export default function Verify() {
                     attempts++;
 
                     try {
-                        const checkResponse = await fetch('http://localhost:3002/api/check-status', {
+                        const checkResponse = await fetch(`${API_BASE}/api/check-status`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ checkToken: pending.checkToken })

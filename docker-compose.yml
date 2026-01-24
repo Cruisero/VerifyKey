@@ -1,0 +1,31 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    networks:
+      - onepass-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: always
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+    env_file:
+      - ./backend/.env
+    networks:
+      - onepass-network
+
+networks:
+  onepass-network:
+    driver: bridge

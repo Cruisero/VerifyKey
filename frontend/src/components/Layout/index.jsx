@@ -33,8 +33,7 @@ export default function Layout({ children }) {
             <header className="header glass">
                 <div className="header-content">
                     <Link to="/" className="logo">
-                        <span className="logo-icon">🔐</span>
-                        <span className="logo-text">VerifyKey</span>
+                        <img src="/src/assets/logo.png" alt="OnePASS" className="logo-img" />
                     </Link>
 
                     <div className="header-actions">

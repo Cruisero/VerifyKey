@@ -35,15 +35,10 @@
     color: var(--text-primary);
 }
 
-.logo-icon {
-    font-size: 1.5rem;
-}
-
-.logo-text {
-    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+.logo-img {
+    height: 70px;
+    width: auto;
+    object-fit: contain;
 }
 
 /* Navigation */

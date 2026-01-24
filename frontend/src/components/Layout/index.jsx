@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../stores/ThemeContext';
 import { useAuth } from '../../stores/AuthContext';
+import logoImg from '../../assets/logo.png';
 import './Layout.css';
 
 export default function Layout({ children }) {
@@ -33,7 +34,7 @@ export default function Layout({ children }) {
             <header className="header glass">
                 <div className="header-content">
                     <Link to="/" className="logo">
-                        <img src="/src/assets/logo.png" alt="OnePASS" className="logo-img" />
+                        <img src={logoImg} alt="OnePASS" className="logo-img" />
                     </Link>
 
                     <div className="header-actions">

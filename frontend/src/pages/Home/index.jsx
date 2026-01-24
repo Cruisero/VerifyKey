@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../stores/AuthContext';
+import logoImg from '../../assets/logo.png';
 import './Home.css';
 
 export default function Home() {
@@ -72,7 +73,7 @@ export default function Home() {
                         </div>
 
                         <h1 className="hero-title">
-                            <img src="/src/assets/logo.png" alt="VerifyKey" className="hero-logo" />
+                            <img src={logoImg} alt="OnePASS" className="hero-logo" />
                             <br />
                             批量自动化验证工具
                         </h1>

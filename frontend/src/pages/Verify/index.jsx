@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import './Verify.css';
 
@@ -29,8 +29,7 @@ const generateInitialData = (count) => {
 };
 
 export default function Verify() {
-    const { user, loading, updateCredits } = useAuth();
-    const navigate = useNavigate();
+    const { user, updateCredits } = useAuth();
 
     const [input, setInput] = useState('');
     const [program, setProgram] = useState('google-student');
@@ -39,12 +38,6 @@ export default function Verify() {
     const [lastSuccess, setLastSuccess] = useState(null);
     const [statusData, setStatusData] = useState(() => generateInitialData(180));
     const [hoveredItem, setHoveredItem] = useState(null);
-
-    useEffect(() => {
-        if (!loading && !user) {
-            navigate('/');
-        }
-    }, [user, loading, navigate]);
 
     // 添加新状态
     const addNewStatus = useCallback(() => {
@@ -96,6 +89,10 @@ export default function Verify() {
 
     // 调用后端 API 进行验证
     const handleVerify = async () => {
+        if (!user) {
+            alert('请先登录后再验证');
+            return;
+        }
         if (!input.trim()) return;
         if (user.credits <= 0) {
             alert('配额不足，请充值后再试');
@@ -298,7 +295,7 @@ export default function Verify() {
     };
 
     const userStats = [
-        { label: '当前配额', value: `${user?.credits || 0} 次`, icon: '🎫', color: 'primary' },
+        { label: '当前配额', value: user ? `${user.credits} 次` : '未登录', icon: '🎫', color: 'primary' },
         { label: '本月验证', value: liveStats.pass + liveStats.fail + liveStats.timeout, icon: '⚡', color: 'success' },
         { label: '成功率', value: `${Math.round(liveStats.pass / statusData.length * 100)}%`, icon: '📈', color: 'info' },
     ];
@@ -307,8 +304,6 @@ export default function Verify() {
         { label: '充值配额', icon: '💰', path: '/recharge' },
     ];
 
-    if (!user) return null;
-
     return (
         <div className="verify-page">
             <div className="container">
@@ -316,17 +311,30 @@ export default function Verify() {
                 <div className="welcome-section">
                     <div className="welcome-content">
                         <h1 className="welcome-title">
-                            欢迎回来，<span className="gradient-text">{user.username}</span> 👋
+                            {user ? (
+                                <>欢迎回来，<span className="gradient-text">{user.username}</span> 👋</>
+                            ) : (
+                                <>欢迎使用 <span className="gradient-text">VerifyKey</span> 🚀</>
+                            )}
                         </h1>
-                        <p className="welcome-desc">开始您的验证任务吧！</p>
+                        <p className="welcome-desc">
+                            {user ? '开始您的验证任务吧！' : '请登录后开始验证任务'}
+                        </p>
                     </div>
                     <div className="quick-actions">
-                        {quickActions.map((action, index) => (
-                            <Link key={index} to={action.path} className="quick-action-btn">
-                                <span className="action-icon">{action.icon}</span>
-                                <span>{action.label}</span>
+                        {user ? (
+                            quickActions.map((action, index) => (
+                                <Link key={index} to={action.path} className="quick-action-btn">
+                                    <span className="action-icon">{action.icon}</span>
+                                    <span>{action.label}</span>
+                                </Link>
+                            ))
+                        ) : (
+                            <Link to="/login" className="quick-action-btn">
+                                <span className="action-icon">🔐</span>
+                                <span>登录 / 注册</span>
                             </Link>
-                        ))}
+                        )}
                     </div>
                 </div>
 
@@ -396,14 +404,14 @@ abc123-def456-ghi789
                             <div className="input-footer">
                                 <div className="input-info">
                                     <span className="id-count">{extractVerificationIds(input).length} 个 ID</span>
-                                    <span className="slots-info">剩余配额: {user.credits} 次</span>
+                                    <span className="slots-info">剩余配额: {user ? `${user.credits} 次` : '未登录'}</span>
                                 </div>
 
                                 <div className="input-actions">
                                     <button
                                         className="btn btn-primary btn-lg"
                                         onClick={handleVerify}
-                                        disabled={verifyStatus === 'processing' || !input.trim()}
+                                        disabled={verifyStatus === 'processing' || !input.trim() || !user}
                                     >
                                         {verifyStatus === 'processing' ? (
                                             <>

@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useAuth } from '../../stores/AuthContext';
 import './Home.css';
 
@@ -11,20 +10,7 @@ export default function Home() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const { login, register, user } = useAuth();
-    const navigate = useNavigate();
-
-    // 如果已登录，跳转到仪表板
-    useEffect(() => {
-        if (user) {
-            navigate('/dashboard');
-        }
-    }, [user, navigate]);
-
-    // 如果已登录，不渲染内容
-    if (user) {
-        return null;
-    }
+    const { login, register } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -37,7 +23,8 @@ export default function Home() {
             } else {
                 await register(email, password, username);
             }
-            navigate('/dashboard');
+            // 登录/注册成功后，AuthContext 会更新 user 状态
+            // HomePage 组件会自动检测到状态变化并切换显示 Verify 页面
         } catch (err) {
             setError(err.message);
         } finally {
@@ -85,7 +72,7 @@ export default function Home() {
                         </div>
 
                         <h1 className="hero-title">
-                            <span className="gradient-text">VerifyKey</span>
+                            <img src="/src/assets/logo.png" alt="VerifyKey" className="hero-logo" />
                             <br />
                             批量自动化验证工具
                         </h1>

@@ -107,7 +107,7 @@ export default function Layout({ children }) {
                                 )}
                             </div>
                         ) : (
-                            <Link to="/" className="btn btn-primary btn-sm">
+                            <Link to="/login" className="btn btn-primary btn-sm">
                                 登录
                             </Link>
                         )}

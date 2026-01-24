@@ -16,16 +16,19 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/dashboard" element={<Navigate to="/verify" replace />} />
+            {/* 首页直接显示 Verify 页面 */}
             <Route
-              path="/verify"
+              path="/"
               element={
                 <Layout>
                   <Verify />
                 </Layout>
               }
             />
+            {/* 登录页面 */}
+            <Route path="/login" element={<Home />} />
+            <Route path="/verify" element={<Navigate to="/" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route
               path="/recharge"
               element={

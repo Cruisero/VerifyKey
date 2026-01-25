@@ -76,17 +76,24 @@ class VerifyResponse(BaseModel):
 
 
 def get_proxy_url() -> Optional[str]:
-    """Build proxy URL from environment variables"""
-    # TEMPORARILY DISABLED: IPRoyal proxy returning 407 - credentials may be expired
-    # TODO: Update proxy credentials in .env file
-    print("[Proxy] ⚠️  Proxy temporarily disabled - credentials not working")
-    return None
+    """Build proxy URL from environment variables - IP2UP format"""
+    if not PROXY_USER or not PROXY_PASS:
+        return None
     
-    # Original code (re-enable when proxy credentials are fixed):
-    # if not PROXY_USER or not PROXY_PASS:
-    #     return None
-    # session_id = f"sess_{datetime.now().timestamp():.0f}"
-    # return f"http://{PROXY_USER}_{session_id}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+    # IP2UP username format: [account]_[country]_[province]_[city]_[session]_[sessionTime]_[flag]
+    # country: 200 = US
+    # session: random string for sticky IP
+    # sessionTime: 0 = no time limit
+    # flag: 1 = auto replenish, 0 = no replenish
+    import uuid
+    session_id = uuid.uuid4().hex[:16]
+    
+    # Format: account_country_province_city_session_sessionTime_flag
+    # Using US (200), no province (0), no city (0), random session, no time limit, auto replenish
+    username = f"{PROXY_USER}_200_0_0_{session_id}_0_1"
+    
+    proxy_url = f"http://{username}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+    return proxy_url
 
 
 def verify_single(vid: str, proxy: str = None) -> dict:

@@ -274,6 +274,9 @@ class SheerIDVerifier:
                     }
                 }
                 
+                # Debug: Log country field
+                print(f"[Verify] Submitting with country: {body.get('country')}, org: {self.org.get('name')}")
+                
                 data, status = self._request("POST", f"/verification/{self.vid}/step/collectStudentPersonalInfo", body)
                 
                 if status != 200:

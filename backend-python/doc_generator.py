@@ -149,8 +149,13 @@ def generate_student_id_with_gemini(first: str, last: str, university: str) -> O
     student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     current_date = time.strftime("%B %d, %Y")
     current_semester = "Spring 2025"
-    valid_thru = "05/2026"
-    issue_date = time.strftime("%m/%Y")
+    
+    # Issue date and valid through should have 4 year gap (typical university duration)
+    current_year = int(time.strftime("%Y"))
+    issue_year = current_year - random.randint(0, 2)  # Issued 0-2 years ago
+    valid_year = issue_year + 4  # Valid for 4 years from issue
+    issue_date = f"08/{issue_year}"  # Typically issued at start of academic year
+    valid_thru = f"05/{valid_year}"  # Valid until graduation
     
     # Determine gender based on first name (simple heuristic)
     female_names = ["Mary", "Patricia", "Jennifer", "Linda", "Barbara", "Elizabeth", "Susan", 

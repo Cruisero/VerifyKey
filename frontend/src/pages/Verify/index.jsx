@@ -38,6 +38,7 @@ export default function Verify() {
     const [lastSuccess, setLastSuccess] = useState(null);
     const [statusData, setStatusData] = useState(() => generateInitialData(180));
     const [hoveredItem, setHoveredItem] = useState(null);
+    const [browserMode, setBrowserMode] = useState(false); // Puppeteer browser simulation mode
 
     // 添加新状态
     const addNewStatus = useCallback(() => {
@@ -124,8 +125,11 @@ export default function Verify() {
         setResults(prev => [...prev, ...resultItems]);
 
         try {
-            // 调用后端代理 API
-            const response = await fetch(`${API_BASE}/api/verify`, {
+            // 根据模式选择 API 端点
+            const endpoint = browserMode ? '/api/verify-puppeteer' : '/api/verify';
+            console.log(`[Verify] Using ${browserMode ? 'Puppeteer (Browser)' : 'API'} mode`);
+
+            const response = await fetch(`${API_BASE}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -375,15 +379,30 @@ export default function Verify() {
                                 <span className="panel-icon">📝</span>
                                 <span>输入</span>
                             </div>
-                            <select
-                                className="program-select"
-                                value={program}
-                                onChange={(e) => setProgram(e.target.value)}
-                            >
-                                {programs.map(p => (
-                                    <option key={p.value} value={p.value}>{p.label}</option>
-                                ))}
-                            </select>
+                            <div className="panel-controls">
+                                {/* Browser Mode Toggle */}
+                                <div className="browser-mode-toggle" title={browserMode ? "浏览器模式：使用 Chromium 模拟真实浏览器" : "API 模式：使用标准 API 请求"}>
+                                    <span className="toggle-label">{browserMode ? '🌐 浏览器' : '⚡ API'}</span>
+                                    <label className="toggle-switch">
+                                        <input
+                                            type="checkbox"
+                                            checked={browserMode}
+                                            onChange={(e) => setBrowserMode(e.target.checked)}
+                                            disabled={verifyStatus === 'processing'}
+                                        />
+                                        <span className="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <select
+                                    className="program-select"
+                                    value={program}
+                                    onChange={(e) => setProgram(e.target.value)}
+                                >
+                                    {programs.map(p => (
+                                        <option key={p.value} value={p.value}>{p.label}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
                         <div className="panel-body">

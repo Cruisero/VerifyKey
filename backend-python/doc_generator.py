@@ -246,7 +246,7 @@ def generate_transcript_svg(first: str, last: str, university: str, birth_date: 
         This is an official document of {university}
     </text>
     <text x="300" y="775" font-family="Arial, sans-serif" font-size="8" fill="#999" text-anchor="middle">
-        Issued: {birth_date.split('-')[0] + 5}-01-15 | Document ID: TR-{student_id}
+        Issued: {int(birth_date.split('-')[0]) + 5}-01-15 | Document ID: TR-{student_id}
     </text>
 </svg>'''
     

@@ -101,15 +101,23 @@ class SheerIDVerifier:
         
         url = f"{SHEERID_API_URL}{endpoint}"
         
+        # Get proxy URL from session if available
+        proxy_url = getattr(self.session, '_proxy_url', None)
+        
         try:
+            # curl_cffi requires proxy as parameter to each request for authentication to work
+            kwargs = {"headers": self.headers, "timeout": 30}
+            if proxy_url:
+                kwargs["proxy"] = proxy_url
+            
             if method.upper() == "GET":
-                resp = self.session.get(url, headers=self.headers, timeout=30)
+                resp = self.session.get(url, **kwargs)
             elif method.upper() == "POST":
-                resp = self.session.post(url, json=body, headers=self.headers, timeout=30)
+                resp = self.session.post(url, json=body, **kwargs)
             elif method.upper() == "DELETE":
-                resp = self.session.delete(url, headers=self.headers, timeout=30)
+                resp = self.session.delete(url, **kwargs)
             elif method.upper() == "PUT":
-                resp = self.session.put(url, json=body, headers=self.headers, timeout=30)
+                resp = self.session.put(url, json=body, **kwargs)
             else:
                 raise ValueError(f"Unknown method: {method}")
             
@@ -126,7 +134,13 @@ class SheerIDVerifier:
     def _upload_s3(self, url: str, data: bytes) -> bool:
         """Upload document to S3"""
         try:
-            resp = self.session.put(url, data=data, headers={"Content-Type": "image/png"}, timeout=60)
+            # Get proxy URL from session if available
+            proxy_url = getattr(self.session, '_proxy_url', None)
+            kwargs = {"data": data, "headers": {"Content-Type": "image/png"}, "timeout": 60}
+            if proxy_url:
+                kwargs["proxy"] = proxy_url
+            
+            resp = self.session.put(url, **kwargs)
             return 200 <= resp.status_code < 300
         except Exception as e:
             print(f"[S3 Upload] Error: {e}")

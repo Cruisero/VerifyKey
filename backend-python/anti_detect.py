@@ -170,23 +170,31 @@ def create_session(proxy: str = None, impersonate: str = None):
     """
     imp_version = impersonate or DEFAULT_IMPERSONATE
     
-    # Format proxy if provided
-    proxies = None
-    if proxy:
-        if not proxy.startswith("http"):
-            proxy = f"http://{proxy}"
-        proxies = {"http": proxy, "https": proxy, "all://": proxy}
-    
     try:
         from curl_cffi import requests as curl_requests
+        from urllib.parse import quote
         
-        if proxies:
-            session = curl_requests.Session(proxies=proxies, impersonate=imp_version)
+        # For curl_cffi, we pass proxy directly to each request, not to Session
+        # This avoids proxy format issues
+        session = curl_requests.Session(impersonate=imp_version)
+        
+        # Store proxy URL for later use (will be passed to each request)
+        if proxy:
+            # URL encode the proxy credentials if needed
+            if "@" in proxy and "://" in proxy:
+                # Already formatted: http://user:pass@host:port
+                session._proxy_url = proxy
+            else:
+                session._proxy_url = proxy if proxy.startswith("http") else f"http://{proxy}"
         else:
-            session = curl_requests.Session(impersonate=imp_version)
+            session._proxy_url = None
         
         print(f"[Anti-Detect] ✅ Using curl_cffi with {imp_version} impersonation")
         print(f"[Anti-Detect]    TLS fingerprint will match real Chrome browser")
+        if session._proxy_url:
+            # Mask password in log
+            masked = session._proxy_url.split("@")[-1] if "@" in session._proxy_url else session._proxy_url
+            print(f"[Anti-Detect]    Proxy: {masked}")
         return session, "curl_cffi", imp_version
         
     except ImportError:
@@ -195,8 +203,9 @@ def create_session(proxy: str = None, impersonate: str = None):
         
         # Fallback to httpx (detectable but functional)
         import httpx
-        proxy_url = proxies.get("https") if proxies else None
+        proxy_url = proxy if proxy else None
         session = httpx.Client(timeout=30, proxy=proxy_url)
+        session._proxy_url = proxy_url
         return session, "httpx", None
 
 

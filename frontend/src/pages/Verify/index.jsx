@@ -218,18 +218,28 @@ export default function Verify() {
                             let status = 'processing';
                             let message = result.message || '处理中...';
 
-                            if (result.status === 'success' || result.success) {
+
+                            if (result.status === 'pending') {
+                                // Pending status - waiting for SheerID review
+                                status = 'pending';
+                                message = '⏳ 待审核: ' + (result.message || 'Submitted for review');
+                            } else if (result.status === 'success') {
+                                // Only true success (not just success=true with pending status)
                                 status = 'success';
                                 message = '✓ ' + (result.message || '验证成功');
                                 setLastSuccess(new Date().toISOString());
                                 updateCredits(-1);
                                 addNewStatus();
-                            } else if (result.status === 'pending') {
-                                status = 'pending';
-                                message = '⏳ ' + (result.message || '待审核');
                             } else if (result.status === 'error' || result.status === 'failed') {
                                 status = 'failed';
                                 message = '✕ ' + (result.message || '验证失败');
+                            } else if (result.success && !result.status) {
+                                // Fallback for legacy success=true without explicit status
+                                status = 'success';
+                                message = '✓ ' + (result.message || '验证成功');
+                                setLastSuccess(new Date().toISOString());
+                                updateCredits(-1);
+                                addNewStatus();
                             }
 
                             setResults(prev => prev.map(r =>

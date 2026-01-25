@@ -133,12 +133,21 @@ class SheerIDVerifier {
         const step = data.currentStep || '';
         const validSteps = ['collectStudentPersonalInfo', 'docUpload', 'sso'];
 
+        console.log(`[SheerID] Verification ${this.vid} step: ${step}`, data.errorIds ? `Errors: ${data.errorIds.join(', ')}` : '');
+
         if (validSteps.includes(step)) {
             return { valid: true, step, data };
         } else if (step === 'success') {
             return { valid: false, error: 'Already verified' };
         } else if (step === 'pending') {
             return { valid: false, error: 'Already pending review' };
+        } else if (step === 'error') {
+            // SheerID returned error state - check for specific error codes
+            const errorIds = data.errorIds || [];
+            if (errorIds.includes('fraudRulesReject')) {
+                return { valid: false, error: 'Fraud detection - try with US residential IP' };
+            }
+            return { valid: false, error: `SheerID error: ${errorIds.join(', ') || 'Unknown'}` };
         }
 
         return { valid: false, error: `Invalid step: ${step}` };

@@ -17,22 +17,26 @@ import base64
 import json
 
 # Browser versions for impersonation (randomly selected for anti-detect)
-# curl_cffi supports: chrome, firefox, safari, edge
+# IMPORTANT: Only versions actually supported by curl_cffi on server
+# Verified via: from curl_cffi.requests import BrowserType; print([b.value for b in BrowserType])
 BROWSER_VERSIONS = [
-    # Chrome versions (most common)
-    "chrome131",
-    "chrome130", 
+    # Chrome versions (most common, highest success rate)
+    "chrome131",  # Latest
     "chrome124",
+    "chrome123",
     "chrome120",
     "chrome119",
-    # Firefox versions (secondary)
-    "firefox120",
-    "firefox115",
+    "chrome116",
+    # Firefox versions
+    "firefox133",
+    "firefox135",
     # Edge versions (Windows users)
-    "edge120",
-    "edge119",
-    # Safari (macOS users) - less common
-    "safari17",
+    "edge99",
+    "edge101",
+    # Safari versions (macOS users)
+    "safari15_5",
+    "safari17_0",
+    "safari18_0",
 ]
 
 # Alias for backward compatibility

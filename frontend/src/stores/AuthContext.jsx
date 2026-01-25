@@ -2,84 +2,129 @@ import { useState, createContext, useContext, useEffect } from 'react';
 
 const AuthContext = createContext();
 
-// 管理员账号配置
-const ADMIN_CREDENTIALS = {
-    email: 'admin@verifykey.com',
-    password: 'admin123'
-};
-
-// 模拟用户数据（后续替换为真实后端）
-const createUserData = (email, username, isAdmin = false) => ({
-    id: Date.now(),
-    email,
-    username: username || email.split('@')[0],
-    credits: 100,
-    role: isAdmin ? 'admin' : 'user',
-    createdAt: new Date().toISOString()
-});
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [token, setToken] = useState(null);
 
     useEffect(() => {
-        // 检查本地存储的登录状态
-        const savedUser = localStorage.getItem('verifykey-user');
-        if (savedUser) {
-            setUser(JSON.parse(savedUser));
+        // Check for saved token
+        const savedToken = localStorage.getItem('verifykey-token');
+        if (savedToken) {
+            // Verify token with backend
+            fetchCurrentUser(savedToken);
+        } else {
+            setLoading(false);
         }
-        setLoading(false);
     }, []);
 
-    const login = async (email, password) => {
-        // 模拟登录（后续替换为真实 API）
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                if (email && password) {
-                    // 检查是否是管理员账号
-                    const isAdmin = email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password;
-                    const userData = createUserData(email, isAdmin ? '管理员' : null, isAdmin);
-                    setUser(userData);
-                    localStorage.setItem('verifykey-user', JSON.stringify(userData));
-                    resolve(userData);
-                } else {
-                    reject(new Error('请输入邮箱和密码'));
+    const fetchCurrentUser = async (authToken) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/auth/me`, {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
                 }
-            }, 500);
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setUser(data.user);
+                setToken(authToken);
+            } else {
+                // Token invalid, clear storage
+                localStorage.removeItem('verifykey-token');
+            }
+        } catch (error) {
+            console.error('Failed to fetch user:', error);
+            localStorage.removeItem('verifykey-token');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const login = async (email, password) => {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
         });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || '登录失败');
+        }
+
+        setUser(data.user);
+        setToken(data.token);
+        localStorage.setItem('verifykey-token', data.token);
+
+        return data.user;
     };
 
     const register = async (email, password, username) => {
-        // 模拟注册
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                if (email && password && username) {
-                    const userData = createUserData(email, username, false);
-                    setUser(userData);
-                    localStorage.setItem('verifykey-user', JSON.stringify(userData));
-                    resolve(userData);
-                } else {
-                    reject(new Error('请填写所有字段'));
-                }
-            }, 500);
+        const res = await fetch(`${API_BASE}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, username })
         });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || '注册失败');
+        }
+
+        setUser(data.user);
+        setToken(data.token);
+        localStorage.setItem('verifykey-token', data.token);
+
+        return data.user;
     };
 
     const logout = () => {
         setUser(null);
-        localStorage.removeItem('verifykey-user');
+        setToken(null);
+        localStorage.removeItem('verifykey-token');
     };
 
-    const updateCredits = (amount) => {
-        if (user) {
-            const updatedUser = { ...user, credits: user.credits + amount };
-            setUser(updatedUser);
-            localStorage.setItem('verifykey-user', JSON.stringify(updatedUser));
+    const updateCredits = async (amount) => {
+        if (!token) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/auth/credits`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ amount })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setUser(data.user);
+            }
+        } catch (error) {
+            console.error('Failed to update credits:', error);
         }
     };
 
+    // Expose token for other API calls
+    const getToken = () => token;
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout, updateCredits }}>
+        <AuthContext.Provider value={{
+            user,
+            loading,
+            login,
+            register,
+            logout,
+            updateCredits,
+            getToken
+        }}>
             {children}
         </AuthContext.Provider>
     );

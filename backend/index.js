@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { verifyBatch, parseVerificationId } = require('./services/sheerid-verifier');
+const auth = require('./utils/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -9,6 +10,86 @@ const PORT = process.env.PORT || 3002;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// =====================
+// Authentication Routes
+// =====================
+
+// Register
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { email, password, username } = req.body;
+
+        if (!email || !password || !username) {
+            return res.status(400).json({ error: '请填写所有字段' });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({ error: '密码至少6位' });
+        }
+
+        const result = await auth.register(email, password, username);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: '请输入邮箱和密码' });
+        }
+
+        const result = await auth.login(email, password);
+        res.json(result);
+    } catch (error) {
+        res.status(401).json({ error: error.message });
+    }
+});
+
+// Get current user
+app.get('/api/auth/me', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: '未登录' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const user = await auth.verifyToken(token);
+
+    if (!user) {
+        return res.status(401).json({ error: 'Token 无效或已过期' });
+    }
+
+    res.json({ user });
+});
+
+// Update credits
+app.post('/api/auth/credits', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: '未登录' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const user = await auth.verifyToken(token);
+
+    if (!user) {
+        return res.status(401).json({ error: 'Token 无效' });
+    }
+
+    const { amount } = req.body;
+    if (typeof amount !== 'number') {
+        return res.status(400).json({ error: '无效的积分数量' });
+    }
+
+    const updatedUser = await auth.updateCredits(user.id, amount);
+    res.json({ user: updatedUser });
+});
 
 // Self-hosted verification endpoint
 app.post('/api/verify', async (req, res) => {

@@ -11,6 +11,9 @@ RUN npm ci --only=production
 # Copy source code
 COPY backend/ ./
 
+# Create data directory for SQLite
+RUN mkdir -p /app/data
+
 EXPOSE 3002
 
 CMD ["node", "index.js"]

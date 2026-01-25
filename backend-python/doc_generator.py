@@ -29,9 +29,18 @@ except ImportError:
     HAS_CAIRO = False
 
 
-# Gemini API configuration
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-image-preview")
+# Gemini API configuration - fallback to env var if config not available
+def _get_gemini_config():
+    """Get Gemini API key and model from config or env"""
+    try:
+        from config_manager import get_active_generator
+        gen = get_active_generator()
+        if gen.get("type") == "gemini" and gen.get("apiKey"):
+            return gen.get("apiKey"), gen.get("model", "gemini-3-pro-image-preview")
+    except:
+        pass
+    # Fallback to environment variables
+    return os.getenv("GEMINI_API_KEY", ""), os.getenv("GEMINI_MODEL", "gemini-3-pro-image-preview")
 
 
 def generate_with_gemini(prompt: str) -> Optional[bytes]:
@@ -44,16 +53,18 @@ def generate_with_gemini(prompt: str) -> Optional[bytes]:
     Returns:
         Image bytes or None if failed
     """
-    if not GEMINI_API_KEY:
+    api_key, model = _get_gemini_config()
+    
+    if not api_key:
         print("[Gemini] No API key configured")
         return None
     
     try:
-        print(f"[Gemini] Calling API with model: {GEMINI_MODEL}")
+        print(f"[Gemini] Calling API with model: {model}")
         
         response = httpx.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
-            params={"key": GEMINI_API_KEY},
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            params={"key": api_key},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {

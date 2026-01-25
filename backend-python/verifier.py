@@ -41,7 +41,7 @@ UNIVERSITIES = [
     {"id": 1314, "idExtended": "1314", "name": "Georgia Institute of Technology-Main Campus (Atlanta, GA)", "domain": "gatech.edu", "country": "US", "weight": 93},
     {"id": 602, "idExtended": "602", "name": "Carnegie Mellon University", "domain": "cmu.edu", "country": "US", "weight": 92},
     {"id": 3477, "idExtended": "3477", "name": "University of California, San Diego", "domain": "ucsd.edu", "country": "US", "weight": 93},
-    {"id": 378, "idExtended": "378", "name": "Arizona State University", "domain": "asu.edu", "country": "US", "weight": 92},
+    {"id": 650865, "idExtended": "650865", "name": "Arizona State University (Glendale, AZ)", "domain": "asu.edu", "country": "US", "weight": 92},
     # Community colleges - may have higher success
     {"id": 2874, "idExtended": "2874", "name": "Santa Monica College", "domain": "smc.edu", "country": "US", "weight": 85},
     {"id": 2350, "idExtended": "2350", "name": "Northern Virginia Community College", "domain": "nvcc.edu", "country": "US", "weight": 84},

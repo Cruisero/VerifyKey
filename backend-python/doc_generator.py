@@ -104,8 +104,14 @@ def generate_with_gemini(prompt: str) -> Optional[bytes]:
 def generate_transcript_with_gemini(first: str, last: str, university: str, birth_date: str) -> Optional[bytes]:
     """Generate academic transcript using Gemini AI"""
     
+    import time
     student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     gpa = round(3.2 + random.random() * 0.8, 2)
+    
+    # CRITICAL: Add current date for SheerID requirement (date within 90 days)
+    current_date = time.strftime("%B %d, %Y")
+    current_semester = "Spring 2025"
+    issue_date = time.strftime("%Y-%m-%d")
     
     prompt = f"""Generate a realistic university academic transcript document image:
 
@@ -114,12 +120,22 @@ STUDENT NAME: {first} {last}
 STUDENT ID: {student_id}
 DATE OF BIRTH: {birth_date}
 CUMULATIVE GPA: {gpa}
+CURRENT SEMESTER: {current_semester}
+ENROLLMENT STATUS: Full-time Student (Enrolled)
+DOCUMENT ISSUE DATE: {current_date}
+TRANSCRIPT DATE: {issue_date}
 
 Requirements:
-- Official academic transcript format with university letterhead
-- Course listing: Computer Science, Calculus, Physics, English
+- Official academic transcript format with university letterhead and logo
+- MUST show the transcript/document date prominently: "{current_date}"
+- Show current enrollment status as "ENROLLED - {current_semester}"
+- Course listing for {current_semester}: Computer Science 101, Calculus II, Physics 201, English Composition
+- All courses should have "{current_semester}" as the term
 - Looks like a real scanned official document
-- Professional formatting
+- Include registrar signature line with date
+- Professional formatting with clear dates visible
+
+CRITICAL: The document date "{current_date}" must be clearly visible as this is required for verification.
 
 Generate ONLY the image, no explanation text."""
     
@@ -129,22 +145,34 @@ Generate ONLY the image, no explanation text."""
 def generate_student_id_with_gemini(first: str, last: str, university: str) -> Optional[bytes]:
     """Generate student ID card using Gemini AI"""
     
+    import time
     student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
-    valid_thru = f"08/{random.randint(2026, 2028)}"
+    current_date = time.strftime("%B %d, %Y")
+    current_semester = "Spring 2025"
+    valid_thru = "05/2026"  # Fixed to near future
+    issue_date = time.strftime("%m/%Y")  # Current month/year for issue date
     
     prompt = f"""Generate a realistic university student ID card image:
 
 UNIVERSITY: {university}
 STUDENT NAME: {first} {last}
 STUDENT ID: {student_id}
+STATUS: Full-time Student - {current_semester}
+ISSUE DATE: {issue_date}
 VALID THROUGH: {valid_thru}
 
 Requirements:
-- Official university ID card design with logo
-- Photo placeholder area on left side
-- Student name and ID clearly visible
+- Official university ID card design with university logo prominently displayed
+- Photo placeholder area on left side  
+- Student name "{first} {last}" MUST be clearly visible
+- University name "{university}" MUST be clearly visible
+- Include current semester/term: "{current_semester}"
+- Include issue date or "Issued: {issue_date}" visible on card
+- Valid through date: "{valid_thru}"
 - Barcode at bottom
 - Looks like a real scanned ID card
+
+CRITICAL: The university name and student name must be clearly visible for verification.
 
 Generate ONLY the image, no explanation text."""
     

@@ -38,7 +38,7 @@ UNIVERSITIES = [
     {"id": 2420, "idExtended": "2420", "name": "Northwestern University", "domain": "northwestern.edu", "country": "US", "weight": 88},
     {"id": 3568, "idExtended": "3568", "name": "University of Michigan", "domain": "umich.edu", "country": "US", "weight": 95},
     {"id": 3686, "idExtended": "3686", "name": "University of Texas at Austin", "domain": "utexas.edu", "country": "US", "weight": 94},
-    {"id": 1217, "idExtended": "1217", "name": "Georgia Institute of Technology", "domain": "gatech.edu", "country": "US", "weight": 93},
+    {"id": 1314, "idExtended": "1314", "name": "Georgia Institute of Technology-Main Campus (Atlanta, GA)", "domain": "gatech.edu", "country": "US", "weight": 93},
     {"id": 602, "idExtended": "602", "name": "Carnegie Mellon University", "domain": "cmu.edu", "country": "US", "weight": 92},
     {"id": 3477, "idExtended": "3477", "name": "University of California, San Diego", "domain": "ucsd.edu", "country": "US", "weight": 93},
     {"id": 378, "idExtended": "378", "name": "Arizona State University", "domain": "asu.edu", "country": "US", "weight": 92},

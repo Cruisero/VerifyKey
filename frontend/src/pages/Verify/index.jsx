@@ -142,58 +142,99 @@ export default function Verify() {
                 throw new Error(`请求失败: ${response.status}`);
             }
 
-            // 处理 SSE 流响应
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let pendingChecks = [];
+            // 检查响应类型 - 后端可能返回 SSE 流或 JSON
+            const contentType = response.headers.get('content-type') || '';
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+            if (contentType.includes('text/event-stream')) {
+                // 处理 SSE 流响应
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let pendingChecks = [];
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                for (const line of lines) {
-                    if (line.startsWith('data:')) {
-                        try {
-                            const data = JSON.parse(line.slice(5).trim());
-                            console.log('SSE data:', data);
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
 
-                            // 处理验证结果
-                            if (data.verificationId) {
-                                const resultId = resultItems.find(r =>
-                                    r.fullId === data.verificationId ||
-                                    r.fullId.includes(data.verificationId)
-                                )?.id;
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            try {
+                                const data = JSON.parse(line.slice(5).trim());
+                                console.log('SSE data:', data);
 
-                                if (resultId) {
-                                    let status = 'processing';
-                                    let message = data.message || '处理中...';
+                                // 处理验证结果
+                                if (data.verificationId) {
+                                    const resultId = resultItems.find(r =>
+                                        r.fullId === data.verificationId ||
+                                        r.fullId.includes(data.verificationId)
+                                    )?.id;
 
-                                    if (data.currentStep === 'success') {
-                                        status = 'success';
-                                        message = '✓ 验证成功';
-                                        setLastSuccess(new Date().toISOString());
-                                        updateCredits(-1);
-                                        addNewStatus();
-                                    } else if (data.currentStep === 'failed' || data.currentStep === 'error') {
-                                        status = 'failed';
-                                        message = '✕ ' + (data.message || '验证失败');
-                                    } else if (data.currentStep === 'pending' && data.checkToken) {
-                                        // 需要轮询检查状态
-                                        pendingChecks.push({ resultId, checkToken: data.checkToken, verificationId: data.verificationId });
+                                    if (resultId) {
+                                        let status = 'processing';
+                                        let message = data.message || '处理中...';
+
+                                        if (data.currentStep === 'success') {
+                                            status = 'success';
+                                            message = '✓ 验证成功';
+                                            setLastSuccess(new Date().toISOString());
+                                            updateCredits(-1);
+                                            addNewStatus();
+                                        } else if (data.currentStep === 'failed' || data.currentStep === 'error') {
+                                            status = 'failed';
+                                            message = '✕ ' + (data.message || '验证失败');
+                                        } else if (data.currentStep === 'pending' && data.checkToken) {
+                                            // 需要轮询检查状态
+                                            pendingChecks.push({ resultId, checkToken: data.checkToken, verificationId: data.verificationId });
+                                        }
+
+                                        setResults(prev => prev.map(r =>
+                                            r.id === resultId ? { ...r, status, message } : r
+                                        ));
                                     }
-
-                                    setResults(prev => prev.map(r =>
-                                        r.id === resultId ? { ...r, status, message } : r
-                                    ));
                                 }
+                            } catch (e) {
+                                console.warn('Parse error:', e, line);
                             }
-                        } catch (e) {
-                            console.warn('Parse error:', e, line);
+                        }
+                    }
+                }
+            } else {
+                // 处理普通 JSON 响应 (Python 后端)
+                const data = await response.json();
+                console.log('JSON response:', data);
+
+                if (data.results && Array.isArray(data.results)) {
+                    for (const result of data.results) {
+                        const resultId = resultItems.find(r =>
+                            r.fullId === result.verificationId ||
+                            r.fullId.includes(result.verificationId)
+                        )?.id;
+
+                        if (resultId) {
+                            let status = 'processing';
+                            let message = result.message || '处理中...';
+
+                            if (result.status === 'success' || result.success) {
+                                status = 'success';
+                                message = '✓ ' + (result.message || '验证成功');
+                                setLastSuccess(new Date().toISOString());
+                                updateCredits(-1);
+                                addNewStatus();
+                            } else if (result.status === 'pending') {
+                                status = 'pending';
+                                message = '⏳ ' + (result.message || '待审核');
+                            } else if (result.status === 'error' || result.status === 'failed') {
+                                status = 'failed';
+                                message = '✕ ' + (result.message || '验证失败');
+                            }
+
+                            setResults(prev => prev.map(r =>
+                                r.id === resultId ? { ...r, status, message, student: result.student, email: result.email, school: result.school } : r
+                            ));
                         }
                     }
                 }

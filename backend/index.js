@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { verifyBatch, parseVerificationId } = require('./services/sheerid-verifier');
+const { verifyWithPuppeteer } = require('./services/puppeteer-verifier');
 const auth = require('./utils/auth');
 
 const app = express();
@@ -165,6 +166,84 @@ app.post('/api/verify', async (req, res) => {
 
     } catch (error) {
         console.error('Verify error:', error);
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    }
+
+    res.end();
+});
+
+// Puppeteer-based verification (browser simulation for better bypass)
+app.post('/api/verify-puppeteer', async (req, res) => {
+    const { verificationIds } = req.body;
+
+    if (!verificationIds || !Array.isArray(verificationIds) || verificationIds.length === 0) {
+        return res.status(400).json({ error: 'verificationIds required' });
+    }
+
+    // Max 3 IDs per batch for Puppeteer (heavier resource usage)
+    if (verificationIds.length > 3) {
+        return res.status(400).json({ error: 'Max 3 verification IDs per batch for Puppeteer mode' });
+    }
+
+    // Set up SSE response
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    res.write(`event: start\ndata: ${JSON.stringify({
+        total: verificationIds.length,
+        message: 'Starting Puppeteer verification...'
+    })}\n\n`);
+
+    try {
+        const results = [];
+
+        for (const vidOrUrl of verificationIds) {
+            const vid = parseVerificationId(vidOrUrl) || vidOrUrl;
+
+            console.log(`[Puppeteer] Starting verification for ${vid}`);
+
+            res.write(`data: ${JSON.stringify({
+                verificationId: vid,
+                currentStep: 'processing',
+                message: 'Starting browser...'
+            })}\n\n`);
+
+            const result = await verifyWithPuppeteer(vid, {
+                proxy: process.env.PROXY_URL,
+                onProgress: (progress) => {
+                    res.write(`data: ${JSON.stringify({
+                        verificationId: vid,
+                        currentStep: progress.step || 'processing',
+                        message: progress.message || '',
+                        details: progress.details || null
+                    })}\n\n`);
+                }
+            });
+
+            results.push({ ...result, verificationId: vid });
+
+            // Send result
+            res.write(`data: ${JSON.stringify({
+                verificationId: vid,
+                currentStep: result.success ? (result.status || 'pending') : 'failed',
+                message: result.error || result.message || '',
+                student: result.student || null,
+                email: result.email || null,
+                school: result.school || null
+            })}\n\n`);
+        }
+
+        // Send completion
+        res.write(`data: ${JSON.stringify({
+            completed: verificationIds.length,
+            total: verificationIds.length,
+            successful: results.filter(r => r.success).length
+        })}\n\n`);
+
+    } catch (error) {
+        console.error('Puppeteer verify error:', error);
         res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
     }
 

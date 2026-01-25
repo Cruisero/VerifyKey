@@ -1,0 +1,24 @@
+{
+  "aiGenerator": {
+    "provider": "gemini_official",
+    "antigravity": {
+      "enabled": false,
+      "apiBase": "http://127.0.0.1:8045/v1",
+      "apiKey": "",
+      "model": "gemini-3-pro-image"
+    },
+    "geminiOfficial": {
+      "enabled": true,
+      "apiKey": "AIzaSyA_pZrkX3Vt_eWYNc7jDIyEKzwlSngU2iY",
+      "model": "gemini-3-pro-image-preview"
+    },
+    "svgFallback": {
+      "enabled": true
+    }
+  },
+  "verification": {
+    "maxBatchSize": 5,
+    "delayBetweenMs": 2000
+  },
+  "updatedAt": "2026-01-25T08:33:36.597Z"
+}

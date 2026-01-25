@@ -1,0 +1,38 @@
+# Development mode - with hot reload
+# Usage: docker compose -f docker-compose.dev.yml up
+
+services:
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3001:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      - VITE_API_URL=http://localhost:3002
+    networks:
+      - onepass-network
+
+  backend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    ports:
+      - "3002:3002"
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+    env_file:
+      - ./backend/.env
+    networks:
+      - onepass-network
+
+networks:
+  onepass-network:
+    driver: bridge

@@ -1,50 +1,16 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { verifyBatch, parseVerificationId } = require('./services/sheerid-verifier');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Store CSRF token (will be fetched from batch.1key.me)
-let csrfToken = null;
-let csrfTokenTime = 0;
-const CSRF_TOKEN_TTL = 5 * 60 * 1000; // 5 minutes
-
-// Fetch CSRF token from batch.1key.me
-async function getCsrfToken() {
-    const now = Date.now();
-    if (csrfToken && (now - csrfTokenTime) < CSRF_TOKEN_TTL) {
-        return csrfToken;
-    }
-
-    try {
-        const response = await fetch('https://batch.1key.me/', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            }
-        });
-        const html = await response.text();
-
-        // Extract CSRF token from HTML
-        const match = html.match(/window\.CSRF_TOKEN\s*=\s*["']([^"']+)["']/);
-        if (match) {
-            csrfToken = match[1];
-            csrfTokenTime = now;
-            console.log('CSRF Token refreshed:', csrfToken.substring(0, 10) + '...');
-            return csrfToken;
-        }
-        throw new Error('CSRF token not found in page');
-    } catch (error) {
-        console.error('Failed to fetch CSRF token:', error.message);
-        throw error;
-    }
-}
-
-// Verify endpoint
+// Self-hosted verification endpoint
 app.post('/api/verify', async (req, res) => {
     const { verificationIds, programId = '' } = req.body;
 
@@ -52,90 +18,103 @@ app.post('/api/verify', async (req, res) => {
         return res.status(400).json({ error: 'verificationIds required' });
     }
 
-    // Max 5 IDs per batch with API key
+    // Max 5 IDs per batch
     if (verificationIds.length > 5) {
         return res.status(400).json({ error: 'Max 5 verification IDs per batch' });
     }
 
+    // Set up SSE response
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    // Send start event
+    res.write(`event: start\ndata: ${JSON.stringify({
+        total: verificationIds.length,
+        message: 'Starting verification...'
+    })}\n\n`);
+
     try {
-        // Get CSRF token
-        const token = await getCsrfToken();
+        // Run batch verification with progress updates
+        const results = await verifyBatch(verificationIds, {
+            onProgress: (progress) => {
+                const vid = progress.verificationId ?
+                    (parseVerificationId(progress.verificationId) || progress.verificationId) :
+                    null;
 
-        // Set up SSE response to client
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
+                // Determine current step for frontend
+                let currentStep = progress.step || 'processing';
+                if (progress.step === 'success') currentStep = 'success';
+                else if (progress.step === 'pending') currentStep = 'pending';
 
-        // Make request to batch.1key.me
-        const response = await fetch('https://batch.1key.me/api/batch', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': token,
-                'Origin': 'https://batch.1key.me',
-                'Referer': 'https://batch.1key.me/',
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            },
-            body: JSON.stringify({
-                verificationIds,
-                hCaptchaToken: process.env.BATCH_API_KEY,
-                useLucky: false,
-                programId
-            })
+                const eventData = {
+                    verificationId: vid,
+                    currentStep: currentStep,
+                    message: progress.message || '',
+                    details: progress.details || null
+                };
+
+                res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+            }
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API error: ${response.status} - ${errorText}`);
+        // Send final results
+        for (const result of results) {
+            const currentStep = result.success ?
+                (result.status === 'success' ? 'success' : 'pending') :
+                'failed';
+
+            res.write(`data: ${JSON.stringify({
+                verificationId: result.verificationId,
+                currentStep: currentStep,
+                message: result.message || result.error || '',
+                student: result.student || null,
+                email: result.email || null,
+                school: result.school || null
+            })}\n\n`);
         }
 
-        // Stream the SSE response
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            res.write(chunk);
-        }
-
-        res.end();
+        // Send end event
+        res.write(`event: end\ndata: ${JSON.stringify({
+            completed: results.length,
+            total: verificationIds.length,
+            successful: results.filter(r => r.success).length
+        })}\n\n`);
 
     } catch (error) {
         console.error('Verify error:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: error.message });
-        } else {
-            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-            res.end();
-        }
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
     }
+
+    res.end();
 });
 
-// Check status endpoint (for pending verifications)
+// Check single verification status
 app.post('/api/check-status', async (req, res) => {
-    const { checkToken } = req.body;
+    const { verificationId } = req.body;
 
-    if (!checkToken) {
-        return res.status(400).json({ error: 'checkToken required' });
+    if (!verificationId) {
+        return res.status(400).json({ error: 'verificationId required' });
     }
 
     try {
-        const response = await fetch('https://batch.1key.me/api/check-status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Origin': 'https://batch.1key.me',
-                'Referer': 'https://batch.1key.me/',
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            },
-            body: JSON.stringify({ checkToken })
-        });
+        const vid = parseVerificationId(verificationId);
+        if (!vid) {
+            return res.status(400).json({ error: 'Invalid verification ID' });
+        }
 
+        // Check current status from SheerID
+        const response = await fetch(`https://services.sheerid.com/rest/v2/verification/${vid}`);
         const data = await response.json();
-        res.json(data);
+
+        res.json({
+            verificationId: vid,
+            currentStep: data.currentStep || 'unknown',
+            message: data.currentStep === 'success' ? 'Verified!' :
+                data.currentStep === 'pending' ? 'Pending review' :
+                    data.currentStep
+        });
 
     } catch (error) {
         console.error('Check status error:', error);
@@ -144,18 +123,108 @@ app.post('/api/check-status', async (req, res) => {
 });
 
 // System status endpoint
-app.get('/api/status', async (req, res) => {
+app.get('/api/status', (req, res) => {
+    const { getActiveGenerator } = require('./utils/config-manager');
+    const generator = getActiveGenerator();
+
+    res.json({
+        status: 'online',
+        mode: 'self-hosted',
+        version: '2.0.0',
+        aiGenerator: generator.type,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Get configuration
+app.get('/api/config', (req, res) => {
+    const { getConfig } = require('./utils/config-manager');
+    const config = getConfig();
+
+    // Mask API keys for security
+    const safeConfig = JSON.parse(JSON.stringify(config));
+    if (safeConfig.aiGenerator?.antigravity?.apiKey) {
+        const key = safeConfig.aiGenerator.antigravity.apiKey;
+        safeConfig.aiGenerator.antigravity.apiKey = key ? `${key.substring(0, 10)}...` : '';
+    }
+    if (safeConfig.aiGenerator?.geminiOfficial?.apiKey) {
+        const key = safeConfig.aiGenerator.geminiOfficial.apiKey;
+        safeConfig.aiGenerator.geminiOfficial.apiKey = key ? `${key.substring(0, 10)}...` : '';
+    }
+
+    res.json(safeConfig);
+});
+
+// Update configuration
+app.post('/api/config', (req, res) => {
+    const { updateConfig, getConfig } = require('./utils/config-manager');
+    const updates = req.body;
+
+    if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: 'Invalid configuration data' });
+    }
+
+    // Preserve existing API keys if not provided in update
+    const currentConfig = getConfig();
+    if (updates.aiGenerator?.antigravity && !updates.aiGenerator.antigravity.apiKey) {
+        updates.aiGenerator.antigravity.apiKey = currentConfig.aiGenerator?.antigravity?.apiKey || '';
+    }
+    if (updates.aiGenerator?.geminiOfficial && !updates.aiGenerator.geminiOfficial.apiKey) {
+        updates.aiGenerator.geminiOfficial.apiKey = currentConfig.aiGenerator?.geminiOfficial?.apiKey || '';
+    }
+
+    const result = updateConfig(updates);
+    if (result) {
+        res.json({ success: true, config: result });
+    } else {
+        res.status(500).json({ error: 'Failed to save configuration' });
+    }
+});
+
+// Test AI generator connection
+app.post('/api/config/test', async (req, res) => {
+    const { provider, apiBase, apiKey, model } = req.body;
+
     try {
-        const response = await fetch('https://batch.1key.me/api/status', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        if (provider === 'antigravity') {
+            // Test Antigravity Tools connection
+            const response = await fetch(`${apiBase}/models`, {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const models = data.data?.map(m => m.id) || [];
+                const hasImageModel = models.some(m => m.includes('image'));
+                res.json({
+                    success: true,
+                    message: `Connected! ${models.length} models available`,
+                    hasImageModel
+                });
+            } else {
+                res.json({ success: false, message: `HTTP ${response.status}` });
             }
-        });
-        const data = await response.json();
-        res.json(data);
+        } else if (provider === 'gemini_official') {
+            // Test Gemini Official API
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                res.json({
+                    success: true,
+                    message: `Connected! ${data.models?.length || 0} models available`
+                });
+            } else {
+                const error = await response.json();
+                res.json({ success: false, message: error.error?.message || `HTTP ${response.status}` });
+            }
+        } else {
+            res.json({ success: true, message: 'SVG generator is always available' });
+        }
     } catch (error) {
-        console.error('Status error:', error);
-        res.status(500).json({ error: error.message });
+        res.json({ success: false, message: error.message });
     }
 });
 
@@ -165,6 +234,8 @@ app.get('/health', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 VerifyKey Backend running on http://localhost:${PORT}`);
-    console.log(`📋 API Key configured: ${process.env.BATCH_API_KEY ? 'Yes' : 'No'}`);
+    console.log(`🚀 VerifyKey Backend (Self-Hosted) running on http://localhost:${PORT}`);
+    console.log(`📋 Mode: Self-hosted SheerID verification`);
+    console.log(`🔒 Proxy: ${process.env.PROXY_URL ? 'Configured' : 'Not configured (direct connection)'}`);
 });
+

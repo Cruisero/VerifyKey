@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 500 500">
+  <!-- Background -->
+  <rect width="500" height="500" fill="#fafafa"/>
+  
+  <!-- Header -->
+  <rect width="500" height="80" fill="#22543d"/>
+  <text x="249" y="35" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle">Harvard University</text>
+  <text x="249" y="60" fill="white" font-family="Arial, sans-serif" font-size="14" text-anchor="middle">OFFICIAL ACADEMIC TRANSCRIPT</text>
+  
+  <!-- Student Info -->
+  <text x="50" y="110" fill="#666" font-family="Arial" font-size="11">Student Name:</text>
+  <text x="150" y="110" fill="#333" font-family="Arial" font-size="12" font-weight="bold">John Smith</text>
+  
+  <text x="300" y="110" fill="#666" font-family="Arial" font-size="11">Student ID:</text>
+  <text x="380" y="110" fill="#333" font-family="Arial" font-size="12">21106573</text>
+  
+  <text x="50" y="135" fill="#666" font-family="Arial" font-size="11">Date of Birth:</text>
+  <text x="150" y="135" fill="#333" font-family="Arial" font-size="12">2003-05-15</text>
+  
+  <text x="300" y="135" fill="#666" font-family="Arial" font-size="11">Cumulative GPA:</text>
+  <text x="400" y="135" fill="#48bb78" font-family="Arial" font-size="14" font-weight="bold">3.35</text>
+  
+  <!-- Divider -->
+  <line x1="40" y1="155" x2="460" y2="155" stroke="#ccc" stroke-width="1"/>
+  
+  <!-- Course Header -->
+  <text x="50" y="180" fill="#22543d" font-family="Arial" font-size="12" font-weight="bold">Course Name</text>
+  <text x="350" y="180" fill="#22543d" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle">Credits</text>
+  <text x="420" y="180" fill="#22543d" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle">Grade</text>
+  
+  <!-- Courses -->
+  
+    <text x="49" y="200" fill="#333" font-family="Arial" font-size="11">Chemistry I</text>
+    <text x="349" y="200" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">3</text>
+    <text x="419" y="200" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">A</text>
+    <text x="49" y="225" fill="#333" font-family="Arial" font-size="11">Introduction to Computer Science</text>
+    <text x="349" y="225" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">3</text>
+    <text x="419" y="225" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">A</text>
+    <text x="49" y="250" fill="#333" font-family="Arial" font-size="11">Microeconomics</text>
+    <text x="349" y="250" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">3</text>
+    <text x="419" y="250" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">A</text>
+    <text x="49" y="275" fill="#333" font-family="Arial" font-size="11">Art History</text>
+    <text x="349" y="275" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">4</text>
+    <text x="419" y="275" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">C+</text>
+    <text x="49" y="300" fill="#333" font-family="Arial" font-size="11">Operating Systems</text>
+    <text x="349" y="300" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">4</text>
+    <text x="419" y="300" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">A-</text>
+    <text x="49" y="325" fill="#333" font-family="Arial" font-size="11">Physics I</text>
+    <text x="349" y="325" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">4</text>
+    <text x="419" y="325" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">B-</text>
+    <text x="49" y="350" fill="#333" font-family="Arial" font-size="11">Statistics</text>
+    <text x="349" y="350" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">4</text>
+    <text x="419" y="350" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">B</text>
+    <text x="49" y="375" fill="#333" font-family="Arial" font-size="11">Macroeconomics</text>
+    <text x="349" y="375" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">3</text>
+    <text x="419" y="375" fill="#333" font-family="Arial" font-size="11" text-anchor="middle">A-</text>
+  
+  <!-- Footer -->
+  <line x1="40" y1="420" x2="460" y2="420" stroke="#ccc" stroke-width="1"/>
+  <text x="250" y="450" fill="#666" font-family="Arial" font-size="10" text-anchor="middle">This is an official document. Total Credits: 28</text>
+  <text x="250" y="470" fill="#999" font-family="Arial" font-size="9" text-anchor="middle">Generated: 2026-01-25</text>
+</svg>

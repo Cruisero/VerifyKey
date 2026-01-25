@@ -15,18 +15,33 @@ from anti_detect import (
 
 SHEERID_API_URL = "https://services.sheerid.com/rest/v2"
 
-# US Universities with CORRECT SheerID organization IDs (from orgsearch.sheerid.net)
+# US Universities with VERIFIED SheerID IDs (from ThanhNguyxn/SheerID-Verification-Tool)
+# These IDs are confirmed to work with high success rates
 UNIVERSITIES = [
-    {"id": 3113, "idExtended": "3113", "name": "Stanford University", "domain": "stanford.edu", "country": "US"},
-    {"id": 1426, "idExtended": "1426", "name": "Harvard University", "domain": "harvard.edu", "country": "US"},
-    {"id": 3499, "idExtended": "3499", "name": "University of California-Los Angeles", "domain": "ucla.edu", "country": "US"},
-    {"id": 2629, "idExtended": "2629", "name": "University of California-Berkeley", "domain": "berkeley.edu", "country": "US"},
-    {"id": 2812, "idExtended": "2812", "name": "University of Michigan-Ann Arbor", "domain": "umich.edu", "country": "US"},
-    {"id": 2711, "idExtended": "2711", "name": "New York University", "domain": "nyu.edu", "country": "US"},
-    {"id": 1564, "idExtended": "1564", "name": "Yale University", "domain": "yale.edu", "country": "US"},
-    {"id": 1563, "idExtended": "1563", "name": "Columbia University", "domain": "columbia.edu", "country": "US"},
-    {"id": 1461, "idExtended": "1461", "name": "Massachusetts Institute of Technology", "domain": "mit.edu", "country": "US"},
-    {"id": 3169, "idExtended": "3169", "name": "University of Texas at Austin", "domain": "utexas.edu", "country": "US"},
+    # High priority - highest success rates
+    {"id": 2565, "idExtended": "2565", "name": "Pennsylvania State University-Main Campus", "domain": "psu.edu", "weight": 100},
+    {"id": 3499, "idExtended": "3499", "name": "University of California, Los Angeles", "domain": "ucla.edu", "weight": 98},
+    {"id": 3491, "idExtended": "3491", "name": "University of California, Berkeley", "domain": "berkeley.edu", "weight": 97},
+    {"id": 1953, "idExtended": "1953", "name": "Massachusetts Institute of Technology", "domain": "mit.edu", "weight": 95},
+    {"id": 3113, "idExtended": "3113", "name": "Stanford University", "domain": "stanford.edu", "weight": 95},
+    {"id": 2285, "idExtended": "2285", "name": "New York University", "domain": "nyu.edu", "weight": 96},
+    {"id": 1426, "idExtended": "1426", "name": "Harvard University", "domain": "harvard.edu", "weight": 92},
+    {"id": 590759, "idExtended": "590759", "name": "Yale University", "domain": "yale.edu", "weight": 90},
+    {"id": 2626, "idExtended": "2626", "name": "Princeton University", "domain": "princeton.edu", "weight": 90},
+    {"id": 698, "idExtended": "698", "name": "Columbia University", "domain": "columbia.edu", "weight": 92},
+    {"id": 3508, "idExtended": "3508", "name": "University of Chicago", "domain": "uchicago.edu", "weight": 88},
+    {"id": 943, "idExtended": "943", "name": "Duke University", "domain": "duke.edu", "weight": 88},
+    {"id": 751, "idExtended": "751", "name": "Cornell University", "domain": "cornell.edu", "weight": 90},
+    {"id": 2420, "idExtended": "2420", "name": "Northwestern University", "domain": "northwestern.edu", "weight": 88},
+    {"id": 3568, "idExtended": "3568", "name": "University of Michigan", "domain": "umich.edu", "weight": 95},
+    {"id": 3686, "idExtended": "3686", "name": "University of Texas at Austin", "domain": "utexas.edu", "weight": 94},
+    {"id": 1217, "idExtended": "1217", "name": "Georgia Institute of Technology", "domain": "gatech.edu", "weight": 93},
+    {"id": 602, "idExtended": "602", "name": "Carnegie Mellon University", "domain": "cmu.edu", "weight": 92},
+    {"id": 3477, "idExtended": "3477", "name": "University of California, San Diego", "domain": "ucsd.edu", "weight": 93},
+    {"id": 378, "idExtended": "378", "name": "Arizona State University", "domain": "asu.edu", "weight": 92},
+    # Community colleges - may have higher success
+    {"id": 2874, "idExtended": "2874", "name": "Santa Monica College", "domain": "smc.edu", "weight": 85},
+    {"id": 2350, "idExtended": "2350", "name": "Northern Virginia Community College", "domain": "nvcc.edu", "weight": 84},
 ]
 
 # Common first and last names
@@ -45,7 +60,15 @@ LAST_NAMES = [
 
 
 def select_university() -> dict:
-    """Select random US university"""
+    """Select US university with weighted random (higher weight = more likely)"""
+    weights = [u.get("weight", 50) for u in UNIVERSITIES]
+    total = sum(weights)
+    r = random.uniform(0, total)
+    cumulative = 0
+    for u in UNIVERSITIES:
+        cumulative += u.get("weight", 50)
+        if r <= cumulative:
+            return u
     return random.choice(UNIVERSITIES)
 
 
@@ -259,20 +282,28 @@ class SheerIDVerifier:
                 self.on_progress({"step": "skipping_sso", "message": "Skipping SSO..."})
                 self._request("DELETE", f"/verification/{self.vid}/step/sso")
             
-            # Step 3: Request upload URL
+            # Step 3: Request upload URL (ThanhNguyxn's approach)
             self.on_progress({"step": "uploading", "message": "Requesting upload URL..."})
             
+            # Use docUpload endpoint like ThanhNguyxn
+            upload_body = {"files": [{"fileName": "transcript.png", "mimeType": "image/png", "fileSize": len(doc_data)}]}
             upload_data, upload_status = self._request(
                 "POST", 
-                f"/verification/{self.vid}/step/docUpload/document",
-                {"file": "transcript.png", "type": "image/png", "mimeType": "image/png"}
+                f"/verification/{self.vid}/step/docUpload",
+                upload_body
             )
             
             if upload_status != 200:
+                print(f"[Verify] Upload request failed: {upload_status}")
+                print(f"[Verify] Upload response: {upload_data}")
                 return {"success": False, "error": f"Upload URL request failed: {upload_status}"}
             
-            upload_url = upload_data.get("uploadUrl")
-            asset_id = upload_data.get("assetId")
+            # Get upload URL from documents array
+            documents = upload_data.get("documents", [])
+            if not documents:
+                return {"success": False, "error": "No documents in upload response"}
+            
+            upload_url = documents[0].get("uploadUrl")
             
             if not upload_url:
                 return {"success": False, "error": "No upload URL in response"}
@@ -283,24 +314,19 @@ class SheerIDVerifier:
             if not self._upload_s3(upload_url, doc_data):
                 return {"success": False, "error": "S3 upload failed"}
             
-            # Step 5: Complete upload
+            print("[Verify] ✅ Document uploaded to S3")
+            
+            # Step 5: Complete document upload (ThanhNguyxn's approach)
             self.on_progress({"step": "completing", "message": "Completing upload..."})
             
             complete_data, complete_status = self._request(
-                "PUT",
-                f"/verification/{self.vid}/step/docUpload/document/{asset_id}"
-            )
-            
-            # Step 6: Submit for review
-            self.on_progress({"step": "submitting", "message": "Submitting for review..."})
-            
-            submit_data, submit_status = self._request(
                 "POST",
-                f"/verification/{self.vid}/step/docUpload",
-                {}
+                f"/verification/{self.vid}/step/completeDocUpload"
             )
             
-            final_step = submit_data.get("currentStep", "")
+            print(f"[Verify] Complete upload response: {complete_data.get('currentStep', 'unknown')}")
+            
+            final_step = complete_data.get("currentStep", "")
             
             if final_step == "pending":
                 return {
@@ -321,10 +347,10 @@ class SheerIDVerifier:
                     "school": self.org["name"]
                 }
             elif final_step == "error":
-                error_ids = submit_data.get("errorIds", [])
+                error_ids = complete_data.get("errorIds", [])
                 return {"success": False, "error": f"Verification error: {error_ids}"}
             else:
-                return {"success": False, "error": f"Unexpected step: {final_step}", "data": submit_data}
+                return {"success": False, "error": f"Unexpected step: {final_step}", "data": complete_data}
             
         except Exception as e:
             return {"success": False, "error": str(e)}

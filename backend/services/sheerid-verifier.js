@@ -232,6 +232,8 @@ class SheerIDVerifier {
                     submitBody
                 );
 
+                console.log(`[SheerID] Submit response: status=${submitStatus}`, JSON.stringify(submitData));
+
                 if (submitStatus !== 200) {
                     recordResult(this.university.name, false);
                     return { success: false, error: `Submit failed: HTTP ${submitStatus}`, details: submitData };

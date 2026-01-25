@@ -113,28 +113,64 @@ def lookup_organization_id(name: str, country: str = "US") -> Optional[dict]:
             print(f"[Lookup] No results for: {name}")
             return None
         
-        # Try to find exact match or first result
+        # Keywords to SKIP (sub-schools, extensions, medical/law schools)
+        skip_keywords = [
+            "medical", "medicine", "law school", "business school", 
+            "extension", "online", "professional", "graduate school",
+            "nursing", "dental", "pharmacy", "health science",
+            "continuing education", "distance", "global"
+        ]
+        
+        # Keywords to PREFER (main campus)
+        prefer_keywords = [
+            "main campus", "-main", "campus (", "university ("
+        ]
+        
         search_name = name.lower().split(" (")[0]  # Remove location suffix
+        
+        best_match = None
+        fallback_match = None
         
         for org in data:
             org_name = org.get("name", "").lower()
-            # Check if search name is in org name
-            if search_name in org_name or org_name.startswith(search_name):
-                print(f"[Lookup] Found: {org['id']} - {org['name'][:50]}")
-                return {
-                    "id": org["id"],
-                    "idExtended": str(org["id"]),
-                    "name": org["name"]
-                }
+            
+            # Skip if contains skip keywords
+            if any(skip in org_name for skip in skip_keywords):
+                continue
+            
+            # Check if search name matches
+            name_matches = search_name in org_name or org_name.startswith(search_name)
+            
+            if name_matches:
+                # Prefer main campus entries
+                if any(pref in org_name for pref in prefer_keywords):
+                    best_match = org
+                    break
+                elif fallback_match is None:
+                    fallback_match = org
         
-        # Return first result if no exact match
-        first = data[0]
-        print(f"[Lookup] Using first result: {first['id']} - {first['name'][:50]}")
-        return {
-            "id": first["id"],
-            "idExtended": str(first["id"]),
-            "name": first["name"]
-        }
+        # Use best_match, or fallback, or first non-skipped result
+        selected = best_match or fallback_match
+        
+        if not selected:
+            # Find first result that doesn't have skip keywords
+            for org in data:
+                org_name = org.get("name", "").lower()
+                if not any(skip in org_name for skip in skip_keywords):
+                    selected = org
+                    break
+        
+        if not selected and data:
+            # Last resort: use first result
+            selected = data[0]
+        
+        if selected:
+            print(f"[Lookup] Found: {selected['id']} - {selected['name'][:50]}")
+            return {
+                "id": selected["id"],
+                "idExtended": str(selected["id"]),
+                "name": selected["name"]
+            }
         
     except Exception as e:
         print(f"[Lookup] Error: {e}")

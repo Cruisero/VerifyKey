@@ -201,8 +201,11 @@ class SheerIDVerifier {
             // Step 1: Generate document (try Gemini AI first, fallback to SVG)
             this.onProgress({ step: 'doc_generating', message: 'Generating verification document with AI...' });
 
-            const geminiApiKey = process.env.GEMINI_API_KEY;
-            let doc = await generateDocumentWithGemini('auto', firstName, lastName, this.university.name, birthDate, geminiApiKey);
+            const geminiConfig = {
+                apiKey: process.env.GEMINI_API_KEY,
+                model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp-image-generation'
+            };
+            let doc = await generateDocumentWithGemini('auto', firstName, lastName, this.university.name, birthDate, geminiConfig);
 
             // Fallback to SVG if Gemini fails
             if (!doc) {

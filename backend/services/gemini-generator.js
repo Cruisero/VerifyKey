@@ -116,6 +116,63 @@ async function generateImageWithAPI(prompt, apiKey, apiBase = DEFAULT_API_BASE) 
 }
 
 /**
+ * Call Google Gemini Official API directly for image generation
+ */
+async function generateImageWithGoogleGemini(prompt, apiKey, model = 'gemini-2.0-flash-exp-image-generation') {
+    if (!apiKey) {
+        console.log('[Gemini Official] No API key provided');
+        return null;
+    }
+
+    try {
+        console.log(`[Gemini Official] Calling Google API with model: ${model}`);
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseModalities: ["image", "text"]
+                    }
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('[Gemini Official] API Error:', error.error?.message || `HTTP ${response.status}`);
+            return null;
+        }
+
+        const data = await response.json();
+
+        // Extract image from response
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+
+        if (imagePart) {
+            const imageData = Buffer.from(imagePart.inlineData.data, 'base64');
+            console.log(`[Gemini Official] Got image: ${imageData.length} bytes`);
+            return {
+                mimeType: imagePart.inlineData.mimeType,
+                base64: imagePart.inlineData.data,
+                data: imageData
+            };
+        }
+
+        console.log('[Gemini Official] No image in response');
+        return null;
+
+    } catch (error) {
+        console.error('[Gemini Official] Request failed:', error.message);
+        return null;
+    }
+}
+
+/**
  * Generate student ID card using Antigravity Tools API
  */
 async function generateStudentIdWithGemini(firstName, lastName, universityName, apiKey, apiBase) {
@@ -217,43 +274,101 @@ Do NOT include any text explaining the image, ONLY generate the transcript image
 }
 
 /**
- * Main function to generate document with Antigravity Tools API
- * Falls back to SVG template if API fails
+ * Main function to generate document
+ * Priority: Google Gemini Official > Antigravity Proxy > SVG Fallback
  */
-async function generateDocumentWithGemini(type, firstName, lastName, universityName, birthDate, apiKey) {
-    // Get API configuration from environment
-    const key = apiKey || process.env.GEMINI_API_KEY;
-    const base = process.env.GEMINI_API_BASE || DEFAULT_API_BASE;
-
-    if (!key) {
-        console.log('[Antigravity] No API key configured, using fallback SVG generator');
-        return null;
-    }
-
-    console.log(`[Antigravity] Generating ${type} for ${firstName} ${lastName} at ${universityName}`);
-    console.log(`[Antigravity] Using API: ${base}`);
+async function generateDocumentWithGemini(type, firstName, lastName, universityName, birthDate, config = {}) {
+    // Get API configuration
+    const geminiKey = config.apiKey || process.env.GEMINI_API_KEY;
+    const geminiModel = config.model || 'gemini-2.0-flash-exp-image-generation';
+    const antigravityBase = process.env.GEMINI_API_BASE || DEFAULT_API_BASE;
 
     // Randomly choose document type if 'auto'
     const docType = type === 'auto' ? (Math.random() < 0.6 ? 'transcript' : 'id_card') : type;
 
-    let result;
+    console.log(`[DocGenerator] Generating ${docType} for ${firstName} ${lastName} at ${universityName}`);
+
+    // Build prompt based on document type
+    const studentId = `${randomInt(21, 25)}${randomInt(100000, 999999)}`;
+    const gpa = (3.2 + Math.random() * 0.8).toFixed(2);
+
+    let prompt;
     if (docType === 'transcript') {
-        result = await generateTranscriptWithGemini(firstName, lastName, universityName, birthDate, key, base);
+        const courses = [
+            'Introduction to Computer Science - A',
+            'Calculus I - A-',
+            'English Composition - B+',
+            'Physics I - A',
+            'Chemistry I - B+',
+            'Statistics - A-'
+        ].join('\\n');
+
+        prompt = `Generate a realistic university academic transcript document image:
+
+UNIVERSITY: ${universityName}
+STUDENT NAME: ${firstName} ${lastName}
+STUDENT ID: ${studentId}
+DATE OF BIRTH: ${birthDate}
+CUMULATIVE GPA: ${gpa}
+
+Requirements:
+- Official academic transcript format with university letterhead
+- Course listing with grades
+- Looks like a real scanned official document
+- Professional formatting
+
+Generate ONLY the image, no explanation text.`;
     } else {
-        result = await generateStudentIdWithGemini(firstName, lastName, universityName, key, base);
+        prompt = `Generate a realistic university student ID card image:
+
+UNIVERSITY: ${universityName}
+STUDENT NAME: ${firstName} ${lastName}
+STUDENT ID: ${studentId}
+
+Requirements:
+- Official university ID card design with logo
+- Student photo placeholder area
+- Barcode at bottom
+- Looks like a real scanned ID card
+
+Generate ONLY the image, no explanation text.`;
     }
 
+    let result = null;
+
+    // Try 1: Google Gemini Official API (direct)
+    if (geminiKey) {
+        console.log('[DocGenerator] Trying Google Gemini Official API...');
+        result = await generateImageWithGoogleGemini(prompt, geminiKey, geminiModel);
+        if (result) {
+            result.type = docType;
+            result.fileName = docType === 'transcript' ? 'transcript.png' : 'student_id.png';
+            result.studentId = studentId;
+            result.generatedBy = 'gemini-official';
+            console.log(`[DocGenerator] ✓ Generated with Google Gemini (${result.data.length} bytes)`);
+            return result;
+        }
+    }
+
+    // Try 2: Antigravity Proxy (local)
+    console.log('[DocGenerator] Trying Antigravity Proxy...');
+    result = await generateImageWithAPI(prompt, geminiKey, antigravityBase);
     if (result) {
-        console.log(`[Antigravity] Successfully generated ${docType} (${result.data.length} bytes)`);
-    } else {
-        console.log(`[Antigravity] Failed to generate ${docType}, will use fallback`);
+        result.type = docType;
+        result.fileName = docType === 'transcript' ? 'transcript.png' : 'student_id.png';
+        result.studentId = studentId;
+        result.generatedBy = 'antigravity-proxy';
+        console.log(`[DocGenerator] ✓ Generated with Antigravity (${result.data.length} bytes)`);
+        return result;
     }
 
-    return result;
+    console.log('[DocGenerator] ✗ All AI generators failed, will use SVG fallback');
+    return null;
 }
 
 module.exports = {
     generateStudentIdWithGemini,
     generateTranscriptWithGemini,
     generateDocumentWithGemini,
+    generateImageWithGoogleGemini,
 };

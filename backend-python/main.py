@@ -228,23 +228,30 @@ async def verify(request: VerifyRequest):
 
 
 @app.get("/api/config")
-async def get_config():
+async def get_config_endpoint():
     """Get current configuration (for admin panel)"""
-    return {
-        "aiGenerator": {
-            "provider": "svg",  # SVG fallback for now
-            "svgFallback": {"enabled": True}
-        },
-        "verification": {
-            "maxBatchSize": 5,
-            "delayBetweenMs": 2000
-        },
-        "antiDetect": {
-            "library": "curl_cffi",
-            "impersonate": "chrome131",
-            "newrelicHeaders": True
-        }
-    }
+    import config_manager
+    return config_manager.get_config()
+
+
+@app.post("/api/config")
+async def update_config_endpoint(request: Request, authorization: Optional[str] = Header(None)):
+    """Update configuration (admin only)"""
+    # Verify admin
+    if authorization:
+        token = authorization.replace("Bearer ", "")
+        user = auth.verify_token(token)
+        if not user or user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+    
+    import config_manager
+    body = await request.json()
+    updated = config_manager.update_config(body)
+    
+    if updated:
+        return {"success": True, "config": updated}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to update config")
 
 
 @app.post("/api/verify-puppeteer")

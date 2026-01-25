@@ -15,18 +15,18 @@ from anti_detect import (
 
 SHEERID_API_URL = "https://services.sheerid.com/rest/v2"
 
-# US Universities with SheerID organization IDs
+# US Universities with CORRECT SheerID organization IDs (from orgsearch.sheerid.net)
 UNIVERSITIES = [
-    {"id": 3424, "idExtended": "70E6E8", "name": "Stanford University", "domain": "stanford.edu", "country": "US"},
-    {"id": 3399, "idExtended": "70C4D1", "name": "MIT", "domain": "mit.edu", "country": "US"},
-    {"id": 3411, "idExtended": "70D9E2", "name": "Harvard University", "domain": "harvard.edu", "country": "US"},
-    {"id": 3420, "idExtended": "70E2F4", "name": "Columbia University", "domain": "columbia.edu", "country": "US"},
-    {"id": 3401, "idExtended": "70C7A5", "name": "Yale University", "domain": "yale.edu", "country": "US"},
-    {"id": 3430, "idExtended": "70F1B8", "name": "UCLA", "domain": "ucla.edu", "country": "US"},
-    {"id": 3445, "idExtended": "710AC9", "name": "UC Berkeley", "domain": "berkeley.edu", "country": "US"},
-    {"id": 3502, "idExtended": "714E2C", "name": "University of Michigan", "domain": "umich.edu", "country": "US"},
-    {"id": 3550, "idExtended": "718D6F", "name": "University of Texas Austin", "domain": "utexas.edu", "country": "US"},
-    {"id": 3608, "idExtended": "71C4B0", "name": "NYU", "domain": "nyu.edu", "country": "US"},
+    {"id": 3113, "idExtended": "3113", "name": "Stanford University", "domain": "stanford.edu", "country": "US"},
+    {"id": 1426, "idExtended": "1426", "name": "Harvard University", "domain": "harvard.edu", "country": "US"},
+    {"id": 3499, "idExtended": "3499", "name": "University of California-Los Angeles", "domain": "ucla.edu", "country": "US"},
+    {"id": 2629, "idExtended": "2629", "name": "University of California-Berkeley", "domain": "berkeley.edu", "country": "US"},
+    {"id": 2812, "idExtended": "2812", "name": "University of Michigan-Ann Arbor", "domain": "umich.edu", "country": "US"},
+    {"id": 2711, "idExtended": "2711", "name": "New York University", "domain": "nyu.edu", "country": "US"},
+    {"id": 1564, "idExtended": "1564", "name": "Yale University", "domain": "yale.edu", "country": "US"},
+    {"id": 1563, "idExtended": "1563", "name": "Columbia University", "domain": "columbia.edu", "country": "US"},
+    {"id": 1461, "idExtended": "1461", "name": "Massachusetts Institute of Technology", "domain": "mit.edu", "country": "US"},
+    {"id": 3169, "idExtended": "3169", "name": "University of Texas at Austin", "domain": "utexas.edu", "country": "US"},
 ]
 
 # Common first and last names

@@ -77,13 +77,16 @@ class VerifyResponse(BaseModel):
 
 def get_proxy_url() -> Optional[str]:
     """Build proxy URL from environment variables"""
-    if not PROXY_USER or not PROXY_PASS:
-        return None
+    # TEMPORARILY DISABLED: IPRoyal proxy returning 407 - credentials may be expired
+    # TODO: Update proxy credentials in .env file
+    print("[Proxy] ⚠️  Proxy temporarily disabled - credentials not working")
+    return None
     
-    # Dynamic session for each request
-    session_id = f"sess_{datetime.now().timestamp():.0f}"
-    
-    return f"http://{PROXY_USER}_{session_id}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+    # Original code (re-enable when proxy credentials are fixed):
+    # if not PROXY_USER or not PROXY_PASS:
+    #     return None
+    # session_id = f"sess_{datetime.now().timestamp():.0f}"
+    # return f"http://{PROXY_USER}_{session_id}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
 
 
 def verify_single(vid: str, proxy: str = None) -> dict:

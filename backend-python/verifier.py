@@ -75,6 +75,97 @@ def select_university() -> dict:
     return random.choice(UNIVERSITIES)
 
 
+def lookup_organization_id(name: str, country: str = "US") -> Optional[dict]:
+    """
+    Dynamically lookup correct organization ID from SheerID API
+    
+    This queries the Gemini program's organization list to get the correct ID
+    that works with this specific program.
+    
+    Args:
+        name: University name to search for
+        country: Country code (default US)
+    
+    Returns:
+        dict with id, idExtended, name if found, None otherwise
+    """
+    import httpx
+    
+    try:
+        # Query SheerID API for this program's organizations
+        url = f"https://services.sheerid.com/rest/v2/program/{PROGRAM_ID}/organization"
+        params = {
+            "country": country,
+            "segment": "student",
+            "name": name.split(" (")[0]  # Remove location suffix if present
+        }
+        
+        with httpx.Client(timeout=15) as client:
+            response = client.get(url, params=params)
+        
+        if response.status_code != 200:
+            print(f"[Lookup] API error: {response.status_code}")
+            return None
+        
+        data = response.json()
+        
+        if not data:
+            print(f"[Lookup] No results for: {name}")
+            return None
+        
+        # Try to find exact match or first result
+        search_name = name.lower().split(" (")[0]  # Remove location suffix
+        
+        for org in data:
+            org_name = org.get("name", "").lower()
+            # Check if search name is in org name
+            if search_name in org_name or org_name.startswith(search_name):
+                print(f"[Lookup] Found: {org['id']} - {org['name'][:50]}")
+                return {
+                    "id": org["id"],
+                    "idExtended": str(org["id"]),
+                    "name": org["name"]
+                }
+        
+        # Return first result if no exact match
+        first = data[0]
+        print(f"[Lookup] Using first result: {first['id']} - {first['name'][:50]}")
+        return {
+            "id": first["id"],
+            "idExtended": str(first["id"]),
+            "name": first["name"]
+        }
+        
+    except Exception as e:
+        print(f"[Lookup] Error: {e}")
+        return None
+
+
+def select_university_with_lookup() -> dict:
+    """
+    Select university and verify/update ID from SheerID API
+    
+    This combines random selection with dynamic ID lookup to ensure
+    we always have the correct organization ID for the Gemini program.
+    """
+    # First, select a university from our list
+    university = select_university()
+    
+    # Try to lookup the correct ID from SheerID API
+    lookup_result = lookup_organization_id(university["name"], university.get("country", "US"))
+    
+    if lookup_result:
+        # Update ID with API result
+        university["id"] = lookup_result["id"]
+        university["idExtended"] = lookup_result["idExtended"]
+        university["name"] = lookup_result["name"]
+        print(f"[University] Using API ID: {university['id']} for {university['name'][:40]}")
+    else:
+        print(f"[University] Using cached ID: {university['id']} for {university['name'][:40]}")
+    
+    return university
+
+
 def generate_name() -> Tuple[str, str]:
     """Generate random first and last name"""
     return random.choice(FIRST_NAMES), random.choice(LAST_NAMES)

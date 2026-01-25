@@ -136,9 +136,9 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         
         # Pre-generate student info so we can use it for document generation
         # This ensures the form data and document data match!
-        from verifier import select_university, generate_name, generate_email, generate_birth_date
+        from verifier import select_university_with_lookup, generate_name, generate_email, generate_birth_date
         
-        org = select_university()
+        org = select_university_with_lookup()  # Dynamically lookup correct organization ID from SheerID API
         first, last = generate_name()
         email = generate_email(first, last, org["domain"])
         dob = generate_birth_date()

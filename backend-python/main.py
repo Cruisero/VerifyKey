@@ -134,16 +134,37 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                 "message": check_result.get("error", "Link check failed")
             }
         
-        # Generate document
+        # Pre-generate student info so we can use it for document generation
+        # This ensures the form data and document data match!
+        from verifier import select_university, generate_name, generate_email, generate_birth_date
+        
+        org = select_university()
+        first, last = generate_name()
+        email = generate_email(first, last, org["domain"])
+        dob = generate_birth_date()
+        
+        # Store in verifier so verify() method uses the same info
+        verifier.org = org
+        verifier.student_info = {
+            "firstName": first,
+            "lastName": last,
+            "email": email,
+            "birthDate": dob
+        }
+        verifier.pre_generated = True  # Flag to skip regenerating
+        
+        print(f"[Verify] Pre-generated student: {first} {last} @ {org['name']}")
+        
+        # Generate document using the SAME student info
         print(f"[Verify] Generating document...")
         doc_data, filename = generate_document(
             "auto",
-            "John",  # Will be replaced by verifier
-            "Doe",
-            "University"
+            first,      # Use the same first name as form
+            last,       # Use the same last name as form
+            org["name"] # Use the same school as form
         )
         
-        # Run verification
+        # Run verification with pre-generated info
         result = verifier.verify(doc_data)
         
         return {

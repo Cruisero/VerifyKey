@@ -214,18 +214,27 @@ class SheerIDVerifier:
             if current_step == "pending":
                 return {"success": True, "status": "pending", "message": "Already pending review"}
             
-            # Generate student info
-            self.org = select_university()
-            first, last = generate_name()
-            email = generate_email(first, last, self.org["domain"])
-            dob = generate_birth_date()
-            
-            self.student_info = {
-                "firstName": first,
-                "lastName": last,
-                "email": email,
-                "birthDate": dob
-            }
+            # Use pre-generated student info if available (from main.py)
+            # This ensures document and form have matching data!
+            if hasattr(self, 'pre_generated') and self.pre_generated and hasattr(self, 'student_info'):
+                first = self.student_info["firstName"]
+                last = self.student_info["lastName"]
+                email = self.student_info["email"]
+                dob = self.student_info["birthDate"]
+                print(f"[Verify] Using pre-generated info: {first} {last}")
+            else:
+                # Generate new student info (fallback)
+                self.org = select_university()
+                first, last = generate_name()
+                email = generate_email(first, last, self.org["domain"])
+                dob = generate_birth_date()
+                
+                self.student_info = {
+                    "firstName": first,
+                    "lastName": last,
+                    "email": email,
+                    "birthDate": dob
+                }
             
             self.on_progress({
                 "step": "info_generated",

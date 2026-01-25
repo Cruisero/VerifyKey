@@ -407,7 +407,7 @@ def generate_document(doc_type: str, first: str, last: str, university: str, bir
         Tuple of (document bytes, filename)
     """
     if doc_type == "auto":
-        doc_type = "transcript" if random.random() < 0.7 else "id_card"
+        doc_type = "id_card"  # Always use student ID card with portrait photo
     
     birth = birth_date or "2003-05-15"
     

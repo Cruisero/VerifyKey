@@ -48,7 +48,17 @@ function parseVerificationId(input) {
 class SheerIDVerifier {
     constructor(verificationId, options = {}) {
         this.vid = verificationId;
-        this.proxy = options.proxy || process.env.PROXY_URL || null;
+
+        // Generate dynamic proxy URL with unique session for IP rotation
+        let proxyUrl = options.proxy || process.env.PROXY_URL || null;
+        if (proxyUrl && proxyUrl.includes('session')) {
+            // Replace static session with dynamic one based on verification ID + timestamp
+            const dynamicSession = `sess_${verificationId}_${Date.now()}`;
+            proxyUrl = proxyUrl.replace(/session\d*/, dynamicSession);
+            console.log(`[Proxy] Using dynamic session: ${dynamicSession}`);
+        }
+        this.proxy = proxyUrl;
+
         this.userAgent = getRandomUserAgent();
         this.fingerprint = generateFingerprint();
         this.university = null;

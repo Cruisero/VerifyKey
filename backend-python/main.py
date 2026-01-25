@@ -15,7 +15,7 @@ import asyncio
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -23,9 +23,13 @@ from dotenv import load_dotenv
 
 from verifier import SheerIDVerifier, parse_verification_id
 from doc_generator import generate_document
+import auth
 
 # Load environment variables
 load_dotenv()
+
+# Initialize database
+auth.init_database()
 
 # Configuration
 PORT = int(os.getenv("PORT", 3002))
@@ -252,7 +256,76 @@ async def verify_puppeteer(request: VerifyRequest):
     return await verify(request)
 
 
-# Main entry point
+# ============ AUTH ROUTES ============
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    username: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/register")
+async def register_user(request: RegisterRequest):
+    """Register a new user"""
+    try:
+        username = request.username or request.email.split("@")[0]
+        result = auth.register(request.email, request.password, username)
+        return {"success": True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/auth/login")
+async def login_user(request: LoginRequest):
+    """Login user"""
+    try:
+        result = auth.login(request.email, request.password)
+        return {"success": True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/auth/me")
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    """Get current user from token"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    return {"success": True, "user": user}
+
+
+@app.post("/api/auth/credits")
+async def update_user_credits(authorization: Optional[str] = Header(None)):
+    """Update user credits (admin only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # For now, just return current user
+    return {"success": True, "user": user}
+
+
+
 if __name__ == "__main__":
     import uvicorn
     

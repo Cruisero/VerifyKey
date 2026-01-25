@@ -143,16 +143,26 @@ Generate ONLY the image, no explanation text."""
 
 
 def generate_student_id_with_gemini(first: str, last: str, university: str) -> Optional[bytes]:
-    """Generate student ID card using Gemini AI"""
+    """Generate student ID card using Gemini AI with realistic portrait photo"""
     
     import time
     student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     current_date = time.strftime("%B %d, %Y")
     current_semester = "Spring 2025"
-    valid_thru = "05/2026"  # Fixed to near future
-    issue_date = time.strftime("%m/%Y")  # Current month/year for issue date
+    valid_thru = "05/2026"
+    issue_date = time.strftime("%m/%Y")
     
-    prompt = f"""Generate a realistic university student ID card image:
+    # Determine gender based on first name (simple heuristic)
+    female_names = ["Mary", "Patricia", "Jennifer", "Linda", "Barbara", "Elizabeth", "Susan", 
+                    "Jessica", "Sarah", "Karen", "Lisa", "Nancy", "Betty", "Margaret", "Sandra",
+                    "Ashley", "Kimberly", "Emily", "Donna", "Michelle", "Dorothy", "Carol",
+                    "Amanda", "Melissa", "Deborah", "Stephanie", "Rebecca", "Sharon", "Laura",
+                    "Emma", "Olivia", "Ava", "Isabella", "Sophia", "Mia", "Charlotte", "Amelia"]
+    
+    is_female = first in female_names
+    gender = "female" if is_female else "male"
+    
+    prompt = f"""Generate a photorealistic university student ID card image:
 
 UNIVERSITY: {university}
 STUDENT NAME: {first} {last}
@@ -161,18 +171,27 @@ STATUS: Full-time Student - {current_semester}
 ISSUE DATE: {issue_date}
 VALID THROUGH: {valid_thru}
 
-Requirements:
-- Official university ID card design with university logo prominently displayed
-- Photo placeholder area on left side  
-- Student name "{first} {last}" MUST be clearly visible
-- University name "{university}" MUST be clearly visible
-- Include current semester/term: "{current_semester}"
-- Include issue date or "Issued: {issue_date}" visible on card
-- Valid through date: "{valid_thru}"
-- Barcode at bottom
-- Looks like a real scanned ID card
+CRITICAL REQUIREMENTS:
+1. LEFT SIDE: Include a REALISTIC portrait photo of a young {gender} college student (age 18-22):
+   - Professional headshot style, 1:1 aspect ratio
+   - Neutral background (light blue or white)
+   - Natural smile, looking at camera
+   - Dressed appropriately for a student ID photo
+   - The photo MUST look like a real person, NOT a placeholder or silhouette
 
-CRITICAL: The university name and student name must be clearly visible for verification.
+2. RIGHT SIDE: Card information
+   - University name "{university}" with logo
+   - Student name "{first} {last}" clearly visible
+   - Student ID: {student_id}
+   - "Full-time Student" status
+   - Issue date: {issue_date}
+   - Valid through: {valid_thru}
+
+3. BOTTOM: Barcode strip
+
+4. OVERALL: Must look like a real scanned/photographed student ID card
+
+The portrait photo is ESSENTIAL - it must be a realistic {gender} face, not an icon or placeholder.
 
 Generate ONLY the image, no explanation text."""
     

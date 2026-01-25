@@ -18,7 +18,7 @@ const {
 } = require('../utils/anti-detect');
 const { generateDocument } = require('./document-generator');
 const { generateDocumentWithGemini } = require('./gemini-generator');
-const config = require('../utils/config');
+const { getConfig } = require('../utils/config-manager');
 
 // SheerID verification URL
 const SHEERID_BASE_URL = 'https://services.sheerid.com/verify';
@@ -257,7 +257,7 @@ class PuppeteerVerifier {
                 this.onProgress({ step: 'uploading', message: 'Document upload required...' });
 
                 // Generate document
-                const aiConfig = config.get('aiGenerator', {});
+                const aiConfig = getConfig().aiGenerator || {};
                 let doc = null;
 
                 if (aiConfig.provider === 'gemini_official' && aiConfig.geminiOfficial?.enabled) {

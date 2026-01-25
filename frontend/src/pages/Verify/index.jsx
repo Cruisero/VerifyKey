@@ -523,6 +523,7 @@ abc123-def456-ghi789
                                             <div className="result-status">
                                                 {result.status === 'processing' && <span className="spinner small"></span>}
                                                 {result.status === 'success' && <span className="status-icon success">✓</span>}
+                                                {result.status === 'pending' && <span className="status-icon pending">⏳</span>}
                                                 {result.status === 'failed' && <span className="status-icon failed">✕</span>}
                                             </div>
                                             <div className="result-info">

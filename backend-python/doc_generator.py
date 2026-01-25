@@ -167,7 +167,7 @@ def generate_student_id_with_gemini(first: str, last: str, university: str) -> O
     is_female = first in female_names
     gender = "female" if is_female else "male"
     
-    prompt = f"""Generate a photorealistic university student ID card image:
+    prompt = f"""Generate a photorealistic photo of a university student ID card:
 
 UNIVERSITY: {university}
 STUDENT NAME: {first} {last}
@@ -177,24 +177,30 @@ ISSUE DATE: {issue_date}
 VALID THROUGH: {valid_thru}
 
 CRITICAL REQUIREMENTS:
-1. LEFT SIDE: Include a REALISTIC portrait photo of a young {gender} college student (age 18-22):
+1. This should look like a PHOTO of a physical ID card placed on a desk or table
+2. ALL FOUR CORNERS of the card must be visible - do NOT crop or cut off any edges
+3. The entire card must be shown from top to bottom, left to right
+
+4. LEFT SIDE of card: Include a REALISTIC portrait photo of a young {gender} college student (age 18-22):
    - Professional headshot style, 1:1 aspect ratio
    - Neutral background (light blue or white)
    - Natural smile, looking at camera
    - Dressed appropriately for a student ID photo
    - The photo MUST look like a real person, NOT a placeholder or silhouette
 
-2. RIGHT SIDE: Card information
-   - University name "{university}" with logo
+5. RIGHT SIDE of card: Card information
+   - University name "{university}" with logo at top
    - Student name "{first} {last}" clearly visible
    - Student ID: {student_id}
    - "Full-time Student" status
    - Issue date: {issue_date}
    - Valid through: {valid_thru}
 
-3. BOTTOM: Barcode strip
+6. NO barcode - do not include any barcode on the card
 
-4. OVERALL: Must look like a real scanned/photographed student ID card
+7. The photo should show the complete physical card with slight shadows indicating depth
+   - Card edges should be clearly visible
+   - Slight 3D perspective is okay but card should be mostly flat/frontal
 
 The portrait photo is ESSENTIAL - it must be a realistic {gender} face, not an icon or placeholder.
 

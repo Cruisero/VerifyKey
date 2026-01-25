@@ -2,7 +2,8 @@ import { useState, createContext, useContext, useEffect } from 'react';
 
 const AuthContext = createContext();
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+// In production (served via nginx), use relative path. In development, use localhost.
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3002' : '');
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);

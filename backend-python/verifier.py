@@ -392,3 +392,102 @@ def parse_verification_id(url_or_id: str) -> Optional[str]:
         return match.group(1).lower()
     
     return None
+
+
+def poll_verification_status(vid: str, max_attempts: int = 30, interval: int = 10, proxy: str = None) -> dict:
+    """
+    Poll SheerID API to monitor verification status until final result
+    
+    Args:
+        vid: Verification ID
+        max_attempts: Maximum number of polling attempts (default 30 = 5 minutes with 10s interval)
+        interval: Seconds between polls (default 10)
+        proxy: Optional proxy URL
+    
+    Returns:
+        dict with final status
+    """
+    import time
+    import httpx
+    
+    print(f"[Monitor] Starting to poll verification {vid}")
+    print(f"[Monitor] Max attempts: {max_attempts}, Interval: {interval}s")
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # Build request
+            url = f"https://services.sheerid.com/rest/v2/verification/{vid}"
+            
+            # Use proxy if specified
+            client_kwargs = {"timeout": 30}
+            if proxy:
+                client_kwargs["proxy"] = proxy
+            
+            with httpx.Client(**client_kwargs) as client:
+                response = client.get(url)
+                
+            if response.status_code != 200:
+                print(f"[Monitor] Attempt {attempt}: HTTP {response.status_code}")
+                time.sleep(interval)
+                continue
+            
+            data = response.json()
+            current_step = data.get("currentStep", "")
+            error_ids = data.get("errorIds", [])
+            rejection_reasons = data.get("rejectionReasons", [])
+            
+            print(f"[Monitor] Attempt {attempt}/{max_attempts}: step={current_step}, errors={error_ids}")
+            
+            # Final states
+            if current_step == "success":
+                return {
+                    "success": True,
+                    "status": "success",
+                    "message": "Verification approved!",
+                    "verificationId": vid,
+                    "attempts": attempt
+                }
+            
+            if current_step == "error":
+                return {
+                    "success": False,
+                    "status": "error",
+                    "message": f"Verification failed: {error_ids}",
+                    "errorIds": error_ids,
+                    "verificationId": vid,
+                    "attempts": attempt
+                }
+            
+            # Check for rejection reasons (docUpload with rejection means re-upload needed)
+            if current_step == "docUpload" and rejection_reasons:
+                return {
+                    "success": False,
+                    "status": "rejected",
+                    "message": f"Document rejected: {rejection_reasons}",
+                    "rejectionReasons": rejection_reasons,
+                    "verificationId": vid,
+                    "attempts": attempt
+                }
+            
+            # Still pending - continue polling
+            if current_step == "pending":
+                print(f"[Monitor] Status: pending, waiting {interval}s...")
+                time.sleep(interval)
+                continue
+            
+            # Other states (collectStudentPersonalInfo, docUpload without rejection)
+            print(f"[Monitor] Status: {current_step}, waiting {interval}s...")
+            time.sleep(interval)
+            
+        except Exception as e:
+            print(f"[Monitor] Attempt {attempt} error: {e}")
+            time.sleep(interval)
+    
+    # Timeout
+    return {
+        "success": False,
+        "status": "timeout",
+        "message": f"Polling timed out after {max_attempts} attempts",
+        "verificationId": vid,
+        "attempts": max_attempts
+    }

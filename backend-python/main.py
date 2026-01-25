@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from verifier import SheerIDVerifier, parse_verification_id
+from verifier import SheerIDVerifier, parse_verification_id, poll_verification_status
 from doc_generator import generate_document
 import auth
 
@@ -256,6 +256,89 @@ async def verify(request: VerifyRequest):
             "failed": len(request.verificationIds) - success_count
         }
     }
+
+
+@app.get("/api/check-status/{verification_id}")
+async def check_status(verification_id: str):
+    """
+    Check current status of a verification (single query)
+    
+    Returns the current step and any errors/rejection reasons
+    """
+    import httpx
+    
+    parsed_id = parse_verification_id(verification_id)
+    if not parsed_id:
+        raise HTTPException(status_code=400, detail="Invalid verification ID")
+    
+    try:
+        url = f"https://services.sheerid.com/rest/v2/verification/{parsed_id}"
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(url)
+        
+        if response.status_code != 200:
+            return {
+                "verificationId": parsed_id,
+                "status": "error",
+                "message": f"HTTP {response.status_code}"
+            }
+        
+        data = response.json()
+        current_step = data.get("currentStep", "")
+        error_ids = data.get("errorIds", [])
+        rejection_reasons = data.get("rejectionReasons", [])
+        
+        return {
+            "verificationId": parsed_id,
+            "currentStep": current_step,
+            "status": current_step,
+            "errorIds": error_ids,
+            "rejectionReasons": rejection_reasons,
+            "created": data.get("created"),
+            "updated": data.get("updated"),
+            "country": data.get("country"),
+            "locale": data.get("locale"),
+            "systemErrorMessage": data.get("systemErrorMessage")
+        }
+        
+    except Exception as e:
+        return {
+            "verificationId": parsed_id,
+            "status": "error",
+            "message": str(e)
+        }
+
+
+class PollRequest(BaseModel):
+    verificationId: str
+    maxAttempts: Optional[int] = 30
+    interval: Optional[int] = 10
+
+
+@app.post("/api/poll-status")
+async def poll_status_endpoint(request: PollRequest):
+    """
+    Poll verification status until final result (success/error)
+    
+    Polls every `interval` seconds for up to `maxAttempts` times 
+    (default: 30 attempts = 5 minutes)
+    """
+    parsed_id = parse_verification_id(request.verificationId)
+    if not parsed_id:
+        raise HTTPException(status_code=400, detail="Invalid verification ID")
+    
+    proxy = get_proxy_url()
+    
+    # Run polling synchronously (it has its own sleep/loop)
+    result = poll_verification_status(
+        vid=parsed_id,
+        max_attempts=request.maxAttempts or 30,
+        interval=request.interval or 10,
+        proxy=proxy
+    )
+    
+    return result
 
 
 @app.get("/api/config")

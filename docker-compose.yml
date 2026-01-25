@@ -11,21 +11,42 @@ services:
     networks:
       - onepass-network
 
+  # Python Backend with curl_cffi TLS fingerprint spoofing
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.python
     restart: always
     ports:
       - "3002:3002"
     environment:
-      - NODE_ENV=production
       - PORT=3002
+      - PYTHONUNBUFFERED=1
     env_file:
-      - ./backend/.env
+      - ./backend-python/.env
+    volumes:
+      - backend-data:/app/data
     networks:
       - onepass-network
+  # Legacy Node.js backend (commented out, can be re-enabled)
+  # backend-node:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.backend
+  #   restart: always
+  #   ports:
+  #     - "3003:3002"
+  #   environment:
+  #     - NODE_ENV=production
+  #     - PORT=3002
+  #   env_file:
+  #     - ./backend/.env
+  #   networks:
+  #     - onepass-network
 
 networks:
   onepass-network:
     driver: bridge
+
+volumes:
+  backend-data:

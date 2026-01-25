@@ -239,10 +239,16 @@ class SheerIDVerifier:
                 data, status = self._request("POST", f"/verification/{self.vid}/step/collectStudentPersonalInfo", body)
                 
                 if status != 200:
-                    return {"success": False, "error": f"Submit failed: {status}"}
+                    # Log detailed error for debugging
+                    print(f"[Verify] Submit failed with status {status}")
+                    print(f"[Verify] Response data: {data}")
+                    error_msg = data.get("message", "") if isinstance(data, dict) else str(data)
+                    error_ids = data.get("errorIds", []) if isinstance(data, dict) else []
+                    return {"success": False, "error": f"Submit failed: {status}", "details": error_msg, "errorIds": error_ids}
                 
                 if data.get("currentStep") == "error":
                     error_ids = data.get("errorIds", [])
+                    print(f"[Verify] SheerID error: {error_ids}")
                     return {"success": False, "error": f"Error: {error_ids}"}
                 
                 current_step = data.get("currentStep", "")

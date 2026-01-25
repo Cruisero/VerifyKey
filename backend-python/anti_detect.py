@@ -16,25 +16,51 @@ import uuid
 import base64
 import json
 
-# Chrome versions for impersonation
-CHROME_VERSIONS = [
+# Browser versions for impersonation (randomly selected for anti-detect)
+# curl_cffi supports: chrome, firefox, safari, edge
+BROWSER_VERSIONS = [
+    # Chrome versions (most common)
     "chrome131",
     "chrome130", 
     "chrome124",
     "chrome120",
     "chrome119",
+    # Firefox versions (secondary)
+    "firefox120",
+    "firefox115",
+    # Edge versions (Windows users)
+    "edge120",
+    "edge119",
+    # Safari (macOS users) - less common
+    "safari17",
 ]
 
-# User agents matching Chrome versions
+# Alias for backward compatibility
+CHROME_VERSIONS = BROWSER_VERSIONS
+
+# User agents matching browser versions (randomly selected)
 USER_AGENTS = [
+    # Chrome on Windows
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    # Chrome on macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    # Chrome on Linux
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    # Firefox on Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:115.0) Gecko/20100101 Firefox/115.0",
+    # Firefox on macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0",
+    # Edge on Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0",
+    # Safari on macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
 ]
 
-# Screen resolutions
+# Screen resolutions (realistic distribution)
 RESOLUTIONS = [
     "1920x1080", "1366x768", "1536x864", "1440x900", "1280x720",
     "2560x1440", "1600x900", "1680x1050", "1280x800", "1024x768"
@@ -43,11 +69,13 @@ RESOLUTIONS = [
 # Timezones (US-focused for university verification)
 TIMEZONES = [-8, -7, -6, -5, -4]
 
-# Languages
+# Languages (US English primary, some variations)
 LANGUAGES = [
     "en-US,en;q=0.9",
     "en-US,en;q=0.9,es;q=0.8",
+    "en-US,en;q=0.9,zh;q=0.8",
     "en-GB,en;q=0.9",
+    "en,en-US;q=0.9",
 ]
 
 # Platform hints (must match User-Agent)
@@ -55,6 +83,8 @@ PLATFORMS = [
     ("Windows", '"Windows"', '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"'),
     ("Windows", '"Windows"', '"Chromium";v="130", "Google Chrome";v="130", "Not_A Brand";v="24"'),
     ("macOS", '"macOS"', '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"'),
+    ("Windows", '"Windows"', '"Chromium";v="120", "Microsoft Edge";v="120", "Not_A Brand";v="24"'),
+    ("macOS", '"macOS"', '"Not_A Brand";v="99", "Chromium";v="120", "Safari";v="17"'),
 ]
 
 DEFAULT_IMPERSONATE = "chrome131"
@@ -168,7 +198,11 @@ def create_session(proxy: str = None, impersonate: str = None):
     CRITICAL: curl_cffi with Chrome impersonation makes TLS fingerprint
     match real Chrome browser, bypassing SheerID's JA3/JA4 detection.
     """
-    imp_version = impersonate or DEFAULT_IMPERSONATE
+    # Random browser version if not specified (anti-detect fingerprinting)
+    if impersonate is None:
+        imp_version = random.choice(CHROME_VERSIONS)
+    else:
+        imp_version = impersonate
     
     try:
         from curl_cffi import requests as curl_requests

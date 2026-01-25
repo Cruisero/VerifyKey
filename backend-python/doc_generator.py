@@ -1,12 +1,18 @@
 """
 Document Generator for SheerID Verification
-Generates SVG-based student documents (transcripts, ID cards)
+Generates student documents using:
+1. Google Gemini AI (primary) - More realistic
+2. SVG templates (fallback) - Always available
 """
 
 import random
 import base64
 import io
-from typing import Tuple
+import os
+import json
+from typing import Tuple, Optional
+
+import httpx
 
 # Try to import PIL for image conversion
 try:
@@ -21,6 +27,117 @@ try:
     HAS_CAIRO = True
 except ImportError:
     HAS_CAIRO = False
+
+
+# Gemini API configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-image-preview")
+
+
+def generate_with_gemini(prompt: str) -> Optional[bytes]:
+    """
+    Generate image using Google Gemini AI
+    
+    Args:
+        prompt: Text prompt for image generation
+    
+    Returns:
+        Image bytes or None if failed
+    """
+    if not GEMINI_API_KEY:
+        print("[Gemini] No API key configured")
+        return None
+    
+    try:
+        print(f"[Gemini] Calling API with model: {GEMINI_MODEL}")
+        
+        response = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+            params={"key": GEMINI_API_KEY},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "responseModalities": ["image", "text"]
+                }
+            },
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            error = response.json()
+            print(f"[Gemini] API Error: {error.get('error', {}).get('message', response.status_code)}")
+            return None
+        
+        data = response.json()
+        
+        # Extract image from response
+        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        image_part = next(
+            (p for p in parts if p.get("inlineData", {}).get("mimeType", "").startswith("image/")),
+            None
+        )
+        
+        if image_part:
+            image_data = base64.b64decode(image_part["inlineData"]["data"])
+            print(f"[Gemini] ✓ Got image: {len(image_data)} bytes")
+            return image_data
+        
+        print("[Gemini] No image in response")
+        return None
+        
+    except Exception as e:
+        print(f"[Gemini] Request failed: {e}")
+        return None
+
+
+def generate_transcript_with_gemini(first: str, last: str, university: str, birth_date: str) -> Optional[bytes]:
+    """Generate academic transcript using Gemini AI"""
+    
+    student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+    gpa = round(3.2 + random.random() * 0.8, 2)
+    
+    prompt = f"""Generate a realistic university academic transcript document image:
+
+UNIVERSITY: {university}
+STUDENT NAME: {first} {last}
+STUDENT ID: {student_id}
+DATE OF BIRTH: {birth_date}
+CUMULATIVE GPA: {gpa}
+
+Requirements:
+- Official academic transcript format with university letterhead
+- Course listing: Computer Science, Calculus, Physics, English
+- Looks like a real scanned official document
+- Professional formatting
+
+Generate ONLY the image, no explanation text."""
+    
+    return generate_with_gemini(prompt)
+
+
+def generate_student_id_with_gemini(first: str, last: str, university: str) -> Optional[bytes]:
+    """Generate student ID card using Gemini AI"""
+    
+    student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+    valid_thru = f"08/{random.randint(2026, 2028)}"
+    
+    prompt = f"""Generate a realistic university student ID card image:
+
+UNIVERSITY: {university}
+STUDENT NAME: {first} {last}
+STUDENT ID: {student_id}
+VALID THROUGH: {valid_thru}
+
+Requirements:
+- Official university ID card design with logo
+- Photo placeholder area on left side
+- Student name and ID clearly visible
+- Barcode at bottom
+- Looks like a real scanned ID card
+
+Generate ONLY the image, no explanation text."""
+    
+    return generate_with_gemini(prompt)
 
 
 def random_int(min_val: int, max_val: int) -> int:
@@ -212,6 +329,10 @@ def generate_document(doc_type: str, first: str, last: str, university: str, bir
     """
     Generate verification document
     
+    Priority:
+    1. Gemini AI (more realistic)
+    2. SVG templates (fallback)
+    
     Args:
         doc_type: 'transcript', 'id_card', or 'auto'
         first: First name
@@ -225,15 +346,32 @@ def generate_document(doc_type: str, first: str, last: str, university: str, bir
     if doc_type == "auto":
         doc_type = "transcript" if random.random() < 0.7 else "id_card"
     
+    birth = birth_date or "2003-05-15"
+    
+    # Try Gemini AI first
+    print(f"[DocGen] Trying Gemini AI for {doc_type}...")
+    
     if doc_type == "transcript":
-        svg = generate_transcript_svg(first, last, university, birth_date or "2003-05-15")
+        gemini_result = generate_transcript_with_gemini(first, last, university, birth)
         filename = "transcript.png"
     else:
-        svg = generate_student_id_svg(first, last, university)
+        gemini_result = generate_student_id_with_gemini(first, last, university)
         filename = "student_id.png"
+    
+    if gemini_result:
+        print(f"[DocGen] ✓ Generated {doc_type} with Gemini AI: {len(gemini_result)} bytes")
+        return gemini_result, filename
+    
+    # Fallback to SVG
+    print(f"[DocGen] Gemini failed, using SVG fallback...")
+    
+    if doc_type == "transcript":
+        svg = generate_transcript_svg(first, last, university, birth)
+    else:
+        svg = generate_student_id_svg(first, last, university)
     
     png_data = svg_to_png(svg)
     
-    print(f"[DocGen] Generated {doc_type}: {len(png_data)} bytes")
+    print(f"[DocGen] ✓ Generated {doc_type} with SVG: {len(png_data)} bytes")
     
     return png_data, filename

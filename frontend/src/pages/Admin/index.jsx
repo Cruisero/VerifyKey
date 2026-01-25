@@ -16,15 +16,14 @@ export default function Admin() {
     const [saving, setSaving] = useState(false);
 
     // AI Generator form state
-    const [aiProvider, setAiProvider] = useState('svg');
-    const [antigravitySettings, setAntigravitySettings] = useState({
-        apiBase: 'http://127.0.0.1:8045/v1',
-        apiKey: '',
-        model: 'gemini-3-pro-image'
+    const [aiProvider, setAiProvider] = useState('gemini');
+    const [batchApiSettings, setBatchApiSettings] = useState({
+        apiUrl: 'https://batch.1key.me/api/batch',
+        apiKey: ''
     });
     const [geminiSettings, setGeminiSettings] = useState({
         apiKey: '',
-        model: 'gemini-2.0-flash-exp-image-generation'
+        model: 'gemini-3-pro-image-preview'
     });
 
     useEffect(() => {
@@ -44,31 +43,28 @@ export default function Admin() {
             if (res.ok) {
                 const data = await res.json();
                 setConfig(data);
-                setAiProvider(data.aiGenerator?.provider || 'svg');
-                if (data.aiGenerator?.antigravity) {
-                    setAntigravitySettings(prev => ({
+                setAiProvider(data.aiGenerator?.provider || 'gemini');
+                if (data.aiGenerator?.batchApi) {
+                    setBatchApiSettings(prev => ({
                         ...prev,
-                        apiBase: data.aiGenerator.antigravity.apiBase || prev.apiBase,
-                        // Show masked key indicator if key exists on server
-                        apiKey: data.aiGenerator.antigravity.apiKey?.includes('...')
-                            ? '' // Keep empty, user can re-enter if needed
-                            : (data.aiGenerator.antigravity.apiKey || ''),
-                        model: data.aiGenerator.antigravity.model || prev.model
+                        apiUrl: data.aiGenerator.batchApi.apiUrl || prev.apiUrl,
+                        apiKey: data.aiGenerator.batchApi.apiKey?.includes('...')
+                            ? ''
+                            : (data.aiGenerator.batchApi.apiKey || '')
                     }));
-                    // Store indicator that key exists on server
-                    if (data.aiGenerator.antigravity.apiKey?.includes('...')) {
-                        setAntigravitySettings(prev => ({ ...prev, hasStoredKey: true }));
+                    if (data.aiGenerator.batchApi.apiKey?.includes('...')) {
+                        setBatchApiSettings(prev => ({ ...prev, hasStoredKey: true }));
                     }
                 }
-                if (data.aiGenerator?.geminiOfficial) {
+                if (data.aiGenerator?.gemini) {
                     setGeminiSettings(prev => ({
                         ...prev,
-                        apiKey: data.aiGenerator.geminiOfficial.apiKey?.includes('...')
+                        apiKey: data.aiGenerator.gemini.apiKey?.includes('...')
                             ? ''
-                            : (data.aiGenerator.geminiOfficial.apiKey || ''),
-                        model: data.aiGenerator.geminiOfficial.model || prev.model
+                            : (data.aiGenerator.gemini.apiKey || ''),
+                        model: data.aiGenerator.gemini.model || prev.model
                     }));
-                    if (data.aiGenerator.geminiOfficial.apiKey?.includes('...')) {
+                    if (data.aiGenerator.gemini.apiKey?.includes('...')) {
                         setGeminiSettings(prev => ({ ...prev, hasStoredKey: true }));
                     }
                 }
@@ -84,14 +80,13 @@ export default function Admin() {
             const updates = {
                 aiGenerator: {
                     provider: aiProvider,
-                    antigravity: {
-                        enabled: aiProvider === 'antigravity',
-                        apiBase: antigravitySettings.apiBase,
-                        apiKey: antigravitySettings.apiKey || undefined,
-                        model: antigravitySettings.model
+                    batchApi: {
+                        enabled: aiProvider === 'batch_api',
+                        apiUrl: batchApiSettings.apiUrl,
+                        apiKey: batchApiSettings.apiKey || undefined
                     },
-                    geminiOfficial: {
-                        enabled: aiProvider === 'gemini_official',
+                    gemini: {
+                        enabled: aiProvider === 'gemini',
                         apiKey: geminiSettings.apiKey || undefined,
                         model: geminiSettings.model
                     },
@@ -123,9 +118,9 @@ export default function Admin() {
         try {
             const body = {
                 provider: aiProvider,
-                apiBase: antigravitySettings.apiBase,
-                apiKey: aiProvider === 'antigravity' ? antigravitySettings.apiKey : geminiSettings.apiKey,
-                model: aiProvider === 'antigravity' ? antigravitySettings.model : geminiSettings.model
+                apiUrl: aiProvider === 'batch_api' ? batchApiSettings.apiUrl : undefined,
+                apiKey: aiProvider === 'batch_api' ? batchApiSettings.apiKey : geminiSettings.apiKey,
+                model: geminiSettings.model
             };
 
             const res = await fetch(`${API_BASE}/api/config/test`, {
@@ -310,13 +305,13 @@ export default function Admin() {
                                 </div>
 
                                 <div
-                                    className={`provider-card ${aiProvider === 'antigravity' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('antigravity')}
+                                    className={`provider-card ${aiProvider === 'batch_api' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('batch_api')}
                                 >
-                                    <div className="provider-icon">🚀</div>
+                                    <div className="provider-icon">🔗</div>
                                     <div className="provider-info">
-                                        <h4>Antigravity Tools</h4>
-                                        <p>使用本地 API 反代服务</p>
+                                        <h4>batch.1key.me API</h4>
+                                        <p>使用第三方批量验证 API</p>
                                     </div>
                                     <div className="provider-status">
                                         <span className="badge badge-warning">需配置</span>
@@ -324,12 +319,12 @@ export default function Admin() {
                                 </div>
 
                                 <div
-                                    className={`provider-card ${aiProvider === 'gemini_official' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('gemini_official')}
+                                    className={`provider-card ${aiProvider === 'gemini' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('gemini')}
                                 >
                                     <div className="provider-icon">✨</div>
                                     <div className="provider-info">
-                                        <h4>Gemini 官方 API</h4>
+                                        <h4>Gemini API</h4>
                                         <p>直接调用 Google Gemini API</p>
                                     </div>
                                     <div className="provider-status">
@@ -338,19 +333,19 @@ export default function Admin() {
                                 </div>
                             </div>
 
-                            {/* Antigravity Settings */}
-                            {aiProvider === 'antigravity' && (
+                            {/* batch.1key.me API Settings */}
+                            {aiProvider === 'batch_api' && (
                                 <div className="provider-settings">
-                                    <h4>Antigravity Tools 配置</h4>
+                                    <h4>batch.1key.me API 配置</h4>
                                     <div className="settings-form">
                                         <div className="input-group">
-                                            <label className="input-label">API Base URL</label>
+                                            <label className="input-label">API URL</label>
                                             <input
                                                 type="text"
                                                 className="input"
-                                                value={antigravitySettings.apiBase}
-                                                onChange={(e) => setAntigravitySettings(s => ({ ...s, apiBase: e.target.value }))}
-                                                placeholder="http://127.0.0.1:8045/v1"
+                                                value={batchApiSettings.apiUrl}
+                                                onChange={(e) => setBatchApiSettings(s => ({ ...s, apiUrl: e.target.value }))}
+                                                placeholder="https://batch.1key.me/api/batch"
                                             />
                                         </div>
                                         <div className="input-group">
@@ -358,35 +353,25 @@ export default function Admin() {
                                             <input
                                                 type="password"
                                                 className="input"
-                                                value={antigravitySettings.apiKey}
-                                                onChange={(e) => setAntigravitySettings(s => ({ ...s, apiKey: e.target.value, hasStoredKey: false }))}
-                                                placeholder={antigravitySettings.hasStoredKey ? "••••••••••（已保存，留空保持不变）" : "sk-xxxxxxxxxxxxxxxxxxxxxx"}
+                                                value={batchApiSettings.apiKey}
+                                                onChange={(e) => setBatchApiSettings(s => ({ ...s, apiKey: e.target.value, hasStoredKey: false }))}
+                                                placeholder={batchApiSettings.hasStoredKey ? "••••••••••（已保存，留空保持不变）" : "输入 batch.1key.me API Key"}
                                             />
-                                            {antigravitySettings.hasStoredKey && (
+                                            {batchApiSettings.hasStoredKey && (
                                                 <p className="input-hint"><span className="key-stored">✓ API Key 已保存</span></p>
                                             )}
-                                        </div>
-                                        <div className="input-group">
-                                            <label className="input-label">图像生成模型</label>
-                                            <select
-                                                className="input"
-                                                value={antigravitySettings.model}
-                                                onChange={(e) => setAntigravitySettings(s => ({ ...s, model: e.target.value }))}
-                                            >
-                                                <option value="gemini-3-pro-image">gemini-3-pro-image (1:1)</option>
-                                                <option value="gemini-3-pro-image-4x3">gemini-3-pro-image-4x3</option>
-                                                <option value="gemini-3-pro-image-16x9">gemini-3-pro-image-16x9</option>
-                                                <option value="gemini-3-pro-image-2k">gemini-3-pro-image-2k</option>
-                                            </select>
+                                            <p className="input-hint">
+                                                从 <a href="https://batch.1key.me" target="_blank" rel="noreferrer">batch.1key.me</a> 获取 API Key
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Gemini Official Settings */}
-                            {aiProvider === 'gemini_official' && (
+                            {/* Gemini API Settings */}
+                            {aiProvider === 'gemini' && (
                                 <div className="provider-settings">
-                                    <h4>Gemini 官方 API 配置</h4>
+                                    <h4>Gemini API 配置</h4>
                                     <div className="settings-form">
                                         <div className="input-group">
                                             <label className="input-label">API Key</label>
@@ -410,14 +395,9 @@ export default function Admin() {
                                                 onChange={(e) => setGeminiSettings(s => ({ ...s, model: e.target.value }))}
                                             >
                                                 <optgroup label="🖼️ 图像生成模型">
-                                                    <option value="gemini-2.0-flash-exp-image-generation">gemini-2.0-flash-exp-image-generation (推荐)</option>
-                                                    <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
+                                                    <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview (推荐)</option>
+                                                    <option value="gemini-2.0-flash-exp-image-generation">gemini-2.0-flash-exp-image-generation</option>
                                                     <option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
-                                                    <option value="imagen-4.0-fast-generate-001">imagen-4.0-fast-generate-001</option>
-                                                </optgroup>
-                                                <optgroup label="💬 文本模型 (仅测试连接)">
-                                                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                                                    <option value="gemini-1.5-pro">gemini-1.5-pro</option>
                                                 </optgroup>
                                             </select>
                                         </div>

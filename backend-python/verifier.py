@@ -15,6 +15,9 @@ from anti_detect import (
 
 SHEERID_API_URL = "https://services.sheerid.com/rest/v2"
 
+# Google One Student Verification Program ID (from ThanhNguyxn)
+PROGRAM_ID = "67c8c14f5f17a83b745e3f82"
+
 # US Universities with VERIFIED SheerID IDs (from ThanhNguyxn/SheerID-Verification-Tool)
 # These IDs are confirmed to work with high success rates
 UNIVERSITIES = [
@@ -255,7 +258,9 @@ class SheerIDVerifier:
                     "metadata": {
                         "marketConsentValue": False,
                         "verificationId": self.vid,
-                        "refererUrl": f"https://services.sheerid.com/verify/?verificationId={self.vid}",
+                        "refererUrl": f"https://services.sheerid.com/verify/{PROGRAM_ID}/?verificationId={self.vid}",
+                        "flags": '{"collect-info-step-email-first":"default","doc-upload-considerations":"default","doc-upload-may24":"default","doc-upload-redesign-use-legacy-message-keys":false,"docUpload-assertion-checklist":"default","font-size":"default","include-cvec-field-france-student":"not-labeled-optional"}',
+                        "submissionOptIn": "By submitting the personal information above, I acknowledge that my personal information is being collected under the privacy policy of the business from which I am seeking a discount"
                     }
                 }
                 
@@ -277,8 +282,9 @@ class SheerIDVerifier:
                 current_step = data.get("currentStep", "")
                 self.on_progress({"step": "submitted", "message": f"Current step: {current_step}"})
             
-            # Step 2: Skip SSO if needed
-            if current_step == "sso":
+            # Step 2: Skip SSO if needed (ThanhNguyxn's PastKing logic)
+            # Must skip SSO at both 'sso' AND 'collectStudentPersonalInfo' steps
+            if current_step in ["sso", "collectStudentPersonalInfo"]:
                 self.on_progress({"step": "skipping_sso", "message": "Skipping SSO..."})
                 self._request("DELETE", f"/verification/{self.vid}/step/sso")
             

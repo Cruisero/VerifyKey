@@ -4,6 +4,7 @@
  * Now with Gemini AI document generation!
  */
 
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const { selectUniversity, recordResult } = require('../data/universities');
 const {
     getHeaders,
@@ -76,8 +77,9 @@ class SheerIDVerifier {
         }
 
         // Add proxy support if configured
-        // Note: Node.js fetch doesn't natively support proxies
-        // For production, consider using undici or https-proxy-agent
+        if (this.proxy) {
+            fetchOptions.agent = new HttpsProxyAgent(this.proxy);
+        }
 
         try {
             const response = await fetch(url, fetchOptions);

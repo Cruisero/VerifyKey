@@ -41,7 +41,8 @@ def generate_student_id_puppeteer(
     academic_year: str = None,
     gender: str = "any",
     photo_path: str = None,
-    save_form_data: bool = True
+    save_form_data: bool = True,
+    template: str = None
 ) -> Tuple[Optional[bytes], Optional[str], Optional[Dict]]:
     """
     Generate student ID card using Puppeteer HTML template renderer
@@ -116,6 +117,11 @@ def generate_student_id_puppeteer(
         "--format=jpeg",
         "--quality=95"
     ]
+    
+    # Add template if specified
+    if template:
+        cmd.append(f"--template={template}")
+        print(f"[PuppeteerGen] Using template: {template}")
     
     if photo_path:
         cmd.append(f"--photo={photo_path}")
@@ -237,9 +243,8 @@ def generate_document_puppeteer(
         university=university,
         birth_date=birth_date,
         gender=gender,
-        save_form_data=True
-        # Note: template and use_gemini_photo would need to be passed to generate-student-id.js
-        # For now, these are logged for debugging
+        save_form_data=True,
+        template=template
     )
     
     if image_bytes:

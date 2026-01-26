@@ -519,6 +519,18 @@ Examples:
         scale: parseInt(args.scale) || 4
     };
 
+    // Handle custom template
+    if (args.template) {
+        const templatesDir = path.join(__dirname, '../templates');
+        const templatePath = path.join(templatesDir, args.template);
+        if (fs.existsSync(templatePath)) {
+            options.template = templatePath;
+            console.log(`[Generator] Using custom template: ${args.template}`);
+        } else {
+            console.log(`[Generator] Warning: Template ${args.template} not found, using default`);
+        }
+    }
+
     console.log(`Student: ${studentData.name}`);
     console.log(`University: ${studentData.university}`);
     console.log(`ID: ${studentData.studentId}`);

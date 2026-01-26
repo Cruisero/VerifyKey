@@ -14,6 +14,12 @@ import os
 import base64
 from typing import Optional, Tuple, Dict
 from pathlib import Path
+import random
+import datetime
+try:
+    import piexif
+except ImportError:
+    piexif = None
 
 # Path to the Node.js generator script
 # In Docker: /tools/generate-student-id.js
@@ -28,6 +34,68 @@ GENERATOR_SCRIPT = DOCKER_TOOLS_PATH / "generate-student-id.js" if DOCKER_TOOLS_
 DOCKER_OUTPUT_PATH = Path("/output")
 LOCAL_OUTPUT_PATH = Path(__file__).parent.parent / "output"
 OUTPUT_DIR = DOCKER_OUTPUT_PATH if DOCKER_OUTPUT_PATH.exists() else LOCAL_OUTPUT_PATH
+
+
+def inject_realistic_exif(image_path: Path):
+    """
+    Inject realistic camera EXIF metadata into the image
+    to bypass fraud detection systems.
+    """
+    if not piexif:
+        print("[PuppeteerGen] Warning: piexif module not found, skipping EXIF injection")
+        return
+
+    try:
+        # Realistic camera models
+        cameras = [
+            {"make": "Apple", "model": "iPhone 13", "software": "15.4.1"},
+            {"make": "Apple", "model": "iPhone 14 Pro", "software": "16.2"},
+            {"make": "Samsung", "model": "SM-G991B", "software": "G991BXXU3AUGM"},  # S21
+            {"make": "Google", "model": "Pixel 6", "software": "Android 13"},
+            {"make": "OnePlus", "model": "KB2003", "software": "Oxygen OS 11.0.1.1"}
+        ]
+        
+        cam = random.choice(cameras)
+        
+        # DateTime
+        now = datetime.datetime.now()
+        dt_str = now.strftime("%Y:%m:%d %H:%M:%S")
+        
+        # 0th IFD
+        zeroth_ifd = {
+            piexif.ImageIFD.Make: cam["make"],
+            piexif.ImageIFD.Model: cam["model"],
+            piexif.ImageIFD.Software: cam["software"],
+            piexif.ImageIFD.DateTime: dt_str,
+            piexif.ImageIFD.Orientation: 1,
+            piexif.ImageIFD.XResolution: (72, 1),
+            piexif.ImageIFD.YResolution: (72, 1),
+        }
+        
+        # Exif IFD
+        exif_ifd = {
+            piexif.ExifIFD.DateTimeOriginal: dt_str,
+            piexif.ExifIFD.DateTimeDigitized: dt_str,
+            piexif.ExifIFD.ExposureProgram: 2,  # Normal program
+            piexif.ExifIFD.ISOSpeedRatings: random.choice([50, 80, 100, 125, 200]),
+            piexif.ExifIFD.ExifVersion: b"0232",
+            piexif.ExifIFD.ColorSpace: 1,  # sRGB
+            piexif.ExifIFD.PixelXDimension: 1000, # Placeholder, will be updated by piexif? No, just metadata
+            piexif.ExifIFD.PixelYDimension: 1000,
+        }
+        
+        # GPS (Optional - let's add random US university locations or just generic ones?)
+        # For now, let's skip GPS to avoid inconsistency if address is vastly different
+        
+        exif_dict = {"0th": zeroth_ifd, "Exif": exif_ifd}
+        exif_bytes = piexif.dump(exif_dict)
+        
+        piexif.insert(exif_bytes, str(image_path))
+        print(f"[PuppeteerGen] ✓ Injected realistic EXIF: {cam['make']} {cam['model']}")
+        
+    except Exception as e:
+        print(f"[PuppeteerGen] Failed to inject EXIF: {e}")
+
 
 
 def generate_student_id_puppeteer(
@@ -166,6 +234,9 @@ def generate_student_id_puppeteer(
         if not output_path.exists():
             print(f"[PuppeteerGen] Output file not found: {output_path}")
             return None, None, None
+        
+        # Inject EXIF metadata before reading
+        inject_realistic_exif(output_path)
         
         with open(output_path, 'rb') as f:
             image_bytes = f.read()

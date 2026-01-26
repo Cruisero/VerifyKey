@@ -584,12 +584,14 @@ export default function Admin() {
                                                 <h5>📝 表单数据 (将提交到 SheerID)</h5>
                                                 <table className="form-data-table">
                                                     <tbody>
-                                                        {Object.entries(testDocumentResult.formData || {}).map(([key, value]) => (
-                                                            <tr key={key}>
-                                                                <td className="key">{key}</td>
-                                                                <td className="value">{value}</td>
-                                                            </tr>
-                                                        ))}
+                                                        {Object.entries(testDocumentResult.formData || {})
+                                                            .filter(([key]) => ['firstName', 'lastName', 'university', 'birthDate', 'dob', 'email'].includes(key))
+                                                            .map(([key, value]) => (
+                                                                <tr key={key}>
+                                                                    <td className="key">{key}</td>
+                                                                    <td className="value">{value}</td>
+                                                                </tr>
+                                                            ))}
                                                     </tbody>
                                                 </table>
                                             </div>

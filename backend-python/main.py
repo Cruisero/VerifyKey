@@ -408,11 +408,12 @@ class TestDocumentRequest(BaseModel):
 @app.post("/api/config/test-document")
 async def test_document_generation(request: TestDocumentRequest):
     """
-    Test document generation - generates a sample document and returns
-    both the image (as base64) and the form data that would be submitted
+    Test document generation - generates a sample document using the SAVED server config
+    to show exactly what would be submitted during actual verification
     """
     import base64
     import random
+    import config_manager
     
     # Generate random test data if not provided
     first_names = ["John", "Emily", "Michael", "Sarah", "David", "Jessica"]
@@ -425,10 +426,21 @@ async def test_document_generation(request: TestDocumentRequest):
     gender = request.gender or "any"
     
     try:
-        if request.provider == "puppeteer":
-            # Use Puppeteer generator with specified template
-            template = request.template or "student-id-generator.html"
-            use_gemini_photo = request.useGeminiPhoto if request.useGeminiPhoto is not None else True
+        # Use the SAVED server config (same as actual verification)
+        config = config_manager.get_config()
+        provider = config.get("aiGenerator", {}).get("provider", "gemini")
+        
+        print(f"[TestDoc] Using saved config provider: {provider}")
+        
+        doc_data = None
+        filename = None
+        form_data = None
+        
+        if provider == "puppeteer":
+            # Use Puppeteer generator with saved config
+            puppeteer_config = config.get("aiGenerator", {}).get("puppeteer", {})
+            template = puppeteer_config.get("template", "student-id-generator.html")
+            use_gemini_photo = puppeteer_config.get("useGeminiPhoto", True)
             
             print(f"[TestDoc] Using Puppeteer with template: {template}, geminiPhoto: {use_gemini_photo}")
             
@@ -443,45 +455,20 @@ async def test_document_generation(request: TestDocumentRequest):
             )
             
             if doc_data and form_data:
-                # Convert image to base64 for display
                 image_base64 = base64.b64encode(doc_data).decode('utf-8')
                 
                 return {
                     "success": True,
                     "provider": "puppeteer",
+                    "providerNote": f"使用保存的配置: Puppeteer HTML 模板 ({template})",
                     "image": f"data:image/jpeg;base64,{image_base64}",
                     "formData": form_data,
                     "filename": filename
                 }
-            else:
-                # Puppeteer failed, fallback to Gemini/SVG
-                print("[TestDoc] Puppeteer failed, falling back to Gemini/SVG...")
-                doc_data, filename = generate_document("auto", first, last, university)
-                
-                if doc_data:
-                    image_base64 = base64.b64encode(doc_data).decode('utf-8')
-                    mime_type = "image/jpeg" if filename.endswith(".jpg") else "image/png"
-                    
-                    return {
-                        "success": True,
-                        "provider": "gemini (fallback)",
-                        "image": f"data:{mime_type};base64,{image_base64}",
-                        "formData": {
-                            "firstName": first,
-                            "lastName": last,
-                            "fullName": f"{first} {last}".upper(),
-                            "university": university
-                        },
-                        "filename": filename,
-                        "note": "Puppeteer 在 Docker 中不可用，已使用 Gemini/SVG 回退"
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "message": "Puppeteer 和 Gemini/SVG 都失败了"
-                    }
-        else:
-            # Use Gemini/SVG generator
+        
+        # Fallback to Gemini/SVG generator (default or if puppeteer failed)
+        if not doc_data:
+            print(f"[TestDoc] Using Gemini/SVG generator...")
             doc_data, filename = generate_document("auto", first, last, university)
             
             if doc_data:
@@ -490,7 +477,8 @@ async def test_document_generation(request: TestDocumentRequest):
                 
                 return {
                     "success": True,
-                    "provider": request.provider,
+                    "provider": provider,
+                    "providerNote": f"使用保存的配置: {provider.upper()} 文档生成",
                     "image": f"data:{mime_type};base64,{image_base64}",
                     "formData": {
                         "firstName": first,

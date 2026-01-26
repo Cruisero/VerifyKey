@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic Student ID Card</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Lato:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lato', sans-serif;
+        }
+
+        .id-card-container {
+            width: 3.5in;
+            height: 2.2in;
+            position: relative;
+            background: #fdfbf7;
+            /* Cream/Off-white */
+            color: #1f2937;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+
+        /* Decorative Border */
+        .border-frame {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            right: 4px;
+            bottom: 4px;
+            border: 2px solid #b45309;
+            /* Amber 700 */
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .header {
+            background: #1e3a8a;
+            /* Blue 900 */
+            color: white;
+            padding: 8px 12px;
+            text-align: center;
+            border-bottom: 3px solid #b45309;
+            z-index: 10;
+        }
+
+        .university-name {
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            padding: 12px;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .photo-frame {
+            width: 0.9in;
+            height: 1.1in;
+            background: white;
+            border: 1px solid #d1d5db;
+            padding: 3px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            flex-shrink: 0;
+        }
+
+        .student-photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .info-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card-title {
+            color: #b45309;
+            font-family: 'Cinzel', serif;
+            font-size: 9px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 2px;
+            width: 100%;
+        }
+
+        .student-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111827;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 2px 8px;
+            font-size: 8px;
+        }
+
+        .label {
+            color: #6b7280;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .value {
+            color: #374151;
+            font-weight: 600;
+        }
+
+        .footer {
+            padding: 4px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f3f4f6;
+            border-top: 1px solid #e5e7eb;
+            font-size: 7px;
+            color: #6b7280;
+        }
+
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Main Card Container expected by Puppeteer -->
+    <div id="idCardPreview" class="id-card-container">
+        <div class="border-frame"></div>
+
+        <div class="header">
+            <div id="cardUniversityName" class="university-name">University Name</div>
+        </div>
+
+        <div class="content">
+            <div class="photo-frame">
+                <img id="cardStudentPhoto" class="student-photo"
+                    src="https://placehold.co/300x400/e2e8f0/64748b?text=Portrait" alt="Student">
+            </div>
+
+            <div class="info-area">
+                <div class="card-title">Student Identification</div>
+                <div id="cardName" class="student-name">Student Name</div>
+
+                <div class="details-grid">
+                    <span class="label">ID No.</span>
+                    <span id="cardStudentId" class="value font-mono">00000000</span>
+
+                    <span class="label">Born</span>
+                    <span id="cardDob" class="value">Jan 01, 2000</span>
+
+                    <span class="label">Valid</span>
+                    <span id="cardAcademicYear" class="value">2025-2026</span>
+
+                    <span class="label">Phone</span>
+                    <span id="cardPhone" class="value">555-0123</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div id="cardAddress" class="truncate max-w-[2in]">123 Campus Dr, University City</div>
+            <div class="flex items-center gap-1">
+                <div class="w-12 h-3 bg-gray-300"></div> <!-- Barcode placeholder -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Controls for Puppeteer Compatibility -->
+    <div class="controls">
+        <input type="text" id="universityNameInput">
+        <input type="text" id="nameInput">
+        <input type="text" id="dobInput">
+        <input type="text" id="studentIdInput">
+        <input type="text" id="phoneInput">
+        <input type="text" id="academicYearInput">
+        <input type="text" id="addressInput">
+    </div>
+
+</body>
+
+</html>

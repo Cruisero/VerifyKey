@@ -16,10 +16,18 @@ from typing import Optional, Tuple, Dict
 from pathlib import Path
 
 # Path to the Node.js generator script
-GENERATOR_SCRIPT = Path(__file__).parent.parent / "tools" / "generate-student-id.js"
+# In Docker: /tools/generate-student-id.js
+# Local: ../tools/generate-student-id.js
+DOCKER_TOOLS_PATH = Path("/tools")
+LOCAL_TOOLS_PATH = Path(__file__).parent.parent / "tools"
+GENERATOR_SCRIPT = DOCKER_TOOLS_PATH / "generate-student-id.js" if DOCKER_TOOLS_PATH.exists() else LOCAL_TOOLS_PATH / "generate-student-id.js"
 
 # Output directory for generated cards
-OUTPUT_DIR = Path(__file__).parent.parent / "output"
+# In Docker: /output
+# Local: ../output
+DOCKER_OUTPUT_PATH = Path("/output")
+LOCAL_OUTPUT_PATH = Path(__file__).parent.parent / "output"
+OUTPUT_DIR = DOCKER_OUTPUT_PATH if DOCKER_OUTPUT_PATH.exists() else LOCAL_OUTPUT_PATH
 
 
 def generate_student_id_puppeteer(

@@ -45,7 +45,9 @@ COPY templates/ /templates/
 COPY package.json package-lock.json /
 
 # Install Node.js dependencies for Puppeteer
-RUN cd / && npm ci --only=production
+WORKDIR /
+RUN npm cache clean --force && npm install --omit=dev
+WORKDIR /app
 
 # Create data and output directories
 RUN mkdir -p /app/data /output

@@ -15,7 +15,7 @@ CONFIG_FILE = "/app/data/config.json"
 DEFAULT_CONFIG = {
     # AI Generator settings
     "aiGenerator": {
-        "provider": "gemini",  # 'svg' | 'gemini' | 'batch_api'
+        "provider": "gemini",  # 'svg' | 'gemini' | 'batch_api' | 'puppeteer'
         
         # Gemini Official API settings
         "gemini": {
@@ -29,6 +29,14 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "apiUrl": "https://batch.1key.me/api/batch",
             "apiKey": ""
+        },
+        
+        # Puppeteer HTML Template settings (NEW)
+        "puppeteer": {
+            "enabled": False,
+            "template": "student-id-generator.html",  # Selected template file
+            "useGeminiPhoto": True,  # Use Gemini AI to generate student photo
+            "templatesDir": "templates"  # Templates directory relative to project root
         },
         
         # SVG Fallback (always available)
@@ -166,3 +174,43 @@ def get_proxy_url() -> Optional[str]:
     # Add dynamic session
     session_id = f"sess_{datetime.now().timestamp():.0f}"
     return f"http://{user}_{session_id}:{password}@{host}:{port}"
+
+
+def get_available_templates() -> list:
+    """Get list of available HTML templates from the templates directory"""
+    from pathlib import Path
+    
+    # Templates directory (relative to project root)
+    # In Docker: /app/templates, Locally: ../templates relative to this file
+    possible_paths = [
+        Path("/app/templates"),
+        Path(__file__).parent.parent / "templates"
+    ]
+    
+    templates = []
+    
+    for templates_dir in possible_paths:
+        if templates_dir.exists():
+            for file in templates_dir.glob("*.html"):
+                templates.append({
+                    "name": file.stem.replace("-", " ").replace("_", " ").title(),
+                    "filename": file.name,
+                    "path": str(file)
+                })
+            break
+    
+    return templates
+
+
+def get_puppeteer_settings() -> dict:
+    """Get Puppeteer template settings"""
+    config = load_config()
+    puppeteer = config.get("aiGenerator", {}).get("puppeteer", {})
+    
+    return {
+        "enabled": puppeteer.get("enabled", False),
+        "template": puppeteer.get("template", "student-id-generator.html"),
+        "useGeminiPhoto": puppeteer.get("useGeminiPhoto", True),
+        "availableTemplates": get_available_templates()
+    }
+

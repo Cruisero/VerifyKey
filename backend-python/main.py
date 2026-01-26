@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 from verifier import SheerIDVerifier, parse_verification_id, poll_verification_status
 from doc_generator import generate_document
+from puppeteer_doc_generator import generate_document_puppeteer
 import auth
 
 # Load environment variables
@@ -155,14 +156,43 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         
         print(f"[Verify] Pre-generated student: {first} {last} @ {org['name']}")
         
-        # Generate document using the SAME student info
-        print(f"[Verify] Generating document...")
-        doc_data, filename = generate_document(
-            "auto",
-            first,      # Use the same first name as form
-            last,       # Use the same last name as form
-            org["name"] # Use the same school as form
-        )
+        # Check config to determine which generator to use
+        import config_manager
+        config = config_manager.get_config()
+        provider = config.get("aiGenerator", {}).get("provider", "gemini")
+        
+        doc_data = None
+        filename = None
+        form_data = None
+        
+        # Use Puppeteer if configured
+        if provider == "puppeteer":
+            print(f"[Verify] Generating document with Puppeteer HTML template...")
+            doc_data, filename, form_data = generate_document_puppeteer(
+                "id_card",
+                first,      # Use the same first name as form
+                last,       # Use the same last name as form
+                org["name"], # Use the same school as form
+                birth_date=dob,
+                gender="any"
+            )
+        
+        # Fallback to Gemini/SVG generator if Puppeteer not selected or failed
+        if not doc_data:
+            if provider == "puppeteer":
+                print(f"[Verify] Puppeteer failed, using fallback generator...")
+            else:
+                print(f"[Verify] Generating document with {provider}...")
+            doc_data, filename = generate_document(
+                "auto",
+                first,
+                last,
+                org["name"]
+            )
+            form_data = None
+        
+        if form_data:
+            print(f"[Verify] Form data synced: {first} {last}, ID: {form_data.get('studentId')}")
         
         # Run verification with pre-generated info
         result = verifier.verify(doc_data)
@@ -346,6 +376,142 @@ async def get_config_endpoint():
     """Get current configuration (for admin panel)"""
     import config_manager
     return config_manager.get_config()
+
+
+@app.get("/api/templates")
+async def get_templates_endpoint():
+    """Get available HTML templates for Puppeteer generator"""
+    import config_manager
+    return {
+        "templates": config_manager.get_available_templates(),
+        "puppeteerSettings": config_manager.get_puppeteer_settings()
+    }
+
+
+class TestDocumentRequest(BaseModel):
+    provider: str = "puppeteer"
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    university: Optional[str] = None
+    gender: Optional[str] = "any"
+    # Puppeteer settings
+    template: Optional[str] = None
+    useGeminiPhoto: Optional[bool] = True
+    # Gemini settings
+    geminiApiKey: Optional[str] = None
+    geminiModel: Optional[str] = None
+    # Batch API settings
+    batchApiUrl: Optional[str] = None
+    batchApiKey: Optional[str] = None
+
+
+@app.post("/api/config/test-document")
+async def test_document_generation(request: TestDocumentRequest):
+    """
+    Test document generation - generates a sample document and returns
+    both the image (as base64) and the form data that would be submitted
+    """
+    import base64
+    import random
+    
+    # Generate random test data if not provided
+    first_names = ["John", "Emily", "Michael", "Sarah", "David", "Jessica"]
+    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Davis"]
+    universities = ["Stanford University", "MIT", "Harvard University", "Yale University"]
+    
+    first = request.firstName or random.choice(first_names)
+    last = request.lastName or random.choice(last_names)
+    university = request.university or random.choice(universities)
+    gender = request.gender or "any"
+    
+    try:
+        if request.provider == "puppeteer":
+            # Use Puppeteer generator with specified template
+            template = request.template or "student-id-generator.html"
+            use_gemini_photo = request.useGeminiPhoto if request.useGeminiPhoto is not None else True
+            
+            print(f"[TestDoc] Using Puppeteer with template: {template}, geminiPhoto: {use_gemini_photo}")
+            
+            doc_data, filename, form_data = generate_document_puppeteer(
+                "id_card",
+                first,
+                last,
+                university,
+                gender=gender,
+                template=template,
+                use_gemini_photo=use_gemini_photo
+            )
+            
+            if doc_data and form_data:
+                # Convert image to base64 for display
+                image_base64 = base64.b64encode(doc_data).decode('utf-8')
+                
+                return {
+                    "success": True,
+                    "provider": "puppeteer",
+                    "image": f"data:image/jpeg;base64,{image_base64}",
+                    "formData": form_data,
+                    "filename": filename
+                }
+            else:
+                # Puppeteer failed, fallback to Gemini/SVG
+                print("[TestDoc] Puppeteer failed, falling back to Gemini/SVG...")
+                doc_data, filename = generate_document("auto", first, last, university)
+                
+                if doc_data:
+                    image_base64 = base64.b64encode(doc_data).decode('utf-8')
+                    mime_type = "image/jpeg" if filename.endswith(".jpg") else "image/png"
+                    
+                    return {
+                        "success": True,
+                        "provider": "gemini (fallback)",
+                        "image": f"data:{mime_type};base64,{image_base64}",
+                        "formData": {
+                            "firstName": first,
+                            "lastName": last,
+                            "fullName": f"{first} {last}".upper(),
+                            "university": university
+                        },
+                        "filename": filename,
+                        "note": "Puppeteer 在 Docker 中不可用，已使用 Gemini/SVG 回退"
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": "Puppeteer 和 Gemini/SVG 都失败了"
+                    }
+        else:
+            # Use Gemini/SVG generator
+            doc_data, filename = generate_document("auto", first, last, university)
+            
+            if doc_data:
+                image_base64 = base64.b64encode(doc_data).decode('utf-8')
+                mime_type = "image/jpeg" if filename.endswith(".jpg") else "image/png"
+                
+                return {
+                    "success": True,
+                    "provider": request.provider,
+                    "image": f"data:{mime_type};base64,{image_base64}",
+                    "formData": {
+                        "firstName": first,
+                        "lastName": last,
+                        "fullName": f"{first} {last}".upper(),
+                        "university": university
+                    },
+                    "filename": filename
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Document generation failed"
+                }
+                
+    except Exception as e:
+        print(f"[TestDoc] Error: {e}")
+        return {
+            "success": False,
+            "message": str(e)
+        }
 
 
 @app.post("/api/config")

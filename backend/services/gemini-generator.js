@@ -1,13 +1,36 @@
 /**
  * Gemini AI Document Generator via Antigravity Tools Proxy
  * Uses OpenAI-compatible API to generate realistic student documents
+ * 
+ * Now includes automatic post-processing to make images look like real camera photos
  */
 
 const { randomInt, randomChoice } = require('../utils/anti-detect');
 
+// Import image post-processor for realistic camera effects
+let imageProcessor = null;
+try {
+    imageProcessor = require('./image-processor');
+    console.log('[DocGenerator] Image post-processor loaded');
+} catch (e) {
+    console.warn('[DocGenerator] Image post-processor not available, images will not be enhanced');
+}
+
 // Antigravity Tools API configuration (OpenAI-compatible)
 const DEFAULT_API_BASE = 'http://127.0.0.1:8045/v1';
 const IMAGE_MODEL = 'gemini-3-pro-image';
+
+// Post-processing configuration (can be overridden)
+const POST_PROCESS_DEFAULTS = {
+    enabled: true,
+    phone: null,  // null = random phone profile
+    noise: 8,
+    blur: 0.3,
+    brightness: -5,
+    contrast: -3,
+    quality: 85,
+    includeGPS: true
+};
 
 /**
  * Call Antigravity Tools API for image generation
@@ -346,24 +369,81 @@ Generate ONLY the image, no explanation text.`;
             result.studentId = studentId;
             result.generatedBy = 'gemini-official';
             console.log(`[DocGenerator] ✓ Generated with Google Gemini (${result.data.length} bytes)`);
-            return result;
         }
     }
 
     // Try 2: Antigravity Proxy (local)
-    console.log('[DocGenerator] Trying Antigravity Proxy...');
-    result = await generateImageWithAPI(prompt, geminiKey, antigravityBase);
-    if (result) {
-        result.type = docType;
-        result.fileName = docType === 'transcript' ? 'transcript.png' : 'student_id.png';
-        result.studentId = studentId;
-        result.generatedBy = 'antigravity-proxy';
-        console.log(`[DocGenerator] ✓ Generated with Antigravity (${result.data.length} bytes)`);
-        return result;
+    if (!result) {
+        console.log('[DocGenerator] Trying Antigravity Proxy...');
+        result = await generateImageWithAPI(prompt, geminiKey, antigravityBase);
+        if (result) {
+            result.type = docType;
+            result.fileName = docType === 'transcript' ? 'transcript.png' : 'student_id.png';
+            result.studentId = studentId;
+            result.generatedBy = 'antigravity-proxy';
+            console.log(`[DocGenerator] ✓ Generated with Antigravity (${result.data.length} bytes)`);
+        }
     }
 
-    console.log('[DocGenerator] ✗ All AI generators failed, will use SVG fallback');
-    return null;
+    // If no result, log failure and return null
+    if (!result) {
+        console.log('[DocGenerator] ✗ All AI generators failed, will use SVG fallback');
+        return null;
+    }
+
+    // Apply post-processing to make image look like a real camera photo
+    const postProcessConfig = { ...POST_PROCESS_DEFAULTS, ...(config.postProcess || {}) };
+
+    if (postProcessConfig.enabled && imageProcessor) {
+        try {
+            console.log('[DocGenerator] Applying camera effects and EXIF metadata...');
+
+            const processedBuffer = await imageProcessor.postProcessImage(result.data, {
+                phone: postProcessConfig.phone,
+                noise: postProcessConfig.noise,
+                blur: postProcessConfig.blur,
+                brightness: postProcessConfig.brightness,
+                contrast: postProcessConfig.contrast,
+                quality: postProcessConfig.quality,
+                includeGPS: postProcessConfig.includeGPS
+            });
+
+            // Update result with processed image
+            result.data = processedBuffer;
+            result.base64 = processedBuffer.toString('base64');
+            result.mimeType = 'image/jpeg';
+            result.fileName = result.fileName.replace('.png', '.jpg');
+            result.postProcessed = true;
+
+            console.log(`[DocGenerator] ✓ Post-processing complete (${processedBuffer.length} bytes)`);
+        } catch (postProcessError) {
+            console.warn(`[DocGenerator] Post-processing failed: ${postProcessError.message}`);
+            console.warn('[DocGenerator] Using original unprocessed image');
+            result.postProcessed = false;
+        }
+    } else {
+        result.postProcessed = false;
+        if (!imageProcessor) {
+            console.log('[DocGenerator] Post-processing skipped (processor not available)');
+        } else {
+            console.log('[DocGenerator] Post-processing disabled in config');
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Apply post-processing to an existing image
+ * Can be used to process images that were already generated
+ */
+async function postProcessExistingImage(imageBuffer, options = {}) {
+    if (!imageProcessor) {
+        throw new Error('Image processor not available');
+    }
+
+    const config = { ...POST_PROCESS_DEFAULTS, ...options };
+    return imageProcessor.postProcessImage(imageBuffer, config);
 }
 
 module.exports = {
@@ -371,4 +451,7 @@ module.exports = {
     generateTranscriptWithGemini,
     generateDocumentWithGemini,
     generateImageWithGoogleGemini,
+    postProcessExistingImage,
+    POST_PROCESS_DEFAULTS
 };
+

@@ -15,6 +15,10 @@ export default function Admin() {
     const [testing, setTesting] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    // Test document generation state
+    const [testingDocument, setTestingDocument] = useState(false);
+    const [testDocumentResult, setTestDocumentResult] = useState(null);
+
     // AI Generator form state
     const [aiProvider, setAiProvider] = useState('gemini');
     const [batchApiSettings, setBatchApiSettings] = useState({
@@ -24,6 +28,11 @@ export default function Admin() {
     const [geminiSettings, setGeminiSettings] = useState({
         apiKey: '',
         model: 'gemini-3-pro-image-preview'
+    });
+    const [puppeteerSettings, setPuppeteerSettings] = useState({
+        template: 'student-id-generator.html',
+        useGeminiPhoto: true,
+        availableTemplates: []
     });
 
     useEffect(() => {
@@ -68,6 +77,23 @@ export default function Admin() {
                         setGeminiSettings(prev => ({ ...prev, hasStoredKey: true }));
                     }
                 }
+                if (data.aiGenerator?.puppeteer) {
+                    setPuppeteerSettings(prev => ({
+                        ...prev,
+                        template: data.aiGenerator.puppeteer.template || prev.template,
+                        useGeminiPhoto: data.aiGenerator.puppeteer.useGeminiPhoto !== false
+                    }));
+                }
+            }
+
+            // Fetch available templates
+            const templatesRes = await fetch(`${API_BASE}/api/templates`);
+            if (templatesRes.ok) {
+                const templatesData = await templatesRes.json();
+                setPuppeteerSettings(prev => ({
+                    ...prev,
+                    availableTemplates: templatesData.templates || []
+                }));
             }
         } catch (error) {
             console.error('Failed to load config:', error);
@@ -86,9 +112,14 @@ export default function Admin() {
                         apiKey: batchApiSettings.apiKey || undefined
                     },
                     gemini: {
-                        enabled: aiProvider === 'gemini',
+                        enabled: aiProvider === 'gemini' || aiProvider === 'puppeteer',
                         apiKey: geminiSettings.apiKey || undefined,
                         model: geminiSettings.model
+                    },
+                    puppeteer: {
+                        enabled: aiProvider === 'puppeteer',
+                        template: puppeteerSettings.template,
+                        useGeminiPhoto: puppeteerSettings.useGeminiPhoto
                     },
                     svgFallback: { enabled: true }
                 }
@@ -135,6 +166,44 @@ export default function Admin() {
             setTestResult({ success: false, message: error.message });
         }
         setTesting(false);
+    };
+
+    const handleTestDocument = async () => {
+        setTestingDocument(true);
+        setTestDocumentResult(null);
+
+        try {
+            // Build config based on selected provider
+            const testConfig = {
+                provider: aiProvider
+            };
+
+            if (aiProvider === 'puppeteer') {
+                testConfig.template = puppeteerSettings.template;
+                testConfig.useGeminiPhoto = puppeteerSettings.useGeminiPhoto;
+                if (puppeteerSettings.useGeminiPhoto && geminiSettings.apiKey) {
+                    testConfig.geminiApiKey = geminiSettings.apiKey;
+                }
+            } else if (aiProvider === 'gemini') {
+                testConfig.geminiApiKey = geminiSettings.apiKey;
+                testConfig.geminiModel = geminiSettings.model;
+            } else if (aiProvider === 'batch_api') {
+                testConfig.batchApiUrl = batchApiSettings.apiUrl;
+                testConfig.batchApiKey = batchApiSettings.apiKey;
+            }
+
+            const res = await fetch(`${API_BASE}/api/config/test-document`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testConfig)
+            });
+
+            const data = await res.json();
+            setTestDocumentResult(data);
+        } catch (error) {
+            setTestDocumentResult({ success: false, message: error.message });
+        }
+        setTestingDocument(false);
     };
 
     // 模拟数据
@@ -291,20 +360,6 @@ export default function Admin() {
                             {/* Provider Selection */}
                             <div className="provider-cards">
                                 <div
-                                    className={`provider-card ${aiProvider === 'svg' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('svg')}
-                                >
-                                    <div className="provider-icon">📄</div>
-                                    <div className="provider-info">
-                                        <h4>SVG 模板</h4>
-                                        <p>使用内置 SVG 模板生成，无需 API</p>
-                                    </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-success">始终可用</span>
-                                    </div>
-                                </div>
-
-                                <div
                                     className={`provider-card ${aiProvider === 'batch_api' ? 'active' : ''}`}
                                     onClick={() => setAiProvider('batch_api')}
                                 >
@@ -329,6 +384,20 @@ export default function Admin() {
                                     </div>
                                     <div className="provider-status">
                                         <span className="badge badge-warning">需配置</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    className={`provider-card ${aiProvider === 'puppeteer' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('puppeteer')}
+                                >
+                                    <div className="provider-icon">🎨</div>
+                                    <div className="provider-info">
+                                        <h4>Puppeteer HTML 模板</h4>
+                                        <p>使用 Puppeteer 渲染 HTML 模板生成高质量证件</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-success">推荐</span>
                                     </div>
                                 </div>
                             </div>
@@ -405,6 +474,68 @@ export default function Admin() {
                                 </div>
                             )}
 
+                            {/* Puppeteer HTML Template Settings */}
+                            {aiProvider === 'puppeteer' && (
+                                <div className="provider-settings">
+                                    <h4>🎨 Puppeteer HTML 模板配置</h4>
+                                    <div className="settings-form">
+                                        <div className="input-group">
+                                            <label className="input-label">选择 HTML 模板</label>
+                                            <select
+                                                className="input"
+                                                value={puppeteerSettings.template}
+                                                onChange={(e) => setPuppeteerSettings(s => ({ ...s, template: e.target.value }))}
+                                            >
+                                                {puppeteerSettings.availableTemplates.length > 0 ? (
+                                                    puppeteerSettings.availableTemplates.map(tpl => (
+                                                        <option key={tpl.filename} value={tpl.filename}>
+                                                            {tpl.name} ({tpl.filename})
+                                                        </option>
+                                                    ))
+                                                ) : (
+                                                    <option value="student-id-generator.html">student-id-generator.html (默认)</option>
+                                                )}
+                                            </select>
+                                            <p className="input-hint">
+                                                模板文件位于 <code>VerifyKey/templates/</code> 目录
+                                            </p>
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={puppeteerSettings.useGeminiPhoto}
+                                                    onChange={(e) => setPuppeteerSettings(s => ({ ...s, useGeminiPhoto: e.target.checked }))}
+                                                    style={{ marginRight: '8px' }}
+                                                />
+                                                使用 Gemini AI 生成学生证件照
+                                            </label>
+                                            <p className="input-hint">
+                                                启用后将使用 Gemini AI 自动生成逼真的学生头像
+                                            </p>
+                                        </div>
+                                        {puppeteerSettings.useGeminiPhoto && (
+                                            <>
+                                                <div className="input-group">
+                                                    <label className="input-label">Gemini API Key</label>
+                                                    <input
+                                                        type="password"
+                                                        className="input"
+                                                        value={geminiSettings.apiKey}
+                                                        onChange={(e) => setGeminiSettings(s => ({ ...s, apiKey: e.target.value, hasStoredKey: false }))}
+                                                        placeholder={geminiSettings.hasStoredKey ? "••••••••••（已保存，留空保持不变）" : "AIzaSy..."}
+                                                    />
+                                                    <p className="input-hint">
+                                                        {geminiSettings.hasStoredKey && <span className="key-stored">✓ API Key 已保存 · </span>}
+                                                        从 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Google AI Studio</a> 获取
+                                                    </p>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Test & Save Buttons */}
                             <div className="settings-actions">
                                 <button
@@ -413,6 +544,13 @@ export default function Admin() {
                                     disabled={testing}
                                 >
                                     {testing ? '测试中...' : '🔌 测试连接'}
+                                </button>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleTestDocument}
+                                    disabled={testingDocument}
+                                >
+                                    {testingDocument ? '生成中...' : '🖼️ 测试文档生成'}
                                 </button>
                                 <button
                                     className="btn btn-primary"
@@ -433,16 +571,53 @@ export default function Admin() {
                                     <span className="test-message">{testResult.message}</span>
                                 </div>
                             )}
+
+                            {/* Test Document Result */}
+                            {testDocumentResult && (
+                                <div className="test-document-result">
+                                    <h4>📄 文档生成测试结果</h4>
+                                    {testDocumentResult.success ? (
+                                        <div className="test-document-content">
+                                            <div className="test-document-image">
+                                                <img
+                                                    src={testDocumentResult.image}
+                                                    alt="Generated Document"
+                                                    style={{ maxWidth: '400px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                                                />
+                                                <p className="filename">{testDocumentResult.filename}</p>
+                                            </div>
+                                            <div className="test-document-form-data">
+                                                <h5>📝 表单数据 (将提交到 SheerID)</h5>
+                                                <table className="form-data-table">
+                                                    <tbody>
+                                                        {Object.entries(testDocumentResult.formData || {}).map(([key, value]) => (
+                                                            <tr key={key}>
+                                                                <td className="key">{key}</td>
+                                                                <td className="value">{value}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="test-result error">
+                                            <span className="test-icon">❌</span>
+                                            <span className="test-message">{testDocumentResult.message}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Info Card */}
                         <div className="settings-section card">
                             <h3>💡 说明</h3>
                             <div className="info-content">
-                                <p><strong>SVG 模板：</strong>使用预设模板生成简单的学生证/成绩单 SVG 图像，始终可用，无需任何配置。</p>
-                                <p><strong>Antigravity Tools：</strong>使用本地运行的 Antigravity Manager API 反代服务，支持 gemini-3-pro-image 模型生成高质量图像。</p>
-                                <p><strong>Gemini 官方 API：</strong>直接调用 Google Gemini API，需要有效的 API Key。</p>
-                                <p className="info-warning">⚠️ 如果 AI 生成失败，系统会自动回退到 SVG 模板。</p>
+                                <p><strong>🎨 Puppeteer HTML 模板（推荐）：</strong>使用 Puppeteer 渲染自定义 HTML 模板生成高质量学生证图片，支持 Gemini AI 生成逼真的学生证件照，效果最佳。</p>
+                                <p><strong>Gemini 官方 API：</strong>直接调用 Google Gemini API 生成学生证图像，需要有效的 API Key。</p>
+                                <p><strong>batch.1key.me API：</strong>使用第三方批量验证 API，需要配置 API Key。</p>
+                                <p className="info-warning">⚠️ 如果 AI 生成失败，系统会自动回退到备用生成方式。</p>
                             </div>
                         </div>
                     </div>

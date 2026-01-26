@@ -315,6 +315,79 @@
     font-weight: 500;
 }
 
+/* Test Document Result */
+.test-document-result {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-primary);
+}
+
+.test-document-result h4 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+}
+
+.test-document-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+}
+
+.test-document-image {
+    text-align: center;
+}
+
+.test-document-image img {
+    max-width: 100%;
+    height: auto;
+}
+
+.test-document-image .filename {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    margin-top: var(--spacing-sm);
+    font-family: monospace;
+}
+
+.test-document-form-data h5 {
+    font-size: var(--text-base);
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+}
+
+.form-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.form-data-table td {
+    padding: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.form-data-table td.key {
+    font-weight: 600;
+    color: var(--text-secondary);
+    width: 40%;
+}
+
+.form-data-table td.value {
+    color: var(--text-primary);
+    font-family: monospace;
+}
+
+@media (max-width: 768px) {
+    .test-document-content {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .stats-grid {

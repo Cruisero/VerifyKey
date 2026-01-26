@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Student ID - UK/EU Style</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Source Sans Pro', -apple-system, sans-serif;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+        }
+
+        /* Left accent stripe */
+        .accent-stripe {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            background: linear-gradient(180deg, #8b0000 0%, #a52a2a 100%);
+        }
+
+        /* Header */
+        .header {
+            padding: 8px 10px 6px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .university-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .crest {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #8b0000 0%, #600000 100%);
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffd700;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .university-name {
+            font-size: 10px;
+            font-weight: 700;
+            color: #1f2937;
+            line-height: 1.2;
+        }
+
+        .card-label {
+            font-size: 7px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .validity-tag {
+            background: #dcfce7;
+            color: #166534;
+            font-size: 6px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 2px;
+            text-transform: uppercase;
+        }
+
+        /* Main content */
+        .main-content {
+            padding: 8px 10px 8px 16px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .photo-box {
+            width: 62px;
+            height: 78px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .photo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .details-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .student-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.1;
+            margin-bottom: 2px;
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .detail-item {
+            flex: 1;
+        }
+
+        .detail-label {
+            font-size: 6px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            font-weight: 600;
+        }
+
+        .detail-value {
+            font-size: 8px;
+            color: #374151;
+            font-weight: 600;
+        }
+
+        /* Footer */
+        .footer {
+            position: absolute;
+            bottom: 0;
+            left: 6px;
+            right: 0;
+            padding: 4px 10px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .id-number {
+            font-size: 10px;
+            font-weight: 700;
+            color: #1f2937;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 0.05em;
+        }
+
+        .chip-icon {
+            width: 22px;
+            height: 16px;
+            background: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chip-lines {
+            width: 14px;
+            height: 10px;
+            border: 1px solid rgba(139, 69, 19, 0.4);
+            border-radius: 1px;
+            position: relative;
+        }
+
+        .chip-lines::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(139, 69, 19, 0.3);
+        }
+
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div id="idCardPreview" class="id-card-container">
+        <div class="accent-stripe"></div>
+
+        <!-- Header -->
+        <div class="header">
+            <div class="university-info">
+                <div class="crest">⚜</div>
+                <div>
+                    <div id="cardUniversityName" class="university-name">UNIVERSITY OF OXFORD</div>
+                    <div class="card-label">Student Card</div>
+                </div>
+            </div>
+            <div class="validity-tag">Valid</div>
+        </div>
+
+        <!-- Main content -->
+        <div class="main-content">
+            <div class="photo-box">
+                <img id="cardStudentPhoto" src="https://placehold.co/124x156/f3f4f6/9ca3af?text=Photo" alt="Student">
+            </div>
+
+            <div class="details-section">
+                <div id="cardName" class="student-name">STUDENT NAME</div>
+
+                <div class="detail-row">
+                    <div class="detail-item">
+                        <div class="detail-label">Date of Birth</div>
+                        <div id="cardDob" class="detail-value">01/01/2000</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Expiry</div>
+                        <div id="cardAcademicYear" class="detail-value">09/2026</div>
+                    </div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-item">
+                        <div class="detail-label">Phone</div>
+                        <div id="cardPhone" class="detail-value">+44 7700 900123</div>
+                    </div>
+                </div>
+
+                <!-- Hidden address -->
+                <div style="display:none;"><span id="cardAddress">College Address</span></div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div id="cardStudentId" class="id-number">STU-00000000</div>
+            <div class="chip-icon">
+                <div class="chip-lines"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer -->
+    <div class="controls">
+        <input type="text" id="universityNameInput">
+        <input type="text" id="nameInput">
+        <input type="text" id="dobInput">
+        <input type="text" id="studentIdInput">
+        <input type="text" id="phoneInput">
+        <input type="text" id="academicYearInput">
+        <input type="text" id="addressInput">
+    </div>
+</body>
+
+</html>

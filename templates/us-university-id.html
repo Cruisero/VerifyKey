@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Student ID - US Style</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: linear-gradient(180deg, #1e3a5f 0%, #1e3a5f 35%, #ffffff 35%);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+        }
+
+        /* Top section - University branding */
+        .header-section {
+            height: 35%;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .university-logo {
+            width: 32px;
+            height: 32px;
+            background: #c9a227;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 800;
+            color: #1e3a5f;
+            flex-shrink: 0;
+        }
+
+        .university-text {
+            color: white;
+        }
+
+        .university-name {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1.2;
+        }
+
+        .card-type {
+            font-size: 8px;
+            font-weight: 500;
+            opacity: 0.85;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Bottom section - Student info */
+        .content-section {
+            height: 65%;
+            padding: 8px 12px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .photo-container {
+            width: 70px;
+            height: 90px;
+            background: #e5e7eb;
+            border: 2px solid #d1d5db;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .info-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .student-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #111827;
+            text-transform: uppercase;
+            letter-spacing: 0.01em;
+            line-height: 1.1;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 8px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 6px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .info-value {
+            font-size: 8px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .barcode-area {
+            height: 18px;
+            background: repeating-linear-gradient(90deg,
+                    #000 0px, #000 1px,
+                    transparent 1px, transparent 3px,
+                    #000 3px, #000 5px,
+                    transparent 5px, transparent 6px);
+            opacity: 0.8;
+            margin-top: auto;
+        }
+
+        /* Holographic effect overlay */
+        .hologram {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg,
+                    rgba(255, 215, 0, 0.4) 0%,
+                    rgba(192, 192, 192, 0.3) 50%,
+                    rgba(255, 215, 0, 0.4) 100%);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Header with university branding -->
+        <div class="header-section">
+            <div class="university-logo">U</div>
+            <div class="university-text">
+                <div id="cardUniversityName" class="university-name">UNIVERSITY OF CALIFORNIA</div>
+                <div class="card-type">Student Identification Card</div>
+            </div>
+        </div>
+
+        <!-- Content section -->
+        <div class="content-section">
+            <div class="photo-container">
+                <img id="cardStudentPhoto" src="https://placehold.co/140x180/e5e7eb/9ca3af?text=Photo" alt="Student">
+            </div>
+
+            <div class="info-container">
+                <div id="cardName" class="student-name">STUDENT NAME</div>
+
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Student ID</span>
+                        <span id="cardStudentId" class="info-value">000000000</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Valid Thru</span>
+                        <span id="cardAcademicYear" class="info-value">2025-2026</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Date of Birth</span>
+                        <span id="cardDob" class="info-value">Jan 01, 2000</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Phone</span>
+                        <span id="cardPhone" class="info-value">555-0123</span>
+                    </div>
+                </div>
+
+                <div class="barcode-area"></div>
+            </div>
+        </div>
+
+        <div class="hologram"></div>
+
+        <!-- Address hidden but accessible -->
+        <div style="display:none;"><span id="cardAddress">123 Campus Dr</span></div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer -->
+    <div class="controls">
+        <input type="text" id="universityNameInput">
+        <input type="text" id="nameInput">
+        <input type="text" id="dobInput">
+        <input type="text" id="studentIdInput">
+        <input type="text" id="phoneInput">
+        <input type="text" id="academicYearInput">
+        <input type="text" id="addressInput">
+    </div>
+</body>
+
+</html>

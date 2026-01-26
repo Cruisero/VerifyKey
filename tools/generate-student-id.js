@@ -51,19 +51,21 @@ async function generatePhotoWithGemini(studentData) {
     const gender = studentData.gender || 'any';
     const genderDesc = gender === 'male' ? 'young man' : gender === 'female' ? 'young woman' : 'young person';
 
-    const prompt = `Generate a realistic passport-style portrait photo of a ${genderDesc} college student, age 20-26.
+    const prompt = `Generate a realistic casual selfie-style portrait photo of a ${genderDesc} college student, age 18-24.
 
 Requirements:
-- Professional headshot style for student ID card
-- Plain neutral background (light blue or white)
-- Face looking directly at camera with natural friendly smile
-- Clean, youthful appearance (college student age 20-26)
-- Professional but casual attire (polo shirt or casual blazer)
-- High quality, photorealistic image
-- Good studio lighting, sharp focus on face
-- Natural skin tone and features
+- Casual selfie taken with smartphone front camera
+- Simple indoor background (dorm room, library, or campus setting)
+- Natural lighting (window light or indoor ambient light)
+- Face looking at camera with relaxed natural expression
+- Casual student attire (t-shirt, hoodie, or casual shirt)
+- Slight natural imperfections (minor lighting variance, not perfectly centered)
+- Natural skin texture, not overly retouched
+- Realistic smartphone camera quality (slight softness, natural colors)
+- Young college student appearance (18-24 years old)
 
-Generate ONLY the portrait photo, no text, borders, or decorations.`;
+Style: candid phone selfie, NOT professional studio portrait.
+Generate ONLY the portrait photo, no text, filters, or decorations.`;
 
     try {
         console.log('[Photo] Generating student photo via Gemini AI...');

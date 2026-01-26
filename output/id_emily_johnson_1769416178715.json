@@ -1,0 +1,14 @@
+{
+  "firstName": "Emily",
+  "lastName": "Johnson",
+  "fullName": "EMILY JOHNSON",
+  "university": "Stanford University",
+  "studentId": "24-176102",
+  "birthDate": "April 7, 2003",
+  "phone": "+1 746-140-3389",
+  "address": "8425 University Ave, College Town, CA",
+  "academicYear": "2027",
+  "gender": "female",
+  "generatedAt": "2026-01-26 16:30:29",
+  "outputFile": "/Users/bradpit/Code/VerifyKey/output/id_emily_johnson_1769416178715.jpg"
+}

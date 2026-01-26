@@ -44,9 +44,8 @@ COPY tools/ /tools/
 COPY templates/ /templates/
 COPY package.json package-lock.json /
 
-# Install Node.js dependencies for Puppeteer in a clean environment
-RUN cd / && rm -rf /root/.npm && HOME=/tmp npm install --omit=dev
-WORKDIR /app
+# Install Node.js dependencies for Puppeteer
+RUN npm install -g yarn && cd / && yarn install --production
 
 # Create data and output directories
 RUN mkdir -p /app/data /output

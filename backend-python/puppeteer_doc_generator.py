@@ -124,13 +124,30 @@ def generate_student_id_puppeteer(
     print(f"[PuppeteerGen] Student: {full_name} @ {university}")
     
     try:
+        # Get Gemini API Key from config for photo generation
+        import config_manager
+        config = config_manager.get_config()
+        gemini_api_key = config.get("aiGenerator", {}).get("gemini", {}).get("apiKey", "")
+        gemini_model = config.get("aiGenerator", {}).get("gemini", {}).get("model", "gemini-2.0-flash-exp-image-generation")
+        
+        # Prepare environment with Gemini API Key
+        import os
+        env = os.environ.copy()
+        if gemini_api_key:
+            env["GEMINI_API_KEY"] = gemini_api_key
+            env["GEMINI_MODEL"] = gemini_model
+            print(f"[PuppeteerGen] Using Gemini API Key for photo generation")
+        else:
+            print(f"[PuppeteerGen] No Gemini API Key, will use fallback photos")
+        
         # Run the Node.js script
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=120,  # 2 minute timeout
-            cwd=str(GENERATOR_SCRIPT.parent)
+            cwd=str(GENERATOR_SCRIPT.parent),
+            env=env
         )
         
         if result.returncode != 0:

@@ -521,13 +521,26 @@ Examples:
 
     // Handle custom template
     if (args.template) {
-        const templatesDir = path.join(__dirname, '../templates');
-        const templatePath = path.join(templatesDir, args.template);
-        if (fs.existsSync(templatePath)) {
-            options.template = templatePath;
-            console.log(`[Generator] Using custom template: ${args.template}`);
-        } else {
-            console.log(`[Generator] Warning: Template ${args.template} not found, using default`);
+        // Check multiple possible template directories
+        const possibleDirs = [
+            '/templates',                              // Docker: /templates/
+            path.join(__dirname, '../templates')       // Local: ../templates/
+        ];
+
+        let templateFound = false;
+        for (const dir of possibleDirs) {
+            const templatePath = path.join(dir, args.template);
+            if (fs.existsSync(templatePath)) {
+                options.template = templatePath;
+                console.log(`[Generator] Using custom template: ${args.template}`);
+                console.log(`[Generator] Template path: ${templatePath}`);
+                templateFound = true;
+                break;
+            }
+        }
+
+        if (!templateFound) {
+            console.log(`[Generator] Warning: Template ${args.template} not found in any directory, using default`);
         }
     }
 

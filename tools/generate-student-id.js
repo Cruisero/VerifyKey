@@ -323,7 +323,8 @@ class StudentIdGenerator {
 
             // Load template
             console.log('[Generator] Loading HTML template...');
-            const templateUrl = `file://${this.config.template}`;
+            console.log(`[Generator] Template path: ${config.template}`);
+            const templateUrl = `file://${config.template}`;
             await page.goto(templateUrl, { waitUntil: 'networkidle0' });
 
             // Prepare photo URL - auto-generate if not provided

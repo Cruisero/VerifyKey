@@ -511,27 +511,9 @@ export default function Admin() {
                                                 使用 Gemini AI 生成学生证件照
                                             </label>
                                             <p className="input-hint">
-                                                启用后将使用 Gemini AI 自动生成逼真的学生头像
+                                                启用后将使用 Gemini AI 自动生成逼真的学生头像（使用上方 Gemini 配置中的 API Key）
                                             </p>
                                         </div>
-                                        {puppeteerSettings.useGeminiPhoto && (
-                                            <>
-                                                <div className="input-group">
-                                                    <label className="input-label">Gemini API Key</label>
-                                                    <input
-                                                        type="password"
-                                                        className="input"
-                                                        value={geminiSettings.apiKey}
-                                                        onChange={(e) => setGeminiSettings(s => ({ ...s, apiKey: e.target.value, hasStoredKey: false }))}
-                                                        placeholder={geminiSettings.hasStoredKey ? "••••••••••（已保存，留空保持不变）" : "AIzaSy..."}
-                                                    />
-                                                    <p className="input-hint">
-                                                        {geminiSettings.hasStoredKey && <span className="key-stored">✓ API Key 已保存 · </span>}
-                                                        从 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Google AI Studio</a> 获取
-                                                    </p>
-                                                </div>
-                                            </>
-                                        )}
                                     </div>
                                 </div>
                             )}

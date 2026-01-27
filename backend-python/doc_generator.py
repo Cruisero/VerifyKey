@@ -309,22 +309,22 @@ LAYOUT REQUIREMENTS:
 - COLORED BLOCKS for each course spanning their time slots
 - Each course block should have DIFFERENT COLORS (blue, green, orange, red, purple, etc.)
 
-HEADER:
+HEADER (EXACT VALUES - DO NOT CHANGE):
 - University name: {university}
-- Title: "{current_semester} Timetable" or "Schedule Planner"
-- Student name and ID can be shown subtly
+- Title: "{current_semester} Schedule Planner"
+- Student info in top-right corner: "{first} {last} | ID: {student_id}"
 
 EACH COURSE BLOCK MUST SHOW:
-1. Course code (e.g., "Mathematics-52", "APS105H1 S", "CS 210")
-2. Building + Room number (e.g., "Etcheverry 3109", "Wheeler 150", "SF 1012", "BA 1190")
-3. Instructor name (e.g., "Penny Wieser", "J. Smith", "L. Chen")
+1. Course code (e.g., "MATH 1201", "DS 3001", "PHYS 1302", "WRIT 3562", "CSCI 2011")
+2. Building + Room number (e.g., "Evans Hall 10", "Wheeler 150", "Physics Building 3")
+3. Instructor name (e.g., "Prof. Zhang", "J. Sanchez", "P. Wieser")
 
 SAMPLE COURSES TO DISPLAY:
-- Mathematics (M W F, 8:00-8:45am) - Evans Hall 10 - Prof. Zhang
-- Data Science (M W, 10:00-11:15am) - Wheeler 150 - J. Sanchez  
-- Physics Lab (T R, 11:00-12:30pm) - Physics Building 3 - P. Wieser
-- Writing Seminar (M W, 2:00-3:15pm) - Wheeler 150 - Z. Stankova
-- Computer Science (T R, 3:00-4:00pm) - Soda Hall 306 - M. Davis
+- MATH 1201 (M W F, 8:00-8:45am) - Evans Hall 10 - Prof. Zhang
+- DS 3001 (M W, 10:00-11:15am) - Wheeler 150 - J. Sanchez  
+- PHYS 1302 (T R, 11:00-12:30pm) - Physics Building 3 - P. Wieser
+- WRIT 3562 (M W, 2:00-3:15pm) - Wheeler 150 - Z. Stankova
+- CSCI 2011 (T R, 3:00-4:00pm) - Soda Hall 306 - M. Davis
 
 VISUAL STYLE:
 - Clean web interface look (like a university portal screenshot)
@@ -333,8 +333,10 @@ VISUAL STYLE:
 - Professional but functional design
 - Can have small info icons (i) in course blocks like real systems
 
-CRITICAL: This should look like a SCREENSHOT from a real university scheduling system,
-NOT a designed poster. Think of it as what you'd see if you logged into your student portal.
+CRITICAL: 
+- The student name MUST be exactly "{first} {last}" - NOT "Jane Doe" or any placeholder
+- The student ID MUST be exactly "{student_id}" - NOT "1234567" or any placeholder
+- This should look like a SCREENSHOT from a real university scheduling system
 
 Generate ONLY the image."""
     

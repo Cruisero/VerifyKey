@@ -233,6 +233,60 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         if form_data:
             print(f"[Verify] Form data synced: {first} {last}, ID: {form_data.get('studentId')}")
         
+        # Save documents and form data for debugging
+        try:
+            import os
+            import time
+            import json
+            
+            # Create output directory if not exists
+            output_dir = "/output/submissions"
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Generate timestamp prefix
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            prefix = f"{timestamp}_{parsed_id}"
+            
+            # Save each document image
+            for doc in documents:
+                doc_type = doc.get("type", "unknown")
+                doc_filename = f"{prefix}_{doc_type}.png"
+                doc_path = os.path.join(output_dir, doc_filename)
+                with open(doc_path, "wb") as f:
+                    f.write(doc["data"])
+                print(f"[Verify] 💾 Saved: {doc_filename}")
+            
+            # Save form data as JSON
+            submission_data = {
+                "verificationId": parsed_id,
+                "timestamp": timestamp,
+                "student": {
+                    "firstName": first,
+                    "lastName": last,
+                    "email": email,
+                    "birthDate": dob
+                },
+                "university": {
+                    "id": org["id"],
+                    "idExtended": org.get("idExtended"),
+                    "name": org["name"],
+                    "country": org.get("country", "US")
+                },
+                "documents": [
+                    {"type": d.get("type"), "fileName": d.get("fileName")} 
+                    for d in documents
+                ],
+                "provider": provider
+            }
+            
+            json_path = os.path.join(output_dir, f"{prefix}_data.json")
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(submission_data, f, indent=2, ensure_ascii=False)
+            print(f"[Verify] 💾 Saved: {prefix}_data.json")
+            
+        except Exception as save_err:
+            print(f"[Verify] ⚠️ Failed to save submission data: {save_err}")
+        
         # Run verification with documents (supports multi-doc upload)
         result = verifier.verify(documents)
         

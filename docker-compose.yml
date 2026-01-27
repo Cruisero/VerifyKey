@@ -26,6 +26,7 @@ services:
       - ./backend-python/.env
     volumes:
       - backend-data:/app/data
+      - ./output:/output
     networks:
       - onepass-network
   # Legacy Node.js backend (commented out, can be re-enabled)

@@ -325,10 +325,11 @@ def fetch_random_university(country: str = "US") -> dict:
         skip_keywords = [
             "medical", "medicine", "law school", "business school", 
             "extension", "online", "professional", "graduate",
-            "nursing", "dental", "pharmacy", "health",
             "continuing", "distance", "global", "careers", "k12",
             "high school", "secondary school", "primary school",
-            "gymnasium", "lycee", "middle school", "elementary"
+            "gymnasium", "lycee", "middle school", "elementary",
+            "bachelor", "master", "diploma", "certificate", 
+            "program", "course", "bootcamp"
         ]
         
         candidates = []

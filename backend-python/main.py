@@ -553,26 +553,47 @@ async def test_document_generation(request: TestDocumentRequest):
         
         # Fallback to Gemini/SVG generator (default or if puppeteer failed)
         if not doc_data:
-            print(f"[TestDoc] Using Gemini/SVG generator...")
-            doc_data, filename = generate_document("auto", first, last, university)
+            print(f"[TestDoc] Using Gemini multi-document generator...")
             
-            if doc_data:
-                image_base64 = base64.b64encode(doc_data).decode('utf-8')
-                mime_type = "image/jpeg" if filename.endswith(".jpg") else "image/png"
+            from doc_generator import generate_multiple_documents_with_gemini
+            from verifier import generate_birth_date
+            
+            # Generate birth date for transcript
+            birth_date = generate_birth_date()
+            
+            # Generate 3 documents with unified student info
+            result = generate_multiple_documents_with_gemini(first, last, university, birth_date)
+            
+            if result["documents"]:
+                # Build images array for frontend
+                images = []
+                for doc in result["documents"]:
+                    doc_base64 = base64.b64encode(doc["data"]).decode('utf-8')
+                    images.append({
+                        "type": doc["type"],
+                        "filename": doc["fileName"],
+                        "image": f"data:{doc['mimeType']};base64,{doc_base64}"
+                    })
+                
+                # First image as backward-compatible main image
+                first_image = images[0] if images else None
                 
                 return {
                     "success": True,
                     "provider": provider,
-                    "providerNote": f"使用保存的配置: {provider.upper()} 文档生成",
-                    "image": f"data:{mime_type};base64,{image_base64}",
+                    "providerNote": f"使用保存的配置: GEMINI 文档生成 - 生成 {result['successCount']}/3 文档",
+                    "documentCount": len(images),
+                    "images": images,
+                    "image": first_image["image"] if first_image else None,
+                    "filename": first_image["filename"] if first_image else None,
                     "formData": {
                         "firstName": first,
                         "lastName": last,
                         "fullName": f"{first} {last}".upper(),
                         "email": f"{first.lower()}.{last.lower()}{random.randint(10, 99)}@{university.lower().replace(' ', '').replace('university', '').replace('college', '')[:10]}.edu",
-                        "university": university
-                    },
-                    "filename": filename
+                        "university": university,
+                        "studentId": result["studentId"]
+                    }
                 }
             else:
                 return {

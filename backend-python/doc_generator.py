@@ -209,6 +209,116 @@ Generate ONLY the image, no explanation text."""
     return generate_with_gemini(prompt)
 
 
+def generate_schedule_with_gemini(first: str, last: str, university: str, student_id: str = None) -> Optional[bytes]:
+    """Generate weekly class schedule using Gemini AI"""
+    
+    import time
+    if not student_id:
+        student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+    
+    current_semester = "Spring 2025"
+    current_date = time.strftime("%B %d, %Y")
+    
+    prompt = f"""Generate a realistic university weekly class schedule document image:
+
+UNIVERSITY: {university}
+STUDENT NAME: {first} {last}
+STUDENT ID: {student_id}
+SEMESTER: {current_semester}
+GENERATED DATE: {current_date}
+
+Requirements:
+- Weekly schedule grid showing Monday through Friday
+- Time slots from 8:00 AM to 5:00 PM
+- 4-5 courses scheduled across different days:
+  * Computer Science 301 (Mon/Wed 10:00-11:30 AM) - Room CS-201
+  * Calculus III (Tue/Thu 9:00-10:30 AM) - Room MATH-105
+  * Physics II Lab (Wed 2:00-5:00 PM) - Room PHY-LAB
+  * Technical Writing (Mon/Wed 1:00-2:00 PM) - Room ENG-302
+  * Data Structures (Tue/Thu 11:00 AM-12:30 PM) - Room CS-105
+- University logo/header at top
+- Student name and ID clearly visible
+- Professional academic schedule format
+- Clean, readable layout with course colors
+- Document date visible: "{current_date}"
+
+Generate ONLY the image, no explanation text."""
+    
+    return generate_with_gemini(prompt)
+
+
+def generate_multiple_documents_with_gemini(
+    first: str, 
+    last: str, 
+    university: str, 
+    birth_date: str = None,
+    config: dict = None
+) -> dict:
+    """
+    Generate multiple documents (student ID, transcript, schedule) with unified student info
+    
+    Returns:
+        dict with keys: documents, student_id, success_count, all_success
+    """
+    import concurrent.futures
+    import time
+    
+    # Generate unified student ID for all documents
+    student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+    birth = birth_date or "2003-05-15"
+    
+    print(f"[MultiDoc] Generating 3 documents for {first} {last} at {university}")
+    print(f"[MultiDoc] Unified Student ID: {student_id}")
+    
+    documents = []
+    
+    # Generate all three documents
+    def gen_id_card():
+        data = generate_student_id_with_gemini(first, last, university)
+        if data:
+            return {"type": "id_card", "fileName": "student_id.png", "mimeType": "image/png", "data": data}
+        return None
+    
+    def gen_transcript():
+        data = generate_transcript_with_gemini(first, last, university, birth)
+        if data:
+            return {"type": "transcript", "fileName": "transcript.png", "mimeType": "image/png", "data": data}
+        return None
+    
+    def gen_schedule():
+        data = generate_schedule_with_gemini(first, last, university, student_id)
+        if data:
+            return {"type": "schedule", "fileName": "schedule.png", "mimeType": "image/png", "data": data}
+        return None
+    
+    # Run all three generations in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [
+            executor.submit(gen_id_card),
+            executor.submit(gen_transcript),
+            executor.submit(gen_schedule)
+        ]
+        
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                result = future.result()
+                if result:
+                    documents.append(result)
+                    print(f"[MultiDoc] ✓ Generated {result['type']}")
+            except Exception as e:
+                print(f"[MultiDoc] Generation error: {e}")
+    
+    success_count = len(documents)
+    print(f"[MultiDoc] Generated {success_count}/3 documents")
+    
+    return {
+        "documents": documents,
+        "studentId": student_id,
+        "successCount": success_count,
+        "allSuccess": success_count == 3
+    }
+
+
 def random_int(min_val: int, max_val: int) -> int:
     """Generate random integer in range"""
     return random.randint(min_val, max_val)

@@ -812,11 +812,14 @@ class StudentIdGenerator {
                     // Set logo if provided
                     if (logo) {
                         const logoImg = document.getElementById('cardUniversityLogo');
-                        const logoFallback = document.getElementById('cardLogoFallback');
-                        if (logoImg && logoFallback) {
+                        // Support both template types: cardLogoFallback (student-id-generator) and logoFallbackText (us-university-id)
+                        const logoFallback = document.getElementById('cardLogoFallback') || document.getElementById('logoFallbackText');
+                        if (logoImg) {
                             logoImg.src = logo;
                             logoImg.style.display = 'block';
-                            logoFallback.style.display = 'none';
+                            if (logoFallback) {
+                                logoFallback.style.display = 'none';
+                            }
                         }
                     }
                 }, data, photoUrl, logoUrl);

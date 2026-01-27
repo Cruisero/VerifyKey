@@ -21,7 +21,9 @@ PROGRAM_ID = "67c8c14f5f17a83b745e3f82"
 # US Universities with VERIFIED SheerID IDs (from ThanhNguyxn/SheerID-Verification-Tool)
 # These IDs are confirmed to work with high success rates
 UNIVERSITIES = [
-    # High priority - highest success rates
+    # ============================================
+    # UNITED STATES
+    # ============================================
     {"id": 2565, "idExtended": "2565", "name": "Pennsylvania State University-Main Campus", "domain": "psu.edu", "country": "US", "weight": 100},
     {"id": 3499, "idExtended": "3499", "name": "University of California, Los Angeles", "domain": "ucla.edu", "country": "US", "weight": 98},
     {"id": 3491, "idExtended": "3491", "name": "University of California, Berkeley", "domain": "berkeley.edu", "country": "US", "weight": 97},
@@ -42,24 +44,392 @@ UNIVERSITIES = [
     {"id": 602, "idExtended": "602", "name": "Carnegie Mellon University", "domain": "cmu.edu", "country": "US", "weight": 92},
     {"id": 3477, "idExtended": "3477", "name": "University of California, San Diego", "domain": "ucsd.edu", "country": "US", "weight": 93},
     {"id": 650865, "idExtended": "650865", "name": "Arizona State University (Glendale, AZ)", "domain": "asu.edu", "country": "US", "weight": 92},
-    # Community colleges - may have higher success
     {"id": 2874, "idExtended": "2874", "name": "Santa Monica College", "domain": "smc.edu", "country": "US", "weight": 85},
     {"id": 2350, "idExtended": "2350", "name": "Northern Virginia Community College", "domain": "nvcc.edu", "country": "US", "weight": 84},
+    
+    # ============================================
+    # ARGENTINA
+    # ============================================
+    {"id": 0, "idExtended": "AR-UBA", "name": "Universidad de Buenos Aires", "domain": "uba.ar", "country": "AR", "weight": 80},
+    {"id": 0, "idExtended": "AR-UNC", "name": "Universidad Nacional de Córdoba", "domain": "unc.edu.ar", "country": "AR", "weight": 75},
+    {"id": 0, "idExtended": "AR-UNLP", "name": "Universidad Nacional de La Plata", "domain": "unlp.edu.ar", "country": "AR", "weight": 70},
+    
+    # ============================================
+    # AUSTRALIA
+    # ============================================
+    {"id": 0, "idExtended": "AU-USYD", "name": "University of Sydney", "domain": "sydney.edu.au", "country": "AU", "weight": 85},
+    {"id": 0, "idExtended": "AU-UMELB", "name": "University of Melbourne", "domain": "unimelb.edu.au", "country": "AU", "weight": 85},
+    {"id": 0, "idExtended": "AU-ANU", "name": "Australian National University", "domain": "anu.edu.au", "country": "AU", "weight": 82},
+    {"id": 0, "idExtended": "AU-UNSW", "name": "University of New South Wales", "domain": "unsw.edu.au", "country": "AU", "weight": 80},
+    {"id": 0, "idExtended": "AU-UQ", "name": "University of Queensland", "domain": "uq.edu.au", "country": "AU", "weight": 80},
+    
+    # ============================================
+    # AUSTRIA
+    # ============================================
+    {"id": 0, "idExtended": "AT-UNIVIE", "name": "University of Vienna", "domain": "univie.ac.at", "country": "AT", "weight": 80},
+    {"id": 0, "idExtended": "AT-TUW", "name": "Vienna University of Technology", "domain": "tuwien.ac.at", "country": "AT", "weight": 78},
+    
+    # ============================================
+    # BANGLADESH
+    # ============================================
+    {"id": 0, "idExtended": "BD-DU", "name": "University of Dhaka", "domain": "du.ac.bd", "country": "BD", "weight": 75},
+    {"id": 0, "idExtended": "BD-BUET", "name": "Bangladesh University of Engineering and Technology", "domain": "buet.ac.bd", "country": "BD", "weight": 75},
+    {"id": 0, "idExtended": "BD-NSU", "name": "North South University", "domain": "northsouth.edu", "country": "BD", "weight": 70},
+    
+    # ============================================
+    # BELGIUM
+    # ============================================
+    {"id": 0, "idExtended": "BE-KULEUVEN", "name": "KU Leuven", "domain": "kuleuven.be", "country": "BE", "weight": 82},
+    {"id": 0, "idExtended": "BE-ULB", "name": "Université Libre de Bruxelles", "domain": "ulb.ac.be", "country": "BE", "weight": 78},
+    
+    # ============================================
+    # BOLIVIA
+    # ============================================
+    {"id": 0, "idExtended": "BO-UMSA", "name": "Universidad Mayor de San Andrés", "domain": "umsa.bo", "country": "BO", "weight": 70},
+    
+    # ============================================
+    # BULGARIA
+    # ============================================
+    {"id": 0, "idExtended": "BG-SU", "name": "Sofia University", "domain": "uni-sofia.bg", "country": "BG", "weight": 72},
+    
+    # ============================================
+    # CANADA
+    # ============================================
+    {"id": 0, "idExtended": "CA-UTORONTO", "name": "University of Toronto", "domain": "utoronto.ca", "country": "CA", "weight": 88},
+    {"id": 0, "idExtended": "CA-UBC", "name": "University of British Columbia", "domain": "ubc.ca", "country": "CA", "weight": 85},
+    {"id": 0, "idExtended": "CA-MCGILL", "name": "McGill University", "domain": "mcgill.ca", "country": "CA", "weight": 85},
+    {"id": 0, "idExtended": "CA-UWATERLOO", "name": "University of Waterloo", "domain": "uwaterloo.ca", "country": "CA", "weight": 82},
+    
+    # ============================================
+    # CHILE
+    # ============================================
+    {"id": 0, "idExtended": "CL-UCHILE", "name": "Universidad de Chile", "domain": "uchile.cl", "country": "CL", "weight": 78},
+    {"id": 0, "idExtended": "CL-PUC", "name": "Pontificia Universidad Católica de Chile", "domain": "uc.cl", "country": "CL", "weight": 78},
+    
+    # ============================================
+    # CZECH REPUBLIC
+    # ============================================
+    {"id": 0, "idExtended": "CZ-CUNI", "name": "Charles University", "domain": "cuni.cz", "country": "CZ", "weight": 78},
+    {"id": 0, "idExtended": "CZ-CTU", "name": "Czech Technical University in Prague", "domain": "cvut.cz", "country": "CZ", "weight": 75},
+    
+    # ============================================
+    # DENMARK
+    # ============================================
+    {"id": 0, "idExtended": "DK-KU", "name": "University of Copenhagen", "domain": "ku.dk", "country": "DK", "weight": 82},
+    {"id": 0, "idExtended": "DK-DTU", "name": "Technical University of Denmark", "domain": "dtu.dk", "country": "DK", "weight": 80},
+    
+    # ============================================
+    # DOMINICAN REPUBLIC
+    # ============================================
+    {"id": 0, "idExtended": "DO-UASD", "name": "Universidad Autónoma de Santo Domingo", "domain": "uasd.edu.do", "country": "DO", "weight": 70},
+    
+    # ============================================
+    # ECUADOR
+    # ============================================
+    {"id": 0, "idExtended": "EC-UCE", "name": "Universidad Central del Ecuador", "domain": "uce.edu.ec", "country": "EC", "weight": 70},
+    {"id": 0, "idExtended": "EC-ESPOL", "name": "Escuela Superior Politécnica del Litoral", "domain": "espol.edu.ec", "country": "EC", "weight": 72},
+    
+    # ============================================
+    # EL SALVADOR
+    # ============================================
+    {"id": 0, "idExtended": "SV-UES", "name": "Universidad de El Salvador", "domain": "ues.edu.sv", "country": "SV", "weight": 68},
+    
+    # ============================================
+    # FINLAND
+    # ============================================
+    {"id": 0, "idExtended": "FI-HELSINKI", "name": "University of Helsinki", "domain": "helsinki.fi", "country": "FI", "weight": 82},
+    {"id": 0, "idExtended": "FI-AALTO", "name": "Aalto University", "domain": "aalto.fi", "country": "FI", "weight": 80},
+    
+    # ============================================
+    # FRANCE
+    # ============================================
+    {"id": 0, "idExtended": "FR-SORBONNE", "name": "Sorbonne University", "domain": "sorbonne-universite.fr", "country": "FR", "weight": 85},
+    {"id": 0, "idExtended": "FR-PSL", "name": "Paris Sciences et Lettres University", "domain": "psl.eu", "country": "FR", "weight": 83},
+    {"id": 0, "idExtended": "FR-POLYTECHNIQUE", "name": "École Polytechnique", "domain": "polytechnique.edu", "country": "FR", "weight": 85},
+    
+    # ============================================
+    # GHANA
+    # ============================================
+    {"id": 0, "idExtended": "GH-UG", "name": "University of Ghana", "domain": "ug.edu.gh", "country": "GH", "weight": 70},
+    {"id": 0, "idExtended": "GH-KNUST", "name": "Kwame Nkrumah University of Science and Technology", "domain": "knust.edu.gh", "country": "GH", "weight": 70},
+    
+    # ============================================
+    # GREECE
+    # ============================================
+    {"id": 0, "idExtended": "GR-UOA", "name": "National and Kapodistrian University of Athens", "domain": "uoa.gr", "country": "GR", "weight": 75},
+    {"id": 0, "idExtended": "GR-AUTH", "name": "Aristotle University of Thessaloniki", "domain": "auth.gr", "country": "GR", "weight": 75},
+    
+    # ============================================
+    # GUATEMALA
+    # ============================================
+    {"id": 0, "idExtended": "GT-USAC", "name": "Universidad de San Carlos de Guatemala", "domain": "usac.edu.gt", "country": "GT", "weight": 68},
+    
+    # ============================================
+    # HUNGARY
+    # ============================================
+    {"id": 0, "idExtended": "HU-ELTE", "name": "Eötvös Loránd University", "domain": "elte.hu", "country": "HU", "weight": 75},
+    {"id": 0, "idExtended": "HU-BME", "name": "Budapest University of Technology and Economics", "domain": "bme.hu", "country": "HU", "weight": 75},
+    
+    # ============================================
+    # IRAQ
+    # ============================================
+    {"id": 0, "idExtended": "IQ-UOB", "name": "University of Baghdad", "domain": "uobaghdad.edu.iq", "country": "IQ", "weight": 68},
+    
+    # ============================================
+    # ISRAEL
+    # ============================================
+    {"id": 0, "idExtended": "IL-HUJI", "name": "Hebrew University of Jerusalem", "domain": "huji.ac.il", "country": "IL", "weight": 82},
+    {"id": 0, "idExtended": "IL-TECHNION", "name": "Technion - Israel Institute of Technology", "domain": "technion.ac.il", "country": "IL", "weight": 85},
+    {"id": 0, "idExtended": "IL-TAU", "name": "Tel Aviv University", "domain": "tau.ac.il", "country": "IL", "weight": 82},
+    
+    # ============================================
+    # ITALY
+    # ============================================
+    {"id": 0, "idExtended": "IT-UNIMI", "name": "University of Milan", "domain": "unimi.it", "country": "IT", "weight": 80},
+    {"id": 0, "idExtended": "IT-POLIMI", "name": "Politecnico di Milano", "domain": "polimi.it", "country": "IT", "weight": 82},
+    {"id": 0, "idExtended": "IT-UNIBO", "name": "University of Bologna", "domain": "unibo.it", "country": "IT", "weight": 80},
+    {"id": 0, "idExtended": "IT-UNIROMA1", "name": "Sapienza University of Rome", "domain": "uniroma1.it", "country": "IT", "weight": 80},
+    
+    # ============================================
+    # JORDAN
+    # ============================================
+    {"id": 0, "idExtended": "JO-UJ", "name": "University of Jordan", "domain": "ju.edu.jo", "country": "JO", "weight": 72},
+    
+    # ============================================
+    # KENYA
+    # ============================================
+    {"id": 0, "idExtended": "KE-UON", "name": "University of Nairobi", "domain": "uonbi.ac.ke", "country": "KE", "weight": 72},
+    {"id": 0, "idExtended": "KE-KU", "name": "Kenyatta University", "domain": "ku.ac.ke", "country": "KE", "weight": 70},
+    
+    # ============================================
+    # MALAYSIA
+    # ============================================
+    {"id": 0, "idExtended": "MY-UM", "name": "University of Malaya", "domain": "um.edu.my", "country": "MY", "weight": 78},
+    {"id": 0, "idExtended": "MY-UKM", "name": "National University of Malaysia", "domain": "ukm.my", "country": "MY", "weight": 75},
+    {"id": 0, "idExtended": "MY-USM", "name": "Universiti Sains Malaysia", "domain": "usm.my", "country": "MY", "weight": 75},
+    
+    # ============================================
+    # MOROCCO
+    # ============================================
+    {"id": 0, "idExtended": "MA-UM5", "name": "Mohammed V University", "domain": "um5.ac.ma", "country": "MA", "weight": 70},
+    
+    # ============================================
+    # NETHERLANDS
+    # ============================================
+    {"id": 0, "idExtended": "NL-UVA", "name": "University of Amsterdam", "domain": "uva.nl", "country": "NL", "weight": 82},
+    {"id": 0, "idExtended": "NL-TUD", "name": "Delft University of Technology", "domain": "tudelft.nl", "country": "NL", "weight": 82},
+    {"id": 0, "idExtended": "NL-LEI", "name": "Leiden University", "domain": "leidenuniv.nl", "country": "NL", "weight": 80},
+    
+    # ============================================
+    # NICARAGUA
+    # ============================================
+    {"id": 0, "idExtended": "NI-UNAN", "name": "Universidad Nacional Autónoma de Nicaragua", "domain": "unan.edu.ni", "country": "NI", "weight": 65},
+    
+    # ============================================
+    # NIGERIA
+    # ============================================
+    {"id": 0, "idExtended": "NG-UI", "name": "University of Ibadan", "domain": "ui.edu.ng", "country": "NG", "weight": 72},
+    {"id": 0, "idExtended": "NG-UNILAG", "name": "University of Lagos", "domain": "unilag.edu.ng", "country": "NG", "weight": 72},
+    {"id": 0, "idExtended": "NG-ABU", "name": "Ahmadu Bello University", "domain": "abu.edu.ng", "country": "NG", "weight": 70},
+    
+    # ============================================
+    # PAKISTAN
+    # ============================================
+    {"id": 0, "idExtended": "PK-QAU", "name": "Quaid-i-Azam University", "domain": "qau.edu.pk", "country": "PK", "weight": 72},
+    {"id": 0, "idExtended": "PK-LUMS", "name": "Lahore University of Management Sciences", "domain": "lums.edu.pk", "country": "PK", "weight": 75},
+    {"id": 0, "idExtended": "PK-NUST", "name": "National University of Sciences and Technology", "domain": "nust.edu.pk", "country": "PK", "weight": 75},
+    
+    # ============================================
+    # PERU
+    # ============================================
+    {"id": 0, "idExtended": "PE-PUCP", "name": "Pontificia Universidad Católica del Perú", "domain": "pucp.edu.pe", "country": "PE", "weight": 75},
+    {"id": 0, "idExtended": "PE-UNMSM", "name": "Universidad Nacional Mayor de San Marcos", "domain": "unmsm.edu.pe", "country": "PE", "weight": 72},
+    
+    # ============================================
+    # PHILIPPINES
+    # ============================================
+    {"id": 0, "idExtended": "PH-UP", "name": "University of the Philippines", "domain": "up.edu.ph", "country": "PH", "weight": 75},
+    {"id": 0, "idExtended": "PH-ATENEO", "name": "Ateneo de Manila University", "domain": "ateneo.edu", "country": "PH", "weight": 75},
+    {"id": 0, "idExtended": "PH-DLSU", "name": "De La Salle University", "domain": "dlsu.edu.ph", "country": "PH", "weight": 72},
+    
+    # ============================================
+    # POLAND
+    # ============================================
+    {"id": 0, "idExtended": "PL-UW", "name": "University of Warsaw", "domain": "uw.edu.pl", "country": "PL", "weight": 78},
+    {"id": 0, "idExtended": "PL-AGH", "name": "AGH University of Science and Technology", "domain": "agh.edu.pl", "country": "PL", "weight": 75},
+    {"id": 0, "idExtended": "PL-PWR", "name": "Wrocław University of Science and Technology", "domain": "pwr.edu.pl", "country": "PL", "weight": 75},
+    
+    # ============================================
+    # PORTUGAL
+    # ============================================
+    {"id": 0, "idExtended": "PT-UL", "name": "University of Lisbon", "domain": "ulisboa.pt", "country": "PT", "weight": 78},
+    {"id": 0, "idExtended": "PT-UP", "name": "University of Porto", "domain": "up.pt", "country": "PT", "weight": 78},
+    
+    # ============================================
+    # ROMANIA
+    # ============================================
+    {"id": 0, "idExtended": "RO-UB", "name": "University of Bucharest", "domain": "unibuc.ro", "country": "RO", "weight": 72},
+    {"id": 0, "idExtended": "RO-UPB", "name": "Politehnica University of Bucharest", "domain": "upb.ro", "country": "RO", "weight": 72},
+    
+    # ============================================
+    # RWANDA
+    # ============================================
+    {"id": 0, "idExtended": "RW-UR", "name": "University of Rwanda", "domain": "ur.ac.rw", "country": "RW", "weight": 65},
+    
+    # ============================================
+    # SINGAPORE
+    # ============================================
+    {"id": 0, "idExtended": "SG-NUS", "name": "National University of Singapore", "domain": "nus.edu.sg", "country": "SG", "weight": 88},
+    {"id": 0, "idExtended": "SG-NTU", "name": "Nanyang Technological University", "domain": "ntu.edu.sg", "country": "SG", "weight": 85},
+    
+    # ============================================
+    # SOUTH AFRICA
+    # ============================================
+    {"id": 0, "idExtended": "ZA-UCT", "name": "University of Cape Town", "domain": "uct.ac.za", "country": "ZA", "weight": 80},
+    {"id": 0, "idExtended": "ZA-WITS", "name": "University of the Witwatersrand", "domain": "wits.ac.za", "country": "ZA", "weight": 78},
+    {"id": 0, "idExtended": "ZA-SU", "name": "Stellenbosch University", "domain": "sun.ac.za", "country": "ZA", "weight": 78},
+    
+    # ============================================
+    # SPAIN
+    # ============================================
+    {"id": 0, "idExtended": "ES-UB", "name": "University of Barcelona", "domain": "ub.edu", "country": "ES", "weight": 80},
+    {"id": 0, "idExtended": "ES-UAM", "name": "Universidad Autónoma de Madrid", "domain": "uam.es", "country": "ES", "weight": 78},
+    {"id": 0, "idExtended": "ES-UPM", "name": "Universidad Politécnica de Madrid", "domain": "upm.es", "country": "ES", "weight": 78},
+    
+    # ============================================
+    # SRI LANKA
+    # ============================================
+    {"id": 0, "idExtended": "LK-UCOL", "name": "University of Colombo", "domain": "cmb.ac.lk", "country": "LK", "weight": 70},
+    {"id": 0, "idExtended": "LK-UOP", "name": "University of Peradeniya", "domain": "pdn.ac.lk", "country": "LK", "weight": 70},
+    
+    # ============================================
+    # SWEDEN
+    # ============================================
+    {"id": 0, "idExtended": "SE-KTH", "name": "KTH Royal Institute of Technology", "domain": "kth.se", "country": "SE", "weight": 82},
+    {"id": 0, "idExtended": "SE-LU", "name": "Lund University", "domain": "lu.se", "country": "SE", "weight": 82},
+    {"id": 0, "idExtended": "SE-UU", "name": "Uppsala University", "domain": "uu.se", "country": "SE", "weight": 80},
+    
+    # ============================================
+    # SWITZERLAND
+    # ============================================
+    {"id": 0, "idExtended": "CH-ETH", "name": "ETH Zurich", "domain": "ethz.ch", "country": "CH", "weight": 90},
+    {"id": 0, "idExtended": "CH-EPFL", "name": "École Polytechnique Fédérale de Lausanne", "domain": "epfl.ch", "country": "CH", "weight": 88},
+    {"id": 0, "idExtended": "CH-UZH", "name": "University of Zurich", "domain": "uzh.ch", "country": "CH", "weight": 82},
+    
+    # ============================================
+    # TAIWAN
+    # ============================================
+    {"id": 0, "idExtended": "TW-NTU", "name": "National Taiwan University", "domain": "ntu.edu.tw", "country": "TW", "weight": 85},
+    {"id": 0, "idExtended": "TW-NTHU", "name": "National Tsing Hua University", "domain": "nthu.edu.tw", "country": "TW", "weight": 82},
+    {"id": 0, "idExtended": "TW-NCTU", "name": "National Yang Ming Chiao Tung University", "domain": "nycu.edu.tw", "country": "TW", "weight": 80},
+    
+    # ============================================
+    # THAILAND
+    # ============================================
+    {"id": 0, "idExtended": "TH-CU", "name": "Chulalongkorn University", "domain": "chula.ac.th", "country": "TH", "weight": 78},
+    {"id": 0, "idExtended": "TH-MU", "name": "Mahidol University", "domain": "mahidol.ac.th", "country": "TH", "weight": 75},
+    {"id": 0, "idExtended": "TH-KU", "name": "Kasetsart University", "domain": "ku.ac.th", "country": "TH", "weight": 72},
+    
+    # ============================================
+    # TURKEY
+    # ============================================
+    {"id": 0, "idExtended": "TR-BOUN", "name": "Boğaziçi University", "domain": "boun.edu.tr", "country": "TR", "weight": 80},
+    {"id": 0, "idExtended": "TR-METU", "name": "Middle East Technical University", "domain": "metu.edu.tr", "country": "TR", "weight": 80},
+    {"id": 0, "idExtended": "TR-ITU", "name": "Istanbul Technical University", "domain": "itu.edu.tr", "country": "TR", "weight": 78},
+    
+    # ============================================
+    # UKRAINE
+    # ============================================
+    {"id": 0, "idExtended": "UA-KNU", "name": "Taras Shevchenko National University of Kyiv", "domain": "knu.ua", "country": "UA", "weight": 75},
+    {"id": 0, "idExtended": "UA-NTUU", "name": "Igor Sikorsky Kyiv Polytechnic Institute", "domain": "kpi.ua", "country": "UA", "weight": 75},
+    
+    # ============================================
+    # UNITED ARAB EMIRATES
+    # ============================================
+    {"id": 0, "idExtended": "AE-UAEU", "name": "United Arab Emirates University", "domain": "uaeu.ac.ae", "country": "AE", "weight": 78},
+    {"id": 0, "idExtended": "AE-KU", "name": "Khalifa University", "domain": "ku.ac.ae", "country": "AE", "weight": 78},
+    {"id": 0, "idExtended": "AE-AUS", "name": "American University of Sharjah", "domain": "aus.edu", "country": "AE", "weight": 75},
+    
+    # ============================================
+    # VENEZUELA
+    # ============================================
+    {"id": 0, "idExtended": "VE-UCV", "name": "Universidad Central de Venezuela", "domain": "ucv.ve", "country": "VE", "weight": 70},
+    {"id": 0, "idExtended": "VE-USB", "name": "Universidad Simón Bolívar", "domain": "usb.ve", "country": "VE", "weight": 70},
+    
+    # ============================================
+    # VIETNAM
+    # ============================================
+    {"id": 0, "idExtended": "VN-VNU", "name": "Vietnam National University, Hanoi", "domain": "vnu.edu.vn", "country": "VN", "weight": 75},
+    {"id": 0, "idExtended": "VN-HCMUT", "name": "Ho Chi Minh City University of Technology", "domain": "hcmut.edu.vn", "country": "VN", "weight": 72},
+    
+    # ============================================
+    # ZIMBABWE
+    # ============================================
+    {"id": 0, "idExtended": "ZW-UZ", "name": "University of Zimbabwe", "domain": "uz.ac.zw", "country": "ZW", "weight": 65},
 ]
 
-# Common first and last names
-FIRST_NAMES = [
-    "James", "Michael", "David", "John", "Robert", "William", "Richard", "Thomas",
-    "Emily", "Sarah", "Jessica", "Ashley", "Amanda", "Jennifer", "Megan", "Rachel",
-    "Daniel", "Matthew", "Anthony", "Christopher", "Andrew", "Kevin", "Brian", "Eric",
-    "Lauren", "Stephanie", "Nicole", "Elizabeth", "Samantha", "Katherine", "Michelle"
-]
+# International first names by region
+FIRST_NAMES_BY_REGION = {
+    "US": ["James", "Michael", "David", "John", "Robert", "William", "Emily", "Sarah", "Jessica", "Ashley", "Amanda", "Jennifer"],
+    "ES": ["Carlos", "Miguel", "José", "Juan", "María", "Ana", "Carmen", "Laura", "Sofía", "Isabella"],
+    "FR": ["Jean", "Pierre", "Louis", "Marie", "Sophie", "Camille", "Emma", "Léa", "Chloé", "Lucas"],
+    "DE": ["Hans", "Michael", "Thomas", "Anna", "Maria", "Sandra", "Julia", "Lisa", "Sophia", "Maximilian"],
+    "IT": ["Marco", "Giuseppe", "Francesco", "Maria", "Giulia", "Francesca", "Sara", "Alessia", "Chiara", "Alessandro"],
+    "PT": ["João", "Pedro", "Manuel", "Maria", "Ana", "Mariana", "Beatriz", "Inês", "Miguel", "Tiago"],
+    "AR": ["Matías", "Santiago", "Nicolás", "Valentina", "Martina", "Camila", "Lucía", "Sofía", "Juan", "Diego"],
+    "BD": ["Mohammad", "Abdul", "Rahim", "Fatima", "Aisha", "Nadia", "Ahmed", "Hassan", "Karim", "Zainab"],
+    "PK": ["Ali", "Hassan", "Ahmed", "Fatima", "Ayesha", "Zara", "Omar", "Usman", "Bilal", "Sana"],
+    "NG": ["Chukwuemeka", "Oluwaseun", "Adebayo", "Chioma", "Ngozi", "Amaka", "Tunde", "Emeka", "Yinka", "Funke"],
+    "PH": ["Juan", "Jose", "Maria", "Ana", "Carlo", "Miguel", "Angela", "Patricia", "Mark", "John"],
+    "VN": ["Nguyen", "Tran", "Minh", "Anh", "Linh", "Hoa", "Duc", "Tuan", "Huy", "Mai"],
+    "TH": ["Somchai", "Somporn", "Pracha", "Supaporn", "Siriwan", "Naree", "Kittisak", "Pichit", "Niran", "Pranee"],
+    "DEFAULT": ["Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Jamie", "Cameron", "Avery", "Quinn"]
+}
 
-LAST_NAMES = [
-    "Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Wilson",
-    "Anderson", "Taylor", "Thomas", "Moore", "Jackson", "Martin", "Lee", "Thompson",
-    "White", "Harris", "Clark", "Lewis", "Robinson", "Walker", "Young", "King"
-]
+LAST_NAMES_BY_REGION = {
+    "US": ["Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Wilson", "Anderson", "Taylor"],
+    "ES": ["García", "Rodríguez", "Martínez", "López", "González", "Hernández", "Pérez", "Sánchez", "Ramírez", "Torres"],
+    "FR": ["Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand", "Leroy", "Moreau"],
+    "DE": ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Schulz", "Hoffmann"],
+    "IT": ["Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci", "Marino", "Greco"],
+    "PT": ["Silva", "Santos", "Ferreira", "Pereira", "Oliveira", "Costa", "Rodrigues", "Martins", "Sousa", "Fernandes"],
+    "AR": ["González", "Rodríguez", "Gómez", "Fernández", "López", "Díaz", "Martínez", "Pérez", "García", "Sánchez"],
+    "BD": ["Rahman", "Hossain", "Khan", "Ahmed", "Islam", "Chowdhury", "Begum", "Akter", "Uddin", "Miah"],
+    "PK": ["Khan", "Ahmed", "Ali", "Hussain", "Shah", "Malik", "Butt", "Iqbal", "Syed", "Mirza"],
+    "NG": ["Okonkwo", "Adeyemi", "Okafor", "Eze", "Okwu", "Nwosu", "Ibe", "Chukwu", "Nnamdi", "Abubakar"],
+    "PH": ["Santos", "Reyes", "Cruz", "Bautista", "Ocampo", "Garcia", "Mendoza", "Torres", "Villanueva", "Ramos"],
+    "VN": ["Nguyen", "Tran", "Le", "Pham", "Hoang", "Vu", "Vo", "Dang", "Bui", "Do"],
+    "TH": ["Saetang", "Srisawang", "Wongsawat", "Prakobkit", "Thongchai", "Charoenpol", "Somboon", "Rattana", "Pongpun", "Sanit"],
+    "DEFAULT": ["Lee", "Kim", "Chen", "Wang", "Wong", "Singh", "Kumar", "Patel", "Zhang", "Liu"]
+}
+
+# Combined first and last names for backward compatibility
+FIRST_NAMES = FIRST_NAMES_BY_REGION["US"] + FIRST_NAMES_BY_REGION["DEFAULT"]
+LAST_NAMES = LAST_NAMES_BY_REGION["US"] + LAST_NAMES_BY_REGION["DEFAULT"]
+
+# Country code to region mapping for name generation
+COUNTRY_TO_REGION = {
+    "US": "US", "CA": "US",  # North America - English names
+    "AR": "AR", "CL": "AR", "VE": "AR", "PE": "AR", "EC": "AR", "BO": "AR", "GT": "ES", "SV": "ES", "NI": "ES", "DO": "ES",  # Latin America - Spanish
+    "ES": "ES",  # Spain
+    "FR": "FR", "BE": "FR", "CH": "FR",  # French-speaking
+    "DE": "DE", "AT": "DE",  # German-speaking
+    "IT": "IT",  # Italy
+    "PT": "PT",  # Portugal
+    "BD": "BD",  # Bangladesh
+    "PK": "PK",  # Pakistan
+    "NG": "NG", "GH": "NG", "KE": "NG", "ZA": "NG", "RW": "NG", "ZW": "NG",  # Africa
+    "PH": "PH",  # Philippines
+    "VN": "VN",  # Vietnam
+    "TH": "TH",  # Thailand
+    "MY": "DEFAULT", "SG": "DEFAULT", "TW": "DEFAULT",  # Southeast/East Asia
+    "AU": "US", "NZ": "US", "GB": "US", "IE": "US",  # English-speaking
+    "NL": "DEFAULT", "DK": "DEFAULT", "SE": "DEFAULT", "FI": "DEFAULT", "NO": "DEFAULT",  # Nordic/Dutch
+    "PL": "DEFAULT", "CZ": "DEFAULT", "HU": "DEFAULT", "RO": "DEFAULT", "BG": "DEFAULT", "UA": "DEFAULT",  # Eastern Europe
+    "TR": "DEFAULT", "GR": "DEFAULT",  # Mediterranean
+    "IL": "DEFAULT", "JO": "DEFAULT", "IQ": "DEFAULT", "AE": "DEFAULT", "MA": "DEFAULT",  # Middle East/North Africa
+    "LK": "DEFAULT",  # Sri Lanka
+}
 
 
 def select_university() -> dict:
@@ -202,9 +572,12 @@ def select_university_with_lookup() -> dict:
     return university
 
 
-def generate_name() -> Tuple[str, str]:
-    """Generate random first and last name"""
-    return random.choice(FIRST_NAMES), random.choice(LAST_NAMES)
+def generate_name(country: str = "US") -> Tuple[str, str]:
+    """Generate random first and last name based on country/region"""
+    region = COUNTRY_TO_REGION.get(country, "DEFAULT")
+    first_names = FIRST_NAMES_BY_REGION.get(region, FIRST_NAMES_BY_REGION["DEFAULT"])
+    last_names = LAST_NAMES_BY_REGION.get(region, LAST_NAMES_BY_REGION["DEFAULT"])
+    return random.choice(first_names), random.choice(last_names)
 
 
 def generate_email(first: str, last: str, domain: str) -> str:
@@ -352,7 +725,7 @@ class SheerIDVerifier:
             else:
                 # Generate new student info (fallback)
                 self.org = select_university()
-                first, last = generate_name()
+                first, last = generate_name(self.org.get("country", "US"))
                 email = generate_email(first, last, self.org["domain"])
                 dob = generate_birth_date()
                 

@@ -140,7 +140,7 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         from verifier import select_university_with_lookup, generate_name, generate_email, generate_birth_date
         
         org = select_university_with_lookup()  # Dynamically lookup correct organization ID from SheerID API
-        first, last = generate_name()
+        first, last = generate_name(org.get("country", "US"))
         email = generate_email(first, last, org["domain"])
         dob = generate_birth_date()
         

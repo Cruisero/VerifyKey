@@ -366,16 +366,27 @@ def fetch_random_university(country: str = "US") -> dict:
         print(f"[FetchUniv] Error fetching for {country}: {e}")
         return None
 
-def select_university(country: str = None) -> dict:
-    """Select university. If country not specified, pick random supported country."""
+def select_university(country: str = None, region_mode: str = None) -> dict:
+    """Select university. 
+    
+    Args:
+        country: Force specific country code (e.g., 'US')
+        region_mode: 'global' (default, picks random country) or 'us_only' (forces US)
+    """
     
     target_country = country
     if not target_country:
-        # 80% chance to pick random international country, 20% US
-        if random.random() < 0.8:
-            target_country = random.choice([c for c in SUPPORTED_COUNTRIES if c != "US"])
-        else:
+        # Check region mode
+        if region_mode == "us_only":
+            # Force US only
             target_country = "US"
+            print(f"[SelectUniv] Region mode: US Only")
+        else:
+            # Global mode: 80% chance to pick random international country, 20% US
+            if random.random() < 0.8:
+                target_country = random.choice([c for c in SUPPORTED_COUNTRIES if c != "US"])
+            else:
+                target_country = "US"
             
     # Try dynamic fetch first
     univ = fetch_random_university(target_country)
@@ -494,7 +505,7 @@ def lookup_organization_id(name: str, country: str = "US") -> Optional[dict]:
         return None
 
 
-def select_university_with_lookup() -> dict:
+def select_university_with_lookup(region_mode: str = None) -> dict:
     """
     Select university and verify/update ID from SheerID API
     
@@ -502,7 +513,7 @@ def select_university_with_lookup() -> dict:
     we always have the correct organization ID for the Gemini program.
     """
     # First, select a university from our list
-    university = select_university()
+    university = select_university(region_mode=region_mode)
     
     # Try to lookup the correct ID from SheerID API
     lookup_result = lookup_organization_id(university["name"], university.get("country", "US"))
@@ -678,7 +689,11 @@ class SheerIDVerifier:
                 print(f"[Verify] Using pre-generated info: {first} {last}")
             else:
                 # Generate new student info (fallback)
-                self.org = select_university()
+                # Load region mode from config for consistency
+                import config_manager
+                config = config_manager.get_config()
+                region_mode = config.get("aiGenerator", {}).get("regionMode", "global")
+                self.org = select_university(region_mode=region_mode)
                 first, last = generate_name(self.org.get("country", "US"))
                 email = generate_email(first, last, self.org["domain"])
                 dob = generate_birth_date()

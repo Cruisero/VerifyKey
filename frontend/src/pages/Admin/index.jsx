@@ -20,8 +20,7 @@ export default function Admin() {
     const [testDocumentResult, setTestDocumentResult] = useState(null);
 
     // AI Generator form state
-    const [aiProvider, setAiProvider] = useState('gemini'); // 'gemini' | 'batch_api' | 'puppeteer'
-    const [regionMode, setRegionMode] = useState('global'); // 'global' | 'us'
+    const [aiProvider, setAiProvider] = useState('gemini');
     const [batchApiSettings, setBatchApiSettings] = useState({
         apiUrl: 'https://batch.1key.me/api/batch',
         apiKey: ''
@@ -43,6 +42,9 @@ export default function Admin() {
         password: ''
     });
 
+    // Region mode state: 'global' (default) or 'us_only'
+    const [regionMode, setRegionMode] = useState('global');
+
     useEffect(() => {
         if (!loading && !user) {
             navigate('/');
@@ -61,7 +63,6 @@ export default function Admin() {
                 const data = await res.json();
                 setConfig(data);
                 setAiProvider(data.aiGenerator?.provider || 'gemini');
-                setRegionMode(data.aiGenerator?.regionMode || 'global');
                 if (data.aiGenerator?.batchApi) {
                     setBatchApiSettings(prev => ({
                         ...prev,
@@ -104,6 +105,10 @@ export default function Admin() {
                         password: data.proxy.password?.includes('...') ? '' : (data.proxy.password || ''),
                         hasStoredCredentials: data.proxy.user?.includes('...')
                     }));
+                }
+                // Load region mode setting
+                if (data.aiGenerator?.regionMode) {
+                    setRegionMode(data.aiGenerator.regionMode);
                 }
             }
 
@@ -463,31 +468,6 @@ export default function Admin() {
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="provider-selector" style={{ marginTop: '15px' }}>
-                                        <label className="input-label" style={{ marginBottom: '8px', display: 'block' }}>生成区域 (Universe)</label>
-                                        <div className="provider-options">
-                                            <div
-                                                className={`provider-option ${regionMode === 'global' ? 'active' : ''}`}
-                                                onClick={() => setRegionMode('global')}
-                                            >
-                                                <div className="provider-icon">🌍</div>
-                                                <div className="provider-info">
-                                                    <div className="provider-name">全球模式 (Global)</div>
-                                                    <div className="provider-desc">随机选择全球各国大学 (推荐)</div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                className={`provider-option ${regionMode === 'us' ? 'active' : ''}`}
-                                                onClick={() => setRegionMode('us')}
-                                            >
-                                                <div className="provider-icon">🇺🇸</div>
-                                                <div className="provider-info">
-                                                    <div className="provider-name">仅限美国 (US Only)</div>
-                                                    <div className="provider-desc">只生成美国大学</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             )}
 
@@ -571,6 +551,32 @@ export default function Admin() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Region Mode Settings - Always visible */}
+                            <div className="provider-settings region-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                                <h4>🌍 验证地区配置</h4>
+                                <p className="settings-desc" style={{ marginBottom: '16px' }}>
+                                    选择生成验证文档时使用的学校地区范围
+                                </p>
+                                <div className="settings-form">
+                                    <div className="input-group">
+                                        <label className="input-label">地区模式</label>
+                                        <select
+                                            className="input"
+                                            value={regionMode}
+                                            onChange={(e) => setRegionMode(e.target.value)}
+                                        >
+                                            <option value="us_only">🇺🇸 仅美国学校 (US Only)</option>
+                                            <option value="global">🌏 全球学校 (Global)</option>
+                                        </select>
+                                        <p className="input-hint">
+                                            {regionMode === 'us_only'
+                                                ? '仅使用美国学校生成验证文档，更稳定的验证通过率'
+                                                : '随机选择全球学校生成验证文档，包括美国、欧洲、亚洲等地区'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
 
                             {/* Proxy Settings - Always visible */}
                             <div className="provider-settings proxy-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>

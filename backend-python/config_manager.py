@@ -16,7 +16,6 @@ DEFAULT_CONFIG = {
     # AI Generator settings
     "aiGenerator": {
         "provider": "gemini",  # 'svg' | 'gemini' | 'batch_api' | 'puppeteer'
-        "regionMode": "global", # 'global' | 'us'
         
         # Gemini Official API settings
         "gemini": {
@@ -39,6 +38,9 @@ DEFAULT_CONFIG = {
             "useGeminiPhoto": True,  # Use Gemini AI to generate student photo
             "templatesDir": "templates"  # Templates directory relative to project root
         },
+        
+        # Region mode: 'global' (all countries) or 'us_only' (only US schools)
+        "regionMode": "global",
         
         # SVG Fallback (always available)
         "svgFallback": {

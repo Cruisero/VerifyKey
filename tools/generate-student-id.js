@@ -632,7 +632,12 @@ class StudentIdGenerator {
 
                     // Generate receipt-specific data
                     const now = new Date();
-                    const regDate = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getFullYear()).slice(-2)}`;
+                    // Randomize date to be 0-14 days in the past
+                    const daysAgo = Math.floor(Math.random() * 15); // 0 to 14
+                    const pastDate = new Date(now);
+                    pastDate.setDate(now.getDate() - daysAgo);
+
+                    const regDate = `${String(pastDate.getDate()).padStart(2, '0')}.${String(pastDate.getMonth() + 1).padStart(2, '0')}.${String(pastDate.getFullYear()).slice(-2)}`;
                     const amount = 10000 + Math.floor(Math.random() * 89999);
                     const studentRoll = Math.floor(Math.random() * 900) + 100;
                     const centre = 10000 + Math.floor(Math.random() * 90000);

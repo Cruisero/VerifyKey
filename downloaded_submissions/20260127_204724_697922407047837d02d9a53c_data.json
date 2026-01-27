@@ -1,0 +1,31 @@
+{
+  "verificationId": "697922407047837d02d9a53c",
+  "timestamp": "20260127_204724",
+  "student": {
+    "firstName": "Sarah",
+    "lastName": "Anderson",
+    "email": "sarah38@bu.edu",
+    "birthDate": "2005-12-14"
+  },
+  "university": {
+    "id": 519,
+    "idExtended": "519",
+    "name": "Boston University",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "transcript",
+      "fileName": "transcript.png"
+    },
+    {
+      "type": "id_card",
+      "fileName": "student_id.png"
+    },
+    {
+      "type": "schedule",
+      "fileName": "schedule.png"
+    }
+  ],
+  "provider": "gemini"
+}

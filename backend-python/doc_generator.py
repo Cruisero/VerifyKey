@@ -109,10 +109,24 @@ def generate_transcript_with_gemini(first: str, last: str, university: str, birt
         student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     gpa = round(3.2 + random.random() * 0.8, 2)
     
-    # CRITICAL: Add current date for SheerID requirement (date within 90 days)
+    # CRITICAL: Use current date and CURRENT semester for consistency
     current_date = time.strftime("%B %d, %Y")
-    current_semester = "Spring 2025"
-    issue_date = time.strftime("%Y-%m-%d")
+    current_year = int(time.strftime("%Y"))
+    current_month = int(time.strftime("%m"))
+    
+    # Determine semester based on current month
+    if current_month >= 1 and current_month <= 5:
+        current_semester = f"Spring {current_year}"
+    elif current_month >= 6 and current_month <= 7:
+        current_semester = f"Summer {current_year}"
+    else:
+        current_semester = f"Fall {current_year}"
+    
+    # Previous semesters for completed courses
+    prev_semester = f"Fall {current_year - 1}"
+    
+    # Generate realistic course codes based on university
+    uni_short = university.replace("University", "").replace("College", "").strip().split()[0][:3].upper()
     
     prompt = f"""Generate a realistic university academic transcript document image:
 
@@ -121,22 +135,33 @@ STUDENT NAME: {first} {last}
 STUDENT ID: {student_id}
 DATE OF BIRTH: {birth_date}
 CUMULATIVE GPA: {gpa}
+TRANSCRIPT ISSUE DATE: {current_date}
+
+ACADEMIC RECORD - CRITICAL FORMAT:
+
+COMPLETED SEMESTER: {prev_semester}
+Courses with FINAL GRADES (these contribute to GPA):
+- {uni_short} CS 112 - Intro to Computer Science - 4.00 credits - Grade: A
+- {uni_short} MA 123 - Calculus I - 4.00 credits - Grade: A-
+- {uni_short} EN 101 - College Writing - 3.00 credits - Grade: B+
+- {uni_short} PH 151 - General Physics I - 4.00 credits - Grade: A
+
 CURRENT SEMESTER: {current_semester}
-ENROLLMENT STATUS: Full-time Student (Enrolled)
-DOCUMENT ISSUE DATE: {current_date}
-TRANSCRIPT DATE: {issue_date}
+Enrollment Status: Currently Enrolled (Full-time)
+- {uni_short} CS 201 - Data Structures - 4.00 credits - In Progress
+- {uni_short} MA 225 - Calculus II - 4.00 credits - In Progress
+- {uni_short} PH 152 - General Physics II - 4.00 credits - In Progress
 
-Requirements:
-- Official academic transcript format with university letterhead and logo
-- MUST show the transcript/document date prominently: "{current_date}"
-- Show current enrollment status as "ENROLLED - {current_semester}"
-- Course listing for {current_semester}: Computer Science 101, Calculus II, Physics 201, English Composition
-- All courses should have "{current_semester}" as the term
-- Looks like a real scanned official document
-- Include registrar signature line with date
-- Professional formatting with clear dates visible
-
-CRITICAL: The document date "{current_date}" must be clearly visible as this is required for verification.
+CRITICAL REQUIREMENTS:
+1. Show COMPLETED courses with letter grades (A, A-, B+, etc.) from {prev_semester}
+2. Show CURRENT courses as "In Progress" from {current_semester}
+3. GPA {gpa} is calculated from COMPLETED courses only
+4. Document date "{current_date}" must be clearly visible at top
+5. Include "Office of the Registrar" header with university logo
+6. Signature line: "University Registrar" with official title (NOT student signature)
+7. Include university address and registrar's seal/stamp area
+8. Use course codes like "{uni_short} CS 112" not generic "Computer Science 101"
+9. Look like a real scanned official document with slight texture
 
 Generate ONLY the image, no explanation text."""
     
@@ -149,15 +174,28 @@ def generate_student_id_with_gemini(first: str, last: str, university: str, stud
     import time
     if not student_id:
         student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
-    current_date = time.strftime("%B %d, %Y")
-    current_semester = "Spring 2025"
     
-    # Issue date and valid through should have 4 year gap (typical university duration)
     current_year = int(time.strftime("%Y"))
-    issue_year = current_year - random.randint(0, 2)  # Issued 0-2 years ago
-    valid_year = issue_year + 4  # Valid for 4 years from issue
-    issue_date = f"08/{issue_year}"  # Typically issued at start of academic year
-    valid_thru = f"05/{valid_year}"  # Valid until graduation
+    current_month = int(time.strftime("%m"))
+    
+    # Determine CURRENT semester based on month
+    if current_month >= 1 and current_month <= 5:
+        current_semester = f"Spring {current_year}"
+    elif current_month >= 6 and current_month <= 7:
+        current_semester = f"Summer {current_year}"
+    else:
+        current_semester = f"Fall {current_year}"
+    
+    # Issue date should be BEFORE current date (when student enrolled)
+    # Student started Fall semester 1-3 years ago
+    enrollment_year = current_year - random.randint(1, 3)
+    issue_date = f"08/{enrollment_year}"  # August when Fall semester starts
+    
+    # Valid through: graduation year (4 years from enrollment, or current year + 1-2)
+    valid_year = enrollment_year + 4
+    if valid_year < current_year:
+        valid_year = current_year + 1  # Still valid if graduated
+    valid_thru = f"05/{valid_year}"  # May graduation
     
     # Determine gender based on first name (simple heuristic)
     female_names = ["Mary", "Patricia", "Jennifer", "Linda", "Barbara", "Elizabeth", "Susan", 
@@ -174,9 +212,15 @@ def generate_student_id_with_gemini(first: str, last: str, university: str, stud
 UNIVERSITY: {university}
 STUDENT NAME: {first} {last}
 STUDENT ID: {student_id}
-STATUS: Full-time Student - {current_semester}
+STATUS: Full-time Student
 ISSUE DATE: {issue_date}
 VALID THROUGH: {valid_thru}
+
+CRITICAL TIME LOGIC:
+- Card was issued in {issue_date} (when student enrolled)
+- Card is valid through {valid_thru} (expected graduation)
+- This is a CURRENTLY VALID ID card
+- Do NOT show any semester on the card (just "Full-time Student" status)
 
 CRITICAL REQUIREMENTS:
 1. This should look like a PHOTO of a physical ID card placed on a desk or table
@@ -194,7 +238,7 @@ CRITICAL REQUIREMENTS:
    - University name "{university}" with logo at top
    - Student name "{first} {last}" clearly visible
    - Student ID: {student_id}
-   - "Full-time Student" status
+   - "Full-time Student" status (NO semester year)
    - Issue date: {issue_date}
    - Valid through: {valid_thru}
 
@@ -218,8 +262,20 @@ def generate_schedule_with_gemini(first: str, last: str, university: str, studen
     if not student_id:
         student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     
-    current_semester = "Spring 2025"
+    current_year = int(time.strftime("%Y"))
+    current_month = int(time.strftime("%m"))
     current_date = time.strftime("%B %d, %Y")
+    
+    # Determine CURRENT semester based on month
+    if current_month >= 1 and current_month <= 5:
+        current_semester = f"Spring {current_year}"
+    elif current_month >= 6 and current_month <= 7:
+        current_semester = f"Summer {current_year}"
+    else:
+        current_semester = f"Fall {current_year}"
+    
+    # Generate realistic course codes based on university
+    uni_short = university.replace("University", "").replace("College", "").strip().split()[0][:3].upper()
     
     prompt = f"""Generate a realistic university weekly class schedule document image:
 
@@ -227,22 +283,26 @@ UNIVERSITY: {university}
 STUDENT NAME: {first} {last}
 STUDENT ID: {student_id}
 SEMESTER: {current_semester}
-GENERATED DATE: {current_date}
+
+CRITICAL: Use "Printed on: {current_date}" NOT "Generated Date" (which looks fake)
 
 Requirements:
 - Weekly schedule grid showing Monday through Friday
 - Time slots from 8:00 AM to 5:00 PM
-- 4-5 courses scheduled across different days:
-  * Computer Science 301 (Mon/Wed 10:00-11:30 AM) - Room CS-201
-  * Calculus III (Tue/Thu 9:00-10:30 AM) - Room MATH-105
-  * Physics II Lab (Wed 2:00-5:00 PM) - Room PHY-LAB
-  * Technical Writing (Mon/Wed 1:00-2:00 PM) - Room ENG-302
-  * Data Structures (Tue/Thu 11:00 AM-12:30 PM) - Room CS-105
+- 4-5 courses with REALISTIC course codes and room names:
+  * {uni_short} CS 201 - Data Structures (Mon/Wed 10:00-11:30 AM) - Room: SCI 105
+  * {uni_short} MA 225 - Calculus II (Tue/Thu 9:00-10:30 AM) - Room: CAS 214
+  * {uni_short} PH 152 - Physics II Lab (Wed 2:00-5:00 PM) - Room: PHO 121
+  * {uni_short} WR 150 - College Writing (Mon/Wed 1:00-2:00 PM) - Room: CGS 302
+  * {uni_short} CS 112 - Intro to Computer Science (Tue/Thu 11:00 AM-12:30 PM) - Room: SCI 117
+
+- Use REAL building name + room number format (like "SCI 105", "CAS 214", "PHO 121")
+- DO NOT use fake room names like "CS-201" or "MATH-105"
 - University logo/header at top
 - Student name and ID clearly visible
+- "Printed on: {current_date}" in the corner (NOT "Generated Date")
 - Professional academic schedule format
 - Clean, readable layout with course colors
-- Document date visible: "{current_date}"
 
 Generate ONLY the image, no explanation text."""
     

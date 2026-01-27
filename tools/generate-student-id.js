@@ -764,7 +764,11 @@ class StudentIdGenerator {
                 }
             } else {
                 // Fill student ID card template (default)
-                await page.evaluate((studentData, photo) => {
+                // Generate university logo for student ID card
+                console.log('[Generator] Generating university logo for student ID card...');
+                let logoUrl = await generateLogoWithGemini(data.university);
+
+                await page.evaluate((studentData, photo, logo) => {
                     // Helper to safely set element
                     const setById = (id, value) => {
                         const el = document.getElementById(id);
@@ -801,7 +805,29 @@ class StudentIdGenerator {
                         const photoEl = document.getElementById('cardStudentPhoto');
                         if (photoEl) photoEl.src = photo;
                     }
-                }, data, photoUrl);
+
+                    // Set logo if provided
+                    if (logo) {
+                        const logoImg = document.getElementById('cardUniversityLogo');
+                        const logoFallback = document.getElementById('cardLogoFallback');
+                        if (logoImg && logoFallback) {
+                            logoImg.src = logo;
+                            logoImg.style.display = 'block';
+                            logoFallback.style.display = 'none';
+                        }
+                    }
+                }, data, photoUrl, logoUrl);
+
+                // Wait for logo to load if we have one
+                if (logoUrl) {
+                    console.log('[Generator] Waiting for student ID logo to load...');
+                    await page.waitForFunction(() => {
+                        const img = document.getElementById('cardUniversityLogo');
+                        return img && img.complete && img.naturalHeight !== 0;
+                    }, { timeout: 10000 }).catch(() => {
+                        console.log('[Generator] Student ID logo load timeout, continuing...');
+                    });
+                }
             }
 
             // Wait for photo to load (only for student ID templates)

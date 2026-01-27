@@ -50,322 +50,169 @@ UNIVERSITIES = [
     # ============================================
     # ARGENTINA
     # ============================================
-    {"id": 0, "idExtended": "AR-UBA", "name": "Universidad de Buenos Aires", "domain": "uba.ar", "country": "AR", "weight": 80},
-    {"id": 0, "idExtended": "AR-UNC", "name": "Universidad Nacional de Córdoba", "domain": "unc.edu.ar", "country": "AR", "weight": 75},
-    {"id": 0, "idExtended": "AR-UNLP", "name": "Universidad Nacional de La Plata", "domain": "unlp.edu.ar", "country": "AR", "weight": 70},
+    {"id": 11562025, "idExtended": "11562025", "name": "Universidad de Buenos Aires", "domain": "uba.ar", "country": "AR", "weight": 80},
+    {"id": 10079464, "idExtended": "10079464", "name": "Universidad Nacional de Córdoba", "domain": "unc.edu.ar", "country": "AR", "weight": 75},
     
     # ============================================
     # AUSTRALIA
     # ============================================
-    {"id": 0, "idExtended": "AU-USYD", "name": "University of Sydney", "domain": "sydney.edu.au", "country": "AU", "weight": 85},
-    {"id": 0, "idExtended": "AU-UMELB", "name": "University of Melbourne", "domain": "unimelb.edu.au", "country": "AU", "weight": 85},
-    {"id": 0, "idExtended": "AU-ANU", "name": "Australian National University", "domain": "anu.edu.au", "country": "AU", "weight": 82},
-    {"id": 0, "idExtended": "AU-UNSW", "name": "University of New South Wales", "domain": "unsw.edu.au", "country": "AU", "weight": 80},
-    {"id": 0, "idExtended": "AU-UQ", "name": "University of Queensland", "domain": "uq.edu.au", "country": "AU", "weight": 80},
+    {"id": 4418286, "idExtended": "4418286", "name": "The University Of Sydney", "domain": "sydney.edu.au", "country": "AU", "weight": 85},
+    {"id": 11288134, "idExtended": "11288134", "name": "University of Melbourne", "domain": "unimelb.edu.au", "country": "AU", "weight": 85},
+    {"id": 345276, "idExtended": "345276", "name": "Australian National University", "domain": "anu.edu.au", "country": "AU", "weight": 82},
     
     # ============================================
     # AUSTRIA
     # ============================================
-    {"id": 0, "idExtended": "AT-UNIVIE", "name": "University of Vienna", "domain": "univie.ac.at", "country": "AT", "weight": 80},
-    {"id": 0, "idExtended": "AT-TUW", "name": "Vienna University of Technology", "domain": "tuwien.ac.at", "country": "AT", "weight": 78},
+    {"id": 345582, "idExtended": "345582", "name": "MODUL University Vienna", "domain": "modul.ac.at", "country": "AT", "weight": 80},
     
     # ============================================
     # BANGLADESH
     # ============================================
-    {"id": 0, "idExtended": "BD-DU", "name": "University of Dhaka", "domain": "du.ac.bd", "country": "BD", "weight": 75},
-    {"id": 0, "idExtended": "BD-BUET", "name": "Bangladesh University of Engineering and Technology", "domain": "buet.ac.bd", "country": "BD", "weight": 75},
-    {"id": 0, "idExtended": "BD-NSU", "name": "North South University", "domain": "northsouth.edu", "country": "BD", "weight": 70},
+    {"id": 661802, "idExtended": "661802", "name": "Royal University of Dhaka", "domain": "royaluniversitydhaka.edu.bd", "country": "BD", "weight": 75},
     
     # ============================================
     # BELGIUM
     # ============================================
-    {"id": 0, "idExtended": "BE-KULEUVEN", "name": "KU Leuven", "domain": "kuleuven.be", "country": "BE", "weight": 82},
-    {"id": 0, "idExtended": "BE-ULB", "name": "Université Libre de Bruxelles", "domain": "ulb.ac.be", "country": "BE", "weight": 78},
-    
-    # ============================================
-    # BOLIVIA
-    # ============================================
-    {"id": 0, "idExtended": "BO-UMSA", "name": "Universidad Mayor de San Andrés", "domain": "umsa.bo", "country": "BO", "weight": 70},
-    
-    # ============================================
-    # BULGARIA
-    # ============================================
-    {"id": 0, "idExtended": "BG-SU", "name": "Sofia University", "domain": "uni-sofia.bg", "country": "BG", "weight": 72},
+    {"id": 10038183, "idExtended": "10038183", "name": "KU Leuven", "domain": "kuleuven.be", "country": "BE", "weight": 82},
     
     # ============================================
     # CANADA
     # ============================================
-    {"id": 0, "idExtended": "CA-UTORONTO", "name": "University of Toronto", "domain": "utoronto.ca", "country": "CA", "weight": 88},
-    {"id": 0, "idExtended": "CA-UBC", "name": "University of British Columbia", "domain": "ubc.ca", "country": "CA", "weight": 85},
-    {"id": 0, "idExtended": "CA-MCGILL", "name": "McGill University", "domain": "mcgill.ca", "country": "CA", "weight": 85},
-    {"id": 0, "idExtended": "CA-UWATERLOO", "name": "University of Waterloo", "domain": "uwaterloo.ca", "country": "CA", "weight": 82},
+    {"id": 11272362, "idExtended": "11272362", "name": "University of Toronto", "domain": "utoronto.ca", "country": "CA", "weight": 88},
+    {"id": 4782066, "idExtended": "4782066", "name": "McGill University", "domain": "mcgill.ca", "country": "CA", "weight": 85},
+    {"id": 4553283, "idExtended": "4553283", "name": "University of British Columbia", "domain": "ubc.ca", "country": "CA", "weight": 85},
+    {"id": 328357, "idExtended": "328357", "name": "University of Waterloo", "domain": "uwaterloo.ca", "country": "CA", "weight": 82},
     
     # ============================================
     # CHILE
     # ============================================
-    {"id": 0, "idExtended": "CL-UCHILE", "name": "Universidad de Chile", "domain": "uchile.cl", "country": "CL", "weight": 78},
-    {"id": 0, "idExtended": "CL-PUC", "name": "Pontificia Universidad Católica de Chile", "domain": "uc.cl", "country": "CL", "weight": 78},
-    
-    # ============================================
-    # CZECH REPUBLIC
-    # ============================================
-    {"id": 0, "idExtended": "CZ-CUNI", "name": "Charles University", "domain": "cuni.cz", "country": "CZ", "weight": 78},
-    {"id": 0, "idExtended": "CZ-CTU", "name": "Czech Technical University in Prague", "domain": "cvut.cz", "country": "CZ", "weight": 75},
+    {"id": 10336322, "idExtended": "10336322", "name": "Universidad de Chile", "domain": "uchile.cl", "country": "CL", "weight": 78},
     
     # ============================================
     # DENMARK
     # ============================================
-    {"id": 0, "idExtended": "DK-KU", "name": "University of Copenhagen", "domain": "ku.dk", "country": "DK", "weight": 82},
-    {"id": 0, "idExtended": "DK-DTU", "name": "Technical University of Denmark", "domain": "dtu.dk", "country": "DK", "weight": 80},
-    
-    # ============================================
-    # DOMINICAN REPUBLIC
-    # ============================================
-    {"id": 0, "idExtended": "DO-UASD", "name": "Universidad Autónoma de Santo Domingo", "domain": "uasd.edu.do", "country": "DO", "weight": 70},
-    
-    # ============================================
-    # ECUADOR
-    # ============================================
-    {"id": 0, "idExtended": "EC-UCE", "name": "Universidad Central del Ecuador", "domain": "uce.edu.ec", "country": "EC", "weight": 70},
-    {"id": 0, "idExtended": "EC-ESPOL", "name": "Escuela Superior Politécnica del Litoral", "domain": "espol.edu.ec", "country": "EC", "weight": 72},
-    
-    # ============================================
-    # EL SALVADOR
-    # ============================================
-    {"id": 0, "idExtended": "SV-UES", "name": "Universidad de El Salvador", "domain": "ues.edu.sv", "country": "SV", "weight": 68},
+    {"id": 7133699, "idExtended": "7133699", "name": "IT University of Copenhagen", "domain": "itu.dk", "country": "DK", "weight": 82},
     
     # ============================================
     # FINLAND
     # ============================================
-    {"id": 0, "idExtended": "FI-HELSINKI", "name": "University of Helsinki", "domain": "helsinki.fi", "country": "FI", "weight": 82},
-    {"id": 0, "idExtended": "FI-AALTO", "name": "Aalto University", "domain": "aalto.fi", "country": "FI", "weight": 80},
+    {"id": 4817687, "idExtended": "4817687", "name": "University of Helsinki", "domain": "helsinki.fi", "country": "FI", "weight": 82},
     
     # ============================================
     # FRANCE
     # ============================================
-    {"id": 0, "idExtended": "FR-SORBONNE", "name": "Sorbonne University", "domain": "sorbonne-universite.fr", "country": "FR", "weight": 85},
-    {"id": 0, "idExtended": "FR-PSL", "name": "Paris Sciences et Lettres University", "domain": "psl.eu", "country": "FR", "weight": 83},
-    {"id": 0, "idExtended": "FR-POLYTECHNIQUE", "name": "École Polytechnique", "domain": "polytechnique.edu", "country": "FR", "weight": 85},
+    {"id": 329683, "idExtended": "329683", "name": "Sorbonne University", "domain": "sorbonne-universite.fr", "country": "FR", "weight": 85},
     
     # ============================================
-    # GHANA
+    # GERMANY
     # ============================================
-    {"id": 0, "idExtended": "GH-UG", "name": "University of Ghana", "domain": "ug.edu.gh", "country": "GH", "weight": 70},
-    {"id": 0, "idExtended": "GH-KNUST", "name": "Kwame Nkrumah University of Science and Technology", "domain": "knust.edu.gh", "country": "GH", "weight": 70},
-    
-    # ============================================
-    # GREECE
-    # ============================================
-    {"id": 0, "idExtended": "GR-UOA", "name": "National and Kapodistrian University of Athens", "domain": "uoa.gr", "country": "GR", "weight": 75},
-    {"id": 0, "idExtended": "GR-AUTH", "name": "Aristotle University of Thessaloniki", "domain": "auth.gr", "country": "GR", "weight": 75},
-    
-    # ============================================
-    # GUATEMALA
-    # ============================================
-    {"id": 0, "idExtended": "GT-USAC", "name": "Universidad de San Carlos de Guatemala", "domain": "usac.edu.gt", "country": "GT", "weight": 68},
-    
-    # ============================================
-    # HUNGARY
-    # ============================================
-    {"id": 0, "idExtended": "HU-ELTE", "name": "Eötvös Loránd University", "domain": "elte.hu", "country": "HU", "weight": 75},
-    {"id": 0, "idExtended": "HU-BME", "name": "Budapest University of Technology and Economics", "domain": "bme.hu", "country": "HU", "weight": 75},
-    
-    # ============================================
-    # IRAQ
-    # ============================================
-    {"id": 0, "idExtended": "IQ-UOB", "name": "University of Baghdad", "domain": "uobaghdad.edu.iq", "country": "IQ", "weight": 68},
+    {"id": 344333, "idExtended": "344333", "name": "Technische Universität Berlin", "domain": "tu-berlin.de", "country": "DE", "weight": 82},
     
     # ============================================
     # ISRAEL
     # ============================================
-    {"id": 0, "idExtended": "IL-HUJI", "name": "Hebrew University of Jerusalem", "domain": "huji.ac.il", "country": "IL", "weight": 82},
-    {"id": 0, "idExtended": "IL-TECHNION", "name": "Technion - Israel Institute of Technology", "domain": "technion.ac.il", "country": "IL", "weight": 85},
-    {"id": 0, "idExtended": "IL-TAU", "name": "Tel Aviv University", "domain": "tau.ac.il", "country": "IL", "weight": 82},
+    {"id": 10295116, "idExtended": "10295116", "name": "Tel Aviv University", "domain": "tau.ac.il", "country": "IL", "weight": 82},
+    {"id": 7588417, "idExtended": "7588417", "name": "Technion - Israel Institute of Technology", "domain": "technion.ac.il", "country": "IL", "weight": 85},
     
     # ============================================
     # ITALY
     # ============================================
-    {"id": 0, "idExtended": "IT-UNIMI", "name": "University of Milan", "domain": "unimi.it", "country": "IT", "weight": 80},
-    {"id": 0, "idExtended": "IT-POLIMI", "name": "Politecnico di Milano", "domain": "polimi.it", "country": "IT", "weight": 82},
-    {"id": 0, "idExtended": "IT-UNIBO", "name": "University of Bologna", "domain": "unibo.it", "country": "IT", "weight": 80},
-    {"id": 0, "idExtended": "IT-UNIROMA1", "name": "Sapienza University of Rome", "domain": "uniroma1.it", "country": "IT", "weight": 80},
+    {"id": 10278166, "idExtended": "10278166", "name": "Politecnico di Milano", "domain": "polimi.it", "country": "IT", "weight": 82},
+    {"id": 10243841, "idExtended": "10243841", "name": "University of Bologna", "domain": "unibo.it", "country": "IT", "weight": 80},
     
     # ============================================
-    # JORDAN
+    # JAPAN
     # ============================================
-    {"id": 0, "idExtended": "JO-UJ", "name": "University of Jordan", "domain": "ju.edu.jo", "country": "JO", "weight": 72},
-    
-    # ============================================
-    # KENYA
-    # ============================================
-    {"id": 0, "idExtended": "KE-UON", "name": "University of Nairobi", "domain": "uonbi.ac.ke", "country": "KE", "weight": 72},
-    {"id": 0, "idExtended": "KE-KU", "name": "Kenyatta University", "domain": "ku.ac.ke", "country": "KE", "weight": 70},
+    {"id": 354636, "idExtended": "354636", "name": "Tokyo Medical University", "domain": "tokyo-med.ac.jp", "country": "JP", "weight": 78},
     
     # ============================================
     # MALAYSIA
     # ============================================
-    {"id": 0, "idExtended": "MY-UM", "name": "University of Malaya", "domain": "um.edu.my", "country": "MY", "weight": 78},
-    {"id": 0, "idExtended": "MY-UKM", "name": "National University of Malaysia", "domain": "ukm.my", "country": "MY", "weight": 75},
-    {"id": 0, "idExtended": "MY-USM", "name": "Universiti Sains Malaysia", "domain": "usm.my", "country": "MY", "weight": 75},
-    
-    # ============================================
-    # MOROCCO
-    # ============================================
-    {"id": 0, "idExtended": "MA-UM5", "name": "Mohammed V University", "domain": "um5.ac.ma", "country": "MA", "weight": 70},
+    {"id": 355232, "idExtended": "355232", "name": "University of Malaya", "domain": "um.edu.my", "country": "MY", "weight": 78},
     
     # ============================================
     # NETHERLANDS
     # ============================================
-    {"id": 0, "idExtended": "NL-UVA", "name": "University of Amsterdam", "domain": "uva.nl", "country": "NL", "weight": 82},
-    {"id": 0, "idExtended": "NL-TUD", "name": "Delft University of Technology", "domain": "tudelft.nl", "country": "NL", "weight": 82},
-    {"id": 0, "idExtended": "NL-LEI", "name": "Leiden University", "domain": "leidenuniv.nl", "country": "NL", "weight": 80},
-    
-    # ============================================
-    # NICARAGUA
-    # ============================================
-    {"id": 0, "idExtended": "NI-UNAN", "name": "Universidad Nacional Autónoma de Nicaragua", "domain": "unan.edu.ni", "country": "NI", "weight": 65},
+    {"id": 10266061, "idExtended": "10266061", "name": "University of Amsterdam", "domain": "uva.nl", "country": "NL", "weight": 82},
+    {"id": 327018, "idExtended": "327018", "name": "Delft University of Technology", "domain": "tudelft.nl", "country": "NL", "weight": 82},
     
     # ============================================
     # NIGERIA
     # ============================================
-    {"id": 0, "idExtended": "NG-UI", "name": "University of Ibadan", "domain": "ui.edu.ng", "country": "NG", "weight": 72},
-    {"id": 0, "idExtended": "NG-UNILAG", "name": "University of Lagos", "domain": "unilag.edu.ng", "country": "NG", "weight": 72},
-    {"id": 0, "idExtended": "NG-ABU", "name": "Ahmadu Bello University", "domain": "abu.edu.ng", "country": "NG", "weight": 70},
+    {"id": 11570617, "idExtended": "11570617", "name": "University of Lagos", "domain": "unilag.edu.ng", "country": "NG", "weight": 72},
     
     # ============================================
     # PAKISTAN
     # ============================================
-    {"id": 0, "idExtended": "PK-QAU", "name": "Quaid-i-Azam University", "domain": "qau.edu.pk", "country": "PK", "weight": 72},
-    {"id": 0, "idExtended": "PK-LUMS", "name": "Lahore University of Management Sciences", "domain": "lums.edu.pk", "country": "PK", "weight": 75},
-    {"id": 0, "idExtended": "PK-NUST", "name": "National University of Sciences and Technology", "domain": "nust.edu.pk", "country": "PK", "weight": 75},
-    
-    # ============================================
-    # PERU
-    # ============================================
-    {"id": 0, "idExtended": "PE-PUCP", "name": "Pontificia Universidad Católica del Perú", "domain": "pucp.edu.pe", "country": "PE", "weight": 75},
-    {"id": 0, "idExtended": "PE-UNMSM", "name": "Universidad Nacional Mayor de San Marcos", "domain": "unmsm.edu.pe", "country": "PE", "weight": 72},
+    {"id": 661104, "idExtended": "661104", "name": "Lahore University of Management Sciences", "domain": "lums.edu.pk", "country": "PK", "weight": 75},
     
     # ============================================
     # PHILIPPINES
     # ============================================
-    {"id": 0, "idExtended": "PH-UP", "name": "University of the Philippines", "domain": "up.edu.ph", "country": "PH", "weight": 75},
-    {"id": 0, "idExtended": "PH-ATENEO", "name": "Ateneo de Manila University", "domain": "ateneo.edu", "country": "PH", "weight": 75},
-    {"id": 0, "idExtended": "PH-DLSU", "name": "De La Salle University", "domain": "dlsu.edu.ph", "country": "PH", "weight": 72},
-    
-    # ============================================
-    # POLAND
-    # ============================================
-    {"id": 0, "idExtended": "PL-UW", "name": "University of Warsaw", "domain": "uw.edu.pl", "country": "PL", "weight": 78},
-    {"id": 0, "idExtended": "PL-AGH", "name": "AGH University of Science and Technology", "domain": "agh.edu.pl", "country": "PL", "weight": 75},
-    {"id": 0, "idExtended": "PL-PWR", "name": "Wrocław University of Science and Technology", "domain": "pwr.edu.pl", "country": "PL", "weight": 75},
-    
-    # ============================================
-    # PORTUGAL
-    # ============================================
-    {"id": 0, "idExtended": "PT-UL", "name": "University of Lisbon", "domain": "ulisboa.pt", "country": "PT", "weight": 78},
-    {"id": 0, "idExtended": "PT-UP", "name": "University of Porto", "domain": "up.pt", "country": "PT", "weight": 78},
-    
-    # ============================================
-    # ROMANIA
-    # ============================================
-    {"id": 0, "idExtended": "RO-UB", "name": "University of Bucharest", "domain": "unibuc.ro", "country": "RO", "weight": 72},
-    {"id": 0, "idExtended": "RO-UPB", "name": "Politehnica University of Bucharest", "domain": "upb.ro", "country": "RO", "weight": 72},
-    
-    # ============================================
-    # RWANDA
-    # ============================================
-    {"id": 0, "idExtended": "RW-UR", "name": "University of Rwanda", "domain": "ur.ac.rw", "country": "RW", "weight": 65},
+    {"id": 11434579, "idExtended": "11434579", "name": "Polytechnic University of the Philippines", "domain": "pup.edu.ph", "country": "PH", "weight": 75},
     
     # ============================================
     # SINGAPORE
     # ============================================
-    {"id": 0, "idExtended": "SG-NUS", "name": "National University of Singapore", "domain": "nus.edu.sg", "country": "SG", "weight": 88},
-    {"id": 0, "idExtended": "SG-NTU", "name": "Nanyang Technological University", "domain": "ntu.edu.sg", "country": "SG", "weight": 85},
+    {"id": 356355, "idExtended": "356355", "name": "National University of Singapore", "domain": "nus.edu.sg", "country": "SG", "weight": 88},
+    {"id": 356356, "idExtended": "356356", "name": "Nanyang Technological University", "domain": "ntu.edu.sg", "country": "SG", "weight": 85},
     
     # ============================================
     # SOUTH AFRICA
     # ============================================
-    {"id": 0, "idExtended": "ZA-UCT", "name": "University of Cape Town", "domain": "uct.ac.za", "country": "ZA", "weight": 80},
-    {"id": 0, "idExtended": "ZA-WITS", "name": "University of the Witwatersrand", "domain": "wits.ac.za", "country": "ZA", "weight": 78},
-    {"id": 0, "idExtended": "ZA-SU", "name": "Stellenbosch University", "domain": "sun.ac.za", "country": "ZA", "weight": 78},
+    {"id": 659433, "idExtended": "659433", "name": "University of Cape Town", "domain": "uct.ac.za", "country": "ZA", "weight": 80},
+    
+    # ============================================
+    # SOUTH KOREA
+    # ============================================
+    {"id": 6812577, "idExtended": "6812577", "name": "Seoul National University", "domain": "snu.ac.kr", "country": "KR", "weight": 85},
     
     # ============================================
     # SPAIN
     # ============================================
-    {"id": 0, "idExtended": "ES-UB", "name": "University of Barcelona", "domain": "ub.edu", "country": "ES", "weight": 80},
-    {"id": 0, "idExtended": "ES-UAM", "name": "Universidad Autónoma de Madrid", "domain": "uam.es", "country": "ES", "weight": 78},
-    {"id": 0, "idExtended": "ES-UPM", "name": "Universidad Politécnica de Madrid", "domain": "upm.es", "country": "ES", "weight": 78},
-    
-    # ============================================
-    # SRI LANKA
-    # ============================================
-    {"id": 0, "idExtended": "LK-UCOL", "name": "University of Colombo", "domain": "cmb.ac.lk", "country": "LK", "weight": 70},
-    {"id": 0, "idExtended": "LK-UOP", "name": "University of Peradeniya", "domain": "pdn.ac.lk", "country": "LK", "weight": 70},
+    {"id": 11305227, "idExtended": "11305227", "name": "University of Barcelona", "domain": "ub.edu", "country": "ES", "weight": 80},
     
     # ============================================
     # SWEDEN
     # ============================================
-    {"id": 0, "idExtended": "SE-KTH", "name": "KTH Royal Institute of Technology", "domain": "kth.se", "country": "SE", "weight": 82},
-    {"id": 0, "idExtended": "SE-LU", "name": "Lund University", "domain": "lu.se", "country": "SE", "weight": 82},
-    {"id": 0, "idExtended": "SE-UU", "name": "Uppsala University", "domain": "uu.se", "country": "SE", "weight": 80},
+    {"id": 356903, "idExtended": "356903", "name": "KTH Royal Institute of Technology", "domain": "kth.se", "country": "SE", "weight": 82},
     
     # ============================================
     # SWITZERLAND
     # ============================================
-    {"id": 0, "idExtended": "CH-ETH", "name": "ETH Zurich", "domain": "ethz.ch", "country": "CH", "weight": 90},
-    {"id": 0, "idExtended": "CH-EPFL", "name": "École Polytechnique Fédérale de Lausanne", "domain": "epfl.ch", "country": "CH", "weight": 88},
-    {"id": 0, "idExtended": "CH-UZH", "name": "University of Zurich", "domain": "uzh.ch", "country": "CH", "weight": 82},
+    {"id": 417392, "idExtended": "417392", "name": "ETH Zurich", "domain": "ethz.ch", "country": "CH", "weight": 90},
     
     # ============================================
     # TAIWAN
     # ============================================
-    {"id": 0, "idExtended": "TW-NTU", "name": "National Taiwan University", "domain": "ntu.edu.tw", "country": "TW", "weight": 85},
-    {"id": 0, "idExtended": "TW-NTHU", "name": "National Tsing Hua University", "domain": "nthu.edu.tw", "country": "TW", "weight": 82},
-    {"id": 0, "idExtended": "TW-NCTU", "name": "National Yang Ming Chiao Tung University", "domain": "nycu.edu.tw", "country": "TW", "weight": 80},
+    {"id": 7587204, "idExtended": "7587204", "name": "National Taiwan University of Science and Technology", "domain": "ntust.edu.tw", "country": "TW", "weight": 85},
     
     # ============================================
     # THAILAND
     # ============================================
-    {"id": 0, "idExtended": "TH-CU", "name": "Chulalongkorn University", "domain": "chula.ac.th", "country": "TH", "weight": 78},
-    {"id": 0, "idExtended": "TH-MU", "name": "Mahidol University", "domain": "mahidol.ac.th", "country": "TH", "weight": 75},
-    {"id": 0, "idExtended": "TH-KU", "name": "Kasetsart University", "domain": "ku.ac.th", "country": "TH", "weight": 72},
+    {"id": 11298836, "idExtended": "11298836", "name": "Chulalongkorn University", "domain": "chula.ac.th", "country": "TH", "weight": 78},
     
     # ============================================
     # TURKEY
     # ============================================
-    {"id": 0, "idExtended": "TR-BOUN", "name": "Boğaziçi University", "domain": "boun.edu.tr", "country": "TR", "weight": 80},
-    {"id": 0, "idExtended": "TR-METU", "name": "Middle East Technical University", "domain": "metu.edu.tr", "country": "TR", "weight": 80},
-    {"id": 0, "idExtended": "TR-ITU", "name": "Istanbul Technical University", "domain": "itu.edu.tr", "country": "TR", "weight": 78},
-    
-    # ============================================
-    # UKRAINE
-    # ============================================
-    {"id": 0, "idExtended": "UA-KNU", "name": "Taras Shevchenko National University of Kyiv", "domain": "knu.ua", "country": "UA", "weight": 75},
-    {"id": 0, "idExtended": "UA-NTUU", "name": "Igor Sikorsky Kyiv Polytechnic Institute", "domain": "kpi.ua", "country": "UA", "weight": 75},
+    {"id": 10233975, "idExtended": "10233975", "name": "Boğaziçi University", "domain": "boun.edu.tr", "country": "TR", "weight": 80},
     
     # ============================================
     # UNITED ARAB EMIRATES
     # ============================================
-    {"id": 0, "idExtended": "AE-UAEU", "name": "United Arab Emirates University", "domain": "uaeu.ac.ae", "country": "AE", "weight": 78},
-    {"id": 0, "idExtended": "AE-KU", "name": "Khalifa University", "domain": "ku.ac.ae", "country": "AE", "weight": 78},
-    {"id": 0, "idExtended": "AE-AUS", "name": "American University of Sharjah", "domain": "aus.edu", "country": "AE", "weight": 75},
+    {"id": 594393, "idExtended": "594393", "name": "Khalifa University", "domain": "ku.ac.ae", "country": "AE", "weight": 78},
     
     # ============================================
-    # VENEZUELA
+    # UNITED KINGDOM
     # ============================================
-    {"id": 0, "idExtended": "VE-UCV", "name": "Universidad Central de Venezuela", "domain": "ucv.ve", "country": "VE", "weight": 70},
-    {"id": 0, "idExtended": "VE-USB", "name": "Universidad Simón Bolívar", "domain": "usb.ve", "country": "VE", "weight": 70},
+    {"id": 11348908, "idExtended": "11348908", "name": "University of Oxford", "domain": "ox.ac.uk", "country": "GB", "weight": 90},
+    {"id": 11272464, "idExtended": "11272464", "name": "University of Cambridge", "domain": "cam.ac.uk", "country": "GB", "weight": 90},
+    {"id": 273294, "idExtended": "273294", "name": "Imperial College London", "domain": "imperial.ac.uk", "country": "GB", "weight": 88},
     
     # ============================================
     # VIETNAM
     # ============================================
-    {"id": 0, "idExtended": "VN-VNU", "name": "Vietnam National University, Hanoi", "domain": "vnu.edu.vn", "country": "VN", "weight": 75},
-    {"id": 0, "idExtended": "VN-HCMUT", "name": "Ho Chi Minh City University of Technology", "domain": "hcmut.edu.vn", "country": "VN", "weight": 72},
-    
-    # ============================================
-    # ZIMBABWE
-    # ============================================
-    {"id": 0, "idExtended": "ZW-UZ", "name": "University of Zimbabwe", "domain": "uz.ac.zw", "country": "ZW", "weight": 65},
+    {"id": 10490944, "idExtended": "10490944", "name": "Vietnam National University", "domain": "vnu.edu.vn", "country": "VN", "weight": 75},
 ]
 
 # International first names by region

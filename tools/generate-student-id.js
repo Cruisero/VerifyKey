@@ -445,12 +445,15 @@ class StudentIdGenerator {
                         'CA': ['TD Bank', 'RBC', 'Scotiabank', 'BMO', 'CIBC'],
                         'AU': ['Commonwealth Bank', 'ANZ', 'Westpac', 'NAB'],
                         'UK': ['Barclays', 'HSBC', 'Lloyds Bank', 'NatWest', 'Santander UK'],
+                        'GB': ['Barclays', 'HSBC', 'Lloyds Bank', 'NatWest', 'Santander UK'],
                         'DE': ['Deutsche Bank', 'Commerzbank', 'DZ Bank'],
                         'FR': ['BNP Paribas', 'Crédit Agricole', 'Société Générale'],
                         'IT': ['Intesa Sanpaolo', 'UniCredit', 'Banco BPM'],
                         'ES': ['Santander', 'BBVA', 'CaixaBank'],
                         'NL': ['ING Bank', 'ABN AMRO', 'Rabobank'],
                         'CH': ['UBS', 'Credit Suisse', 'Julius Baer'],
+                        'AT': ['Erste Group Bank', 'Raiffeisen Bank', 'BAWAG'],
+                        'BE': ['KBC Bank', 'BNP Paribas Fortis', 'ING Belgium'],
                         'SG': ['DBS Bank', 'OCBC', 'UOB'],
                         'MY': ['Maybank', 'CIMB', 'Public Bank'],
                         'TH': ['Bangkok Bank', 'Kasikornbank', 'Siam Commercial Bank'],
@@ -464,6 +467,16 @@ class StudentIdGenerator {
                         'BR': ['Itaú', 'Banco do Brasil', 'Bradesco'],
                         'MX': ['BBVA México', 'Banorte', 'Citibanamex'],
                         'IN': ['SBI', 'HDFC Bank', 'ICICI Bank', 'Axis Bank'],
+                        'KR': ['KB Kookmin Bank', 'Shinhan Bank', 'Woori Bank', 'Hana Bank'],
+                        'JP': ['MUFG Bank', 'Mizuho Bank', 'SMBC', 'Resona Bank'],
+                        'TW': ['CTBC Bank', 'Cathay United Bank', 'E.SUN Bank'],
+                        'IL': ['Bank Hapoalim', 'Bank Leumi', 'Discount Bank'],
+                        'TR': ['İş Bankası', 'Garanti BBVA', 'Akbank'],
+                        'SE': ['Swedbank', 'SEB', 'Handelsbanken', 'Nordea'],
+                        'DK': ['Danske Bank', 'Nordea', 'Jyske Bank'],
+                        'FI': ['Nordea', 'OP Financial Group', 'Danske Bank'],
+                        'CL': ['Banco de Chile', 'Santander Chile', 'BCI'],
+                        'AE': ['Emirates NBD', 'ADCB', 'FAB'],
                         'DEFAULT': ['International Bank', 'National Bank', 'State Bank', 'Commercial Bank']
                     };
 
@@ -477,6 +490,7 @@ class StudentIdGenerator {
                         'SE': 'SEK', 'DK': 'DKK', 'NO': 'NOK', 'RO': 'RON', 'UA': 'UAH',
                         'IL': 'ILS', 'AE': 'AED', 'JO': 'JOD', 'IQ': 'IQD', 'MA': 'MAD',
                         'LK': 'LKR', 'RW': 'RWF', 'ZW': 'USD', 'VE': 'VES',
+                        'KR': 'KRW', 'JP': 'JPY',
                         'DEFAULT': 'USD'
                     };
 
@@ -486,13 +500,18 @@ class StudentIdGenerator {
                         const specificPatterns = [
                             ['CA', /canada|toronto|mcgill|british columbia|waterloo|montreal|ottawa|alberta|queens/i],
                             ['AU', /australia|sydney|melbourne|queensland|unsw|anu|monash/i],
-                            ['UK', /uk|britain|england|oxford|cambridge|london|manchester|edinburgh|imperial/i],
+                            ['GB', /uk|britain|england|oxford|cambridge|london|manchester|edinburgh|imperial/i],
                             ['DE', /germany|german|berlin|munich|heidelberg|tuw|tu |technische/i],
                             ['FR', /france|french|paris|sorbonne|polytechnique|lyon|marseille/i],
                             ['IT', /italy|italian|milan|roma|bologna|polimi|torino/i],
                             ['ES', /spain|spanish|madrid|barcelona|valencia|sevilla/i],
                             ['NL', /netherlands|dutch|amsterdam|delft|leiden|rotterdam|utrecht/i],
                             ['CH', /switzerland|swiss|zurich|eth|epfl|geneva|bern/i],
+                            ['AT', /austria|austrian|vienna|wien|graz|innsbruck|modul/i],
+                            ['BE', /belgium|belgian|brussels|leuven|ghent|antwerp/i],
+                            ['FI', /finland|finnish|helsinki|aalto|turku/i],
+                            ['DK', /denmark|danish|copenhagen|aarhus/i],
+                            ['SE', /sweden|swedish|stockholm|lund|uppsala|kth/i],
                             ['SG', /singapore|nus|nanyang/i],
                             ['MY', /malaysia|malaya|ukm|usm|utm/i],
                             ['TH', /thailand|thai|chulalongkorn|mahidol|kasetsart|bangkok/i],
@@ -511,6 +530,9 @@ class StudentIdGenerator {
                             ['CN', /china|chinese|beijing|shanghai|tsinghua|peking|fudan/i],
                             ['BR', /brazil|brazilian|são paulo|rio|usp|unicamp/i],
                             ['MX', /mexico|mexican|unam|monterrey/i],
+                            ['CL', /chile|chilean|santiago/i],
+                            ['IL', /israel|israeli|tel aviv|jerusalem|technion|haifa/i],
+                            ['AE', /emirates|uae|dubai|abu dhabi|khalifa/i],
                         ];
 
                         for (const [country, pattern] of specificPatterns) {

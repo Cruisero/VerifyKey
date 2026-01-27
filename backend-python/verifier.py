@@ -255,51 +255,127 @@ FIRST_NAMES = FIRST_NAMES_BY_REGION["US"] + FIRST_NAMES_BY_REGION["DEFAULT"]
 LAST_NAMES = LAST_NAMES_BY_REGION["US"] + LAST_NAMES_BY_REGION["DEFAULT"]
 
 # Country code to region mapping for name generation
+# Expanded country list
+SUPPORTED_COUNTRIES = [
+    "AR", "AU", "AT", "BD", "BE", "BO", "BG", "CA", "CL", "CZ", 
+    "DK", "DO", "EC", "SV", "FI", "FR", "GH", "GR", "GT", "HU", 
+    "IQ", "IL", "IT", "JO", "KE", "MY", "MA", "NL", "NI", "NG", 
+    "PK", "PE", "PH", "PL", "PT", "RO", "RW", "SG", "ZA", "ES", 
+    "LK", "SE", "CH", "TW", "TH", "TR", "UA", "AE", "US", "VE", 
+    "VN", "ZW", "GB", "DE", "IE", "NZ", "MX", "BR", "CO", "IN"
+]
+
 COUNTRY_TO_REGION = {
-    "US": "US", "CA": "US",  # North America - English names
-    "AR": "AR", "CL": "AR", "VE": "AR", "PE": "AR", "EC": "AR", "BO": "AR", "GT": "ES", "SV": "ES", "NI": "ES", "DO": "ES",  # Latin America - Spanish
-    "ES": "ES",  # Spain
-    "FR": "FR", "BE": "FR", "CH": "FR",  # French-speaking
-    "DE": "DE", "AT": "DE",  # German-speaking
-    "IT": "IT",  # Italy
-    "PT": "PT",  # Portugal
-    "BD": "BD",  # Bangladesh
-    "PK": "PK",  # Pakistan
-    "NG": "NG", "GH": "NG", "KE": "NG", "ZA": "NG", "RW": "NG", "ZW": "NG",  # Africa
-    "PH": "PH",  # Philippines
-    "VN": "VN",  # Vietnam
-    "TH": "TH",  # Thailand
-    "MY": "DEFAULT", "SG": "DEFAULT", "TW": "DEFAULT",  # Southeast/East Asia
-    "AU": "US", "NZ": "US", "GB": "US", "IE": "US",  # English-speaking
-    "NL": "DEFAULT", "DK": "DEFAULT", "SE": "DEFAULT", "FI": "DEFAULT", "NO": "DEFAULT",  # Nordic/Dutch
-    "PL": "DEFAULT", "CZ": "DEFAULT", "HU": "DEFAULT", "RO": "DEFAULT", "BG": "DEFAULT", "UA": "DEFAULT",  # Eastern Europe
-    "TR": "DEFAULT", "GR": "DEFAULT",  # Mediterranean
-    "IL": "DEFAULT", "JO": "DEFAULT", "IQ": "DEFAULT", "AE": "DEFAULT", "MA": "DEFAULT",  # Middle East/North Africa
-    "LK": "DEFAULT",  # Sri Lanka
+    # North America
+    "US": "US", "CA": "US",
+    # Latin America (Spanish)
+    "AR": "AR", "CL": "AR", "VE": "AR", "PE": "AR", "EC": "AR", "BO": "AR", 
+    "GT": "ES", "SV": "ES", "NI": "ES", "DO": "ES", "MX": "ES", "CO": "AR",
+    # Europe (West/Central)
+    "FR": "FR", "BE": "FR", "CH": "FR",
+    "DE": "DE", "AT": "DE",
+    "IT": "IT", 
+    "ES": "ES", 
+    "PT": "PT",
+    "NL": "DEFAULT", "DK": "DEFAULT", "SE": "DEFAULT", "FI": "DEFAULT", 
+    # Europe (East)
+    "PL": "DEFAULT", "CZ": "DEFAULT", "HU": "DEFAULT", "RO": "DEFAULT", 
+    "BG": "DEFAULT", "UA": "DEFAULT",
+    # UK/Ireland/Oceania
+    "GB": "US", "IE": "US", "AU": "US", "NZ": "US",
+    # Asia (South)
+    "BD": "BD", "PK": "PK", "IN": "BD", "LK": "DEFAULT",
+    # Asia (Southeast/East)
+    "PH": "PH", "VN": "VN", "TH": "TH", 
+    "MY": "DEFAULT", "SG": "DEFAULT", "TW": "DEFAULT",
+    # Middle East / Africa
+    "TR": "DEFAULT", "GR": "DEFAULT", "IL": "DEFAULT", "JO": "DEFAULT", 
+    "IQ": "DEFAULT", "AE": "DEFAULT", "MA": "DEFAULT",
+    "NG": "NG", "GH": "NG", "KE": "NG", "ZA": "NG", "RW": "NG", "ZW": "NG",
+    # Others
+    "BR": "PT"
 }
 
+def fetch_random_university(country: str = "US") -> dict:
+    """Dynamically fetch a random university for the given country from SheerID API"""
+    import httpx
+    
+    try:
+        # Query SheerID API
+        url = f"https://services.sheerid.com/rest/v2/program/{PROGRAM_ID}/organization"
+        params = {
+            "country": country,
+            "segment": "student",
+            "limit": 100
+        }
+        
+        with httpx.Client(timeout=10) as client:
+            response = client.get(url, params=params)
+        
+        if response.status_code != 200:
+            print(f"[FetchUniv] API error for {country}: {response.status_code}")
+            return None
+        
+        data = response.json()
+        if not data:
+            print(f"[FetchUniv] No universities found for {country}")
+            return None
+            
+        # Filter unwanted types
+        skip_keywords = [
+            "medical", "medicine", "law school", "business school", 
+            "extension", "online", "professional", "graduate",
+            "nursing", "dental", "pharmacy", "health",
+            "continuing", "distance", "global", "careers", "k12"
+        ]
+        
+        candidates = []
+        for org in data:
+            name_lower = org["name"].lower()
+            if any(k in name_lower for k in skip_keywords):
+                continue
+            candidates.append(org)
+            
+        if not candidates:
+            return random.choice(data) # Fallback to any if all filtered
+            
+        # Pick one
+        selected = random.choice(candidates)
+        return {
+            "id": selected["id"],
+            "idExtended": selected["idExtended"],
+            "name": selected["name"],
+            "country": country,
+            "domain": "example.com" # We don't get domain from API, use dummy
+        }
+        
+    except Exception as e:
+        print(f"[FetchUniv] Error fetching for {country}: {e}")
+        return None
 
 def select_university(country: str = None) -> dict:
-    """Select university with weighted random. Option to filter by country."""
-    if country:
-        candidates = [u for u in UNIVERSITIES if u.get("country", "US") == country]
-        if not candidates:
-            # Fallback to defaults if no match for country
-            candidates = [u for u in UNIVERSITIES if u.get("country", "US") == "US"]
-    else:
-        candidates = UNIVERSITIES
+    """Select university. If country not specified, pick random supported country."""
+    
+    target_country = country
+    if not target_country:
+        # 80% chance to pick random international country, 20% US
+        if random.random() < 0.8:
+            target_country = random.choice([c for c in SUPPORTED_COUNTRIES if c != "US"])
+        else:
+            target_country = "US"
+            
+    # Try dynamic fetch first
+    univ = fetch_random_university(target_country)
+    if univ:
+        print(f"[SelectUniv] Dynamically fetched {univ['name']} ({target_country})")
+        return univ
         
-    weights = [u.get("weight", 50) for u in candidates]
-    total = sum(weights)
-    if total == 0:
-        return random.choice(candidates)
+    # Fallback to hardcoded list if fetch fails or US
+    print(f"[SelectUniv] Fallback to local list for {target_country}")
+    candidates = [u for u in UNIVERSITIES if u.get("country", "US") == target_country]
+    if not candidates:
+        candidates = [u for u in UNIVERSITIES if u.get("country", "US") == "US"]
         
-    r = random.uniform(0, total)
-    cumulative = 0
-    for u in candidates:
-        cumulative += u.get("weight", 50)
-        if r <= cumulative:
-            return u
     return random.choice(candidates)
 
 

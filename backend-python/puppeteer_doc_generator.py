@@ -219,7 +219,7 @@ def generate_student_id_puppeteer(
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,  # 2 minute timeout
+            timeout=300,  # 5 minute timeout for Gemini API photo/logo generation
             cwd=str(GENERATOR_SCRIPT.parent),
             env=env
         )

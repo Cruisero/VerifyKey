@@ -492,7 +492,7 @@ class SheerIDVerifier:
             # curl_cffi requires proxy as parameter to each request for authentication to work
             kwargs = {"headers": self.headers, "timeout": 30}
             if proxy_url:
-                kwargs["proxy"] = proxy_url
+                kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
             
             if method.upper() == "GET":
                 resp = self.session.get(url, **kwargs)
@@ -522,7 +522,7 @@ class SheerIDVerifier:
             proxy_url = getattr(self.session, '_proxy_url', None)
             kwargs = {"data": data, "headers": {"Content-Type": "image/png"}, "timeout": 60}
             if proxy_url:
-                kwargs["proxy"] = proxy_url
+                kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
             
             resp = self.session.put(url, **kwargs)
             return 200 <= resp.status_code < 300

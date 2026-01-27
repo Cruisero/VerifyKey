@@ -20,7 +20,8 @@ export default function Admin() {
     const [testDocumentResult, setTestDocumentResult] = useState(null);
 
     // AI Generator form state
-    const [aiProvider, setAiProvider] = useState('gemini');
+    const [aiProvider, setAiProvider] = useState('gemini'); // 'gemini' | 'batch_api' | 'puppeteer'
+    const [regionMode, setRegionMode] = useState('global'); // 'global' | 'us'
     const [batchApiSettings, setBatchApiSettings] = useState({
         apiUrl: 'https://batch.1key.me/api/batch',
         apiKey: ''
@@ -60,6 +61,7 @@ export default function Admin() {
                 const data = await res.json();
                 setConfig(data);
                 setAiProvider(data.aiGenerator?.provider || 'gemini');
+                setRegionMode(data.aiGenerator?.regionMode || 'global');
                 if (data.aiGenerator?.batchApi) {
                     setBatchApiSettings(prev => ({
                         ...prev,
@@ -125,6 +127,7 @@ export default function Admin() {
             const updates = {
                 aiGenerator: {
                     provider: aiProvider,
+                    regionMode: regionMode,
                     batchApi: {
                         enabled: aiProvider === 'batch_api',
                         apiUrl: batchApiSettings.apiUrl,
@@ -458,6 +461,31 @@ export default function Admin() {
                                             <p className="input-hint">
                                                 从 <a href="https://batch.1key.me" target="_blank" rel="noreferrer">batch.1key.me</a> 获取 API Key
                                             </p>
+                                        </div>
+                                    </div>
+                                    <div className="provider-selector" style={{ marginTop: '15px' }}>
+                                        <label className="input-label" style={{ marginBottom: '8px', display: 'block' }}>生成区域 (Universe)</label>
+                                        <div className="provider-options">
+                                            <div
+                                                className={`provider-option ${regionMode === 'global' ? 'active' : ''}`}
+                                                onClick={() => setRegionMode('global')}
+                                            >
+                                                <div className="provider-icon">🌍</div>
+                                                <div className="provider-info">
+                                                    <div className="provider-name">全球模式 (Global)</div>
+                                                    <div className="provider-desc">随机选择全球各国大学 (推荐)</div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                className={`provider-option ${regionMode === 'us' ? 'active' : ''}`}
+                                                onClick={() => setRegionMode('us')}
+                                            >
+                                                <div className="provider-icon">🇺🇸</div>
+                                                <div className="provider-info">
+                                                    <div className="provider-name">仅限美国 (US Only)</div>
+                                                    <div className="provider-desc">只生成美国大学</div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

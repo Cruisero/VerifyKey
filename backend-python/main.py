@@ -152,8 +152,15 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         # This ensures the form data and document data match!
         from verifier import select_university, generate_name, generate_email, generate_birth_date
         
-        # Select university (Randomly from supported countries)
-        org = select_university(country=None) 
+        # Use regionPreference from config
+        import config_manager
+        config = config_manager.get_config()
+        region_mode = config.get("aiGenerator", {}).get("regionMode", "global")
+        
+        # Select university based on region mode
+        target_country = "US" if region_mode == "us" else None
+        
+        org = select_university(country=target_country) 
         first, last = generate_name(org.get("country", "US"))
         email = generate_email(first, last, org["domain"])
         dob = generate_birth_date()
@@ -476,13 +483,20 @@ async def test_document_generation(request: TestDocumentRequest):
     university = request.university
     gender = request.gender or "any"
     
+    # Load config first to get region preference
+    config = config_manager.get_config()
+    region_mode = config.get("aiGenerator", {}).get("regionMode", "global")
+    
     # If not provided, generate random data using verifier to support international universities
     if not university or not first or not last:
         from verifier import select_university, generate_name
         
-        # Select university if not provided (use fast local lookup for test)
+        # Select university if not provided
         if not university:
-            uni_data = select_university()
+            # Respect region preference
+            target_country = "US" if region_mode == "us" else None
+            uni_data = select_university(country=target_country)
+            
             university = uni_data["name"]
             country = uni_data.get("country", "US")
         else:

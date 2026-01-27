@@ -16,6 +16,7 @@ DEFAULT_CONFIG = {
     # AI Generator settings
     "aiGenerator": {
         "provider": "gemini",  # 'svg' | 'gemini' | 'batch_api' | 'puppeteer'
+        "regionMode": "global", # 'global' | 'us'
         
         # Gemini Official API settings
         "gemini": {

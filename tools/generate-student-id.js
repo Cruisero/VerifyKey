@@ -114,78 +114,145 @@ Generate ONLY the portrait photo, no text, borders, or decorations.`;
 }
 
 /**
- * Generate university logo/emblem using Gemini AI
+ * College logos directory path
  */
-async function generateLogoWithGemini(universityName) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp-image-generation';
+const LOGO_DIR = path.join(__dirname, '../templates/college logo');
 
-    if (!apiKey) {
-        console.log('[Logo] No Gemini API key found, will use fallback');
+/**
+ * Get university logo from local /templates/college logo/ folder
+ * 
+ * Strategy:
+ * 1. Look for exact match by university name
+ * 2. Look for partial match (university name contains file name or vice versa)
+ * 3. If no match found, pick a random logo from the folder
+ * 
+ * @param {string} universityName - Name of the university
+ * @returns {string|null} Base64 data URL of the logo, or null if no logos available
+ */
+async function getLocalLogo(universityName) {
+    console.log(`[Logo] Searching local logos for: ${universityName}`);
+
+    // Check if logo directory exists
+    if (!fs.existsSync(LOGO_DIR)) {
+        console.log(`[Logo] Logo directory not found: ${LOGO_DIR}`);
         return null;
     }
 
-    // Extract key words from university name for the prompt
-    const shortName = universityName.replace(/University|College|Institute|of|the/gi, '').trim();
+    // Get all logo files (png, jpg, jpeg, svg, webp)
+    const validExtensions = ['.png', '.jpg', '.jpeg', '.svg', '.webp'];
+    const allFiles = fs.readdirSync(LOGO_DIR).filter(file => {
+        const ext = path.extname(file).toLowerCase();
+        return validExtensions.includes(ext) && !file.startsWith('.');
+    });
 
-    const prompt = `Generate a simple, clean university emblem/logo icon for "${universityName}".
-
-Requirements:
-- Circular or shield-shaped emblem design
-- Professional academic style
-- Simple iconic design (2-3 colors maximum)
-- Include stylized imagery like: book, torch, laurel wreath, or academic symbols
-- Clean lines, suitable for small display size
-- NO text or letters in the design
-- Solid background that contrasts with the design
-- Classic university emblem aesthetic
-- Flat design style, not 3D
-
-Style: minimalist academic emblem icon.
-Generate ONLY the logo icon, no text, no university name.`;
-
-    try {
-        console.log('[Logo] Generating university logo via Gemini AI...');
-
-        // Add 60 second timeout to prevent hanging
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 60000);
-
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        responseModalities: ["image", "text"]
-                    }
-                }),
-                signal: controller.signal
-            }
-        );
-
-        clearTimeout(timeout);
-
-        if (response.ok) {
-            const data = await response.json();
-            const parts = data.candidates?.[0]?.content?.parts || [];
-            const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-
-            if (imagePart) {
-                console.log('[Logo] ✓ Logo generated via Gemini AI');
-                return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-            }
-            console.log('[Logo] No image in Gemini response');
-        } else {
-            const error = await response.json();
-            console.log('[Logo] Gemini API error:', error.error?.message || response.status);
-        }
-    } catch (error) {
-        console.log('[Logo] Gemini API failed:', error.message);
+    if (allFiles.length === 0) {
+        console.log('[Logo] No logo files found in directory');
+        return null;
     }
 
+    console.log(`[Logo] Found ${allFiles.length} logo files`);
+
+    // Normalize university name for matching
+    const normalizedName = universityName.toLowerCase().trim();
+
+    // Step 1: Try exact match (file name without extension matches university name)
+    let matchedFile = allFiles.find(file => {
+        const fileNameWithoutExt = path.basename(file, path.extname(file)).toLowerCase();
+        return fileNameWithoutExt === normalizedName;
+    });
+
+    // Step 2: Try partial match
+    if (!matchedFile) {
+        // Extract key words from university name
+        const keywords = normalizedName
+            .replace(/university|college|institute|of|the|at|and/gi, '')
+            .split(/[\s\-_,]+/)
+            .filter(w => w.length > 2);
+
+        // Score each file by how many keywords match
+        let bestMatch = null;
+        let bestScore = 0;
+
+        for (const file of allFiles) {
+            const fileNameLower = path.basename(file, path.extname(file)).toLowerCase();
+
+            // Check if file name is contained in university name or vice versa
+            if (normalizedName.includes(fileNameLower) || fileNameLower.includes(normalizedName.replace(/\s+/g, ''))) {
+                matchedFile = file;
+                break;
+            }
+
+            // Count keyword matches
+            let score = 0;
+            for (const keyword of keywords) {
+                if (fileNameLower.includes(keyword)) {
+                    score += keyword.length; // Longer matches count more
+                }
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = file;
+            }
+        }
+
+        // Use best partial match if score is significant
+        if (!matchedFile && bestScore >= 5) {
+            matchedFile = bestMatch;
+            console.log(`[Logo] Found partial match: ${matchedFile} (score: ${bestScore})`);
+        }
+    }
+
+    // Step 3: If no match, pick a random logo
+    if (!matchedFile) {
+        matchedFile = allFiles[Math.floor(Math.random() * allFiles.length)];
+        console.log(`[Logo] No match found, using random logo: ${matchedFile}`);
+    } else {
+        console.log(`[Logo] ✓ Found matching logo: ${matchedFile}`);
+    }
+
+    // Read and convert to base64
+    const logoPath = path.join(LOGO_DIR, matchedFile);
+
+    try {
+        const buffer = fs.readFileSync(logoPath);
+        const ext = path.extname(matchedFile).toLowerCase();
+
+        // Determine MIME type
+        const mimeTypes = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.svg': 'image/svg+xml',
+            '.webp': 'image/webp'
+        };
+        const mimeType = mimeTypes[ext] || 'image/png';
+
+        const base64 = buffer.toString('base64');
+        console.log(`[Logo] ✓ Loaded logo: ${matchedFile} (${(buffer.length / 1024).toFixed(1)}KB)`);
+
+        return `data:${mimeType};base64,${base64}`;
+    } catch (error) {
+        console.log(`[Logo] Failed to read logo file: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Get university logo - uses local files only (no AI generation)
+ * 
+ * @param {string} universityName - Name of the university
+ * @returns {string|null} Base64 data URL of the logo
+ */
+async function generateLogoWithGemini(universityName) {
+    // First try local logos
+    const localLogo = await getLocalLogo(universityName);
+    if (localLogo) {
+        return localLogo;
+    }
+
+    // Fallback to SVG if no local logos available
+    console.log('[Logo] No local logos available, generating fallback SVG...');
     return generateFallbackLogo(universityName);
 }
 

@@ -46,7 +46,46 @@
             gap: 12px;
         }
 
-        /* ... skipped ... */
+        .logo-container {
+            width: 42px;
+            height: 42px;
+            background-color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+            padding: 2px;
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .uni-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .uni-name {
+            color: white;
+            font-weight: 800;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+
+        .card-title {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-top: 1px;
+        }
 
         /* Body Section */
         .body {
@@ -56,7 +95,53 @@
             gap: 16px;
         }
 
-        /* ... skipped ... */
+        .photo-container {
+            width: 80px;
+            height: 96px;
+            border-radius: 6px;
+            overflow: hidden;
+            flex-shrink: 0;
+            background-color: #e5e7eb;
+        }
+
+        .photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .details {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .field-label {
+            color: #6b7280;
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-bottom: 1px;
+        }
+
+        .field-value {
+            color: #111827;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+
+        .field-value.large {
+            font-size: 13px;
+        }
 
         /* Footer Section */
         .footer {

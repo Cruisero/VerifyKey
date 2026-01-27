@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Fee Receipt</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Times+New+Roman:wght@400;700&family=Arial:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .receipt-container {
+            width: 800px;
+            background: #ffffff;
+            border: 2px solid #333;
+            padding: 0;
+        }
+
+        /* Header Section */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 20px 30px;
+            border-bottom: none;
+        }
+
+        .header-text {
+            flex: 1;
+        }
+
+        .university-name {
+            font-size: 32px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 5px;
+        }
+
+        .university-subtitle {
+            font-size: 18px;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .logo {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #e91e63 0%, #c2185b 50%, #880e4f 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border: 3px solid #c2185b;
+        }
+
+        .logo-inner {
+            width: 70px;
+            height: 70px;
+            background: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        /* Title */
+        .receipt-title {
+            text-align: center;
+            font-size: 20px;
+            font-style: italic;
+            font-weight: bold;
+            padding: 15px 0;
+            border-bottom: 1px solid #ccc;
+            margin: 0 30px;
+        }
+
+        /* Info Section */
+        .info-section {
+            padding: 15px 30px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .info-group {
+            display: flex;
+            align-items: baseline;
+        }
+
+        .info-label {
+            font-weight: normal;
+            margin-right: 10px;
+            min-width: 120px;
+        }
+
+        .info-value {
+            font-weight: normal;
+        }
+
+        /* Description */
+        .description {
+            padding: 15px 30px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .description p {
+            margin-bottom: 10px;
+        }
+
+        /* Payment Table */
+        .payment-section {
+            padding: 0 30px 15px;
+        }
+
+        .payment-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .payment-table th {
+            background: #c0c0c0;
+            border: 1px solid #999;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: normal;
+            font-size: 14px;
+        }
+
+        .payment-table td {
+            border: 1px solid #999;
+            padding: 8px 10px;
+            font-size: 14px;
+        }
+
+        /* Session Info */
+        .session-info {
+            padding: 15px 30px;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        /* Notes */
+        .notes {
+            padding: 15px 30px;
+            font-size: 13px;
+        }
+
+        .notes p {
+            margin-bottom: 10px;
+        }
+
+        /* Footer Address */
+        .footer-address {
+            padding: 15px 30px;
+            border-top: 2px solid #c2185b;
+            font-size: 13px;
+            background: #fafafa;
+        }
+
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="receiptPreview" class="receipt-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-text">
+                <div id="cardUniversityName" class="university-name">Uttara Town College</div>
+                <div class="university-subtitle">A Modern University College</div>
+            </div>
+            <div class="logo">
+                <div class="logo-inner">📚</div>
+            </div>
+        </div>
+
+        <!-- Title -->
+        <div class="receipt-title">FEE RECEIPT</div>
+
+        <!-- Student Info -->
+        <div class="info-section">
+            <div class="info-row">
+                <div class="info-group">
+                    <span class="info-label">Student Roll no:</span>
+                    <span id="cardStudentRoll" class="info-value">119</span>
+                </div>
+                <div class="info-group">
+                    <span class="info-label">Centre:</span>
+                    <span id="cardCentre" class="info-value">01705</span>
+                </div>
+            </div>
+            <div class="info-row">
+                <div class="info-group">
+                    <span class="info-label">Name:</span>
+                    <span id="cardName" class="info-value">STUDENT NAME</span>
+                </div>
+                <div class="info-group">
+                    <span class="info-label">Registration Date:</span>
+                    <span id="cardRegDate" class="info-value">14.10.25</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Description -->
+        <div class="description">
+            <p>Received the sum of Rs./-<span id="cardAmountWords">18500</span> (<span id="cardAmountText">Eighteen
+                    thousand five hundred</span> only) towards tuition fees of 1st semester HON'S</p>
+            <p>*Payment Details:</p>
+        </div>
+
+        <!-- Payment Table -->
+        <div class="payment-section">
+            <table class="payment-table">
+                <thead>
+                    <tr>
+                        <th>Instrument No</th>
+                        <th>Instrument Date</th>
+                        <th>Payment Type</th>
+                        <th>Bank</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td id="cardInstrumentNo">125704</td>
+                        <td id="cardInstrumentDate">14.10.25</td>
+                        <td id="cardPaymentType">BDT</td>
+                        <td id="cardBank">Islami Bank</td>
+                        <td id="cardAmount">18500</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Session -->
+        <div class="session-info">
+            TOWARDS FEES FOR HON'S 1st SEMESTER FOR FALL <span id="cardYear">2025</span> SESSION
+        </div>
+
+        <!-- Notes -->
+        <div class="notes">
+            <p>*Subject to realisation</p>
+            <p>Note:-Computer generated statement, hence requires no signature</p>
+        </div>
+
+        <!-- Footer Address -->
+        <div class="footer-address">
+            Address:- <span id="cardAddress">Uttara Town University College Directorate of Distance Education, 1st
+                Floor, House Building, Plot 1 Road-2, Dhaka 1230</span>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer -->
+    <div class="controls">
+        <input type="text" id="universityNameInput">
+        <input type="text" id="nameInput">
+        <input type="text" id="studentRollInput">
+        <input type="text" id="centreInput">
+        <input type="text" id="regDateInput">
+        <input type="text" id="instrumentNoInput">
+        <input type="text" id="instrumentDateInput">
+        <input type="text" id="bankInput">
+        <input type="text" id="amountInput">
+        <input type="text" id="addressInput">
+    </div>
+</body>
+
+</html>

@@ -518,6 +518,36 @@ class StudentIdGenerator {
         const data = { ...DEFAULT_STUDENT, ...studentData };
         const config = { ...this.config, ...options };
 
+        // Generate extra data for International Student ID (if not provided)
+        const faculties = [
+            'Faculty of Engineering', 'Faculty of Arts', 'Faculty of Science',
+            'School of Business', 'Faculty of Medicine', 'Faculty of Law',
+            'Faculty of Education', 'School of Architecture', 'Faculty of Social Sciences',
+            'College of Liberal Arts', 'School of Nursing', 'Faculty of Design'
+        ];
+        data.faculty = data.faculty || faculties[Math.floor(Math.random() * faculties.length)];
+
+        // Date generation logic: Valid > Dec 2026, Issue = Valid - 4 years
+        if (!data.validDate || !data.issueDate) {
+            // Generate Valid Date between Jan 1, 2027 and Dec 31, 2030 (ensures > Dec 2026)
+            const startValid = new Date('2027-01-01').getTime();
+            const endValid = new Date('2030-12-31').getTime();
+            const validTime = startValid + Math.random() * (endValid - startValid);
+            const validDateObj = new Date(validTime);
+
+            // Format YYYY-MM-DD
+            const formatDate = (date) => {
+                return date.toISOString().split('T')[0];
+            };
+
+            data.validDate = formatDate(validDateObj);
+
+            // Issue Date = Valid Date - 4 years
+            const issueDateObj = new Date(validDateObj);
+            issueDateObj.setFullYear(issueDateObj.getFullYear() - 4);
+            data.issueDate = formatDate(issueDateObj);
+        }
+
         // Determine output path
         let outputPath = options.output;
         if (!outputPath) {
@@ -802,6 +832,9 @@ class StudentIdGenerator {
                     setById('cardPhone', studentData.phone);
                     setById('cardAddress', studentData.address);
                     setById('cardAcademicYear', studentData.academicYear);
+                    setById('cardFaculty', studentData.faculty);
+                    setById('cardIssueDate', studentData.issueDate);
+                    setById('cardValidDate', studentData.validDate);
 
                     // Set photo if provided
                     if (photo) {

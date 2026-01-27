@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>International Student ID Card</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background-color: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Section */
+        .header {
+            background-color: #ef4444;
+            /* Red-500 */
+            height: 32%;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+        }
+
+        .logo-container {
+            width: 42px;
+            height: 42px;
+            background-color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+            padding: 2px;
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .uni-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .uni-name {
+            color: white;
+            font-weight: 800;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+
+        .card-title {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-top: 1px;
+        }
+
+        /* Body Section */
+        .body {
+            flex: 1;
+            padding: 16px 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .photo-container {
+            width: 80px;
+            height: 96px;
+            border-radius: 6px;
+            overflow: hidden;
+            flex-shrink: 0;
+            background-color: #e5e7eb;
+        }
+
+        .photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .details {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .field-label {
+            color: #6b7280;
+            /* Gray-500 */
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-bottom: 1px;
+        }
+
+        .field-value {
+            color: #111827;
+            /* Gray-900 */
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+
+        .field-value.large {
+            font-size: 13px;
+        }
+
+        /* Footer Section */
+        .footer {
+            padding: 8px 20px 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #f3f4f6;
+            margin-top: auto;
+        }
+
+        .date-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .date-group.right {
+            align-items: flex-end;
+        }
+
+        /* Controls for puppeteer */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Header -->
+        <div class="header">
+            <div id="universityLogoContainer" class="logo-container">
+                <img id="cardUniversityLogo" src="" alt="Logo" style="display:none;"
+                    onload="this.style.display='block'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='none');">
+                <span id="logoFallbackText" style="font-size: 20px;">🎓</span>
+            </div>
+            <div class="uni-info">
+                <div id="cardUniversityName" class="uni-name">Swarthmore College</div>
+                <div class="card-title">INTERNATIONAL STUDENT ID CARD</div>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="body">
+            <div class="photo-container">
+                <img id="cardStudentPhoto" src="https://placehold.co/300x400/e2e8f0/64748b?text=Photo"
+                    alt="Student Photo">
+            </div>
+
+            <div class="details">
+                <div class="field-group">
+                    <span class="field-label">NAME</span>
+                    <span id="cardName" class="field-value large">Christopher Smith</span>
+                </div>
+
+                <div class="field-group">
+                    <span class="field-label">STUDENT ID</span>
+                    <span id="cardStudentId" class="field-value">INT12512432</span>
+                </div>
+
+                <div class="field-group">
+                    <span class="field-label">FACULTY</span>
+                    <span id="cardFaculty" class="field-value">Faculty of Engineering</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="date-group">
+                <span class="field-label">ISSUE</span>
+                <span id="cardIssueDate" class="field-value">2023-12-17</span>
+            </div>
+            <div class="date-group right">
+                <span class="field-label">VALID</span>
+                <span id="cardValidDate" class="field-value">2027-12-17</span>
+            </div>
+        </div>
+
+        <!-- Hidden elements for data that might be passed but not used or used differently -->
+        <div style="display:none;">
+            <span id="cardAcademicYear"></span>
+            <span id="cardDob"></span>
+            <span id="cardPhone"></span>
+            <span id="cardAddress"></span>
+        </div>
+    </div>
+
+    <!-- Hidden Controls -->
+    <div class="controls">
+        <input type="text" id="universityNameInput">
+        <input type="text" id="nameInput">
+        <input type="text" id="studentIdInput">
+    </div>
+
+</body>
+
+</html>

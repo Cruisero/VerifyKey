@@ -616,10 +616,11 @@ class SheerIDVerifier:
             if current_step == "collectStudentPersonalInfo":
                 # Log current IP address for debugging
                 try:
+                    proxy_url = getattr(self.session, '_proxy_url', None)
                     ip_response = self.session.get(
                         "https://ipinfo.io/json",
                         headers={"Accept": "application/json"},
-                        proxies={"http": self.proxy_url, "https": self.proxy_url} if self.proxy_url else None,
+                        proxies={"http": proxy_url, "https": proxy_url} if proxy_url else None,
                         timeout=10
                     )
                     if ip_response.status_code == 200:

@@ -279,17 +279,28 @@ COUNTRY_TO_REGION = {
 }
 
 
-def select_university() -> dict:
-    """Select US university with weighted random (higher weight = more likely)"""
-    weights = [u.get("weight", 50) for u in UNIVERSITIES]
+def select_university(country: str = None) -> dict:
+    """Select university with weighted random. Option to filter by country."""
+    if country:
+        candidates = [u for u in UNIVERSITIES if u.get("country", "US") == country]
+        if not candidates:
+            # Fallback to defaults if no match for country
+            candidates = [u for u in UNIVERSITIES if u.get("country", "US") == "US"]
+    else:
+        candidates = UNIVERSITIES
+        
+    weights = [u.get("weight", 50) for u in candidates]
     total = sum(weights)
+    if total == 0:
+        return random.choice(candidates)
+        
     r = random.uniform(0, total)
     cumulative = 0
-    for u in UNIVERSITIES:
+    for u in candidates:
         cumulative += u.get("weight", 50)
         if r <= cumulative:
             return u
-    return random.choice(UNIVERSITIES)
+    return random.choice(candidates)
 
 
 def lookup_organization_id(name: str, country: str = "US") -> Optional[dict]:

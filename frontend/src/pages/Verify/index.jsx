@@ -207,6 +207,8 @@ export default function Verify() {
                 const data = await response.json();
                 console.log('JSON response:', data);
 
+                const pendingVerifications = []; // 收集需要轮询的验证
+
                 if (data.results && Array.isArray(data.results)) {
                     for (const result of data.results) {
                         const resultId = resultItems.find(r =>
@@ -220,9 +222,18 @@ export default function Verify() {
 
 
                             if (result.status === 'pending') {
-                                // Pending status - waiting for SheerID review
+                                // Pending status - waiting for SheerID review + start polling
                                 status = 'pending';
-                                message = '⏳ 待审核: ' + (result.message || 'Submitted for review');
+                                message = '⏳ 已提交，正在等待 SheerID 审核...';
+
+                                // 收集需要轮询的验证
+                                pendingVerifications.push({
+                                    resultId,
+                                    verificationId: result.verificationId,
+                                    student: result.student,
+                                    email: result.email,
+                                    school: result.school
+                                });
                             } else if (result.status === 'success') {
                                 // Only true success (not just success=true with pending status)
                                 status = 'success';
@@ -247,6 +258,77 @@ export default function Verify() {
                             ));
                         }
                     }
+                }
+
+                // 🔄 自动轮询 pending 状态的验证
+                for (const pending of pendingVerifications) {
+                    (async () => {
+                        let attempts = 0;
+                        const maxAttempts = 60; // 最多等待 60 次 (5分钟)
+                        const interval = 5000; // 每 5 秒检查一次
+
+                        while (attempts < maxAttempts) {
+                            await new Promise(r => setTimeout(r, interval));
+                            attempts++;
+
+                            try {
+                                // 使用 GET 请求检查状态
+                                const checkResponse = await fetch(`${API_BASE}/api/check-status/${pending.verificationId}`);
+                                const checkData = await checkResponse.json();
+
+                                console.log(`[Poll ${attempts}/${maxAttempts}] ${pending.verificationId}:`, checkData);
+
+                                // 更新进度消息
+                                setResults(prev => prev.map(r =>
+                                    r.id === pending.resultId
+                                        ? { ...r, message: `⏳ 等待审核中... (${attempts}/${maxAttempts})` }
+                                        : r
+                                ));
+
+                                // 检查最终状态
+                                if (checkData.currentStep === 'success') {
+                                    setResults(prev => prev.map(r =>
+                                        r.id === pending.resultId
+                                            ? { ...r, status: 'success', message: '✓ 验证成功!' }
+                                            : r
+                                    ));
+                                    setLastSuccess(new Date().toISOString());
+                                    updateCredits(-1);
+                                    addNewStatus();
+                                    break;
+                                } else if (checkData.currentStep === 'error') {
+                                    const errorMsg = checkData.errorIds?.join(', ') || '验证失败';
+                                    setResults(prev => prev.map(r =>
+                                        r.id === pending.resultId
+                                            ? { ...r, status: 'failed', message: `✕ 失败: ${errorMsg}` }
+                                            : r
+                                    ));
+                                    break;
+                                } else if (checkData.currentStep === 'docUpload' && checkData.rejectionReasons?.length > 0) {
+                                    // 文档被拒绝
+                                    const reasons = checkData.rejectionReasons.join(', ');
+                                    setResults(prev => prev.map(r =>
+                                        r.id === pending.resultId
+                                            ? { ...r, status: 'failed', message: `✕ 文档被拒: ${reasons}` }
+                                            : r
+                                    ));
+                                    break;
+                                }
+                                // pending 状态继续等待
+                            } catch (e) {
+                                console.error('Poll status error:', e);
+                            }
+                        }
+
+                        // 超时处理
+                        if (attempts >= maxAttempts) {
+                            setResults(prev => prev.map(r =>
+                                r.id === pending.resultId && r.status === 'pending'
+                                    ? { ...r, message: '⏳ 审核超时，请稍后手动检查状态' }
+                                    : r
+                            ));
+                        }
+                    })();
                 }
             }
 

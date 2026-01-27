@@ -20,23 +20,10 @@ import json
 # IMPORTANT: Only versions actually supported by curl_cffi on server
 # Verified via: from curl_cffi.requests import BrowserType; print([b.value for b in BrowserType])
 BROWSER_VERSIONS = [
-    # Chrome versions (most common, highest success rate)
-    "chrome131",  # Latest
-    "chrome124",
-    "chrome123",
-    "chrome120",
-    "chrome119",
-    "chrome116",
-    # Firefox versions
-    "firefox133",
-    "firefox135",
-    # Edge versions (Windows users)
-    "edge99",
-    "edge101",
-    # Safari versions (macOS users)
-    "safari15_5",
-    "safari17_0",
-    "safari18_0",
+    # Use older, stable Chrome versions supported by most curl_cffi versions
+    "chrome110",
+    "chrome100",
+    "safari15_5"
 ]
 
 # Alias for backward compatibility
@@ -91,7 +78,7 @@ PLATFORMS = [
     ("macOS", '"macOS"', '"Not_A Brand";v="99", "Chromium";v="120", "Safari";v="17"'),
 ]
 
-DEFAULT_IMPERSONATE = "chrome131"
+DEFAULT_IMPERSONATE = "chrome110"
 
 
 def get_random_user_agent() -> str:

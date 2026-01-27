@@ -560,6 +560,13 @@ class SheerIDVerifier:
         try:
             # Warm up session first
             self.on_progress({"step": "warming", "message": "Warming up session..."})
+            
+            # DEBUG: Check if pre-generated info is present
+            if hasattr(self, 'pre_generated'):
+                print(f"[Verify] DEBUG: pre_generated flag is {self.pre_generated}")
+            if hasattr(self, 'org'):
+                 print(f"[Verify] DEBUG: self.org is {self.org.get('name', 'Unknown')}, country: {self.org.get('country')}")
+
             warm_session(self.session, headers=self.headers)
             
             # Check current step

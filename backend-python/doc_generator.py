@@ -101,11 +101,12 @@ def generate_with_gemini(prompt: str) -> Optional[bytes]:
         return None
 
 
-def generate_transcript_with_gemini(first: str, last: str, university: str, birth_date: str) -> Optional[bytes]:
+def generate_transcript_with_gemini(first: str, last: str, university: str, birth_date: str, student_id: str = None) -> Optional[bytes]:
     """Generate academic transcript using Gemini AI"""
     
     import time
-    student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+    if not student_id:
+        student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     gpa = round(3.2 + random.random() * 0.8, 2)
     
     # CRITICAL: Add current date for SheerID requirement (date within 90 days)
@@ -142,11 +143,12 @@ Generate ONLY the image, no explanation text."""
     return generate_with_gemini(prompt)
 
 
-def generate_student_id_with_gemini(first: str, last: str, university: str) -> Optional[bytes]:
+def generate_student_id_with_gemini(first: str, last: str, university: str, student_id: str = None) -> Optional[bytes]:
     """Generate student ID card using Gemini AI with realistic portrait photo"""
     
     import time
-    student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+    if not student_id:
+        student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     current_date = time.strftime("%B %d, %Y")
     current_semester = "Spring 2025"
     
@@ -272,15 +274,15 @@ def generate_multiple_documents_with_gemini(
     
     documents = []
     
-    # Generate all three documents
+    # Generate all three documents with UNIFIED student_id
     def gen_id_card():
-        data = generate_student_id_with_gemini(first, last, university)
+        data = generate_student_id_with_gemini(first, last, university, student_id)
         if data:
             return {"type": "id_card", "fileName": "student_id.png", "mimeType": "image/png", "data": data}
         return None
     
     def gen_transcript():
-        data = generate_transcript_with_gemini(first, last, university, birth)
+        data = generate_transcript_with_gemini(first, last, university, birth, student_id)
         if data:
             return {"type": "transcript", "fileName": "transcript.png", "mimeType": "image/png", "data": data}
         return None

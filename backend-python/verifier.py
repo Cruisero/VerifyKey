@@ -321,26 +321,38 @@ def fetch_random_university(country: str = "US") -> dict:
             print(f"[FetchUniv] No universities found for {country}")
             return None
             
-        # Filter unwanted types
+        # Filter unwanted types (stricter for high quality)
         skip_keywords = [
             "medical", "medicine", "law school", "business school", 
             "extension", "online", "professional", "graduate",
             "nursing", "dental", "pharmacy", "health",
-            "continuing", "distance", "global", "careers", "k12"
+            "continuing", "distance", "global", "careers", "k12",
+            "high school", "secondary school", "primary school",
+            "gymnasium", "lycee", "middle school", "elementary"
         ]
         
         candidates = []
+        university_candidates = [] # Higher priority
+        
         for org in data:
             name_lower = org["name"].lower()
             if any(k in name_lower for k in skip_keywords):
                 continue
+            
             candidates.append(org)
             
-        if not candidates:
-            return random.choice(data) # Fallback to any if all filtered
+            # Prioritize explicit universities
+            if "university" in name_lower or "universidad" in name_lower or "universität" in name_lower or "université" in name_lower:
+                university_candidates.append(org)
             
-        # Pick one
-        selected = random.choice(candidates)
+        if not candidates:
+            return random.choice(data) # Fallback
+            
+        # Prefer "University" labeled instutitions if available
+        if university_candidates:
+            selected = random.choice(university_candidates)
+        else:
+            selected = random.choice(candidates)
         return {
             "id": selected["id"],
             "idExtended": selected["idExtended"],

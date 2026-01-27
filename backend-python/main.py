@@ -167,14 +167,21 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         
         # Use Puppeteer if configured
         if provider == "puppeteer":
-            print(f"[Verify] Generating document with Puppeteer HTML template...")
+            # Read puppeteer settings from config (same as test flow)
+            puppeteer_config = config.get("aiGenerator", {}).get("puppeteer", {})
+            template = puppeteer_config.get("template", "student-id-generator.html")
+            use_gemini_photo = puppeteer_config.get("useGeminiPhoto", True)
+            
+            print(f"[Verify] Generating document with Puppeteer HTML template: {template}, geminiPhoto: {use_gemini_photo}")
             doc_data, filename, form_data = generate_document_puppeteer(
                 "id_card",
                 first,      # Use the same first name as form
                 last,       # Use the same last name as form
                 org["name"], # Use the same school as form
                 birth_date=dob,
-                gender="any"
+                gender="any",
+                template=template,
+                use_gemini_photo=use_gemini_photo
             )
         
         # Fallback to Gemini/SVG generator if Puppeteer not selected or failed

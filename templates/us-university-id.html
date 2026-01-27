@@ -165,7 +165,12 @@
     <div id="idCardPreview" class="id-card-container">
         <!-- Header with university branding -->
         <div class="header-section">
-            <div class="university-logo">U</div>
+            <div class="university-logo" id="universityLogoContainer">
+                <img id="cardUniversityLogo" src="" alt=""
+                    style="width:100%;height:100%;object-fit:contain;display:none;"
+                    onload="this.style.display='block'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='none');">
+                <span id="logoFallbackText">U</span>
+            </div>
             <div class="university-text">
                 <div id="cardUniversityName" class="university-name">UNIVERSITY OF CALIFORNIA</div>
                 <div class="card-type">Student Identification Card</div>

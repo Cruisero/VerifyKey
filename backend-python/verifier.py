@@ -44,6 +44,24 @@ UNIVERSITIES = [
     {"id": 602, "idExtended": "602", "name": "Carnegie Mellon University", "domain": "cmu.edu", "country": "US", "weight": 92},
     {"id": 3477, "idExtended": "3477", "name": "University of California, San Diego", "domain": "ucsd.edu", "country": "US", "weight": 93},
     {"id": 650865, "idExtended": "650865", "name": "Arizona State University (Glendale, AZ)", "domain": "asu.edu", "country": "US", "weight": 92},
+    # More US Universities from ThanhNguyxn
+    {"id": 3600, "idExtended": "3600", "name": "University of North Carolina at Chapel Hill", "domain": "unc.edu", "country": "US", "weight": 90},
+    {"id": 3645, "idExtended": "3645", "name": "University of Southern California", "domain": "usc.edu", "country": "US", "weight": 91},
+    {"id": 3629, "idExtended": "3629", "name": "University of Pennsylvania", "domain": "upenn.edu", "country": "US", "weight": 90},
+    {"id": 1603, "idExtended": "1603", "name": "Indiana University Bloomington", "domain": "iu.edu", "country": "US", "weight": 88},
+    {"id": 2506, "idExtended": "2506", "name": "Ohio State University", "domain": "osu.edu", "country": "US", "weight": 90},
+    {"id": 2700, "idExtended": "2700", "name": "Purdue University", "domain": "purdue.edu", "country": "US", "weight": 89},
+    {"id": 3761, "idExtended": "3761", "name": "University of Washington", "domain": "uw.edu", "country": "US", "weight": 90},
+    {"id": 3770, "idExtended": "3770", "name": "University of Wisconsin-Madison", "domain": "wisc.edu", "country": "US", "weight": 88},
+    {"id": 3562, "idExtended": "3562", "name": "University of Maryland", "domain": "umd.edu", "country": "US", "weight": 87},
+    {"id": 519, "idExtended": "519", "name": "Boston University", "domain": "bu.edu", "country": "US", "weight": 86},
+    {"id": 3521, "idExtended": "3521", "name": "University of Florida", "domain": "ufl.edu", "country": "US", "weight": 90},
+    {"id": 3535, "idExtended": "3535", "name": "University of Illinois at Urbana-Champaign", "domain": "illinois.edu", "country": "US", "weight": 91},
+    {"id": 3557, "idExtended": "3557", "name": "University of Minnesota Twin Cities", "domain": "umn.edu", "country": "US", "weight": 88},
+    {"id": 3483, "idExtended": "3483", "name": "University of California, Davis", "domain": "ucdavis.edu", "country": "US", "weight": 89},
+    {"id": 3487, "idExtended": "3487", "name": "University of California, Irvine", "domain": "uci.edu", "country": "US", "weight": 88},
+    {"id": 3502, "idExtended": "3502", "name": "University of California, Santa Barbara", "domain": "ucsb.edu", "country": "US", "weight": 87},
+    # Community Colleges (may have higher success)
     {"id": 2874, "idExtended": "2874", "name": "Santa Monica College", "domain": "smc.edu", "country": "US", "weight": 85},
     {"id": 2350, "idExtended": "2350", "name": "Northern Virginia Community College", "domain": "nvcc.edu", "country": "US", "weight": 84},
     
@@ -366,36 +384,55 @@ def fetch_random_university(country: str = "US") -> dict:
         print(f"[FetchUniv] Error fetching for {country}: {e}")
         return None
 
-def select_university(country: str = None, region_mode: str = None) -> dict:
+def select_university(country: str = None, region_mode: str = None, university_source: str = None) -> dict:
     """Select university. 
     
     Args:
         country: Force specific country code (e.g., 'US')
         region_mode: 'global' (default, picks random country) or 'us_only' (forces US)
+        university_source: 'sheerid_api' (dynamic fetch) or 'custom_list' (local list)
     """
     
+    # Determine target country based on region mode
     target_country = country
     if not target_country:
-        # Check region mode
         if region_mode == "us_only":
-            # Force US only
             target_country = "US"
-            print(f"[SelectUniv] Region mode: US Only")
         else:
             # Global mode: 80% chance to pick random international country, 20% US
             if random.random() < 0.8:
                 target_country = random.choice([c for c in SUPPORTED_COUNTRIES if c != "US"])
             else:
                 target_country = "US"
-            
-    # Try dynamic fetch first
+    
+    print(f"[SelectUniv] Region: {region_mode}, Source: {university_source}, Country: {target_country}")
+    
+    # If using custom list, directly use hardcoded list
+    if university_source == "custom_list":
+        candidates = [u for u in UNIVERSITIES if u.get("country") == target_country]
+        if candidates:
+            # Weighted random selection based on weight field
+            weights = [u.get("weight", 50) for u in candidates]
+            selected = random.choices(candidates, weights=weights, k=1)[0]
+            print(f"[SelectUniv] Custom list: Selected {selected['name']} (weight: {selected.get('weight', 50)})")
+            return selected
+        else:
+            # Fallback to US if no universities for target country in list
+            us_universities = [u for u in UNIVERSITIES if u.get("country") == "US"]
+            if us_universities:
+                weights = [u.get("weight", 50) for u in us_universities]
+                selected = random.choices(us_universities, weights=weights, k=1)[0]
+                print(f"[SelectUniv] Custom list fallback: Selected {selected['name']} (US)")
+                return selected
+    
+    # SheerID API dynamic fetch (default)
     univ = fetch_random_university(target_country)
     if univ:
-        print(f"[SelectUniv] Dynamically fetched {univ['name']} ({target_country})")
+        print(f"[SelectUniv] API: Fetched {univ['name']} ({target_country})")
         return univ
         
-    # Fallback to hardcoded list if fetch fails or US
-    print(f"[SelectUniv] Fallback to local list for {target_country}")
+    # Fallback to hardcoded list if API fails
+    print(f"[SelectUniv] API failed, fallback to local list for {target_country}")
     candidates = [u for u in UNIVERSITIES if u.get("country", "US") == target_country]
     if not candidates:
         candidates = [u for u in UNIVERSITIES if u.get("country", "US") == "US"]
@@ -505,7 +542,7 @@ def lookup_organization_id(name: str, country: str = "US") -> Optional[dict]:
         return None
 
 
-def select_university_with_lookup(region_mode: str = None) -> dict:
+def select_university_with_lookup(region_mode: str = None, university_source: str = None) -> dict:
     """
     Select university and verify/update ID from SheerID API
     
@@ -513,7 +550,7 @@ def select_university_with_lookup(region_mode: str = None) -> dict:
     we always have the correct organization ID for the Gemini program.
     """
     # First, select a university from our list
-    university = select_university(region_mode=region_mode)
+    university = select_university(region_mode=region_mode, university_source=university_source)
     
     # Try to lookup the correct ID from SheerID API
     lookup_result = lookup_organization_id(university["name"], university.get("country", "US"))
@@ -689,11 +726,12 @@ class SheerIDVerifier:
                 print(f"[Verify] Using pre-generated info: {first} {last}")
             else:
                 # Generate new student info (fallback)
-                # Load region mode from config for consistency
+                # Load region mode and university source from config for consistency
                 import config_manager
                 config = config_manager.get_config()
                 region_mode = config.get("aiGenerator", {}).get("regionMode", "global")
-                self.org = select_university(region_mode=region_mode)
+                university_source = config.get("aiGenerator", {}).get("universitySource", "sheerid_api")
+                self.org = select_university(region_mode=region_mode, university_source=university_source)
                 first, last = generate_name(self.org.get("country", "US"))
                 email = generate_email(first, last, self.org["domain"])
                 dob = generate_birth_date()
@@ -743,7 +781,6 @@ class SheerIDVerifier:
                     "birthDate": dob,
                     "email": email,
                     "phoneNumber": "",
-                    "country": self.org.get("country", "US"),  # Add country field
                     "organization": {
                         "id": self.org["id"],
                         "idExtended": self.org["idExtended"],
@@ -760,8 +797,8 @@ class SheerIDVerifier:
                     }
                 }
                 
-                # Debug: Log country field
-                print(f"[Verify] Submitting with country: {body.get('country')}, org: {self.org.get('name')}")
+                # Debug: Log submission info
+                print(f"[Verify] Submitting: {first} {last} @ {self.org.get('name')}")
                 
                 data, status = self._request("POST", f"/verification/{self.vid}/step/collectStudentPersonalInfo", body)
                 

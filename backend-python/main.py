@@ -152,13 +152,14 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         # This ensures the form data and document data match!
         from verifier import select_university, generate_name, generate_email, generate_birth_date
         
-        # Read region mode from config
+        # Read region mode and university source from config
         import config_manager
         config = config_manager.get_config()
         region_mode = config.get("aiGenerator", {}).get("regionMode", "global")
+        university_source = config.get("aiGenerator", {}).get("universitySource", "sheerid_api")
         
-        # Select university (use region mode setting)
-        org = select_university(country=None, region_mode=region_mode) 
+        # Select university (use region mode and university source settings)
+        org = select_university(country=None, region_mode=region_mode, university_source=university_source) 
         first, last = generate_name(org.get("country", "US"))
         email = generate_email(first, last, org["domain"])
         dob = generate_birth_date()
@@ -485,15 +486,18 @@ async def test_document_generation(request: TestDocumentRequest):
     if not university or not first or not last:
         from verifier import select_university, generate_name
         
-        # Get region mode from saved config
+        # Get region mode and university source from saved config
         config = config_manager.get_config()
         region_mode = config.get("aiGenerator", {}).get("regionMode", "global")
+        university_source = config.get("aiGenerator", {}).get("universitySource", "sheerid_api")
+        print(f"[TestDoc] Region: {region_mode}, Source: {university_source}")
         
-        # Select university if not provided (use region mode from config)
+        # Select university if not provided (use region mode and source from config)
         if not university:
-            uni_data = select_university(region_mode=region_mode)
+            uni_data = select_university(region_mode=region_mode, university_source=university_source)
             university = uni_data["name"]
             country = uni_data.get("country", "US")
+            print(f"[TestDoc] Selected university: {university} (Country: {country})")
         else:
             # Try to guess country if university is provided but names are missing
             # This is a simple fallback
@@ -565,6 +569,7 @@ async def test_document_generation(request: TestDocumentRequest):
                         "firstName": first,
                         "lastName": last,
                         "fullName": f"{first} {last}".upper(),
+                        "email": f"{first.lower()}.{last.lower()}{random.randint(10, 99)}@{university.lower().replace(' ', '').replace('university', '').replace('college', '')[:10]}.edu",
                         "university": university
                     },
                     "filename": filename

@@ -45,6 +45,9 @@ export default function Admin() {
     // Region mode state: 'global' (default) or 'us_only'
     const [regionMode, setRegionMode] = useState('global');
 
+    // University source: 'sheerid_api' (dynamic) or 'custom_list' (local list)
+    const [universitySource, setUniversitySource] = useState('sheerid_api');
+
     useEffect(() => {
         if (!loading && !user) {
             navigate('/');
@@ -110,6 +113,10 @@ export default function Admin() {
                 if (data.aiGenerator?.regionMode) {
                     setRegionMode(data.aiGenerator.regionMode);
                 }
+                // Load university source setting
+                if (data.aiGenerator?.universitySource) {
+                    setUniversitySource(data.aiGenerator.universitySource);
+                }
             }
 
             // Fetch available templates
@@ -133,6 +140,7 @@ export default function Admin() {
                 aiGenerator: {
                     provider: aiProvider,
                     regionMode: regionMode,
+                    universitySource: universitySource,
                     batchApi: {
                         enabled: aiProvider === 'batch_api',
                         apiUrl: batchApiSettings.apiUrl,
@@ -573,6 +581,22 @@ export default function Admin() {
                                             {regionMode === 'us_only'
                                                 ? '仅使用美国学校生成验证文档，更稳定的验证通过率'
                                                 : '随机选择全球学校生成验证文档，包括美国、欧洲、亚洲等地区'}
+                                        </p>
+                                    </div>
+                                    <div className="input-group" style={{ marginTop: '16px' }}>
+                                        <label className="input-label">学校来源</label>
+                                        <select
+                                            className="input"
+                                            value={universitySource}
+                                            onChange={(e) => setUniversitySource(e.target.value)}
+                                        >
+                                            <option value="sheerid_api">🔗 SheerID API 动态获取</option>
+                                            <option value="custom_list">📋 自定义名单 (本地列表)</option>
+                                        </select>
+                                        <p className="input-hint">
+                                            {universitySource === 'sheerid_api'
+                                                ? '从 SheerID API 实时获取学校列表，确保 ID 准确匹配'
+                                                : '使用预设的高成功率学校名单 (来自 ThanhNguyxn)，不依赖 API'}
                                         </p>
                                     </div>
                                 </div>

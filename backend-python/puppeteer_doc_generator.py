@@ -296,11 +296,16 @@ def generate_student_id_puppeteer(
         
         print(f"[PuppeteerGen] ✓ Generated: {output_filename} ({len(image_bytes)} bytes)")
         
+        # Generate email from name and university domain
+        uni_domain = university.lower().replace(" ", "").replace("university", "").replace("college", "")[:10] + ".edu"
+        email = f"{first.lower()}.{last.lower()}{random.randint(10, 99)}@{uni_domain}"
+        
         # Prepare form data
         form_data = {
             "firstName": first,
             "lastName": last,
             "fullName": full_name,
+            "email": email,
             "university": university,
             "studentId": student_id,
             "birthDate": birth_date,

@@ -42,6 +42,9 @@ DEFAULT_CONFIG = {
         # Region mode: 'global' (all countries) or 'us_only' (only US schools)
         "regionMode": "global",
         
+        # University source: 'sheerid_api' (dynamic) or 'custom_list' (local list)
+        "universitySource": "sheerid_api",
+        
         # SVG Fallback (always available)
         "svgFallback": {
             "enabled": True

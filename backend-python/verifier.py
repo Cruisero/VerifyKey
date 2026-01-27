@@ -614,6 +614,22 @@ class SheerIDVerifier:
             
             # Step 1: Submit student info (if needed)
             if current_step == "collectStudentPersonalInfo":
+                # Log current IP address for debugging
+                try:
+                    ip_response = self.session.get(
+                        "https://ipinfo.io/json",
+                        headers={"Accept": "application/json"},
+                        proxies={"http": self.proxy_url, "https": self.proxy_url} if self.proxy_url else None,
+                        timeout=10
+                    )
+                    if ip_response.status_code == 200:
+                        ip_data = ip_response.json()
+                        print(f"[Verify] 🌐 Submitting with IP: {ip_data.get('ip')} ({ip_data.get('city')}, {ip_data.get('country')}) - {ip_data.get('org')}")
+                    else:
+                        print(f"[Verify] ⚠️ Could not fetch IP info (status {ip_response.status_code})")
+                except Exception as ip_err:
+                    print(f"[Verify] ⚠️ IP check failed: {ip_err}")
+                
                 self.on_progress({"step": "submitting", "message": "Submitting student info..."})
                 
                 body = {

@@ -276,17 +276,13 @@ export default function Verify() {
                                 const checkResponse = await fetch(`${API_BASE}/api/check-status/${pending.verificationId}`);
                                 const checkData = await checkResponse.json();
 
-                                console.log(`[Poll ${attempts}/${maxAttempts}] ${pending.verificationId}:`, checkData);
+                                // 获取状态 (后端可能返回 currentStep 或 status)
+                                const step = checkData.currentStep || checkData.status || '';
 
-                                // 更新进度消息
-                                setResults(prev => prev.map(r =>
-                                    r.id === pending.resultId
-                                        ? { ...r, message: `⏳ 等待审核中... (${attempts}/${maxAttempts})` }
-                                        : r
-                                ));
+                                console.log(`[Poll ${attempts}/${maxAttempts}] ${pending.verificationId}: step=${step}`, checkData);
 
                                 // 检查最终状态
-                                if (checkData.currentStep === 'success') {
+                                if (step === 'success') {
                                     setResults(prev => prev.map(r =>
                                         r.id === pending.resultId
                                             ? { ...r, status: 'success', message: '✓ 验证成功!' }
@@ -296,15 +292,19 @@ export default function Verify() {
                                     updateCredits(-1);
                                     addNewStatus();
                                     break;
-                                } else if (checkData.currentStep === 'error') {
-                                    const errorMsg = checkData.errorIds?.join(', ') || '验证失败';
+                                } else if (step === 'error') {
+                                    // 错误状态 - 显示详细错误信息
+                                    const errorMsg = checkData.systemErrorMessage ||
+                                        checkData.errorIds?.join(', ') ||
+                                        checkData.message ||
+                                        '验证失败';
                                     setResults(prev => prev.map(r =>
                                         r.id === pending.resultId
-                                            ? { ...r, status: 'failed', message: `✕ 失败: ${errorMsg}` }
+                                            ? { ...r, status: 'failed', message: `✕ ${errorMsg}` }
                                             : r
                                     ));
                                     break;
-                                } else if (checkData.currentStep === 'docUpload' && checkData.rejectionReasons?.length > 0) {
+                                } else if (step === 'docUpload' && checkData.rejectionReasons?.length > 0) {
                                     // 文档被拒绝
                                     const reasons = checkData.rejectionReasons.join(', ');
                                     setResults(prev => prev.map(r =>
@@ -313,8 +313,21 @@ export default function Verify() {
                                             : r
                                     ));
                                     break;
+                                } else if (step === 'pending') {
+                                    // 仍在审核中 - 更新进度消息
+                                    setResults(prev => prev.map(r =>
+                                        r.id === pending.resultId
+                                            ? { ...r, message: `⏳ 审核中... (${attempts}/${maxAttempts})` }
+                                            : r
+                                    ));
+                                } else {
+                                    // 其他状态 - 更新进度
+                                    setResults(prev => prev.map(r =>
+                                        r.id === pending.resultId
+                                            ? { ...r, message: `⏳ ${step || '等待中'}... (${attempts}/${maxAttempts})` }
+                                            : r
+                                    ));
                                 }
-                                // pending 状态继续等待
                             } catch (e) {
                                 console.error('Poll status error:', e);
                             }

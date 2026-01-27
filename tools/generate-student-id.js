@@ -107,6 +107,75 @@ Generate ONLY the portrait photo, no text, borders, or decorations.`;
 }
 
 /**
+ * Generate university logo/emblem using Gemini AI
+ */
+async function generateLogoWithGemini(universityName) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp-image-generation';
+
+    if (!apiKey) {
+        console.log('[Logo] No Gemini API key found, will use fallback');
+        return null;
+    }
+
+    // Extract key words from university name for the prompt
+    const shortName = universityName.replace(/University|College|Institute|of|the/gi, '').trim();
+
+    const prompt = `Generate a simple, clean university emblem/logo icon for "${universityName}".
+
+Requirements:
+- Circular or shield-shaped emblem design
+- Professional academic style
+- Simple iconic design (2-3 colors maximum)
+- Include stylized imagery like: book, torch, laurel wreath, or academic symbols
+- Clean lines, suitable for small display size
+- NO text or letters in the design
+- Solid background that contrasts with the design
+- Classic university emblem aesthetic
+- Flat design style, not 3D
+
+Style: minimalist academic emblem icon.
+Generate ONLY the logo icon, no text, no university name.`;
+
+    try {
+        console.log('[Logo] Generating university logo via Gemini AI...');
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseModalities: ["image", "text"]
+                    }
+                })
+            }
+        );
+
+        if (response.ok) {
+            const data = await response.json();
+            const parts = data.candidates?.[0]?.content?.parts || [];
+            const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+
+            if (imagePart) {
+                console.log('[Logo] ✓ Logo generated via Gemini AI');
+                return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+            }
+            console.log('[Logo] No image in Gemini response');
+        } else {
+            const error = await response.json();
+            console.log('[Logo] Gemini API error:', error.error?.message || response.status);
+        }
+    } catch (error) {
+        console.log('[Logo] Gemini API failed:', error.message);
+    }
+
+    return null;
+}
+
+/**
  * Get fallback photo from various sources
  */
 async function getFallbackPhoto(gender = 'any') {
@@ -344,48 +413,149 @@ class StudentIdGenerator {
                 }
             }
 
-            // Fill in student information
+            // Fill in student information based on template type
             console.log('[Generator] Filling student data...');
-            await page.evaluate((studentData, photo) => {
-                // Set form values
-                document.getElementById('universityNameInput').value = studentData.university;
-                document.getElementById('nameInput').value = studentData.name;
-                document.getElementById('dobInput').value = studentData.dob;
-                document.getElementById('studentIdInput').value = studentData.studentId;
-                document.getElementById('phoneInput').value = studentData.phone;
-                document.getElementById('academicYearInput').value = studentData.academicYear;
-                document.getElementById('addressInput').value = studentData.address;
 
-                // Trigger input events to update preview
-                const inputIds = [
-                    'universityNameInput', 'nameInput', 'dobInput',
-                    'studentIdInput', 'phoneInput', 'academicYearInput', 'addressInput'
-                ];
-                inputIds.forEach(id => {
-                    document.getElementById(id).dispatchEvent(new Event('input', { bubbles: true }));
-                });
+            // Detect template type and fill accordingly
+            const templateType = await page.evaluate(() => {
+                // Detect template by checking for specific elements
+                if (document.getElementById('receiptPreview')) return 'fee-receipt';
+                if (document.getElementById('idCardPreview')) return 'student-id';
+                return 'unknown';
+            });
 
-                // ALSO directly set card element text content (more reliable)
-                document.getElementById('cardUniversityName').textContent = studentData.university;
-                document.getElementById('cardName').textContent = studentData.name;
-                document.getElementById('cardDob').textContent = studentData.dob;
-                document.getElementById('cardStudentId').textContent = studentData.studentId;
-                document.getElementById('cardPhone').textContent = studentData.phone;
-                document.getElementById('cardAddress').textContent = studentData.address;
-                document.getElementById('cardAcademicYear').textContent = studentData.academicYear;
+            console.log(`[Generator] Detected template type: ${templateType}`);
 
-                // Set photo if provided
-                if (photo) {
-                    document.getElementById('cardStudentPhoto').src = photo;
+            if (templateType === 'fee-receipt') {
+                // Generate university logo for fee receipt
+                console.log('[Generator] Generating university logo for fee receipt...');
+                let logoUrl = await generateLogoWithGemini(data.university);
+
+                // Fill fee receipt template with logo
+                await page.evaluate((studentData, logo) => {
+                    // Helper to safely set element text
+                    const setTextById = (id, text) => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = text;
+                    };
+
+                    // Helper to safely set input value
+                    const setInputById = (id, value) => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.value = value;
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    };
+
+                    // Generate receipt-specific data
+                    const now = new Date();
+                    const regDate = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getFullYear()).slice(-2)}`;
+                    const amount = 10000 + Math.floor(Math.random() * 89999);
+                    const studentRoll = Math.floor(Math.random() * 900) + 100;
+                    const centre = 10000 + Math.floor(Math.random() * 90000);
+                    const instrumentNo = 100000 + Math.floor(Math.random() * 900000);
+
+                    // Number to words converter
+                    const numberToWords = (num) => {
+                        const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+                            'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+                        const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+                        if (num === 0) return 'Zero';
+                        if (num < 20) return ones[num];
+                        if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '');
+                        if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + numberToWords(num % 100) : '');
+                        if (num < 100000) return numberToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + numberToWords(num % 1000) : '');
+                        return num.toString();
+                    };
+
+                    // Set card elements directly
+                    setTextById('cardUniversityName', studentData.university);
+                    setTextById('cardName', studentData.name);
+                    setTextById('cardStudentRoll', studentRoll.toString());
+                    setTextById('cardCentre', centre.toString());
+                    setTextById('cardRegDate', regDate);
+                    setTextById('cardInstrumentNo', instrumentNo.toString());
+                    setTextById('cardInstrumentDate', regDate);
+                    setTextById('cardPaymentType', 'BDT');
+                    setTextById('cardBank', 'Islami Bank');
+                    setTextById('cardAmount', amount.toString());
+                    setTextById('cardAmountWords', amount.toString());
+                    setTextById('cardAmountText', numberToWords(amount));
+                    setTextById('cardAddress', studentData.address || 'Uttara Town University College, 1st Floor, House Building, Plot 1 Road-2, Dhaka 1230');
+                    setTextById('cardYear', new Date().getFullYear().toString());
+
+                    // Set logo if provided
+                    if (logo) {
+                        const logoImg = document.getElementById('cardLogo');
+                        const logoEmoji = document.getElementById('cardLogoEmoji');
+                        if (logoImg && logoEmoji) {
+                            logoImg.src = logo;
+                            logoImg.style.display = 'block';
+                            logoEmoji.style.display = 'none';
+                        }
+                    }
+                }, data, logoUrl);
+
+                // Wait for logo to load if we have one
+                if (logoUrl) {
+                    console.log('[Generator] Waiting for logo to load...');
+                    await page.waitForFunction(() => {
+                        const img = document.getElementById('cardLogo');
+                        return img && img.complete && img.naturalHeight !== 0;
+                    }, { timeout: 10000 }).catch(() => {
+                        console.log('[Generator] Logo load timeout, continuing...');
+                    });
                 }
-            }, data, photoUrl);
+            } else {
+                // Fill student ID card template (default)
+                await page.evaluate((studentData, photo) => {
+                    // Helper to safely set element
+                    const setById = (id, value) => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                                el.value = value;
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                            } else {
+                                el.textContent = value;
+                            }
+                        }
+                    };
 
-            // Wait for photo to load
-            if (photoUrl) {
+                    // Set form values
+                    setById('universityNameInput', studentData.university);
+                    setById('nameInput', studentData.name);
+                    setById('dobInput', studentData.dob);
+                    setById('studentIdInput', studentData.studentId);
+                    setById('phoneInput', studentData.phone);
+                    setById('academicYearInput', studentData.academicYear);
+                    setById('addressInput', studentData.address);
+
+                    // Set card element text content directly
+                    setById('cardUniversityName', studentData.university);
+                    setById('cardName', studentData.name);
+                    setById('cardDob', studentData.dob);
+                    setById('cardStudentId', studentData.studentId);
+                    setById('cardPhone', studentData.phone);
+                    setById('cardAddress', studentData.address);
+                    setById('cardAcademicYear', studentData.academicYear);
+
+                    // Set photo if provided
+                    if (photo) {
+                        const photoEl = document.getElementById('cardStudentPhoto');
+                        if (photoEl) photoEl.src = photo;
+                    }
+                }, data, photoUrl);
+            }
+
+            // Wait for photo to load (only for student ID templates)
+            if (photoUrl && templateType !== 'fee-receipt') {
                 console.log('[Generator] Waiting for photo to load...');
                 await page.waitForFunction(() => {
                     const img = document.getElementById('cardStudentPhoto');
-                    return img.complete && img.naturalHeight !== 0;
+                    return img && img.complete && img.naturalHeight !== 0;
                 }, { timeout: 10000 }).catch(() => {
                     console.log('[Generator] Photo load timeout, continuing...');
                 });
@@ -394,12 +564,15 @@ class StudentIdGenerator {
             // Wait for rendering
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Capture the ID card element
-            console.log('[Generator] Capturing ID card screenshot...');
-            const cardElement = await page.$('#idCardPreview');
+            // Capture the document element based on template type
+            console.log('[Generator] Capturing screenshot...');
+
+            // Select the correct element based on template type
+            const previewSelector = templateType === 'fee-receipt' ? '#receiptPreview' : '#idCardPreview';
+            const cardElement = await page.$(previewSelector);
 
             if (!cardElement) {
-                throw new Error('Could not find ID card element (#idCardPreview)');
+                throw new Error(`Could not find preview element (${previewSelector})`);
             }
 
             // Take screenshot

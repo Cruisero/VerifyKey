@@ -68,6 +68,7 @@
             justify-content: center;
             position: relative;
             border: 3px solid #c2185b;
+            overflow: hidden;
         }
 
         .logo-inner {
@@ -79,6 +80,13 @@
             align-items: center;
             justify-content: center;
             font-size: 28px;
+            overflow: hidden;
+        }
+
+        .logo-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         /* Title */
@@ -197,7 +205,10 @@
                 <div class="university-subtitle">A Modern University College</div>
             </div>
             <div class="logo">
-                <div class="logo-inner">📚</div>
+                <div class="logo-inner">
+                    <img id="cardLogo" src="" alt="Logo" style="display: none;">
+                    <span id="cardLogoEmoji">📚</span>
+                </div>
             </div>
         </div>
 

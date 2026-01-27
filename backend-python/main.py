@@ -445,11 +445,12 @@ async def test_document_generation(request: TestDocumentRequest):
     
     # If not provided, generate random data using verifier to support international universities
     if not university or not first or not last:
-        from verifier import select_university, generate_name
+        from verifier import select_university_with_lookup, generate_name
         
         # Select university if not provided
         if not university:
-            uni_data = select_university()
+            # Use same lookup logic as actual verification
+            uni_data = select_university_with_lookup()
             university = uni_data["name"]
             country = uni_data.get("country", "US")
         else:

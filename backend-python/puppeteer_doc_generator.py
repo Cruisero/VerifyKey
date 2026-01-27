@@ -98,10 +98,59 @@ def inject_realistic_exif(image_path: Path):
 
 
 
+
+def generate_international_address(country: str = "US") -> str:
+    """Generate a realistic looking address for a specific country"""
+    number = random.randint(10, 9999)
+    
+    if country == "US":
+        streets = ["University Ave", "College Blvd", "Main St", "Broadway", "Park Ave"]
+        cities = ["College Town", "Springfield", "Riverside", "Franklin", "Clinton"]
+        state = random.choice(["CA", "NY", "TX", "FL", "IL", "PA", "OH", "GA"])
+        return f"{number} {random.choice(streets)}, {random.choice(cities)}, {state}"
+        
+    elif country in ["GB", "IE", "AU", "NZ", "CA"]: # English speaking
+        streets = ["High St", "Station Rd", "Victoria St", "Church Ln", "Main St"]
+        cities = ["London", "Manchester", "Bristol", "Oxford", "Cambridge"] if country == "GB" else ["Sydney", "Melbourne", "Toronto", "Vancouver"]
+        postcode = f"{random.choice(['CB', 'OX', 'SW', 'M', 'L'])}{random.randint(1, 20)} {random.randint(1, 9)}{random.choice(['A', 'B', 'C'])}{random.choice(['A', 'B', 'C'])}"
+        return f"{number} {random.choice(streets)}, {random.choice(cities)}, {postcode}"
+        
+    elif country in ["FR", "BE", "CH"]: # French
+        streets = ["Rue de la Paix", "Avenue de la République", "Boulevard Saint-Michel", "Rue des Écoles"]
+        cities = ["Paris", "Lyon", "Marseille", "Toulouse", "Nice"]
+        zipcode = random.randint(10000, 99000)
+        return f"{number} {random.choice(streets)}, {zipcode} {random.choice(cities)}"
+        
+    elif country in ["DE", "AT"]: # German
+        streets = ["Hauptstraße", "Bahnhofstraße", "Schulstraße", "Gartenstraße"]
+        cities = ["Berlin", "München", "Hamburg", "Köln", "Frankfurt"]
+        zipcode = random.randint(10000, 99999)
+        return f"{random.choice(streets)} {number}, {zipcode} {random.choice(cities)}"
+        
+    elif country in ["ES", "MX", "AR", "CL", "CO", "PE"]: # Spanish
+        streets = ["Calle Mayor", "Avenida de la Constitución", "Plaza de España", "Calle Real"]
+        cities = ["Madrid", "Barcelona", "Valencia", "Sevilla"] if country == "ES" else ["Buenos Aires", "Santiago", "Bogotá", "Lima"]
+        return f"{random.choice(streets)} {number}, {random.randint(1000, 9999)} {random.choice(cities)}"
+        
+    elif country == "IL": # Israel
+        streets = ["Ben Yehuda St", "Dizengoff St", "Rothschild Blvd", "King George St"]
+        cities = ["Tel Aviv", "Jerusalem", "Haifa", "Rishon LeZion"]
+        return f"{number} {random.choice(streets)}, {random.choice(cities)}"
+        
+    elif country in ["JP", "KR", "CN", "TW", "HK"]: # East Asia (English format often used in intl docs)
+        cities = ["Tokyo", "Seoul", "Beijing", "Taipei"]
+        districts = ["Central", "North", "South", "West"]
+        return f"{number} {random.choice(districts)} District, {random.choice(cities)}"
+        
+    else: # Generic International
+        return f"{number} University Road, Campus City, {country}"
+
+
 def generate_student_id_puppeteer(
     first: str,
     last: str,
     university: str,
+    country: str = "US",
     birth_date: str = None,
     student_id: str = None,
     phone: str = None,
@@ -119,6 +168,7 @@ def generate_student_id_puppeteer(
         first: First name
         last: Last name
         university: University name
+        country: Country code (2-letter ISO)
         birth_date: Birth date (e.g., "March 15, 2002")
         student_id: Student ID number
         phone: Phone number
@@ -149,10 +199,13 @@ def generate_student_id_puppeteer(
         student_id = f"{prefix}-{number}"
     
     if not phone:
-        phone = f"+1 {random.randint(200, 999)}-{random.randint(100, 999)}-{random.randint(1000, 9999)}"
+        if country == "US" or country == "CA":
+            phone = f"+1 {random.randint(200, 999)}-{random.randint(100, 999)}-{random.randint(1000, 9999)}"
+        else:
+            phone = f"+{random.randint(20, 99)} {random.randint(100, 999)}-{random.randint(1000, 9999)}"
     
     if not address:
-        address = f"{random.randint(100, 9999)} University Ave, College Town, CA"
+        address = generate_international_address(country)
     
     if not academic_year:
         academic_year = str(int(time.strftime("%Y")) + 1)
@@ -281,6 +334,7 @@ def generate_document_puppeteer(
     first: str,
     last: str,
     university: str,
+    country: str = "US",
     birth_date: str = None,
     gender: str = "any",
     template: str = "student-id-generator.html",
@@ -297,6 +351,7 @@ def generate_document_puppeteer(
         first: First name
         last: Last name
         university: University name
+        country: Country code (2-letter ISO)
         birth_date: Birth date (optional)
         gender: Gender for photo ("male", "female", "any")
         template: HTML template filename to use
@@ -312,6 +367,7 @@ def generate_document_puppeteer(
         first=first,
         last=last,
         university=university,
+        country=country,
         birth_date=birth_date,
         gender=gender,
         save_form_data=True,

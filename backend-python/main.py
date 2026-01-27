@@ -192,6 +192,7 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                 first,      # Use the same first name as form
                 last,       # Use the same last name as form
                 org["name"], # Use the same school as form
+                country=org.get("country", "US"), # Pass country for address generation
                 birth_date=dob,
                 gender="any",
                 template=template,
@@ -519,6 +520,7 @@ async def test_document_generation(request: TestDocumentRequest):
                 first,
                 last,
                 university,
+                country=country,
                 gender=gender,
                 template=template,
                 use_gemini_photo=use_gemini_photo

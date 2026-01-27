@@ -438,15 +438,30 @@ async def test_document_generation(request: TestDocumentRequest):
     import random
     import config_manager
     
-    # Generate random test data if not provided
-    first_names = ["John", "Emily", "Michael", "Sarah", "David", "Jessica"]
-    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Davis"]
-    universities = ["Stanford University", "MIT", "Harvard University", "Yale University"]
-    
-    first = request.firstName or random.choice(first_names)
-    last = request.lastName or random.choice(last_names)
-    university = request.university or random.choice(universities)
+    first = request.firstName
+    last = request.lastName
+    university = request.university
     gender = request.gender or "any"
+    
+    # If not provided, generate random data using verifier to support international universities
+    if not university or not first or not last:
+        from verifier import select_university, generate_name
+        
+        # Select university if not provided
+        if not university:
+            uni_data = select_university()
+            university = uni_data["name"]
+            country = uni_data.get("country", "US")
+        else:
+            # Try to guess country if university is provided but names are missing
+            # This is a simple fallback
+            country = "US" 
+            
+        # Generate names based on university country if not provided
+        if not first or not last:
+            gen_first, gen_last = generate_name(country)
+            first = first or gen_first
+            last = last or gen_last
     
     try:
         # Use the SAVED server config (same as actual verification)

@@ -210,16 +210,18 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         
         # Use Gemini multi-document generator
         elif provider == "gemini":
-            print(f"[Verify] Generating 3 documents with Gemini AI...")
+            gemini_config = config.get("aiGenerator", {}).get("gemini", {})
+            document_types = gemini_config.get("documentTypes", ["id_card", "transcript", "schedule"])
+            print(f"[Verify] Generating {len(document_types)} documents with Gemini AI: {document_types}")
             from doc_generator import generate_multiple_documents_with_gemini
             
-            result = generate_multiple_documents_with_gemini(first, last, org["name"], dob)
+            result = generate_multiple_documents_with_gemini(first, last, org["name"], dob, document_types=document_types)
             documents = result.get("documents", [])
             
             if documents:
                 doc_data = documents[0]["data"]  # Primary document for backward compat
                 filename = documents[0]["fileName"]
-                print(f"[Verify] Generated {len(documents)}/3 documents with Gemini")
+                print(f"[Verify] Generated {len(documents)}/{len(document_types)} documents with Gemini")
             else:
                 print(f"[Verify] Gemini generation failed, using SVG fallback...")
         
@@ -623,11 +625,15 @@ async def test_document_generation(request: TestDocumentRequest):
             from doc_generator import generate_multiple_documents_with_gemini
             from verifier import generate_birth_date
             
+            # Get document types from config
+            gemini_config = config.get("aiGenerator", {}).get("gemini", {})
+            document_types = gemini_config.get("documentTypes", ["id_card", "transcript", "schedule"])
+            
             # Generate birth date for transcript
             birth_date = generate_birth_date()
             
-            # Generate 3 documents with unified student info
-            result = generate_multiple_documents_with_gemini(first, last, university, birth_date)
+            # Generate documents with unified student info
+            result = generate_multiple_documents_with_gemini(first, last, university, birth_date, document_types=document_types)
             
             if result["documents"]:
                 # Build images array for frontend
@@ -646,7 +652,7 @@ async def test_document_generation(request: TestDocumentRequest):
                 return {
                     "success": True,
                     "provider": provider,
-                    "providerNote": f"使用保存的配置: GEMINI 文档生成 - 生成 {result['successCount']}/3 文档",
+                    "providerNote": f"使用保存的配置: GEMINI 文档生成 - 生成 {result['successCount']}/{len(document_types)} 文档",
                     "documentCount": len(images),
                     "images": images,
                     "image": first_image["image"] if first_image else None,

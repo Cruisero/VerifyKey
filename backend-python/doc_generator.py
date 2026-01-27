@@ -348,10 +348,16 @@ def generate_multiple_documents_with_gemini(
     last: str, 
     university: str, 
     birth_date: str = None,
-    config: dict = None
+    config: dict = None,
+    document_types: list = None
 ) -> dict:
     """
     Generate multiple documents (student ID, transcript, schedule) with unified student info
+    
+    Args:
+        document_types: List of document types to generate. 
+                       Options: ['id_card', 'transcript', 'schedule']
+                       If None or empty, generates all three.
     
     Returns:
         dict with keys: documents, student_id, success_count, all_success
@@ -359,16 +365,23 @@ def generate_multiple_documents_with_gemini(
     import concurrent.futures
     import time
     
+    # Default to all document types if not specified
+    if not document_types:
+        document_types = ['id_card', 'transcript', 'schedule']
+    
     # Generate unified student ID for all documents
     student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     birth = birth_date or "2003-05-15"
     
-    print(f"[MultiDoc] Generating 3 documents for {first} {last} at {university}")
+    total_docs = len(document_types)
+    print(f"[MultiDoc] Generating {total_docs} documents for {first} {last} at {university}")
+    print(f"[MultiDoc] Document types: {document_types}")
     print(f"[MultiDoc] Unified Student ID: {student_id}")
     
     documents = []
+    futures_map = {}
     
-    # Generate all three documents with UNIFIED student_id
+    # Generate only selected document types
     def gen_id_card():
         data = generate_student_id_with_gemini(first, last, university, student_id)
         if data:
@@ -387,13 +400,15 @@ def generate_multiple_documents_with_gemini(
             return {"type": "schedule", "fileName": "schedule.png", "mimeType": "image/png", "data": data}
         return None
     
-    # Run all three generations in parallel
+    # Run selected document generations in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [
-            executor.submit(gen_id_card),
-            executor.submit(gen_transcript),
-            executor.submit(gen_schedule)
-        ]
+        futures = []
+        if 'id_card' in document_types:
+            futures.append(executor.submit(gen_id_card))
+        if 'transcript' in document_types:
+            futures.append(executor.submit(gen_transcript))
+        if 'schedule' in document_types:
+            futures.append(executor.submit(gen_schedule))
         
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -405,13 +420,13 @@ def generate_multiple_documents_with_gemini(
                 print(f"[MultiDoc] Generation error: {e}")
     
     success_count = len(documents)
-    print(f"[MultiDoc] Generated {success_count}/3 documents")
+    print(f"[MultiDoc] Generated {success_count}/{total_docs} documents")
     
     return {
         "documents": documents,
         "studentId": student_id,
         "successCount": success_count,
-        "allSuccess": success_count == 3
+        "allSuccess": success_count == total_docs
     }
 
 

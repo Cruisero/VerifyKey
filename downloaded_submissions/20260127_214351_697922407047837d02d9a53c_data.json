@@ -1,0 +1,31 @@
+{
+  "verificationId": "697922407047837d02d9a53c",
+  "timestamp": "20260127_214351",
+  "student": {
+    "firstName": "Michael",
+    "lastName": "Wilson",
+    "email": "mwilson@berkeley.edu",
+    "birthDate": "2000-06-26"
+  },
+  "university": {
+    "id": 3491,
+    "idExtended": "3491",
+    "name": "University of California, Berkeley",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "id_card",
+      "fileName": "student_id.png"
+    },
+    {
+      "type": "schedule",
+      "fileName": "schedule.png"
+    },
+    {
+      "type": "transcript",
+      "fileName": "transcript.png"
+    }
+  ],
+  "provider": "gemini"
+}

@@ -27,7 +27,8 @@ export default function Admin() {
     });
     const [geminiSettings, setGeminiSettings] = useState({
         apiKey: '',
-        model: 'gemini-3-pro-image-preview'
+        model: 'gemini-3-pro-image-preview',
+        documentTypes: ['id_card', 'transcript', 'schedule']  // Default: generate all
     });
     const [puppeteerSettings, setPuppeteerSettings] = useState({
         template: 'student-id-generator.html',
@@ -84,7 +85,8 @@ export default function Admin() {
                         apiKey: data.aiGenerator.gemini.apiKey?.includes('...')
                             ? ''
                             : (data.aiGenerator.gemini.apiKey || ''),
-                        model: data.aiGenerator.gemini.model || prev.model
+                        model: data.aiGenerator.gemini.model || prev.model,
+                        documentTypes: data.aiGenerator.gemini.documentTypes || prev.documentTypes
                     }));
                     if (data.aiGenerator.gemini.apiKey?.includes('...')) {
                         setGeminiSettings(prev => ({ ...prev, hasStoredKey: true }));
@@ -149,7 +151,8 @@ export default function Admin() {
                     gemini: {
                         enabled: aiProvider === 'gemini' || aiProvider === 'puppeteer',
                         apiKey: geminiSettings.apiKey || undefined,
-                        model: geminiSettings.model
+                        model: geminiSettings.model,
+                        documentTypes: geminiSettings.documentTypes
                     },
                     puppeteer: {
                         enabled: aiProvider === 'puppeteer',
@@ -511,6 +514,57 @@ export default function Admin() {
                                                     <option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
                                                 </optgroup>
                                             </select>
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">生成文档类型</label>
+                                            <div className="checkbox-group">
+                                                <label className="checkbox-label">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={geminiSettings.documentTypes?.includes('id_card')}
+                                                        onChange={(e) => {
+                                                            const types = geminiSettings.documentTypes || [];
+                                                            if (e.target.checked) {
+                                                                setGeminiSettings(s => ({ ...s, documentTypes: [...types, 'id_card'] }));
+                                                            } else {
+                                                                setGeminiSettings(s => ({ ...s, documentTypes: types.filter(t => t !== 'id_card') }));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span>🪪 学生证</span>
+                                                </label>
+                                                <label className="checkbox-label">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={geminiSettings.documentTypes?.includes('transcript')}
+                                                        onChange={(e) => {
+                                                            const types = geminiSettings.documentTypes || [];
+                                                            if (e.target.checked) {
+                                                                setGeminiSettings(s => ({ ...s, documentTypes: [...types, 'transcript'] }));
+                                                            } else {
+                                                                setGeminiSettings(s => ({ ...s, documentTypes: types.filter(t => t !== 'transcript') }));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span>📜 成绩单</span>
+                                                </label>
+                                                <label className="checkbox-label">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={geminiSettings.documentTypes?.includes('schedule')}
+                                                        onChange={(e) => {
+                                                            const types = geminiSettings.documentTypes || [];
+                                                            if (e.target.checked) {
+                                                                setGeminiSettings(s => ({ ...s, documentTypes: [...types, 'schedule'] }));
+                                                            } else {
+                                                                setGeminiSettings(s => ({ ...s, documentTypes: types.filter(t => t !== 'schedule') }));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span>📅 课程表</span>
+                                                </label>
+                                            </div>
+                                            <p className="input-hint">选择要自动生成的证明文件类型，至少选择一项</p>
                                         </div>
                                     </div>
                                 </div>

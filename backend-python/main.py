@@ -77,23 +77,36 @@ class VerifyResponse(BaseModel):
 
 
 def get_proxy_url() -> Optional[str]:
-    """Build proxy URL from environment variables - IP2UP format"""
-    if not PROXY_USER or not PROXY_PASS:
+    """Build proxy URL from config.json (saved via admin panel)"""
+    import config_manager
+    
+    config = config_manager.load_config()
+    proxy = config.get("proxy", {})
+    
+    if not proxy.get("enabled"):
         return None
     
-    # IP2UP username format: [account]_[country]_[province]_[city]_[session]_[sessionTime]_[flag]
-    # country: 200 = US
-    # session: random string for sticky IP
-    # sessionTime: 0 = no time limit
-    # flag: 1 = auto replenish, 0 = no replenish
+    user = proxy.get("user", "")
+    password = proxy.get("password", "")
+    host = proxy.get("host", "")
+    port = proxy.get("port", "")
+    
+    if not user or not password or not host:
+        return None
+    
+    # Add dynamic session for IP2UP format
     import uuid
     session_id = uuid.uuid4().hex[:16]
     
-    # Format: account_country_province_city_session_sessionTime_flag
-    # Using US (200), no province (0), no city (0), random session, no time limit, auto replenish
-    username = f"{PROXY_USER}_200_0_0_{session_id}_0_1"
+    # If username already has session info, use as-is; otherwise add session
+    if "_" in user and len(user.split("_")) >= 5:
+        # User already has full format, just use it
+        username = user
+    else:
+        # Add session info for sticky IP
+        username = f"{user}_{session_id}"
     
-    proxy_url = f"http://{username}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+    proxy_url = f"http://{username}:{password}@{host}:{port}"
     return proxy_url
 
 
@@ -273,9 +286,15 @@ async def verify(request: VerifyRequest):
     # Get proxy URL
     proxy = get_proxy_url()
     if proxy:
-        print(f"[Verify] Using proxy: {PROXY_HOST}:{PROXY_PORT}")
+        # Extract host from proxy URL for logging
+        import re
+        match = re.search(r'@([^:]+):(\d+)$', proxy)
+        if match:
+            print(f"[Verify] ✅ Using proxy from config: {match.group(1)}:{match.group(2)}")
+        else:
+            print(f"[Verify] ✅ Using proxy from config")
     else:
-        print("[Verify] No proxy configured")
+        print("[Verify] ⚠️ No proxy configured in config.json")
     
     results = []
     success_count = 0

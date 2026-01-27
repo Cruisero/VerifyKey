@@ -194,9 +194,8 @@ def generate_student_id_puppeteer(
         birth_date = f"{month} {day}, {year}"
     
     if not student_id:
-        prefix = 20 + random.randint(0, 5)
-        number = random.randint(100000, 999999)
-        student_id = f"{prefix}-{number}"
+        # Generate 9-digit student ID (no symbols)
+        student_id = str(random.randint(100000000, 999999999))
     
     if not phone:
         if country == "US" or country == "CA":

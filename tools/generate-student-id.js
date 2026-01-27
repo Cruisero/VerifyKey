@@ -439,14 +439,95 @@ class StudentIdGenerator {
                         if (el) el.textContent = text;
                     };
 
-                    // Helper to safely set input value
-                    const setInputById = (id, value) => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            el.value = value;
-                            el.dispatchEvent(new Event('input', { bubbles: true }));
-                        }
+                    // Banks and payment types by country
+                    const BANKS_BY_COUNTRY = {
+                        'US': ['Bank of America', 'Chase', 'Wells Fargo', 'Citibank', 'US Bank', 'Capital One'],
+                        'CA': ['TD Bank', 'RBC', 'Scotiabank', 'BMO', 'CIBC'],
+                        'AU': ['Commonwealth Bank', 'ANZ', 'Westpac', 'NAB'],
+                        'UK': ['Barclays', 'HSBC', 'Lloyds Bank', 'NatWest', 'Santander UK'],
+                        'DE': ['Deutsche Bank', 'Commerzbank', 'DZ Bank'],
+                        'FR': ['BNP Paribas', 'Crédit Agricole', 'Société Générale'],
+                        'IT': ['Intesa Sanpaolo', 'UniCredit', 'Banco BPM'],
+                        'ES': ['Santander', 'BBVA', 'CaixaBank'],
+                        'NL': ['ING Bank', 'ABN AMRO', 'Rabobank'],
+                        'CH': ['UBS', 'Credit Suisse', 'Julius Baer'],
+                        'SG': ['DBS Bank', 'OCBC', 'UOB'],
+                        'MY': ['Maybank', 'CIMB', 'Public Bank'],
+                        'TH': ['Bangkok Bank', 'Kasikornbank', 'Siam Commercial Bank'],
+                        'VN': ['Vietcombank', 'BIDV', 'VietinBank'],
+                        'PH': ['BDO', 'BPI', 'Metrobank'],
+                        'PK': ['HBL', 'UBL', 'MCB Bank', 'Allied Bank'],
+                        'BD': ['Islami Bank', 'Dutch-Bangla Bank', 'BRAC Bank'],
+                        'NG': ['First Bank', 'Zenith Bank', 'GTBank', 'UBA'],
+                        'ZA': ['Standard Bank', 'ABSA', 'Nedbank', 'FNB'],
+                        'AR': ['Banco Nación', 'Banco Galicia', 'Santander Argentina'],
+                        'BR': ['Itaú', 'Banco do Brasil', 'Bradesco'],
+                        'MX': ['BBVA México', 'Banorte', 'Citibanamex'],
+                        'IN': ['SBI', 'HDFC Bank', 'ICICI Bank', 'Axis Bank'],
+                        'DEFAULT': ['International Bank', 'National Bank', 'State Bank', 'Commercial Bank']
                     };
+
+                    const CURRENCY_BY_COUNTRY = {
+                        'US': 'USD', 'CA': 'CAD', 'AU': 'AUD', 'UK': 'GBP', 'GB': 'GBP',
+                        'DE': 'EUR', 'FR': 'EUR', 'IT': 'EUR', 'ES': 'EUR', 'NL': 'EUR', 'AT': 'EUR', 'BE': 'EUR', 'FI': 'EUR', 'PT': 'EUR', 'GR': 'EUR',
+                        'CH': 'CHF', 'SG': 'SGD', 'MY': 'MYR', 'TH': 'THB', 'VN': 'VND', 'PH': 'PHP',
+                        'PK': 'PKR', 'BD': 'BDT', 'NG': 'NGN', 'ZA': 'ZAR', 'KE': 'KES', 'GH': 'GHS',
+                        'AR': 'ARS', 'BR': 'BRL', 'MX': 'MXN', 'CL': 'CLP', 'PE': 'PEN', 'CO': 'COP',
+                        'IN': 'INR', 'TW': 'TWD', 'TR': 'TRY', 'PL': 'PLN', 'CZ': 'CZK', 'HU': 'HUF',
+                        'SE': 'SEK', 'DK': 'DKK', 'NO': 'NOK', 'RO': 'RON', 'UA': 'UAH',
+                        'IL': 'ILS', 'AE': 'AED', 'JO': 'JOD', 'IQ': 'IQD', 'MA': 'MAD',
+                        'LK': 'LKR', 'RW': 'RWF', 'ZW': 'USD', 'VE': 'VES',
+                        'DEFAULT': 'USD'
+                    };
+
+                    // Get country from university name or default
+                    const getCountryFromUniversity = (uniName) => {
+                        // Check specific countries FIRST (before generic patterns)
+                        const specificPatterns = [
+                            ['CA', /canada|toronto|mcgill|british columbia|waterloo|montreal|ottawa|alberta|queens/i],
+                            ['AU', /australia|sydney|melbourne|queensland|unsw|anu|monash/i],
+                            ['UK', /uk|britain|england|oxford|cambridge|london|manchester|edinburgh|imperial/i],
+                            ['DE', /germany|german|berlin|munich|heidelberg|tuw|tu |technische/i],
+                            ['FR', /france|french|paris|sorbonne|polytechnique|lyon|marseille/i],
+                            ['IT', /italy|italian|milan|roma|bologna|polimi|torino/i],
+                            ['ES', /spain|spanish|madrid|barcelona|valencia|sevilla/i],
+                            ['NL', /netherlands|dutch|amsterdam|delft|leiden|rotterdam|utrecht/i],
+                            ['CH', /switzerland|swiss|zurich|eth|epfl|geneva|bern/i],
+                            ['SG', /singapore|nus|nanyang/i],
+                            ['MY', /malaysia|malaya|ukm|usm|utm/i],
+                            ['TH', /thailand|thai|chulalongkorn|mahidol|kasetsart|bangkok/i],
+                            ['VN', /vietnam|vietnamese|hanoi|ho chi minh|hcm/i],
+                            ['PH', /philippines|filipino|ateneo|la salle|manila/i],
+                            ['PK', /pakistan|lahore|karachi|islamabad|nust|lums/i],
+                            ['BD', /bangladesh|dhaka|buet|chittagong/i],
+                            ['NG', /nigeria|lagos|ibadan|abuja/i],
+                            ['ZA', /south africa|cape town|wits|stellenbosch|johannesburg/i],
+                            ['AR', /argentina|buenos aires|cordoba|rosario/i],
+                            ['IN', /india|delhi|mumbai|bangalore|iit|iim|chennai|kolkata/i],
+                            ['TW', /taiwan|taipei|national taiwan|nthu|nctu/i],
+                            ['TR', /turkey|turkish|istanbul|ankara|boğaziçi/i],
+                            ['JP', /japan|japanese|tokyo|kyoto|osaka|waseda|keio/i],
+                            ['KR', /korea|korean|seoul|yonsei|kaist/i],
+                            ['CN', /china|chinese|beijing|shanghai|tsinghua|peking|fudan/i],
+                            ['BR', /brazil|brazilian|são paulo|rio|usp|unicamp/i],
+                            ['MX', /mexico|mexican|unam|monterrey/i],
+                        ];
+
+                        for (const [country, pattern] of specificPatterns) {
+                            if (pattern.test(uniName)) return country;
+                        }
+
+                        // Default patterns for US (only if no specific match)
+                        const usPattern = /america|usa|united states|california|texas|new york|florida|michigan|ohio|penn|harvard|yale|stanford|mit|columbia|cornell|princeton|duke|ucla|berkeley|arizona|illinois|washington|georgia tech|carnegie/i;
+                        if (usPattern.test(uniName)) return 'US';
+
+                        return 'US'; // Default to US
+                    };
+
+                    const country = getCountryFromUniversity(studentData.university);
+                    const banks = BANKS_BY_COUNTRY[country] || BANKS_BY_COUNTRY['DEFAULT'];
+                    const currency = CURRENCY_BY_COUNTRY[country] || CURRENCY_BY_COUNTRY['DEFAULT'];
+                    const bank = banks[Math.floor(Math.random() * banks.length)];
 
                     // Generate receipt-specific data
                     const now = new Date();
@@ -478,8 +559,8 @@ class StudentIdGenerator {
                     setTextById('cardRegDate', regDate);
                     setTextById('cardInstrumentNo', instrumentNo.toString());
                     setTextById('cardInstrumentDate', regDate);
-                    setTextById('cardPaymentType', 'BDT');
-                    setTextById('cardBank', 'Islami Bank');
+                    setTextById('cardPaymentType', currency);
+                    setTextById('cardBank', bank);
                     setTextById('cardAmount', amount.toString());
                     setTextById('cardAmountWords', amount.toString());
                     setTextById('cardAmountText', numberToWords(amount));

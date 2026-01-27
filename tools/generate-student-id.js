@@ -186,7 +186,72 @@ Generate ONLY the logo icon, no text, no university name.`;
         console.log('[Logo] Gemini API failed:', error.message);
     }
 
-    return null;
+    return generateFallbackLogo(universityName);
+}
+
+/**
+ * Generate a simple fallback SVG logo based on university name
+ */
+function generateFallbackLogo(universityName) {
+    console.log('[Logo] Generating fallback SVG logo...');
+
+    // Simple hash for consistent results per university
+    let hash = 0;
+    for (let i = 0; i < universityName.length; i++) {
+        hash = universityName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    // Academic colors
+    const colors = [
+        ['#1e3a8a', '#60a5fa'], // Dark Blue
+        ['#991b1b', '#f87171'], // Dark Red
+        ['#14532d', '#4ade80'], // Dark Green
+        ['#581c87', '#c084fc'], // Dark Purple
+        ['#7c2d12', '#fb923c'], // Dark Orange
+        ['#1e293b', '#94a3b8'], // Slate
+        ['#831843', '#f472b6'], // Maroon
+    ];
+    const colorIdx = Math.abs(hash) % colors.length;
+    const [primary, secondary] = colors[colorIdx];
+
+    // Initial
+    const initial = universityName.charAt(0).toUpperCase();
+    // Second letter if available (e.g. U for University)
+    const secondLetter = universityName.split(' ').length > 1 ? universityName.split(' ')[1].charAt(0).toUpperCase() : '';
+    const text = secondLetter ? `${initial}${secondLetter}` : initial;
+
+    // Shape style: 0=Shield, 1=Circle, 2=Crest
+    const style = Math.abs(hash >> 3) % 3;
+
+    let content = '';
+
+    if (style === 0) {
+        // Shield
+        content = `
+            <path d="M50 5 L90 20 V55 C90 80 50 95 50 95 C50 95 10 80 10 55 V20 L50 5 Z" fill="${primary}" stroke="${secondary}" stroke-width="3"/>
+            <text x="50" y="65" font-family="serif" font-size="${text.length > 1 ? 30 : 40}" fill="white" text-anchor="middle" font-weight="bold">${text}</text>
+        `;
+    } else if (style === 1) {
+        // Seal/Circle
+        content = `
+            <circle cx="50" cy="50" r="45" fill="${primary}" stroke="${secondary}" stroke-width="3"/>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="white" stroke-width="1" stroke-dasharray="3 3"/>
+            <text x="50" y="65" font-family="serif" font-size="${text.length > 1 ? 30 : 40}" fill="white" text-anchor="middle" font-weight="bold">${text}</text>
+        `;
+    } else {
+        // Crest / Square-ish
+        content = `
+            <rect x="15" y="15" width="70" height="70" rx="10" fill="${primary}" stroke="${secondary}" stroke-width="3"/>
+            <path d="M15 15 L85 85" stroke="${secondary}" stroke-width="1" opacity="0.5"/>
+            <path d="M85 15 L15 85" stroke="${secondary}" stroke-width="1" opacity="0.5"/>
+            <rect x="30" y="30" width="40" height="40" rx="5" fill="white" fill-opacity="0.2"/>
+            <text x="50" y="65" font-family="serif" font-size="${text.length > 1 ? 30 : 40}" fill="white" text-anchor="middle" font-weight="bold">${text}</text>
+        `;
+    }
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">${content}</svg>`;
+    const base64SVG = Buffer.from(svg).toString('base64');
+    return `data:image/svg+xml;base64,${base64SVG}`;
 }
 
 /**

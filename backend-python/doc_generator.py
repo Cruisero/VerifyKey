@@ -244,13 +244,21 @@ FRONT OF CARD:
 ├─────────────────────────────────────┤
 │                                     │
 │ ┌──────┐   {first} {last}           │
-│ │      │   Student ID: {student_id} │
-│ │ PHOTO│                            │
-│ │      │   Undergraduate            │
+│ │      │                            │
+│ │ PHOTO│   {student_id}             │
+│ │      │                            │
 │ └──────┘                            │
 │                                     │
-│         EXP: {exp_date}             │
+│         EXP {exp_date}              │
 └─────────────────────────────────────┘
+
+CRITICAL: Real student IDs are MINIMAL. They show:
+- University name/logo
+- Student photo
+- Student name
+- ID number
+- Expiration date
+That's IT. No "Student ID:" label, no "Undergraduate", no status text.
 
 PHOTO REQUIREMENTS:
 - Portrait photo of a realistic young {gender} college student (age 18-22)

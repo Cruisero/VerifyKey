@@ -531,7 +531,7 @@ class StudentIdGenerator {
         if (!data.validDate || !data.issueDate) {
             // Generate Valid Date between Jan 1, 2027 and Dec 31, 2030 (ensures > Dec 2026)
             const startValid = new Date('2027-01-01').getTime();
-            const endValid = new Date('2030-12-31').getTime();
+            const endValid = new Date('2029-11-30').getTime();
             const validTime = startValid + Math.random() * (endValid - startValid);
             const validDateObj = new Date(validTime);
 

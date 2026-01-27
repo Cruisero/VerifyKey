@@ -116,7 +116,10 @@ Generate ONLY the portrait photo, no text, borders, or decorations.`;
 /**
  * College logos directory path
  */
-const LOGO_DIR = path.join(__dirname, '../templates/college logo');
+// Logo directories - check Docker path first, then local path
+const DOCKER_LOGO_DIR = '/templates/College logo';
+const LOCAL_LOGO_DIR = path.join(__dirname, '../templates/College logo');
+const LOGO_DIR = fs.existsSync(DOCKER_LOGO_DIR) ? DOCKER_LOGO_DIR : LOCAL_LOGO_DIR;
 
 /**
  * Get university logo from local /templates/college logo/ folder

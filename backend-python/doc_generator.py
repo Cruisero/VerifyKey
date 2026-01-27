@@ -289,7 +289,6 @@ def generate_schedule_with_gemini(first: str, last: str, university: str, studen
     
     current_year = int(time.strftime("%Y"))
     current_month = int(time.strftime("%m"))
-    current_date = time.strftime("%m/%d/%Y")
     
     # Determine CURRENT semester based on month
     if current_month >= 1 and current_month <= 5:
@@ -299,46 +298,43 @@ def generate_schedule_with_gemini(first: str, last: str, university: str, studen
     else:
         current_semester = f"Fall {current_year}"
     
-    prompt = f"""Generate a REALISTIC university class schedule printout.
-This should look like a report from an actual registrar system, NOT a colorful poster.
+    prompt = f"""Generate a REALISTIC university weekly class schedule screenshot.
+This should look like an actual university Schedule Planner or Timetable web portal.
 
-CRITICAL STYLE REQUIREMENTS:
-- BLACK AND WHITE ONLY - no colorful course blocks
-- Table-based layout with visible grid lines
-- Looks like a plain system printout, not a design
-- Monospace or plain serif font
-- This is a REPORT, not a poster
+REFERENCE STYLE: Berkeley Schedule Planner / University of Toronto Timetable
 
-EXACT DOCUMENT FORMAT:
+LAYOUT REQUIREMENTS:
+- WEEKLY GRID VIEW with columns: Monday | Tuesday | Wednesday | Thursday | Friday
+- Time slots as rows on the left side (8am, 9am, 10am... through 5pm or 6pm)
+- COLORED BLOCKS for each course spanning their time slots
+- Each course block should have DIFFERENT COLORS (blue, green, orange, red, purple, etc.)
 
-{university}
-Student Class Schedule
-─────────────────────────────────────────────────────────
+HEADER:
+- University name: {university}
+- Title: "{current_semester} Timetable" or "Schedule Planner"
+- Student name and ID can be shown subtly
 
-Student: {first} {last}           ID: {student_id}
-Term: {current_semester}          Printed: {current_date}
+EACH COURSE BLOCK MUST SHOW:
+1. Course code (e.g., "Mathematics-52", "APS105H1 S", "CS 210")
+2. Building + Room number (e.g., "Etcheverry 3109", "Wheeler 150", "SF 1012", "BA 1190")
+3. Instructor name (e.g., "Penny Wieser", "J. Smith", "L. Chen")
 
-─────────────────────────────────────────────────────────
-Course Code | Days | Time        | Location | Instructor
-─────────────────────────────────────────────────────────
-CAS CS 210  | M W  | 10:00-11:20 | SCI 201  | J. Smith
-MA 225      | T R  | 09:00-10:15 | CAS 105  | L. Chen
-WR 150      | M W  | 13:00-14:20 | ENG 302  | A. Brown
-PY 212      | T R  | 14:00-15:15 | PHO 115  | M. Davis
-PY 212L     | F    | 14:00-17:00 | PHO LAB  | Staff
-─────────────────────────────────────────────────────────
+SAMPLE COURSES TO DISPLAY:
+- Mathematics (M W F, 8:00-8:45am) - Evans Hall 10 - Prof. Zhang
+- Data Science (M W, 10:00-11:15am) - Wheeler 150 - J. Sanchez  
+- Physics Lab (T R, 11:00-12:30pm) - Physics Building 3 - P. Wieser
+- Writing Seminar (M W, 2:00-3:15pm) - Wheeler 150 - Z. Stankova
+- Computer Science (T R, 3:00-4:00pm) - Soda Hall 306 - M. Davis
 
-Total Credits: 16.0
-Enrollment Status: Full-time
+VISUAL STYLE:
+- Clean web interface look (like a university portal screenshot)
+- Pastel or muted color blocks (not too bright)
+- Grid lines visible between days and time slots
+- Professional but functional design
+- Can have small info icons (i) in course blocks like real systems
 
-CRITICAL FORMATTING:
-- Use "M W" "T R" "F" for days (not full day names)
-- Use 24h or AM/PM time format consistently
-- Location = Building code + Room number (SCI 201, CAS 105)
-- Include INSTRUCTOR column with last initial + last name
-- Plain table lines, no color blocks for courses
-- NO weekly grid view - just a simple table list
-- Looks like it was printed from a university portal
+CRITICAL: This should look like a SCREENSHOT from a real university scheduling system,
+NOT a designed poster. Think of it as what you'd see if you logged into your student portal.
 
 Generate ONLY the image."""
     

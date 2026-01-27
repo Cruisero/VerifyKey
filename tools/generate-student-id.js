@@ -71,9 +71,9 @@ Generate ONLY the portrait photo, no text, borders, or decorations.`;
     try {
         console.log('[Photo] Generating student photo via Gemini AI...');
 
-        // Add 30 second timeout to prevent hanging
+        // Add 60 second timeout to prevent hanging
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
+        const timeout = setTimeout(() => controller.abort(), 60000);
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -147,9 +147,9 @@ Generate ONLY the logo icon, no text, no university name.`;
     try {
         console.log('[Logo] Generating university logo via Gemini AI...');
 
-        // Add 30 second timeout to prevent hanging
+        // Add 60 second timeout to prevent hanging
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
+        const timeout = setTimeout(() => controller.abort(), 60000);
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,

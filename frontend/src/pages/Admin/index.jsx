@@ -34,6 +34,13 @@ export default function Admin() {
         useGeminiPhoto: true,
         availableTemplates: []
     });
+    const [proxySettings, setProxySettings] = useState({
+        enabled: true,
+        host: 'proxy.global.ip2up.com',
+        port: '12348',
+        user: '',
+        password: ''
+    });
 
     useEffect(() => {
         if (!loading && !user) {
@@ -84,6 +91,18 @@ export default function Admin() {
                         useGeminiPhoto: data.aiGenerator.puppeteer.useGeminiPhoto !== false
                     }));
                 }
+                // Load proxy settings
+                if (data.proxy) {
+                    setProxySettings(prev => ({
+                        ...prev,
+                        enabled: data.proxy.enabled !== false,
+                        host: data.proxy.host || prev.host,
+                        port: data.proxy.port || prev.port,
+                        user: data.proxy.user?.includes('...') ? '' : (data.proxy.user || ''),
+                        password: data.proxy.password?.includes('...') ? '' : (data.proxy.password || ''),
+                        hasStoredCredentials: data.proxy.user?.includes('...')
+                    }));
+                }
             }
 
             // Fetch available templates
@@ -122,6 +141,13 @@ export default function Admin() {
                         useGeminiPhoto: puppeteerSettings.useGeminiPhoto
                     },
                     svgFallback: { enabled: true }
+                },
+                proxy: {
+                    enabled: proxySettings.enabled,
+                    host: proxySettings.host,
+                    port: proxySettings.port,
+                    user: proxySettings.user || undefined,
+                    password: proxySettings.password || undefined
                 }
             };
 
@@ -517,6 +543,81 @@ export default function Admin() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Proxy Settings - Always visible */}
+                            <div className="provider-settings proxy-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                                <h4>🌐 住宅代理配置 (Residential Proxy)</h4>
+                                <p className="settings-desc" style={{ marginBottom: '16px' }}>
+                                    配置住宅代理可有效防止 SheerID 的 IP 风控检测 (fraudRulesReject)
+                                </p>
+                                <div className="settings-form">
+                                    <div className="input-group">
+                                        <label className="input-label">
+                                            <input
+                                                type="checkbox"
+                                                checked={proxySettings.enabled}
+                                                onChange={(e) => setProxySettings(s => ({ ...s, enabled: e.target.checked }))}
+                                                style={{ marginRight: '8px' }}
+                                            />
+                                            启用代理
+                                        </label>
+                                    </div>
+                                    {proxySettings.enabled && (
+                                        <>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
+                                                <div className="input-group">
+                                                    <label className="input-label">代理主机 (Host)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="input"
+                                                        value={proxySettings.host}
+                                                        onChange={(e) => setProxySettings(s => ({ ...s, host: e.target.value }))}
+                                                        placeholder="proxy.global.ip2up.com"
+                                                    />
+                                                </div>
+                                                <div className="input-group">
+                                                    <label className="input-label">端口 (Port)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="input"
+                                                        value={proxySettings.port}
+                                                        onChange={(e) => setProxySettings(s => ({ ...s, port: e.target.value }))}
+                                                        placeholder="12348"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="input-group">
+                                                <label className="input-label">用户名 (Username)</label>
+                                                <input
+                                                    type="text"
+                                                    className="input"
+                                                    value={proxySettings.user}
+                                                    onChange={(e) => setProxySettings(s => ({ ...s, user: e.target.value, hasStoredCredentials: false }))}
+                                                    placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : "hW32EF_200_0_0_..."}
+                                                />
+                                                <p className="input-hint">
+                                                    ip2up 格式: <code>[account]_[country]_[province]_[city]_[session]_[sessionTime]_[flag]</code>
+                                                </p>
+                                            </div>
+                                            <div className="input-group">
+                                                <label className="input-label">密码 (Password)</label>
+                                                <input
+                                                    type="password"
+                                                    className="input"
+                                                    value={proxySettings.password}
+                                                    onChange={(e) => setProxySettings(s => ({ ...s, password: e.target.value, hasStoredCredentials: false }))}
+                                                    placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : ""}
+                                                />
+                                                {proxySettings.hasStoredCredentials && (
+                                                    <p className="input-hint">
+                                                        <span className="key-stored">✓ 代理凭据已保存</span>
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
 
                             {/* Test & Save Buttons */}
                             <div className="settings-actions">

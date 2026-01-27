@@ -405,9 +405,29 @@ async def poll_status_endpoint(request: PollRequest):
 
 @app.get("/api/config")
 async def get_config_endpoint():
-    """Get current configuration (for admin panel)"""
+    """Get current configuration (for admin panel) with masked sensitive values"""
     import config_manager
-    return config_manager.get_config()
+    config = config_manager.get_config()
+    
+    # Mask sensitive fields
+    def mask_key(key):
+        if key and len(key) > 6:
+            return key[:4] + "..." + key[-2:]
+        return "..." if key else ""
+    
+    # Mask API keys
+    if config.get("aiGenerator", {}).get("gemini", {}).get("apiKey"):
+        config["aiGenerator"]["gemini"]["apiKey"] = mask_key(config["aiGenerator"]["gemini"]["apiKey"])
+    if config.get("aiGenerator", {}).get("batchApi", {}).get("apiKey"):
+        config["aiGenerator"]["batchApi"]["apiKey"] = mask_key(config["aiGenerator"]["batchApi"]["apiKey"])
+    
+    # Mask proxy credentials
+    if config.get("proxy", {}).get("user"):
+        config["proxy"]["user"] = mask_key(config["proxy"]["user"])
+    if config.get("proxy", {}).get("password"):
+        config["proxy"]["password"] = mask_key(config["proxy"]["password"])
+    
+    return config
 
 
 @app.get("/api/templates")

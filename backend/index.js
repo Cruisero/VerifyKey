@@ -388,6 +388,113 @@ app.post('/api/config/test', async (req, res) => {
     }
 });
 
+// Test document generation - generates 3 documents (student ID, transcript, schedule)
+app.post('/api/config/test-document', async (req, res) => {
+    const { provider, geminiApiKey, geminiModel, template, useGeminiPhoto, batchApiUrl, batchApiKey } = req.body;
+
+    try {
+        const { generateName, generateBirthDate } = require('./utils/anti-detect');
+        const { selectUniversity } = require('./data/universities');
+
+        // Generate test student data
+        const { firstName, lastName } = generateName();
+        const birthDate = generateBirthDate();
+        const university = selectUniversity();
+
+        let documents = [];
+        let providerNote = '';
+
+        if (provider === 'gemini') {
+            // Use Gemini multi-document generation
+            const { generateMultipleDocumentsWithGemini } = require('./services/gemini-generator');
+
+            const config = {
+                apiKey: geminiApiKey || process.env.GEMINI_API_KEY,
+                model: geminiModel || 'gemini-2.0-flash-exp-image-generation'
+            };
+
+            providerNote = `使用 GEMINI 文档生成 (${config.model})`;
+
+            const result = await generateMultipleDocumentsWithGemini(
+                firstName, lastName, university.name, birthDate, config
+            );
+
+            documents = result.documents;
+            providerNote += ` - 生成 ${result.successCount}/3 文档`;
+
+        } else if (provider === 'puppeteer') {
+            // Use Puppeteer HTML template
+            const { StudentIdGenerator } = require('../tools/generate-student-id');
+
+            const generator = new StudentIdGenerator({
+                template: template || 'student-id-generator.html'
+            });
+
+            await generator.init();
+
+            const result = await generator.generate({
+                name: `${firstName} ${lastName}`,
+                university: university.name,
+                dob: birthDate
+            }, {
+                useGeminiPhoto: useGeminiPhoto && geminiApiKey,
+                geminiApiKey: geminiApiKey
+            });
+
+            await generator.close();
+
+            if (result.success && result.buffer) {
+                documents = [{
+                    type: 'id_card',
+                    fileName: 'student_id.png',
+                    mimeType: 'image/png',
+                    data: result.buffer
+                }];
+            }
+            providerNote = `使用 Puppeteer HTML 模板 (${template || 'student-id-generator.html'})`;
+
+        } else {
+            // Fallback to SVG
+            const { generateDocument } = require('./services/document-generator');
+            const doc = generateDocument('auto', firstName, lastName, university.name, birthDate);
+            documents = [doc];
+            providerNote = '使用 SVG 本地生成';
+        }
+
+        if (documents.length === 0) {
+            return res.json({ success: false, message: 'Document generation failed' });
+        }
+
+        // Return all documents with base64 images
+        const images = documents.map(doc => ({
+            type: doc.type,
+            filename: doc.fileName,
+            image: `data:${doc.mimeType};base64,${doc.data.toString('base64')}`
+        }));
+
+        res.json({
+            success: true,
+            providerNote,
+            documentCount: documents.length,
+            images,
+            // Keep backward compatibility - first image as main
+            image: images[0]?.image,
+            filename: images[0]?.filename,
+            formData: {
+                firstName,
+                lastName,
+                dob: birthDate,
+                university: university.name,
+                email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${university.domain || 'student.edu'}`
+            }
+        });
+
+    } catch (error) {
+        console.error('Test document error:', error);
+        res.json({ success: false, message: error.message });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });

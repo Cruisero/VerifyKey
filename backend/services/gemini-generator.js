@@ -434,6 +434,117 @@ Generate ONLY the image, no explanation text.`;
 }
 
 /**
+ * Generate class schedule using Gemini API
+ */
+async function generateScheduleWithGemini(firstName, lastName, universityName, studentId, config = {}) {
+    const geminiKey = config.apiKey || process.env.GEMINI_API_KEY;
+    const geminiModel = config.model || 'gemini-2.0-flash-exp-image-generation';
+    const antigravityBase = process.env.GEMINI_API_BASE || DEFAULT_API_BASE;
+
+    console.log(`[DocGenerator] Generating schedule for ${firstName} ${lastName}, ID: ${studentId}`);
+
+    // Generate realistic course schedule
+    const days = [
+        'Monday:    09:00-10:30 Introduction to Computer Science (Room 201)',
+        '           14:00-15:30 Linear Algebra (Room 305)',
+        'Tuesday:   10:00-12:00 Physics Laboratory (Lab 102)',
+        '           15:00-16:30 Statistics (Room 208)',
+        'Wednesday: 09:00-10:30 Data Structures (Room 201)',
+        '           13:00-14:30 English Academic Writing (Room 108)',
+        'Thursday:  11:00-12:30 Calculus II (Room 305)',
+        '           14:00-16:00 Chemistry Lab (Lab 105)',
+        'Friday:    09:00-11:00 Programming Workshop (Lab 201)'
+    ].join('\\n');
+
+    const prompt = `Generate a realistic university weekly class schedule document image:
+
+UNIVERSITY: ${universityName}
+STUDENT NAME: ${firstName} ${lastName}
+STUDENT ID: ${studentId}
+SEMESTER: Spring 2026
+
+WEEKLY SCHEDULE:
+${days}
+
+Requirements:
+- Official university schedule format with letterhead and logo
+- Clear table layout showing days, times, and locations
+- Course codes and room numbers visible
+- Professional formatting with university branding
+- Looks like a real printed/scanned schedule document
+
+Generate ONLY the image, no explanation text.`;
+
+    let result = null;
+
+    // Try Google Gemini Official API first
+    if (geminiKey) {
+        result = await generateImageWithGoogleGemini(prompt, geminiKey, geminiModel);
+    }
+
+    // Fallback to Antigravity Proxy
+    if (!result) {
+        result = await generateImageWithAPI(prompt, geminiKey, antigravityBase);
+    }
+
+    if (result) {
+        result.type = 'schedule';
+        result.fileName = 'class_schedule.png';
+        result.studentId = studentId;
+        result.generatedBy = result.generatedBy || 'gemini';
+        console.log(`[DocGenerator] ✓ Generated schedule (${result.data.length} bytes)`);
+    } else {
+        console.log('[DocGenerator] ✗ Schedule generation failed');
+    }
+
+    return result;
+}
+
+/**
+ * Generate multiple documents with unified student information
+ * Returns object containing documents array and metadata
+ */
+async function generateMultipleDocumentsWithGemini(firstName, lastName, universityName, birthDate, config = {}) {
+    console.log(`[DocGenerator] Generating 3 documents for ${firstName} ${lastName} at ${universityName}`);
+
+    // Generate a unified student ID to use across all documents
+    const studentId = `${randomInt(21, 25)}${randomInt(100000, 999999)}`;
+    console.log(`[DocGenerator] Using unified Student ID: ${studentId}`);
+
+    const geminiConfig = {
+        ...config,
+        apiKey: config.apiKey || process.env.GEMINI_API_KEY,
+        model: config.model || 'gemini-2.0-flash-exp-image-generation'
+    };
+
+    // Generate all three documents in parallel for efficiency
+    const [idCardResult, transcriptResult, scheduleResult] = await Promise.all([
+        generateDocumentWithGemini('id_card', firstName, lastName, universityName, birthDate, geminiConfig)
+            .catch(e => { console.error('[DocGenerator] ID card failed:', e.message); return null; }),
+        generateDocumentWithGemini('transcript', firstName, lastName, universityName, birthDate, geminiConfig)
+            .catch(e => { console.error('[DocGenerator] Transcript failed:', e.message); return null; }),
+        generateScheduleWithGemini(firstName, lastName, universityName, studentId, geminiConfig)
+            .catch(e => { console.error('[DocGenerator] Schedule failed:', e.message); return null; })
+    ]);
+
+    // Override student IDs to ensure consistency across all documents
+    if (idCardResult) idCardResult.studentId = studentId;
+    if (transcriptResult) transcriptResult.studentId = studentId;
+
+    const documents = [idCardResult, transcriptResult, scheduleResult].filter(d => d !== null);
+    const successCount = documents.length;
+
+    console.log(`[DocGenerator] Generated ${successCount}/3 documents successfully`);
+
+    return {
+        documents,
+        studentId,
+        successCount,
+        allSuccess: successCount === 3
+    };
+}
+
+/**
  * Apply post-processing to an existing image
  * Can be used to process images that were already generated
  */
@@ -450,6 +561,8 @@ module.exports = {
     generateStudentIdWithGemini,
     generateTranscriptWithGemini,
     generateDocumentWithGemini,
+    generateScheduleWithGemini,
+    generateMultipleDocumentsWithGemini,
     generateImageWithGoogleGemini,
     postProcessExistingImage,
     POST_PROCESS_DEFAULTS

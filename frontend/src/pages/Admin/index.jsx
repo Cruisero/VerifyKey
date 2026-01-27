@@ -731,13 +731,48 @@ export default function Admin() {
                                                     ⚙️ {testDocumentResult.providerNote}
                                                 </div>
                                             )}
-                                            <div className="test-document-image">
-                                                <img
-                                                    src={testDocumentResult.image}
-                                                    alt="Generated Document"
-                                                    style={{ maxWidth: '400px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-                                                />
-                                                <p className="filename">{testDocumentResult.filename}</p>
+                                            {/* Display all generated documents */}
+                                            <div className="test-document-images" style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: testDocumentResult.images?.length > 1 ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr',
+                                                gap: '16px',
+                                                marginBottom: '20px'
+                                            }}>
+                                                {(testDocumentResult.images || [{ image: testDocumentResult.image, filename: testDocumentResult.filename, type: 'document' }]).map((doc, idx) => (
+                                                    <div key={idx} className="test-document-image" style={{
+                                                        background: '#f8f9fa',
+                                                        borderRadius: '12px',
+                                                        padding: '12px',
+                                                        textAlign: 'center'
+                                                    }}>
+                                                        <div style={{
+                                                            fontSize: '12px',
+                                                            color: '#667eea',
+                                                            fontWeight: 600,
+                                                            marginBottom: '8px',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            {doc.type === 'id_card' ? '🪪 学生卡' :
+                                                                doc.type === 'transcript' ? '📜 成绩单' :
+                                                                    doc.type === 'schedule' ? '📅 课程表' : '📄 文档'}
+                                                        </div>
+                                                        <img
+                                                            src={doc.image}
+                                                            alt={doc.type || 'Generated Document'}
+                                                            style={{
+                                                                maxWidth: '100%',
+                                                                maxHeight: '300px',
+                                                                borderRadius: '8px',
+                                                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                                            }}
+                                                        />
+                                                        <p className="filename" style={{
+                                                            marginTop: '8px',
+                                                            fontSize: '12px',
+                                                            color: '#666'
+                                                        }}>{doc.filename}</p>
+                                                    </div>
+                                                ))}
                                             </div>
                                             <div className="test-document-form-data">
                                                 <h5>📝 表单数据 (将提交到 SheerID)</h5>

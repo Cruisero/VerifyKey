@@ -16,7 +16,7 @@ const {
     getRandomUserAgent
 } = require('../utils/anti-detect');
 const { generateDocument } = require('./document-generator');
-const { generateDocumentWithGemini } = require('./gemini-generator');
+const { generateDocumentWithGemini, generateMultipleDocumentsWithGemini } = require('./gemini-generator');
 
 // SheerID API base URL
 const SHEERID_API_URL = 'https://services.sheerid.com/rest/v2';
@@ -198,21 +198,29 @@ class SheerIDVerifier {
                 }
             });
 
-            // Step 1: Generate document (try Gemini AI first, fallback to SVG)
-            this.onProgress({ step: 'doc_generating', message: 'Generating verification document with AI...' });
+            // Step 1: Generate documents (try Gemini AI first, fallback to SVG)
+            this.onProgress({ step: 'doc_generating', message: 'Generating 3 verification documents with AI...' });
 
             const geminiConfig = {
                 apiKey: process.env.GEMINI_API_KEY,
                 model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp-image-generation'
             };
-            let doc = await generateDocumentWithGemini('auto', firstName, lastName, this.university.name, birthDate, geminiConfig);
 
-            // Fallback to SVG if Gemini fails
-            if (!doc) {
+            // Generate 3 documents with unified student information
+            const multiDocResult = await generateMultipleDocumentsWithGemini(
+                firstName, lastName, this.university.name, birthDate, geminiConfig
+            );
+
+            let docs = multiDocResult.documents;
+
+            // Fallback to single SVG document if all Gemini generations fail
+            if (docs.length === 0) {
                 this.onProgress({ step: 'doc_generating', message: 'Using fallback document generator...' });
-                doc = generateDocument('auto', firstName, lastName, this.university.name, birthDate);
+                const fallbackDoc = generateDocument('auto', firstName, lastName, this.university.name, birthDate);
+                docs = [fallbackDoc];
             } else {
-                this.onProgress({ step: 'doc_generating', message: `AI generated ${doc.type} document` });
+                const docTypes = docs.map(d => d.type).join(', ');
+                this.onProgress({ step: 'doc_generating', message: `AI generated ${docs.length} documents: ${docTypes}` });
             }
 
             // Step 2: Submit student info (if needed)
@@ -267,15 +275,15 @@ class SheerIDVerifier {
                 await randomSleep(500, 1000);
             }
 
-            // Step 4: Upload document
-            this.onProgress({ step: 'uploading', message: 'Uploading verification document...' });
+            // Step 4: Upload documents (all documents in batch)
+            this.onProgress({ step: 'uploading', message: `Uploading ${docs.length} verification documents...` });
 
             const uploadBody = {
-                files: [{
+                files: docs.map(doc => ({
                     fileName: doc.fileName,
                     mimeType: doc.mimeType,
                     fileSize: doc.data.length
-                }]
+                }))
             };
 
             const { data: uploadData, status: uploadStatus } = await this.request(
@@ -284,17 +292,26 @@ class SheerIDVerifier {
                 uploadBody
             );
 
-            if (!uploadData.documents || !uploadData.documents[0]) {
+            if (!uploadData.documents || uploadData.documents.length === 0) {
                 recordResult(this.university.name, false);
-                return { success: false, error: 'No upload URL received' };
+                return { success: false, error: 'No upload URLs received' };
             }
 
-            const uploadUrl = uploadData.documents[0].uploadUrl;
-            const uploadSuccess = await this.uploadToS3(uploadUrl, doc.data, doc.mimeType);
+            // Upload all documents in parallel
+            const uploadPromises = uploadData.documents.map((docInfo, index) => {
+                const docToUpload = docs[index];
+                if (!docToUpload) return Promise.resolve(false);
+                return this.uploadToS3(docInfo.uploadUrl, docToUpload.data, docToUpload.mimeType);
+            });
 
-            if (!uploadSuccess) {
+            const uploadResults = await Promise.all(uploadPromises);
+            const successfulUploads = uploadResults.filter(r => r === true).length;
+
+            this.onProgress({ step: 'uploading', message: `Uploaded ${successfulUploads}/${docs.length} documents` });
+
+            if (successfulUploads === 0) {
                 recordResult(this.university.name, false);
-                return { success: false, error: 'Document upload failed' };
+                return { success: false, error: 'All document uploads failed' };
             }
 
             // Step 5: Complete upload

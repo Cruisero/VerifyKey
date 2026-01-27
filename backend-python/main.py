@@ -283,27 +283,12 @@ async def verify(request: VerifyRequest):
     for vid in request.verificationIds:
         result = verify_single(vid, proxy)
         
-        # If pending, poll for final result (wait up to 3 minutes)
+        # If pending, return immediately instead of polling (avoid Cloudflare 524 timeout)
+        # The result will be stored and user can check status later
         if result.get("status") == "pending":
-            print(f"[Verify] Initial status pending for {vid}, polling for result...")
-            # Poll with shorter interval for faster feedback
-            # 36 attempts * 5 seconds = 180 seconds (3 minutes) timeout
-            poll_result = poll_verification_status(vid, max_attempts=36, interval=5, proxy=proxy)
-            
-            # Merge poll result fields into original result
-            result.update(poll_result)
-            
-            # Update status and success based on poll result
-            if poll_result.get("status") == "success":
-                result["success"] = True
-                result["status"] = "success"
-                result["message"] = "Verification approved!"
-            elif poll_result.get("status") == "rejected":
-                result["success"] = False
-                result["status"] = "rejected"
-                result["message"] = poll_result.get("message", "Verification rejected")
-            elif poll_result.get("status") == "timeout":
-                result["message"] = "Verification is still pending review (timeout)"
+            print(f"[Verify] ✅ Submitted successfully, status: pending (no polling to avoid timeout)")
+            result["message"] = "已提交成功，正在等待 SheerID 审核（约1-5分钟）"
+            result["success"] = True  # Mark as success since submission was successful
         
         results.append(result)
         

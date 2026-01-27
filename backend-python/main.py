@@ -181,6 +181,7 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         config = config_manager.get_config()
         provider = config.get("aiGenerator", {}).get("provider", "gemini")
         
+        documents = []  # List of document data for multi-doc upload
         doc_data = None
         filename = None
         form_data = None
@@ -204,26 +205,36 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                 template=template,
                 use_gemini_photo=use_gemini_photo
             )
+            if doc_data:
+                documents = [{"type": "id_card", "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
         
-        # Fallback to Gemini/SVG generator if Puppeteer not selected or failed
-        if not doc_data:
-            if provider == "puppeteer":
-                print(f"[Verify] Puppeteer failed, using fallback generator...")
+        # Use Gemini multi-document generator
+        elif provider == "gemini":
+            print(f"[Verify] Generating 3 documents with Gemini AI...")
+            from doc_generator import generate_multiple_documents_with_gemini
+            
+            result = generate_multiple_documents_with_gemini(first, last, org["name"], dob)
+            documents = result.get("documents", [])
+            
+            if documents:
+                doc_data = documents[0]["data"]  # Primary document for backward compat
+                filename = documents[0]["fileName"]
+                print(f"[Verify] Generated {len(documents)}/3 documents with Gemini")
             else:
-                print(f"[Verify] Generating document with {provider}...")
-            doc_data, filename = generate_document(
-                "auto",
-                first,
-                last,
-                org["name"]
-            )
-            form_data = None
+                print(f"[Verify] Gemini generation failed, using SVG fallback...")
+        
+        # Fallback to SVG generator
+        if not documents:
+            print(f"[Verify] Using SVG fallback generator...")
+            doc_data, filename = generate_document("auto", first, last, org["name"])
+            if doc_data:
+                documents = [{"type": "id_card", "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
         
         if form_data:
             print(f"[Verify] Form data synced: {first} {last}, ID: {form_data.get('studentId')}")
         
-        # Run verification with pre-generated info
-        result = verifier.verify(doc_data)
+        # Run verification with documents (supports multi-doc upload)
+        result = verifier.verify(documents)
         
         return {
             "verificationId": parsed_id,

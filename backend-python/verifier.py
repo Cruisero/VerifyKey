@@ -689,10 +689,19 @@ class SheerIDVerifier:
         
         return {"valid": False, "error": f"Invalid step: {step}"}
     
-    def verify(self, doc_data: bytes) -> dict:
-        """Run full verification"""
+    def verify(self, documents: list) -> dict:
+        """Run full verification with multiple documents
+        
+        Args:
+            documents: List of document dicts with keys: type, data, fileName, mimeType
+                      OR single bytes for backward compatibility
+        """
         if not self.vid:
             return {"success": False, "error": "Invalid verification ID"}
+        
+        # Handle backward compatibility: single bytes -> list
+        if isinstance(documents, bytes):
+            documents = [{"type": "document", "data": documents, "fileName": "document.png", "mimeType": "image/png"}]
         
         try:
             # Warm up session first
@@ -824,11 +833,19 @@ class SheerIDVerifier:
                 self.on_progress({"step": "skipping_sso", "message": "Skipping SSO..."})
                 self._request("DELETE", f"/verification/{self.vid}/step/sso")
             
-            # Step 3: Request upload URL (ThanhNguyxn's approach)
-            self.on_progress({"step": "uploading", "message": "Requesting upload URL..."})
+            # Step 3: Request upload URLs for all documents
+            self.on_progress({"step": "uploading", "message": f"Requesting upload URLs for {len(documents)} documents..."})
             
-            # Use docUpload endpoint like ThanhNguyxn
-            upload_body = {"files": [{"fileName": "transcript.png", "mimeType": "image/png", "fileSize": len(doc_data)}]}
+            # Build files array for upload request
+            files_array = []
+            for doc in documents:
+                files_array.append({
+                    "fileName": doc.get("fileName", "document.png"),
+                    "mimeType": doc.get("mimeType", "image/png"),
+                    "fileSize": len(doc["data"])
+                })
+            
+            upload_body = {"files": files_array}
             upload_data, upload_status = self._request(
                 "POST", 
                 f"/verification/{self.vid}/step/docUpload",
@@ -840,23 +857,35 @@ class SheerIDVerifier:
                 print(f"[Verify] Upload response: {upload_data}")
                 return {"success": False, "error": f"Upload URL request failed: {upload_status}"}
             
-            # Get upload URL from documents array
-            documents = upload_data.get("documents", [])
-            if not documents:
+            # Get upload URLs from response
+            upload_docs = upload_data.get("documents", [])
+            if not upload_docs:
                 return {"success": False, "error": "No documents in upload response"}
             
-            upload_url = documents[0].get("uploadUrl")
+            # Step 4: Upload each document to S3
+            uploaded_count = 0
+            for i, doc in enumerate(documents):
+                if i >= len(upload_docs):
+                    print(f"[Verify] ⚠️ No upload URL for document {i+1}")
+                    break
+                
+                upload_url = upload_docs[i].get("uploadUrl")
+                if not upload_url:
+                    print(f"[Verify] ⚠️ Missing upload URL for document {i+1}")
+                    continue
+                
+                self.on_progress({"step": "uploading", "message": f"Uploading document {i+1}/{len(documents)}..."})
+                
+                if self._upload_s3(upload_url, doc["data"]):
+                    uploaded_count += 1
+                    print(f"[Verify] ✅ Document {i+1} ({doc.get('type', 'unknown')}) uploaded to S3")
+                else:
+                    print(f"[Verify] ❌ Document {i+1} upload failed")
             
-            if not upload_url:
-                return {"success": False, "error": "No upload URL in response"}
+            if uploaded_count == 0:
+                return {"success": False, "error": "All document uploads failed"}
             
-            # Step 4: Upload document to S3
-            self.on_progress({"step": "uploading", "message": "Uploading document..."})
-            
-            if not self._upload_s3(upload_url, doc_data):
-                return {"success": False, "error": "S3 upload failed"}
-            
-            print("[Verify] ✅ Document uploaded to S3")
+            print(f"[Verify] ✅ {uploaded_count}/{len(documents)} documents uploaded to S3")
             
             # Step 5: Complete document upload (ThanhNguyxn's approach)
             self.on_progress({"step": "completing", "message": "Completing upload..."})

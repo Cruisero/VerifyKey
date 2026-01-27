@@ -102,102 +102,122 @@ def generate_with_gemini(prompt: str) -> Optional[bytes]:
 
 
 def generate_transcript_with_gemini(first: str, last: str, university: str, birth_date: str, student_id: str = None) -> Optional[bytes]:
-    """Generate academic transcript using Gemini AI"""
+    """Generate academic transcript using Gemini AI - realistic registrar style"""
     
     import time
     if not student_id:
         student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
-    gpa = round(3.2 + random.random() * 0.8, 2)
     
-    # CRITICAL: Use current date and CURRENT semester for consistency
-    current_date = time.strftime("%B %d, %Y")
+    # Calculate GPA and credits
+    term_gpa = round(3.2 + random.random() * 0.6, 2)
+    cum_gpa = round(3.3 + random.random() * 0.5, 2)
+    
+    current_date = time.strftime("%m/%d/%Y")
     current_year = int(time.strftime("%Y"))
     current_month = int(time.strftime("%m"))
     
-    # Determine semester based on current month
+    # Determine current and previous semesters
     if current_month >= 1 and current_month <= 5:
         current_semester = f"Spring {current_year}"
+        prev_semester = f"Fall {current_year - 1}"
     elif current_month >= 6 and current_month <= 7:
         current_semester = f"Summer {current_year}"
+        prev_semester = f"Spring {current_year}"
     else:
         current_semester = f"Fall {current_year}"
+        prev_semester = f"Spring {current_year}"
     
-    # Previous semesters for completed courses
-    prev_semester = f"Fall {current_year - 1}"
-    
-    # Generate realistic course codes based on university
-    uni_short = university.replace("University", "").replace("College", "").strip().split()[0][:3].upper()
-    
-    prompt = f"""Generate a realistic university academic transcript document image:
+    prompt = f"""Generate a REALISTIC official university transcript image. 
+The document should look like a REAL American university registrar system printout.
 
-UNIVERSITY: {university}
-STUDENT NAME: {first} {last}
-STUDENT ID: {student_id}
-DATE OF BIRTH: {birth_date}
-CUMULATIVE GPA: {gpa}
-TRANSCRIPT ISSUE DATE: {current_date}
+CRITICAL STYLE REQUIREMENTS:
+- BLACK AND WHITE ONLY - no colors, no color blocks
+- Plain, boring, functional design (like a real government form)
+- Dense information layout with table lines
+- Monospace or serif font typical of official documents
+- Look like a scanned paper document with slight texture
 
-ACADEMIC RECORD - CRITICAL FORMAT:
+EXACT DOCUMENT STRUCTURE:
 
-COMPLETED SEMESTER: {prev_semester}
-Courses with FINAL GRADES (these contribute to GPA):
-- {uni_short} CS 112 - Intro to Computer Science - 4.00 credits - Grade: A
-- {uni_short} MA 123 - Calculus I - 4.00 credits - Grade: A-
-- {uni_short} EN 101 - College Writing - 3.00 credits - Grade: B+
-- {uni_short} PH 151 - General Physics I - 4.00 credits - Grade: A
+{university.upper()}
+Office of the University Registrar
+Official Academic Transcript
+----------------------------------------
 
-CURRENT SEMESTER: {current_semester}
-Enrollment Status: Currently Enrolled (Full-time)
-- {uni_short} CS 201 - Data Structures - 4.00 credits - In Progress
-- {uni_short} MA 225 - Calculus II - 4.00 credits - In Progress
-- {uni_short} PH 152 - General Physics II - 4.00 credits - In Progress
+Student Name: {first} {last}
+Student ID: {student_id}
+Date of Birth: {birth_date}
 
-CRITICAL REQUIREMENTS:
-1. Show COMPLETED courses with letter grades (A, A-, B+, etc.) from {prev_semester}
-2. Show CURRENT courses as "In Progress" from {current_semester}
-3. GPA {gpa} is calculated from COMPLETED courses only
-4. Document date "{current_date}" must be clearly visible at top
-5. Include "Office of the Registrar" header with university logo
-6. Signature line: "University Registrar" with official title (NOT student signature)
-7. Include university address and registrar's seal/stamp area
-8. Use course codes like "{uni_short} CS 112" not generic "Computer Science 101"
-9. Look like a real scanned official document with slight texture
+Program: Bachelor of Science
+College/School: College of Arts & Sciences
+Enrollment Status: Full-time Undergraduate
 
-Generate ONLY the image, no explanation text."""
+------------------------------------------------
+TERM: {prev_semester}
+
+Course Code | Course Title              | Credits | Grade
+----------------------------------------------------------
+CAS CS 112  | Intro to Computer Science | 4.0     | A-
+MA 124      | Calculus I                | 4.0     | B+
+WR 150      | Writing Seminar           | 4.0     | A
+PY 211      | General Physics I         | 4.0     | B
+
+Term GPA: {term_gpa}
+Credits Earned This Term: 16.0
+
+------------------------------------------------
+TERM: {current_semester} (In Progress)
+
+Course Code | Course Title              | Credits | Grade
+----------------------------------------------------------
+CAS CS 210  | Data Structures           | 4.0     | IP
+MA 225      | Calculus II               | 4.0     | IP
+PY 212      | General Physics II        | 4.0     | IP
+WR 151      | Writing Seminar II        | 4.0     | IP
+
+Credits Attempted: 16.0
+
+------------------------------------------------
+Cumulative Credits Earned: 48.0
+Cumulative GPA: {cum_gpa}
+------------------------------------------------
+
+Issued by: Office of the University Registrar
+[Official Seal Area]
+Transcript Date: {current_date}
+
+CRITICAL: 
+- NO colorful headers or backgrounds
+- Plain black text on white/off-white background
+- Table grid lines visible
+- Looks like a boring official government document
+- Include "IP" (In Progress) for current courses, NOT letter grades
+
+Generate ONLY the image."""
     
     return generate_with_gemini(prompt)
 
 
 def generate_student_id_with_gemini(first: str, last: str, university: str, student_id: str = None) -> Optional[bytes]:
-    """Generate student ID card using Gemini AI with realistic portrait photo"""
+    """Generate student ID card using Gemini AI - realistic functional design"""
     
     import time
     if not student_id:
         student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
     
     current_year = int(time.strftime("%Y"))
-    current_month = int(time.strftime("%m"))
     
-    # Determine CURRENT semester based on month
-    if current_month >= 1 and current_month <= 5:
-        current_semester = f"Spring {current_year}"
-    elif current_month >= 6 and current_month <= 7:
-        current_semester = f"Summer {current_year}"
-    else:
-        current_semester = f"Fall {current_year}"
-    
-    # Issue date should be BEFORE current date (when student enrolled)
-    # Student started Fall semester 1-3 years ago
+    # Issue date: when student enrolled (1-3 years ago)
     enrollment_year = current_year - random.randint(1, 3)
-    issue_date = f"08/{enrollment_year}"  # August when Fall semester starts
+    issue_date = f"08/{enrollment_year}"
     
-    # Valid through: graduation year (4 years from enrollment, or current year + 1-2)
-    valid_year = enrollment_year + 4
-    if valid_year < current_year:
-        valid_year = current_year + 1  # Still valid if graduated
-    valid_thru = f"05/{valid_year}"  # May graduation
+    # Expiration: aligned with academic year end
+    exp_year = enrollment_year + 4
+    if exp_year < current_year:
+        exp_year = current_year + 1
+    exp_date = f"05/{exp_year}"
     
-    # Determine gender based on first name (simple heuristic)
+    # Determine gender for photo
     female_names = ["Mary", "Patricia", "Jennifer", "Linda", "Barbara", "Elizabeth", "Susan", 
                     "Jessica", "Sarah", "Karen", "Lisa", "Nancy", "Betty", "Margaret", "Sandra",
                     "Ashley", "Kimberly", "Emily", "Donna", "Michelle", "Dorothy", "Carol",
@@ -207,50 +227,47 @@ def generate_student_id_with_gemini(first: str, last: str, university: str, stud
     is_female = first in female_names
     gender = "female" if is_female else "male"
     
-    prompt = f"""Generate a photorealistic photo of a university student ID card:
+    prompt = f"""Generate a REALISTIC university student ID card photo.
+The card should look like a REAL university ID - functional, not decorative.
 
-UNIVERSITY: {university}
-STUDENT NAME: {first} {last}
-STUDENT ID: {student_id}
-STATUS: Full-time Student
-ISSUE DATE: {issue_date}
-VALID THROUGH: {valid_thru}
+CRITICAL DESIGN PRINCIPLES:
+- This is a FUNCTIONAL ID card, not a marketing design
+- Simple, clean layout - no fancy graphics or colorful backgrounds
+- White or light gray background with minimal accent color (if any)
+- Looks like a real plastic card you'd carry in your wallet
 
-CRITICAL TIME LOGIC:
-- Card was issued in {issue_date} (when student enrolled)
-- Card is valid through {valid_thru} (expected graduation)
-- This is a CURRENTLY VALID ID card
-- Do NOT show any semester on the card (just "Full-time Student" status)
+CARD LAYOUT (standard university ID format):
 
-CRITICAL REQUIREMENTS:
-1. This should look like a PHOTO of a physical ID card placed on a desk or table
-2. ALL FOUR CORNERS of the card must be visible - do NOT crop or cut off any edges
-3. The entire card must be shown from top to bottom, left to right
+FRONT OF CARD:
+┌─────────────────────────────────────┐
+│ [University Logo] {university}      │
+├─────────────────────────────────────┤
+│                                     │
+│ ┌──────┐   {first} {last}           │
+│ │      │   Student ID: {student_id} │
+│ │ PHOTO│                            │
+│ │      │   Undergraduate            │
+│ └──────┘                            │
+│                                     │
+│         EXP: {exp_date}             │
+└─────────────────────────────────────┘
 
-4. LEFT SIDE of card: Include a REALISTIC portrait photo of a young {gender} college student (age 18-22):
-   - Professional headshot style, 1:1 aspect ratio
-   - Neutral background (light blue or white)
-   - Natural smile, looking at camera
-   - Dressed appropriately for a student ID photo
-   - The photo MUST look like a real person, NOT a placeholder or silhouette
+PHOTO REQUIREMENTS:
+- Portrait photo of a realistic young {gender} college student (age 18-22)
+- Professional headshot style on neutral background
+- Natural expression, looking at camera
+- The photo MUST look like a real person
 
-5. RIGHT SIDE of card: Card information
-   - University name "{university}" with logo at top
-   - Student name "{first} {last}" clearly visible
-   - Student ID: {student_id}
-   - "Full-time Student" status (NO semester year)
-   - Issue date: {issue_date}
-   - Valid through: {valid_thru}
+CARD STYLE:
+- Horizontal orientation (standard credit card size proportions)
+- Show the card photographed on a desk surface with slight shadow
+- All four corners visible
+- No barcode or magnetic strip visible on front
+- Matte or semi-gloss card finish
+- University name/logo at top
+- Photo on left side, text info on right
 
-6. NO barcode - do not include any barcode on the card
-
-7. The photo should show the complete physical card with slight shadows indicating depth
-   - Card edges should be clearly visible
-   - Slight 3D perspective is okay but card should be mostly flat/frontal
-
-The portrait photo is ESSENTIAL - it must be a realistic {gender} face, not an icon or placeholder.
-
-Generate ONLY the image, no explanation text."""
+Generate ONLY the image, no text explanation."""
     
     return generate_with_gemini(prompt)
 
@@ -264,7 +281,7 @@ def generate_schedule_with_gemini(first: str, last: str, university: str, studen
     
     current_year = int(time.strftime("%Y"))
     current_month = int(time.strftime("%m"))
-    current_date = time.strftime("%B %d, %Y")
+    current_date = time.strftime("%m/%d/%Y")
     
     # Determine CURRENT semester based on month
     if current_month >= 1 and current_month <= 5:
@@ -274,37 +291,48 @@ def generate_schedule_with_gemini(first: str, last: str, university: str, studen
     else:
         current_semester = f"Fall {current_year}"
     
-    # Generate realistic course codes based on university
-    uni_short = university.replace("University", "").replace("College", "").strip().split()[0][:3].upper()
-    
-    prompt = f"""Generate a realistic university weekly class schedule document image:
+    prompt = f"""Generate a REALISTIC university class schedule printout.
+This should look like a report from an actual registrar system, NOT a colorful poster.
 
-UNIVERSITY: {university}
-STUDENT NAME: {first} {last}
-STUDENT ID: {student_id}
-SEMESTER: {current_semester}
+CRITICAL STYLE REQUIREMENTS:
+- BLACK AND WHITE ONLY - no colorful course blocks
+- Table-based layout with visible grid lines
+- Looks like a plain system printout, not a design
+- Monospace or plain serif font
+- This is a REPORT, not a poster
 
-CRITICAL: Use "Printed on: {current_date}" NOT "Generated Date" (which looks fake)
+EXACT DOCUMENT FORMAT:
 
-Requirements:
-- Weekly schedule grid showing Monday through Friday
-- Time slots from 8:00 AM to 5:00 PM
-- 4-5 courses with REALISTIC course codes and room names:
-  * {uni_short} CS 201 - Data Structures (Mon/Wed 10:00-11:30 AM) - Room: SCI 105
-  * {uni_short} MA 225 - Calculus II (Tue/Thu 9:00-10:30 AM) - Room: CAS 214
-  * {uni_short} PH 152 - Physics II Lab (Wed 2:00-5:00 PM) - Room: PHO 121
-  * {uni_short} WR 150 - College Writing (Mon/Wed 1:00-2:00 PM) - Room: CGS 302
-  * {uni_short} CS 112 - Intro to Computer Science (Tue/Thu 11:00 AM-12:30 PM) - Room: SCI 117
+{university}
+Student Class Schedule
+─────────────────────────────────────────────────────────
 
-- Use REAL building name + room number format (like "SCI 105", "CAS 214", "PHO 121")
-- DO NOT use fake room names like "CS-201" or "MATH-105"
-- University logo/header at top
-- Student name and ID clearly visible
-- "Printed on: {current_date}" in the corner (NOT "Generated Date")
-- Professional academic schedule format
-- Clean, readable layout with course colors
+Student: {first} {last}           ID: {student_id}
+Term: {current_semester}          Printed: {current_date}
 
-Generate ONLY the image, no explanation text."""
+─────────────────────────────────────────────────────────
+Course Code | Days | Time        | Location | Instructor
+─────────────────────────────────────────────────────────
+CAS CS 210  | M W  | 10:00-11:20 | SCI 201  | J. Smith
+MA 225      | T R  | 09:00-10:15 | CAS 105  | L. Chen
+WR 150      | M W  | 13:00-14:20 | ENG 302  | A. Brown
+PY 212      | T R  | 14:00-15:15 | PHO 115  | M. Davis
+PY 212L     | F    | 14:00-17:00 | PHO LAB  | Staff
+─────────────────────────────────────────────────────────
+
+Total Credits: 16.0
+Enrollment Status: Full-time
+
+CRITICAL FORMATTING:
+- Use "M W" "T R" "F" for days (not full day names)
+- Use 24h or AM/PM time format consistently
+- Location = Building code + Room number (SCI 201, CAS 105)
+- Include INSTRUCTOR column with last initial + last name
+- Plain table lines, no color blocks for courses
+- NO weekly grid view - just a simple table list
+- Looks like it was printed from a university portal
+
+Generate ONLY the image."""
     
     return generate_with_gemini(prompt)
 

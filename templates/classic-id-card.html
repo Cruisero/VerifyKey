@@ -151,7 +151,14 @@
     <div id="idCardPreview" class="id-card-container">
         <div class="border-frame"></div>
 
-        <div class="header">
+        <div class="header" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+            <div id="universityLogoContainer"
+                style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
+                <img id="cardUniversityLogo" src="" alt=""
+                    style="width:100%;height:100%;object-fit:contain;display:none;"
+                    onload="this.style.display='block'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='none');">
+                <span id="logoFallbackText" style="font-size:16px;">🎓</span>
+            </div>
             <div id="cardUniversityName" class="university-name">University Name</div>
         </div>
 

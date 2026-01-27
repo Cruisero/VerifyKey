@@ -60,6 +60,13 @@
             color: #ffd700;
             font-size: 12px;
             font-weight: 700;
+            overflow: hidden;
+        }
+
+        .crest img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         .university-name {
@@ -210,7 +217,11 @@
         <!-- Header -->
         <div class="header">
             <div class="university-info">
-                <div class="crest">⚜</div>
+                <div class="crest" id="universityLogoContainer">
+                    <img id="cardUniversityLogo" src="" alt="" style="display:none;"
+                        onload="this.style.display='block'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='none'); this.parentElement.style.background='transparent';">
+                    <span id="logoFallbackText">⚜</span>
+                </div>
                 <div>
                     <div id="cardUniversityName" class="university-name">UNIVERSITY OF OXFORD</div>
                     <div class="card-label">Student Card</div>

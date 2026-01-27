@@ -161,7 +161,16 @@
             </div>
 
             <div class="info-area">
-                <div id="cardUniversityName" class="university-name">University Name</div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:0.15in;">
+                    <div id="universityLogoContainer"
+                        style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;">
+                        <img id="cardUniversityLogo" src="" alt=""
+                            style="width:100%;height:100%;object-fit:contain;display:none;"
+                            onload="this.style.display='block'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='none');">
+                        <span id="logoFallbackText" style="font-size:12px;">🎓</span>
+                    </div>
+                    <div id="cardUniversityName" class="university-name" style="margin-bottom:0;">University Name</div>
+                </div>
 
                 <div id="cardName" class="student-name">Student Name</div>
                 <div class="detail-row" style="margin-bottom: 0.1in;">

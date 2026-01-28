@@ -53,51 +53,81 @@ def generate_with_gemini(prompt: str) -> Optional[bytes]:
     Returns:
         Image bytes or None if failed
     """
+    import time as time_module
+    
     api_key, model = _get_gemini_config()
     
     if not api_key:
         print("[Gemini] No API key configured")
         return None
     
-    try:
-        print(f"[Gemini] Calling API with model: {model}")
-        
-        response = httpx.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-            params={"key": api_key},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "responseModalities": ["image", "text"]
-                }
-            },
-            timeout=60
-        )
-        
-        if response.status_code != 200:
-            error = response.json()
-            print(f"[Gemini] API Error: {error.get('error', {}).get('message', response.status_code)}")
+    max_retries = 3
+    retry_delay = 2  # Start with 2 seconds
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"[Gemini] Calling API with model: {model}" + (f" (attempt {attempt + 1}/{max_retries})" if attempt > 0 else ""))
+            
+            response = httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                params={"key": api_key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "responseModalities": ["image", "text"]
+                    }
+                },
+                timeout=90  # Increased timeout
+            )
+            
+            if response.status_code == 503 or response.status_code == 429:
+                # Service unavailable or rate limited - retry
+                error = response.json()
+                error_msg = error.get('error', {}).get('message', 'Service overloaded')
+                print(f"[Gemini] API overloaded, retrying in {retry_delay}s... ({error_msg})")
+                time_module.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+                continue
+            
+            if response.status_code != 200:
+                error = response.json()
+                error_msg = error.get('error', {}).get('message', str(response.status_code))
+                
+                # Check if it's an overload error in the message
+                if 'overloaded' in error_msg.lower() or 'rate' in error_msg.lower():
+                    print(f"[Gemini] API overloaded, retrying in {retry_delay}s... ({error_msg})")
+                    time_module.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                
+                print(f"[Gemini] API Error: {error_msg}")
+                return None
+            
+            data = response.json()
+            
+            # Extract image from response
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            image_part = next(
+                (p for p in parts if p.get("inlineData", {}).get("mimeType", "").startswith("image/")),
+                None
+            )
+            
+            if image_part:
+                image_data = base64.b64decode(image_part["inlineData"]["data"])
+                print(f"[Gemini] ✓ Got image: {len(image_data)} bytes")
+                return image_data
+            
+            print("[Gemini] No image in response")
             return None
-        
-        data = response.json()
-        
-        # Extract image from response
-        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-        image_part = next(
-            (p for p in parts if p.get("inlineData", {}).get("mimeType", "").startswith("image/")),
-            None
-        )
-        
-        if image_part:
-            image_data = base64.b64decode(image_part["inlineData"]["data"])
-            print(f"[Gemini] ✓ Got image: {len(image_data)} bytes")
-            return image_data
-        
-        print("[Gemini] No image in response")
-        return None
-        
-    except Exception as e:
-        print(f"[Gemini] Request failed: {e}")
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            if 'timeout' in error_str or 'timed out' in error_str:
+                print(f"[Gemini] Request timeout, retrying in {retry_delay}s...")
+                time_module.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            print(f"[Gemini] Request failed: {e}")
         return None
 
 

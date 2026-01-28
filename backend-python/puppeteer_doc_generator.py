@@ -254,7 +254,7 @@ def generate_student_id_puppeteer(
         import config_manager
         config = config_manager.get_config()
         gemini_api_key = config.get("aiGenerator", {}).get("gemini", {}).get("apiKey", "")
-        gemini_model = config.get("aiGenerator", {}).get("gemini", {}).get("model", "gemini-2.0-flash-exp-image-generation")
+        gemini_model = config.get("aiGenerator", {}).get("gemini", {}).get("model", "gemini-3-pro-image-preview")
         
         # Prepare environment with Gemini API Key
         import os

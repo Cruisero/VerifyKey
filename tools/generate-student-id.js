@@ -41,7 +41,7 @@ require('dotenv').config({ path: path.join(__dirname, '../backend/.env') });
  */
 async function generatePhotoWithGemini(studentData) {
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp-image-generation';
+    const model = process.env.GEMINI_MODEL || 'gemini-3-pro-image-preview';
 
     if (!apiKey) {
         console.log('[Photo] No Gemini API key found, will use fallback');

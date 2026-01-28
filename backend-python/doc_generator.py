@@ -116,28 +116,59 @@ def generate_transcript_with_gemini(first: str, last: str, university: str, birt
     current_year = int(time.strftime("%Y"))
     current_month = int(time.strftime("%m"))
     
-    # Determine current and previous semesters
-    if current_month >= 1 and current_month <= 5:
-        current_semester = f"Spring {current_year}"
-        prev_semester = f"Fall {current_year - 1}"
-    elif current_month >= 6 and current_month <= 7:
-        current_semester = f"Summer {current_year}"
-        prev_semester = f"Spring {current_year}"
+    # Detect if university uses Quarter System (like UW, Stanford, UCLA, etc.)
+    quarter_schools = ["washington", "stanford", "ucla", "uc ", "berkeley", "chicago", "northwestern", "dartmouth", "oregon", "caltech"]
+    uni_lower = university.lower()
+    uses_quarters = any(school in uni_lower for school in quarter_schools)
+    
+    # Generate appropriate terms based on system
+    if uses_quarters:
+        # Quarter System: Autumn, Winter, Spring, Summer
+        if current_month >= 1 and current_month <= 3:
+            current_term = f"Winter {current_year}"
+            prev_term = f"Autumn {current_year - 1}"
+        elif current_month >= 4 and current_month <= 6:
+            current_term = f"Spring {current_year}"
+            prev_term = f"Winter {current_year}"
+        elif current_month >= 7 and current_month <= 9:
+            current_term = f"Summer {current_year}"
+            prev_term = f"Spring {current_year}"
+        else:
+            current_term = f"Autumn {current_year}"
+            prev_term = f"Summer {current_year}"
+        term_system = "Quarter"
+        credits_per_course = "5.0"
+        total_credits = "60.0"
     else:
-        current_semester = f"Fall {current_year}"
-        prev_semester = f"Spring {current_year}"
+        # Semester System: Fall, Spring, Summer
+        if current_month >= 1 and current_month <= 5:
+            current_term = f"Spring {current_year}"
+            prev_term = f"Fall {current_year - 1}"
+        elif current_month >= 6 and current_month <= 7:
+            current_term = f"Summer {current_year}"
+            prev_term = f"Spring {current_year}"
+        else:
+            current_term = f"Fall {current_year}"
+            prev_term = f"Spring {current_year}"
+        term_system = "Semester"
+        credits_per_course = "4.0"
+        total_credits = "48.0"
     
     prompt = f"""Generate a REALISTIC official university transcript image. 
 The document should look like a REAL American university registrar system printout.
 
-CRITICAL STYLE REQUIREMENTS:
-- BLACK AND WHITE ONLY - no colors, no color blocks
-- Plain, boring, functional design (like a real government form)
-- Dense information layout with table lines
-- Monospace or serif font typical of official documents
-- Look like a scanned paper document with slight texture
+UNIVERSITY: {university}
+CRITICAL: This university uses the {term_system.upper()} SYSTEM.
+{"Use 'Autumn', 'Winter', 'Spring', 'Summer' terms - NOT 'Fall'!" if uses_quarters else "Use 'Fall', 'Spring', 'Summer' terms."}
 
-EXACT DOCUMENT STRUCTURE:
+STYLE REQUIREMENTS:
+- BLACK AND WHITE ONLY - no colors
+- Plain, functional design (like a real official document)
+- Dense information with table lines
+- Monospace or serif font
+- Slight paper texture
+
+DOCUMENT STRUCTURE:
 
 {university.upper()}
 Office of the University Registrar
@@ -149,49 +180,49 @@ Student ID: {student_id}
 Date of Birth: {birth_date}
 
 Program: Bachelor of Science
-College/School: College of Arts & Sciences
+Major: Computer Science
 Enrollment Status: Full-time Undergraduate
 
 ------------------------------------------------
-TERM: {prev_semester}
+TERM: {prev_term}
 
-Course Code | Course Title              | Credits | Grade
-----------------------------------------------------------
-CAS CS 112  | Intro to Computer Science | 4.0     | A-
-MA 124      | Calculus I                | 4.0     | B+
-WR 150      | Writing Seminar           | 4.0     | A
-PY 211      | General Physics I         | 4.0     | B
+Use REALISTIC course codes for {university}:
+- Computer Science courses: CSE 142, CSCI 101, CS 101, CMPSC 101 (NOT "CAS CS")
+- Math courses: MATH 124, MATH 151, CALC 101 (NOT "MA")
+- Writing courses: ENGL 101, WRIT 101, ENG 101 (NOT "WR")
+- Physics courses: PHYS 121, PHYSICS 101, PHY 101 (NOT "PY")
+
+Example for this term with grades:
+CSE 142      | Intro to Programming      | {credits_per_course} | A-
+MATH 124     | Calculus I                | {credits_per_course} | B+
+ENGL 101     | Expository Writing        | {credits_per_course} | A
+PHYS 121     | Mechanics                 | {credits_per_course} | B
 
 Term GPA: {term_gpa}
-Credits Earned This Term: 16.0
 
 ------------------------------------------------
-TERM: {current_semester} (In Progress)
+TERM: {current_term} (In Progress)
 
-Course Code | Course Title              | Credits | Grade
-----------------------------------------------------------
-CAS CS 210  | Data Structures           | 4.0     | IP
-MA 225      | Calculus II               | 4.0     | IP
-PY 212      | General Physics II        | 4.0     | IP
-WR 151      | Writing Seminar II        | 4.0     | IP
+CSE 143      | Data Structures           | {credits_per_course} | IP
+MATH 125     | Calculus II               | {credits_per_course} | IP
+PHYS 122     | Electromagnetism          | {credits_per_course} | IP
+CSE 190      | Special Topics            | {credits_per_course} | IP
 
-Credits Attempted: 16.0
+Credits Attempted: 16.0-20.0
 
 ------------------------------------------------
-Cumulative Credits Earned: 48.0
+Cumulative Credits Earned: {total_credits}
 Cumulative GPA: {cum_gpa}
 ------------------------------------------------
 
 Issued by: Office of the University Registrar
-[Official Seal Area]
 Transcript Date: {current_date}
 
-CRITICAL: 
-- NO colorful headers or backgrounds
-- Plain black text on white/off-white background
-- Table grid lines visible
-- Looks like a boring official government document
-- Include "IP" (In Progress) for current courses, NOT letter grades
+CRITICAL RULES:
+- DO NOT show placeholder text like "[Official Seal Area]" - leave seal area blank or use a subtle background watermark
+- Use "IP" for In Progress courses, NOT letter grades
+- Match course codes to the university style (CSE, MATH, PHYS, ENGL)
+- {"Terms must be Autumn/Winter/Spring/Summer for Quarter system" if uses_quarters else "Terms must be Fall/Spring/Summer for Semester system"}
 
 Generate ONLY the image."""
     

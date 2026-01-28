@@ -267,15 +267,6 @@ def generate_student_id_with_gemini(first: str, last: str, university: str, stud
     valid_year = issue_year + 4
     valid_date = f"MAY {valid_year}"
     
-    # Random major
-    majors = [
-        "Computer Science", "Business Administration", "Psychology", 
-        "Biology", "Engineering", "Communications", "Economics",
-        "Political Science", "Mathematics", "Nursing", "Marketing",
-        "Accounting", "Information Technology", "Chemistry", "Physics"
-    ]
-    major = random.choice(majors)
-    
     # Determine gender for photo
     female_names = ["Mary", "Patricia", "Jennifer", "Linda", "Barbara", "Elizabeth", "Susan", 
                     "Jessica", "Sarah", "Karen", "Lisa", "Nancy", "Betty", "Margaret", "Sandra",
@@ -313,7 +304,7 @@ DESIGN REQUIREMENTS:
 1. HEADER: Dark blue/purple gradient at top with university logo (left), university name (center-left), "STUDENT ID CARD" text (right)
 2. HOLOGRAPHIC EFFECT: Right side of card has subtle rainbow/iridescent holographic pattern
 3. PHOTO: Square student photo on left side with gray-blue background
-4. TEXT LAYOUT: All text fields on right side - NAME, STUDENT ID, MAJOR with labels above values
+4. TEXT LAYOUT: All text fields on right side - NAME, STUDENT ID with labels above values
 5. DATES: ISSUED and VALID UNTIL side by side at bottom
 6. BARCODE: Black barcode stripe at very bottom of card
 7. BACKGROUND: Light gray/white with subtle holographic shimmer on right portion

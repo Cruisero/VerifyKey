@@ -71,7 +71,7 @@ def generate_with_gemini(prompt: str) -> Optional[bytes]:
                     "responseModalities": ["image", "text"]
                 }
             },
-            timeout=60
+            timeout=120  # 2 minutes for image generation
         )
         
         if response.status_code != 200:

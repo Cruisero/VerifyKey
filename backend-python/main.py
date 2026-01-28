@@ -482,27 +482,23 @@ async def poll_status_endpoint(request: PollRequest):
 
 @app.get("/api/config")
 async def get_config_endpoint():
-    """Get current configuration (for admin panel) with masked sensitive values"""
+    """Get current configuration (for admin panel)"""
     import config_manager
     config = config_manager.get_config()
     
-    # Mask sensitive fields
+    # Mask sensitive fields (only API keys, not proxy for admin visibility)
     def mask_key(key):
         if key and len(key) > 6:
             return key[:4] + "..." + key[-2:]
         return "..." if key else ""
     
-    # Mask API keys
+    # Mask API keys only (proxy credentials are shown for admin)
     if config.get("aiGenerator", {}).get("gemini", {}).get("apiKey"):
         config["aiGenerator"]["gemini"]["apiKey"] = mask_key(config["aiGenerator"]["gemini"]["apiKey"])
     if config.get("aiGenerator", {}).get("batchApi", {}).get("apiKey"):
         config["aiGenerator"]["batchApi"]["apiKey"] = mask_key(config["aiGenerator"]["batchApi"]["apiKey"])
     
-    # Mask proxy credentials
-    if config.get("proxy", {}).get("user"):
-        config["proxy"]["user"] = mask_key(config["proxy"]["user"])
-    if config.get("proxy", {}).get("password"):
-        config["proxy"]["password"] = mask_key(config["proxy"]["password"])
+    # Proxy credentials are NOT masked - shown in admin panel
     
     return config
 
@@ -777,6 +773,94 @@ async def update_user_credits(authorization: Optional[str] = Header(None)):
     # For now, just return current user
     return {"success": True, "user": user}
 
+
+# ============ DOCUMENT CAPTURE ROUTES ============
+
+from document_capture import (
+    capture_verification_documents,
+    list_captured_submissions,
+    get_captured_submission,
+    fetch_verification_details
+)
+
+
+@app.get("/api/capture/{verification_id}")
+async def capture_documents(verification_id: str):
+    """
+    Capture documents and metadata for a verification ID
+    
+    This fetches verification details from SheerID and attempts to
+    download any associated documents.
+    
+    Note: This endpoint doesn't use proxy since it's read-only
+    and doesn't need anti-detection measures.
+    """
+    from verifier import parse_verification_id
+    
+    parsed_id = parse_verification_id(verification_id)
+    if not parsed_id:
+        raise HTTPException(status_code=400, detail="Invalid verification ID")
+    
+    # Don't use proxy for capture - just reading data
+    result = capture_verification_documents(parsed_id, proxy=None)
+    
+    return result
+
+
+@app.get("/api/captured")
+async def list_captures():
+    """
+    List all captured submissions
+    
+    Returns a list of all verification IDs that have been captured,
+    along with metadata about each capture.
+    """
+    submissions = list_captured_submissions()
+    return {
+        "success": True,
+        "count": len(submissions),
+        "submissions": submissions
+    }
+
+
+@app.get("/api/captured/{verification_id}")
+async def get_capture_details(verification_id: str):
+    """
+    Get details of a specific captured submission
+    
+    Returns metadata and file paths for a previously captured verification.
+    """
+    result = get_captured_submission(verification_id)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "Not found"))
+    
+    return result
+
+
+@app.get("/api/verification-details/{verification_id}")
+async def get_verification_details(verification_id: str):
+    """
+    Get full verification details from SheerID without saving
+    
+    Useful for inspecting a verification without capturing.
+    """
+    from verifier import parse_verification_id
+    
+    parsed_id = parse_verification_id(verification_id)
+    if not parsed_id:
+        raise HTTPException(status_code=400, detail="Invalid verification ID")
+    
+    proxy = get_proxy_url()
+    details = fetch_verification_details(parsed_id, proxy)
+    
+    if not details.get("success"):
+        raise HTTPException(
+            status_code=details.get("status_code", 500),
+            detail=details.get("error", "Failed to fetch verification details")
+        )
+    
+    return details
 
 
 if __name__ == "__main__":

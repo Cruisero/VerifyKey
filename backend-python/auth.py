@@ -14,8 +14,14 @@ from typing import Optional
 JWT_SECRET = os.getenv("JWT_SECRET", "verifykey-jwt-secret-change-in-production")
 JWT_EXPIRES_HOURS = 168  # 7 days
 
-# Database path
-DB_PATH = "/app/data/verifykey.db"
+# Database path - use /app/data in Docker, local data/ directory otherwise
+if os.path.exists("/app/data"):
+    DB_PATH = "/app/data/verifykey.db"
+else:
+    # Local development - create data directory next to this file
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    DB_PATH = os.path.join(DATA_DIR, "verifykey.db")
 
 
 def get_db():

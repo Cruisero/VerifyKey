@@ -106,7 +106,7 @@ def generate_transcript_with_gemini(first: str, last: str, university: str, birt
     
     import time
     if not student_id:
-        student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+        student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
     
     # Calculate GPA and credits
     term_gpa = round(3.2 + random.random() * 0.6, 2)
@@ -203,7 +203,7 @@ def generate_student_id_with_gemini(first: str, last: str, university: str, stud
     
     import time
     if not student_id:
-        student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+        student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
     
     current_year = int(time.strftime("%Y"))
     
@@ -285,7 +285,7 @@ def generate_schedule_with_gemini(first: str, last: str, university: str, studen
     
     import time
     if not student_id:
-        student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+        student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
     
     current_year = int(time.strftime("%Y"))
     current_month = int(time.strftime("%m"))
@@ -370,7 +370,7 @@ def generate_multiple_documents_with_gemini(
         document_types = ['id_card', 'transcript', 'schedule']
     
     # Generate unified student ID for all documents
-    student_id = f"{random.randint(21, 25)}{random.randint(100000, 999999)}"
+    student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
     birth = birth_date or "2003-05-15"
     
     total_docs = len(document_types)
@@ -438,7 +438,7 @@ def random_int(min_val: int, max_val: int) -> int:
 def generate_transcript_svg(first: str, last: str, university: str, birth_date: str) -> str:
     """Generate academic transcript SVG"""
     
-    student_id = f"{random_int(21, 25)}{random_int(100000, 999999)}"
+    student_id = f"{random_int(21, 25)}{random_int(1000000, 9999999)}"
     gpa = round(3.2 + random.random() * 0.8, 2)
     
     # Generate courses
@@ -546,7 +546,7 @@ def generate_transcript_svg(first: str, last: str, university: str, birth_date: 
 def generate_student_id_svg(first: str, last: str, university: str) -> str:
     """Generate student ID card SVG"""
     
-    student_id = f"{random_int(21, 25)}{random_int(100000, 999999)}"
+    student_id = f"{random_int(21, 25)}{random_int(1000000, 9999999)}"
     valid_thru = f"08/{random_int(2026, 2028)}"
     
     svg = f'''<?xml version="1.0" encoding="UTF-8"?>

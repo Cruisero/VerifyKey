@@ -68,46 +68,69 @@ Requirements:
 Style: casual ID photo, like taken at university registration desk.
 Generate ONLY the portrait photo, no text, borders, or decorations.`;
 
-    try {
-        console.log('[Photo] Generating student photo via Gemini AI...');
+    // Retry up to 3 times for transient errors (503 overloaded, timeouts)
+    const maxRetries = 3;
 
-        // Add 120 second timeout (Gemini image generation can be slow)
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 120000);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`[Photo] Generating student photo via Gemini AI... (attempt ${attempt}/${maxRetries})`);
 
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        responseModalities: ["image", "text"]
-                    }
-                }),
-                signal: controller.signal
+            // Add 90 second timeout per attempt
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 90000);
+
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            responseModalities: ["image", "text"]
+                        }
+                    }),
+                    signal: controller.signal
+                }
+            );
+
+            clearTimeout(timeout);
+
+            if (response.ok) {
+                const data = await response.json();
+                const parts = data.candidates?.[0]?.content?.parts || [];
+                const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+
+                if (imagePart) {
+                    console.log('[Photo] ✓ Photo generated via Gemini AI');
+                    return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+                }
+                console.log('[Photo] No image in Gemini response');
+            } else {
+                const error = await response.json();
+                const errorMsg = error.error?.message || response.status;
+                console.log(`[Photo] Gemini API error (attempt ${attempt}):`, errorMsg);
+
+                // If model is overloaded (503) and we have retries left, wait and retry
+                if (response.status === 503 && attempt < maxRetries) {
+                    console.log(`[Photo] Model overloaded, waiting 5s before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    continue;
+                }
             }
-        );
+        } catch (error) {
+            console.log(`[Photo] Gemini API failed (attempt ${attempt}):`, error.message);
 
-        clearTimeout(timeout);
-
-        if (response.ok) {
-            const data = await response.json();
-            const parts = data.candidates?.[0]?.content?.parts || [];
-            const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-
-            if (imagePart) {
-                console.log('[Photo] ✓ Photo generated via Gemini AI');
-                return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+            // If timeout/aborted and we have retries left, wait and retry
+            if (error.name === 'AbortError' && attempt < maxRetries) {
+                console.log(`[Photo] Timeout, waiting 3s before retry...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                continue;
             }
-            console.log('[Photo] No image in Gemini response');
-        } else {
-            const error = await response.json();
-            console.log('[Photo] Gemini API error:', error.error?.message || response.status);
         }
-    } catch (error) {
-        console.log('[Photo] Gemini API failed:', error.message);
+
+        // If we get here without continuing, break out of retry loop
+        break;
     }
 
     return null;

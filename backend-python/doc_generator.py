@@ -301,8 +301,6 @@ EXACT CARD LAYOUT (follow this precisely):
 │ │          │   STUDENT ID:                         │
 │ │          │   {student_id}                         │
 │ └──────────┘                                       │
-│               MAJOR:                                │
-│               {major}                               │
 │                                                     │
 │  ISSUED:              VALID UNTIL:                  │
 │  {issue_date}              {valid_date}                  │

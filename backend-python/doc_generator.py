@@ -241,23 +241,40 @@ Generate ONLY the image."""
 
 
 def generate_student_id_with_gemini(first: str, last: str, university: str, student_id: str = None) -> Optional[bytes]:
-    """Generate student ID card using Gemini AI - realistic functional design"""
+    """Generate student ID card using Gemini AI - matches reference design"""
     
     import time
     if not student_id:
         student_id = generate_student_id_luhn()
     
     current_year = int(time.strftime("%Y"))
+    current_month = int(time.strftime("%m"))
     
-    # Issue date: when student enrolled (1-3 years ago)
-    enrollment_year = current_year - random.randint(1, 3)
-    issue_date = f"08/{enrollment_year}"
+    # Issue date: current semester start
+    if current_month >= 8:
+        issue_month = "SEP"
+        issue_year = current_year
+    elif current_month >= 1 and current_month <= 5:
+        issue_month = "JAN"
+        issue_year = current_year
+    else:
+        issue_month = "JUN"
+        issue_year = current_year
     
-    # Expiration: aligned with academic year end
-    exp_year = enrollment_year + 4
-    if exp_year < current_year:
-        exp_year = current_year + 1
-    exp_date = f"05/{exp_year}"
+    issue_date = f"{issue_month} {issue_year}"
+    
+    # Valid until: 4 years from issue, in May
+    valid_year = issue_year + 4
+    valid_date = f"MAY {valid_year}"
+    
+    # Random major
+    majors = [
+        "Computer Science", "Business Administration", "Psychology", 
+        "Biology", "Engineering", "Communications", "Economics",
+        "Political Science", "Mathematics", "Nursing", "Marketing",
+        "Accounting", "Information Technology", "Chemistry", "Physics"
+    ]
+    major = random.choice(majors)
     
     # Determine gender for photo
     female_names = ["Mary", "Patricia", "Jennifer", "Linda", "Barbara", "Elizabeth", "Susan", 
@@ -270,52 +287,51 @@ def generate_student_id_with_gemini(first: str, last: str, university: str, stud
     gender = "female" if is_female else "male"
     
     prompt = f"""Generate a REALISTIC university student ID card photo.
-The card should look like a REAL university ID - functional, not decorative.
 
-CRITICAL DESIGN PRINCIPLES:
-- This is a FUNCTIONAL ID card, not a marketing design
-- Simple, clean layout - no fancy graphics or colorful backgrounds
-- White or light gray background with minimal accent color (if any)
-- Looks like a real plastic card you'd carry in your wallet
+EXACT CARD LAYOUT (follow this precisely):
 
-CARD LAYOUT (standard university ID format):
+┌─────────────────────────────────────────────────────┐
+│ ████████████████████  DARK BLUE/PURPLE HEADER  █████│
+│ [LOGO] {university}              STUDENT ID CARD    │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│ ┌──────────┐   NAME:                               │
+│ │          │   {first} {last}                       │
+│ │  PHOTO   │                                       │
+│ │          │   STUDENT ID:                         │
+│ │          │   {student_id}                         │
+│ └──────────┘                                       │
+│               MAJOR:                                │
+│               {major}                               │
+│                                                     │
+│  ISSUED:              VALID UNTIL:                  │
+│  {issue_date}              {valid_date}                  │
+│                                                     │
+│  ║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║  │
+│              (BARCODE)                              │
+└─────────────────────────────────────────────────────┘
 
-FRONT OF CARD:
-┌─────────────────────────────────────┐
-│ [University Logo] {university}      │
-├─────────────────────────────────────┤
-│                                     │
-│ ┌──────┐   {first} {last}           │
-│ │      │                            │
-│ │ PHOTO│   {student_id}             │
-│ │      │                            │
-│ └──────┘                            │
-│                                     │
-│         EXP {exp_date}              │
-└─────────────────────────────────────┘
-
-CRITICAL: Real student IDs are MINIMAL. They show:
-- University name/logo
-- Student photo
-- Student name
-- ID number
-- Expiration date
-That's IT. No "Student ID:" label, no "Undergraduate", no status text.
+DESIGN REQUIREMENTS:
+1. HEADER: Dark blue/purple gradient at top with university logo (left), university name (center-left), "STUDENT ID CARD" text (right)
+2. HOLOGRAPHIC EFFECT: Right side of card has subtle rainbow/iridescent holographic pattern
+3. PHOTO: Square student photo on left side with gray-blue background
+4. TEXT LAYOUT: All text fields on right side - NAME, STUDENT ID, MAJOR with labels above values
+5. DATES: ISSUED and VALID UNTIL side by side at bottom
+6. BARCODE: Black barcode stripe at very bottom of card
+7. BACKGROUND: Light gray/white with subtle holographic shimmer on right portion
 
 PHOTO REQUIREMENTS:
-- Portrait photo of a realistic young {gender} college student (age 18-22)
-- Professional headshot style on neutral background
+- Realistic young {gender} college student (age 18-22)
+- Professional headshot, neutral gray-blue background
 - Natural expression, looking at camera
-- The photo MUST look like a real person
+- Must look like a real person
 
 CARD STYLE:
-- Horizontal orientation (standard credit card size proportions)
-- Show the card photographed on a desk surface with slight shadow
+- Horizontal orientation (credit card proportions 85.6mm × 54mm ratio)
+- Show card photographed on wooden desk surface with slight shadow
 - All four corners visible
-- No barcode or magnetic strip visible on front
-- Matte or semi-gloss card finish
-- University name/logo at top
-- Photo on left side, text info on right
+- Matte/semi-gloss plastic card finish
+- Rounded corners
 
 Generate ONLY the image, no text explanation."""
     

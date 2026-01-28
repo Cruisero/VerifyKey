@@ -29,6 +29,48 @@ except ImportError:
     HAS_CAIRO = False
 
 
+def generate_student_id_luhn() -> str:
+    """
+    Generate a 9-digit student ID using Luhn algorithm (mod 10 check).
+    
+    Format: [8 random digits][check_digit]
+    The check digit is calculated so the full 9-digit number passes Luhn validation.
+    
+    Algorithm (standard Luhn):
+    1. Generate 8 random digits
+    2. Calculate check digit using Luhn formula
+    3. Append check digit to create 9-digit ID
+    
+    Returns:
+        9-digit string that passes Luhn validation
+    """
+    # Generate 8 random digits
+    base_digits = [random.randint(0, 9) for _ in range(8)]
+    
+    # Calculate Luhn check digit
+    # When calculating for appending, we treat the 8 digits as if check digit is at position 0 (rightmost)
+    # So the rightmost of base_digits (index 7) is at position 1 -> needs doubling
+    total = 0
+    for i, digit in enumerate(reversed(base_digits)):
+        # Position from right: i+1 (since check digit will be position 0)
+        # Double digits at odd positions from right (1, 3, 5, 7)
+        if (i + 1) % 2 == 1:  # Odd position from right - double it
+            doubled = digit * 2
+            if doubled > 9:
+                doubled = doubled - 9
+            total += doubled
+        else:  # Even position from right - add as is
+            total += digit
+    
+    # Check digit makes total divisible by 10
+    check_digit = (10 - (total % 10)) % 10
+    
+    # Combine: 8 base digits + check digit (at the end)
+    student_id = ''.join(str(d) for d in base_digits) + str(check_digit)
+    
+    return student_id
+
+
 # Gemini API configuration - fallback to env var if config not available
 def _get_gemini_config():
     """Get Gemini API key and model from config or env"""
@@ -106,7 +148,7 @@ def generate_transcript_with_gemini(first: str, last: str, university: str, birt
     
     import time
     if not student_id:
-        student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
+        student_id = generate_student_id_luhn()
     
     # Calculate GPA and credits
     term_gpa = round(3.2 + random.random() * 0.6, 2)
@@ -203,7 +245,7 @@ def generate_student_id_with_gemini(first: str, last: str, university: str, stud
     
     import time
     if not student_id:
-        student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
+        student_id = generate_student_id_luhn()
     
     current_year = int(time.strftime("%Y"))
     
@@ -285,7 +327,7 @@ def generate_schedule_with_gemini(first: str, last: str, university: str, studen
     
     import time
     if not student_id:
-        student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
+        student_id = generate_student_id_luhn()
     
     current_year = int(time.strftime("%Y"))
     current_month = int(time.strftime("%m"))
@@ -370,7 +412,7 @@ def generate_multiple_documents_with_gemini(
         document_types = ['id_card', 'transcript', 'schedule']
     
     # Generate unified student ID for all documents
-    student_id = f"{random.randint(21, 25)}{random.randint(1000000, 9999999)}"
+    student_id = generate_student_id_luhn()
     birth = birth_date or "2003-05-15"
     
     total_docs = len(document_types)
@@ -438,7 +480,7 @@ def random_int(min_val: int, max_val: int) -> int:
 def generate_transcript_svg(first: str, last: str, university: str, birth_date: str) -> str:
     """Generate academic transcript SVG"""
     
-    student_id = f"{random_int(21, 25)}{random_int(1000000, 9999999)}"
+    student_id = generate_student_id_luhn()
     gpa = round(3.2 + random.random() * 0.8, 2)
     
     # Generate courses
@@ -546,7 +588,7 @@ def generate_transcript_svg(first: str, last: str, university: str, birth_date: 
 def generate_student_id_svg(first: str, last: str, university: str) -> str:
     """Generate student ID card SVG"""
     
-    student_id = f"{random_int(21, 25)}{random_int(1000000, 9999999)}"
+    student_id = generate_student_id_luhn()
     valid_thru = f"08/{random_int(2026, 2028)}"
     
     svg = f'''<?xml version="1.0" encoding="UTF-8"?>

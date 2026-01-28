@@ -1,0 +1,280 @@
+﻿美国高等教育学生身份识别系统综合研究报告：技术规范、行政管理与数字化转型
+执行摘要
+美国高等教育体系中的学生身份识别生态系统（Student Identification Ecosystem）正经历着一场从单一物理凭证向多元化、智能化数字身份认证体系的历史性变革。现代美国大学的学生证——通常被称为“校园卡”（Campus Card）或“一卡通”（One-Card）——早已超越了简单的视觉身份验证工具的范畴，演变为集物理门禁控制、逻辑资源访问、闭环金融交易及法定身份证明于一体的复杂集成系统。本报告旨在对当前美国大学学生证的规范与要求进行详尽的专业分析，涵盖从底层的ISO技术标准到顶层的行政管理政策，再到移动端数字凭证的架构设计。
+当前的行业规范是由技术迭代与法律合规双重驱动的产物。在物理层面，行业正加速淘汰基于低频（125 kHz）的Proximity技术，全面转向基于ISO/IEC 14443标准的高频（13.56 MHz）智能卡技术，如MIFARE DESFire EV3和HID iCLASS Seos，以应对日益严峻的加密安全挑战 1。与此同时，移动凭证（Mobile Credentials）通过Apple Wallet、Google Wallet等平台的普及，迫使高校基础设施进行大规模升级，以支持近场通信（NFC）和低功耗蓝牙（BLE）协议 3。
+在行政管理层面，北美校园卡用户协会（NACCU）与高等教育标准促进委员会（CAS）制定了严格的行业标准，指导高校在卡片设计、数据隐私及服务集成方面的操作 5。此外，随着《2024年保护校园学生法案》（Protecting Students on Campus Act of 2024）等立法的推进，学生证还承担了危机干预资源传播和选民身份验证的法定职能 7。本报告将通过六个核心章节，深入剖析照片提交的生物特征要求、卡片物理结构的工业标准、移动端集成的技术架构、以及防欺诈的安全机制，为理解这一领域提供全面的专业视角。
+________________
+第一章：视觉识别与照片提交的标准化流程
+尽管数字化浪潮汹涌，但视觉验证（Visual Verification）依然是学生证最基础的功能。无论是考试监考、执法检查还是日常校园互动，一张标准化、清晰可辨的人像照片是确立持有者身份的根本依据。为此，美国高校已经建立了一套精密且严格的远程照片采集与审核体系。
+1.1 远程数字化提交的兴起与规范
+为了优化迎新流程并缓解开学季的行政压力，包括哈佛大学（Harvard）、加州大学洛杉矶分校（UCLA）和斯坦福大学（Stanford）在内的主流学府，均已实施了强制性的在线照片提交制度 8。这一转变不仅仅是流程的数字化，更是对照片质量控制权的集中化。通过引入自动化审核算法与人工复核相结合的机制，高校确保了每一张存入数据库的照片均能满足“护照级”（Passport Quality）的标准，从而不仅服务于卡片打印，更能够对接校园安防监控与人脸识别系统。
+1.1.1 图像文件的技术参数
+技术参数的设定旨在平衡存储成本与打印质量，同时确保跨平台的兼容性。美国高校对上传文件的格式、大小及分辨率有着近乎苛刻的统一要求，以防止因源文件质量低劣导致的识别失败。
+在文件格式方面，JPEG (.jpg) 是绝对的行业标准。尽管HEIC格式随着iOS设备的普及而流行，部分系统如哈佛大学的ID Photo系统已开始兼容，但PDF或PNG格式因不含EXIF元数据或体积过大，通常被明确禁止 11。
+关于文件大小（File Size），各校的限制反映了其后端存储架构的差异。例如，哈佛大学允许上传最大为 6 MB 的高保真图像，这为其未来的高分辨率应用预留了空间 11；相比之下，休斯顿大学（University of Houston）将上限设定为 1 MB，伊利诺伊大学（University of Illinois）更是限制在 500 KB 以内，这要求学生在提交前必须具备基本的图像压缩处理能力 12。
+像素尺寸（Dimensions）的规范则是为了适配CR80卡片的打印比例（纵横比）。标准的证件照打印尺寸通常为1英寸 x 1.5英寸左右，因此数字图像的最小分辨率必须能够支撑300 DPI的打印精度。哈佛大学要求的最小尺寸为 280 x 296 像素，而休斯顿大学则要求至少 300 x 400 像素 12。这一细微的差异体现了不同证件制作软件（如ID Works或Lenel）的裁剪算法偏好。
+1.1.2 构图美学与生物特征要求
+除了文件属性，照片的内容构图必须严格遵循生物特征识别（Biometric Identification）的原则。这套标准直接沿袭自美国国务院护照照片的规范，但在校园语境下进行了微调。
+背景控制是首要关卡。所有高校一致要求使用**纯白或灰白色（Off-white）**的纯色背景 8。这一要求并非出于审美，而是为了最大化人像与背景的对比度，便于自动化裁剪算法精确提取人脸轮廓。任何纹理、风景、阴影或其在画面中的干扰元素，都会导致审核系统的自动驳回。
+光影布局是造成照片被拒的最常见原因。规范要求光源必须均匀分布，消除面部及背景的阴影 12。侧光或顶光造成的“阴阳脸”或眼窝阴影，会严重干扰人工核验和机器识别的准确性。
+在面部姿态上，主体必须正对镜头，头部正直，双眼平视前方。头部比例被严格控制，通常要求头部占据画面的 80% 左右，取景范围需涵盖头顶发际线至锁骨位置 11。这种特写视角确保了即便在卡片表面磨损的情况下，面部特征依然清晰可辨。
+关于表情与配饰的规定体现了校园文化与安全需求的博弈。虽然护照照片通常要求中性表情（不露齿），但如哈佛大学等机构明确鼓励自然的微笑，这反映了大学试图构建亲和社区的意图 14。然而，这种微笑不得导致面部肌肉过度变形从而影响识别。眼镜佩戴是允许的，前提是不得有反光遮挡瞳孔；而墨镜、帽子及非宗教性质的头饰则被严格禁止 14。对于宗教头巾，政策通常规定其不得在面部投下阴影，且必须完整露出面部轮廓。
+1.2 证件卡片的解剖学：平面设计与数据字段
+当数字照片转化为实体卡片时，它便承载了大学的品牌形象与行政管理逻辑。卡片的平面设计（Graphic Layout）绝非随意拼凑，而是遵循着严格的品牌识别指南（Brand Identity Guidelines）和功能分区原则。
+1.2.1 核心数据字段的布局逻辑
+一张标准的美国大学学生证，如加州大学伯克利分校的“Cal 1 Card”或宾夕法尼亚州立大学的“id+ Card”，其表面信息布局经过了精心设计，以满足快速视觉扫视的需求 16。
+* 姓名显示（Legal vs. Lived Name）： 传统上，卡片必须印制法定全名。然而，随着包容性政策的推行，如宾州州立大学的AD 84政策，越来越多的高校允许在卡片正面印制“常用名”（Lived Name）或“偏好名”（Preferred Name），而将法定姓名隐藏于后端数据库或仅显示在卡片背面。这一变革要求卡务系统必须具备复杂的字段映射能力 17。
+* 唯一识别码（UID）： 这是一串通常为8至10位的数字，是学生在教务系统（SIS）中的唯一索引。值得注意的是，UID通常不同于卡片芯片内的ISO序列号，前者是人的ID，后者是卡的ID。区分两者是为了在补办新卡时，学生能保留原有的学号，仅更新卡片序列号。
+* 身份类别（Affiliation）： 通过显著的文字或色带区分“本科生（Student）”、“研究生（Graduate）”、“教职工（Faculty/Staff）”或“访客（Affiliate）”。这种分类直接对应了不同的物理访问权限 19。
+* 图书馆条形码（Library Barcode）： 尽管芯片技术已普及，但为了兼容老旧的图书馆自动化系统（ILS），卡片背面或正面底部通常仍印有Code 39或Code 128格式的条形码。这是连接物理馆藏资源的最后一道桥梁 16。
+* 有效期（Expiration Date）： 尽管电子权限可实时撤销，但在作为选民身份证使用时，印制的有效期是法律强制要求的必备要素 7。
+1.2.2 品牌色彩体系与防伪设计
+卡片是大学品牌的移动广告牌。设计规范严格限定了色彩的使用，必须精确匹配官方的Pantone色号。例如，得克萨斯大学系统（UT System）强制要求使用 Pantone 158（橙色） 和 Pantone 540（深蓝），并对校徽（Seal）与文字商标（Wordmark）的组合形式（Lockup）做出了详尽规定 20。
+为了防止伪造，现代卡片设计融合了多重防伪工艺。扭索纹（Guilloche patterns）——一种类似于钞票上的复杂几何线条背景，被广泛用于增加复印难度。幽灵图像（Ghost Image），即在主照片旁以半透明形式重复打印的小头像，也是防篡改的标准配置 21。此外，字体选择也极具考究，如巴鲁克学院（Baruch College）规定必须使用特定的衬线体与无衬线体组合，既体现学术庄重感，又确保信息的易读性 23。
+________________
+第二章：物理凭证的工业标准与芯片技术
+透过卡片的视觉表层，其内部封装的技术核心决定了校园的安全等级。美国大学学生证的物理演进史，就是一部从磁记录技术向射频识别（RFID）技术跨越的技术史。
+2.1 ISO/IEC 7810 物理尺寸标准
+无论内部技术如何迭代，美国大学学生证的物理形态始终恪守 ISO/IEC 7810 ID-1 国际标准，即通俗所称的 CR80 尺寸 24。这一标准确保了卡片能够顺畅地通过读卡器、打印机及ATM机。
+参数
+	规格数值 (公制)
+	规格数值 (英制)
+	备注
+	宽度
+	85.60 mm
+	3.370 英寸
+	国际通用信用卡尺寸
+	高度
+	53.98 mm
+	2.125 英寸
+	
+
+	厚度
+	0.76 mm
+	30 mil
+	含有芯片的卡片可能略厚，但在公差范围内
+	圆角半径
+	3.18 mm
+	0.125 英寸
+	防止尖角磨损与伤害
+	材质方面，虽然传统的PVC（聚氯乙烯）仍是主流，但为了应对内部芯片在高温层压过程中的应力，以及延长卡片在恶劣环境下的使用寿命，越来越多的高校开始采用 复合材料（Composite PVC/PET）。这种材料由聚酯（PET）芯层和PVC外层组成，抗弯折能力显著增强，极大降低了内置天线断裂的风险 22。
+2.2 磁条技术（Magnetic Stripe）：传统的坚守与衰退
+尽管面临淘汰，磁条技术凭借其低廉的成本和庞大的存量设备基础，依然在美国校园中占据一席之地，特别是在图书馆借阅、考勤签到及老式自动贩卖机领域。
+大学ID卡普遍采用 高矫顽力（HiCo, High Coercivity） 磁条，通常为黑色，抗磁化能力达到2750-4000奥斯特（Oersted）。相比于低矫顽力（LoCo）磁条，HiCo磁条不易因接触手机或磁铁而消磁，更适合学生长期持有 28。
+磁条的数据编码遵循ISO/IEC 7811标准，数据分布在三个磁道（Track）上：
+* 第一磁道（Track 1）： 能够存储字母和数字，通常用于存储学生姓名和混合编码。
+* 第二磁道（Track 2）： 仅存储数字，这是最关键的磁道，通常包含ISO标准的16位卡号、有效期及服务代码。这一磁道的数据结构与银行卡高度一致，便于与金融系统对接 30。
+* 第三磁道（Track 3）： 支持读写操作，早期曾用于离线存储金额，但因安全性差已基本弃用。
+由于磁条数据未经加密且易于通过廉价设备克隆（Skimming），NACCU及各大安全审计机构强烈建议将其仅限于非敏感应用，并逐步将其功能迁移至芯片 32。
+2.3 智能芯片技术的代际更迭
+现代校园安全的基石是基于射频识别（RFID）的非接触式智能卡。这一领域存在着清晰的技术断层：即从不安全的低频技术向高安全性的高频技术迁移。
+2.3.1 低频技术（125 kHz Proximity）：安全隐患
+许多老旧校区仍在使用 125 kHz Proximity (Prox) 技术（如HID Prox）。这种卡片结构简单，仅通过线圈天线向读头广播一个固定的设施码（Facility Code）和卡号（Card Number）。由于缺乏加密握手机制，攻击者只需使用几十美元的设备即可在数米外抓取信号并克隆卡片。因此，消除125 kHz技术已成为美国高校安防升级的首要任务 34。
+2.3.2 高频技术（13.56 MHz）：现代标准
+目前的主流是工作在 13.56 MHz 频段的智能卡，它们遵循 ISO/IEC 14443 标准，支持双向认证和AES加密。
+* ISO/IEC 14443 A/B vs. ISO/IEC 15693：
+   * ISO/IEC 14443 (Type A/B)： 这是校园卡的核心标准，设计读取距离短（<10 cm），数据传输速率高（可达848 kbit/s），支持复杂的加密运算，是门禁和支付的理想选择 36。
+   * ISO/IEC 15693： 被称为“疏耦合”或“附近卡”（Vicinity Cards），读取距离可达1米，更适合图书馆图书盘点或人员位置追踪，而非高安全门禁 38。
+2.3.3 主流芯片生态：MIFARE 与 iCLASS
+美国高校市场主要被两大芯片家族占据：NXP的MIFARE系列和HID Global的iCLASS系列。
+* MIFARE DESFire EV3： 这是目前开放标准中的巅峰之作。它获得了Common Criteria EAL 5+ 安全认证，支持灵活的文件系统，允许在同一芯片上分割出不同的应用区域（Application Identifier, AID）。例如，一个扇区用于门禁，另一个扇区用于食堂消费，互不干扰。其向后兼容EV1/EV2的特性使其成为系统平滑升级的首选 1。
+* HID iCLASS Seos： 这是HID推出的高安全性专有解决方案。Seos不仅仅是芯片，更是一种软件定义的“安全身份对象”（Secure Identity Object, SIO）数据模型。它在传输过程中对数据进行多层封装加密，极难破解。由于HID读卡器在美国市场的垄断地位，Seos卡片在斯坦福、杜克等名校中有着极高的占有率 2。
+为了解决过渡期的兼容问题，许多大学发行 多技术复合卡（Multi-technology Cards）。这种卡片在同一张塑料片中封装了125 kHz天线、13.56 MHz芯片以及磁条，虽然成本较高，但能同时适配校内新旧不同的读卡器设备 2。
+________________
+第三章：移动凭证革命与数字钱包架构
+美国大学学生证最激动人心的变革在于实体卡的消亡。移动凭证（Mobile Credentials）通过将身份密钥植入智能手机，彻底改变了学生与校园的交互方式。这不仅仅是便利性的提升，更是底层安全架构的重构。
+3.1 移动凭证的技术架构：安全元件（SE）
+与简单的二维码或条形码不同，正规的大学移动ID是基于硬件级安全的。在iPhone和高端Android设备上，学生ID的加密密钥被存储在 安全元件（Secure Element, SE） 中。SE是一个独立于手机主处理器和操作系统的防篡改芯片，即使手机感染病毒或被越狱，攻击者也无法读取SE内的密钥 42。
+3.2 通信协议：NFC 与 BLE 的博弈
+在传输层，存在着近场通信（NFC）与低功耗蓝牙（BLE）的路线之争。
+* NFC（Near Field Communication）： 这是目前学生ID的主流选择，特别是对于Apple Wallet生态。NFC工作在13.56 MHz，模拟了实体卡的交互方式（Tap）。其优势在于速度极快，无需唤醒屏幕，且安全性高（必须极近距离接触）。
+* BLE（Bluetooth Low Energy）： 由HID Mobile Access等方案主推。其优势在于距离，支持“Twist and Go”手势，即用户在远处转动手机即可开门。然而，由于蓝牙配对的不稳定性和较慢的响应速度，在人流量大的食堂或宿舍入口，NFC的用户体验远优于BLE 44。
+3.3 Apple Student ID 的生态霸权
+苹果公司通过与其钱包应用（Apple Wallet）的深度集成，定义了移动学生证的最高体验标准。其核心技术壁垒在于：
+* 增强型非接触式轮询（ECP, Enhanced Contactless Polling）： 这是一个苹果专有的协议层。标准的NFC读卡器在寻找卡片时会发送通用的轮询信号，而支持ECP的读卡器（如升级固件后的HID Signo）会发送特定的数据包，告诉iPhone：“我是一个学生证读卡器”。iPhone接收到信号后，会直接在后台唤醒钱包中对应的学生卡，无需用户解锁手机或面容识别。这一过程被称为 “快捷模式”（Express Mode） 46。
+* 省电模式支持（Power Reserve）： 得益于ECP和SE的低功耗设计，即便iPhone电量耗尽自动关机，学生在随后的5小时内仍能通过刷手机进入宿舍。这一功能解决了“手机没电回不了家”的痛点，是实体卡得以被完全取代的关键前提 48。
+3.4 Android 生态：Google Wallet 与 Smart Tap
+谷歌的应对方案是 Google Smart Tap 协议。与苹果类似，它允许手机通过NFC向终端传输专有的会员或ID信息。虽然Android生态的硬件碎片化导致SE的普及率不如iPhone，但Google Wallet通过主机卡模拟（HCE, Host Card Emulation）技术，结合云端令牌化（Tokenization），也实现了类似的安全功能。不过，HCE依赖于操作系统的安全性，理论上略逊于纯硬件SE方案 49。
+3.5 系统集成商的角色：Transact 与 CBORD
+大学通常不具备直接对接Apple或Google的技术能力，而是通过中间件提供商（One-Card Providers）来实现。
+* Transact Campus： 市场份额巨大的提供商（服务于宾州州立、默瑟大学等）。其“Mobile Credential”平台不仅管理ID，还深度整合了校园支付、洗衣、打印等服务。Transact的读卡器硬件对NFC有着原生支持 51。
+* CBORD： 另一巨头（服务于田纳西大学等），其CS Gold和Odyssey系统通过与Allegion（Schlage锁具）和HID的深度合作，打通了从宿舍门锁到食堂收银机的全链路 53。
+________________
+第四章：安全机制、防伪与身份欺诈治理
+随着学生证价值的提升（绑定了住宿权和资金），它也成为了造假者的首要目标。大学采取了多层防御体系来对抗日益精进的伪造技术。
+4.1 实体卡防伪工艺
+对于仍需发行的实体卡，高校采用了货币级别的防伪技术 21：
+* 全息覆膜（Holographic Overlaminates）： 在卡片打印完成后，热压一层带有校徽或特定图案的全息透明膜。这种膜不仅保护卡面防磨损，其光学变色特性更是普通打印机无法复制的。
+* UV荧光油墨（UV Printing）： 使用仅在紫外线灯下可见的隐形油墨打印校徽或“VALID”字样。这是校园警察和周边商户核验真伪的快速手段。
+* 微缩文字（Microtext）： 在卡片边框或线条中嵌入极其微小的文字（如校训）。肉眼看似实线，但在放大镜下清晰可辨。复印机的扫描精度不足以解析这些细节，复印件上的微缩文字会变成模糊的虚线。
+4.2 身份核验与“幽灵”ID 防治
+远程照片提交引入了“幽灵学生”（Ghost Students）的风险，即利用虚假身份注册以骗取助学金或进入校园。
+* 活体检测（Liveness Checks）： 现代照片上传系统要求学生进行实时摄像头动作验证（如眨眼、转头），以区分真人与照片/视频攻击 56。
+* 政府ID交叉比对： 在上传自拍的同时，系统强制要求上传驾照或护照的正反面照片。后台利用OCR技术提取证件信息，并与学籍数据及人脸特征进行三重比对（Triangulation），确保申请人是合法的入学新生 15。
+4.3 政策合规与法律强制要求
+除了技术防御，行政政策也是安全体系的一部分。
+* 不可转让性（Non-Transferability）： 几乎所有大学的校规（Student Code of Conduct）都明文规定，出借学生证属于严重违纪，可能导致停学处分。这是为了防止非校内人员利用借来的卡片进入宿舍或实验室 58。
+* 自杀干预资源： 根据加州法律及联邦层面的关注，新发行的学生证背面必须印有全国自杀预防热线（988）、危机短信热线及校警联系方式。这已成为NACCU审计中的强制合规项 7。
+* 选民身份认证： 在威斯康星、德克萨斯等州，学生证可作为投票的有效证件。这要求卡片必须包含持有人的签名、发卡日期及有效期（通常为2年），这对卡片设计的版面提出了额外要求 7。
+________________
+第五章：系统集成与应用场景
+“一卡通”的核心在于“通”。学生证是连接物理校园与数字服务的通用密钥。
+5.1 门禁控制系统
+* 在线与离线锁具： 宿舍门禁通常采用分级架构。大楼入口使用在线有线读卡器（如HID Signo），实时与服务器通讯，丢失卡片可秒级注销。宿舍房间门则常用无线离线锁具（如Schlage AD-400）。这些锁具利用“数据卡”（Data-on-Card）技术，学生在大门刷卡时，卡片会被写入最新的权限数据，随后刷开离线的房门。这种设计极大降低了布线成本 60。
+* 多因素认证： 在P3/P4实验室或服务器机房，系统要求“卡+密码”（PIN）甚至生物特征的双重验证 62。
+5.2 闭环消费与图书馆服务
+* 双账户逻辑： 校园卡通常绑定两个资金账户。一个是仅限校内餐饮使用的“Meal Plan Points”，免税且不可退款；另一个是通用的“Flex/Debit Dollars”，可用于洗衣、打印甚至校外合作商户。
+* 图书馆自动化： 尽管RFID普及，但为了兼容性，图书馆流通系统（如Ex Libris Alma）仍高度依赖卡片上的条形码。学生证即借书证，条码号与学号的映射关系在后台自动维护 16。
+________________
+第六章：行业治理与未来展望
+美国校园卡行业的标准化程度极高，这归功于专业行业组织的推动。
+6.1 NACCU 与 CAS 标准
+NACCU (National Association of Campus Card Users) 是行业的灯塔。它与 CAS (Council for the Advancement of Standards in Higher Education) 合作发布了《校园证件项目与服务标准》（SAGs）。这套标准包含12个评估维度，从任务陈述到法律责任，为高校提供了一套自我诊断的工具 6。
+* 最佳实践： NACCU定期发布如《移动化指南》（Guide to Going Mobile）等白皮书，指导高校如何从技术选型、预算审批到学生营销，全流程落地移动凭证项目 63。
+6.2 未来趋势：生物识别与全面无卡化
+展望未来，实体卡的消亡已成定局。
+* 全面无卡化（Plastic-less）： 诸如阿拉巴马大学等先锋院校已开始向新生默认仅发行移动凭证，实体卡需额外付费申请。这不仅环保（减少PVC塑料），更提升了安全性 65。
+* 生物识别（Biometrics）： Amazon One掌纹支付、人脸识别门禁正逐步在食堂和体育馆试点。未来，学生甚至不需要手机，由于照片提交环节的高质量数据库建设，由于“脸”本身即是ID，校园将进入“无感通行”时代。
+________________
+结论
+综上所述，美国大学学生证的规范体系是一个由精密技术标准（ISO 14443, NFC, SE）、严格行政流程（远程审核, 身份交叉验证）和复杂法律合规（FERPA, 选民ID法）共同编织的严密网络。从哈佛大学对照片像素的毫厘计较，到苹果公司对NFC协议的深度定制，每一个细节都服务于同一个目标：在保障校园绝对安全的前提下，为学生提供无缝、便捷的学习与生活体验。对于即将赴美的留学生而言，理解这一系统不仅是入学的必要步骤，更是融入数字化校园生活的第一课。
+表1：校园卡主流技术标准对比分析
+特性
+	磁条卡 (Magstripe)
+	低频卡 (Prox 125kHz)
+	智能卡 (Smart 13.56MHz)
+	移动凭证 (Mobile NFC)
+	核心安全技术
+	无 (明文磁记录)
+	无 (明文广播)
+	AES/3DES 加密
+	安全元件 (SE) 硬件加密
+	复制/克隆难度
+	极低 (易被侧录)
+	低 (易被复制器克隆)
+	高 (加密且带密钥)
+	极高 (无法物理复制)
+	存储容量
+	极低 (仅轨道数据)
+	低 (仅ID号)
+	高 (2K-8K, 多应用分区)
+	动态 (云端同步)
+	读取方式
+	接触式刷卡 (Swipe)
+	非接触 (<10cm)
+	非接触 (<4cm)
+	非接触 (手机/手表)
+	主要应用场景
+	图书馆, 老式POS
+	老旧门禁
+	高安防门禁, 消费
+	全场景 (门禁, 支付, 交通)
+	行业趋势
+	淘汰中
+	强制升级中
+	当前主流
+	未来标准
+	表2：部分美国名校照片提交要求速查
+大学名称
+	最小像素尺寸
+	最大文件大小
+	背景要求
+	允许格式
+	特殊备注
+	哈佛大学
+	280 x 296 px
+	6 MB
+	纯白/灰白
+	JPEG, HEIC
+	鼓励自然微笑，禁止修图
+	UCLA
+	护照级质量
+	未指定
+	纯白
+	JPEG
+	需在迎新前通过MyUCLA上传
+	休斯顿大学
+	300 x 400 px
+	1 MB
+	白色
+	JPEG
+	需同时上传政府ID以供核验
+	伊利诺伊大学
+	<1000 px
+	500 KB
+	浅色背景
+	JPEG
+	文件名需包含UIN
+	斯坦福大学
+	未指定
+	未指定
+	纯色背景
+	JPEG
+	支持与斯坦福目录(Directory)同步
+	(报告结束)
+Works cited
+1. MIFARE® DESFire® EV3 Blank White PVC Cards - ID Cards Direct, accessed January 28, 2026, https://www.idcardsdirect.com/products/mifarer-desfire-ev3-blank-white-pvc-cards
+2. HID iCLASS Seos Card For Modern Access Control Systems - advantidge, accessed January 28, 2026, https://advantidge.com/iclass-seos-card/
+3. The Many Ways Mobile IDs Can Revolutionize College Campus Life, accessed January 28, 2026, https://www.campussafetymagazine.com/insights/the-many-ways-mobile-ids-can-revolutionize-college-campus-life/166263/
+4. Mobile Credentials: The Future of Access Control - Callmc, accessed January 28, 2026, https://callmc.com/mobile-credentials-access-control/
+5. Demystifying Campus Cards: What We Wish Everyone Understood - NACCU, accessed January 28, 2026, https://www.naccu.org/news/demystifying-campus-cards-what-we-wish-everyone-understood
+6. Assessment Tools - NACCU, accessed January 28, 2026, https://www.naccu.org/assessment-tools
+7. Navigating Legislation: What is Changing in Campus Card and Student ID Policies, accessed January 28, 2026, https://www.naccu.org/news/navigating-legislation-what-is-changing-in-campus-card-and-student-id-policies
+8. Harvard University | Home | MyPhoto, accessed January 28, 2026, https://idphoto.campusservicecenter.cadm.harvard.edu/
+9. What is a BruinCard? | UCLA Undergraduate Admission, accessed January 28, 2026, https://admission.ucla.edu/admitted-students/apply-for-bruin-card
+10. ID Cards - Campus Service Center - Harvard University, accessed January 28, 2026, https://www.campusservicecenter.harvard.edu/id-cards
+11. ID Cards - Harvard Summer School, accessed January 28, 2026, https://summer.harvard.edu/academic-opportunities-support/services/id-cards/
+12. Photo Requirements - Cougar Card - University of Houston, accessed January 28, 2026, https://www.uh.edu/af-university-services/cougarcard/know-your-card/photo-requirements/
+13. Photo terms and conditions, i-card Programs - University of Illinois System, accessed January 28, 2026, https://icard.uillinois.edu/public/photo-terms.cfm
+14. my photo - Harvard University | Home | MyPhoto, accessed January 28, 2026, https://idphoto.campusservicecenter.cadm.harvard.edu/instructions.aspx
+15. Photo Submission Guidelines - Panther Central - University of Pittsburgh, accessed January 28, 2026, https://www.pc.pitt.edu/pitt-id/photo-submission-guidelines
+16. ID Card - Ex Libris Knowledge Center, accessed January 28, 2026, https://knowledge.exlibrisgroup.com/campusM/Product_Documentation/Managing_Product_Integrations/ID_Card
+17. Cal 1 Card Policy | Office of Ethics, Risk, and Compliance Services - UC Berkeley, accessed January 28, 2026, https://oercs.berkeley.edu/policies/campus-policy-library/cal-1-card-policy
+18. Penn State launching new id+ card with updated design, enhanced digital features | LiveOn, accessed January 28, 2026, https://liveon.psu.edu/abington/news/penn-state-launching-new-id-card-updated-design-enhanced-digital-features
+19. Guide to Designing School ID Cards With Entrust Card Issuance Software, accessed January 28, 2026, https://www.entrust.com/resources/learn/guide-to-designing-school-id-cards
+20. Visual Style Guide | The University of Texas System, accessed January 28, 2026, https://www.utsystem.edu/sites/branding/visual-style-guide
+21. ID Card Security - AlphaCard, accessed January 28, 2026, https://www.alphacard.com/id-cards/id-card-security
+22. Zebra Solutions Secure ID Cards, accessed January 28, 2026, https://www.zebra.com/content/dam/zebra_dam/en/brochure/portfolio/card-security-en-us.pdf
+23. Brand Identity Guidelines - Toolkit | OCMPA - CUNY, accessed January 28, 2026, https://toolkit.baruch.cuny.edu/wp-content/uploads/sites/11/2022/08/Final-BrandIdentityGuidelines.pdf
+24. Card size specifications: When does card size matter? - CampusIDNews %, accessed January 28, 2026, https://www.campusidnews.com/card-size-specifications-when-does-card-size-matter/
+25. What Is a CR80 Card? Is It the Same as an RFID Card?, accessed January 28, 2026, https://www.nfctagfactory.com/news/cr80-card-but-what-exactly-is-it-and-how-does-it-relate-to-rfid-cards.html
+26. CR80 Card Specification | CardLogix Corporation, accessed January 28, 2026, https://www.cardlogix.com/glossary/cr80/
+27. 30 mil PVC Smart Card with Magnetic Stripe (CR80/Credit Card Size) - IDenticard.com, accessed January 28, 2026, https://identicard.com/products/pvc-smart-card-magnetic-stripe-cr80-credit-card-size
+28. Magnetic Stripe Encoding - Introduction to ID Card Software - Learning Center - AlphaCard, accessed January 28, 2026, https://www.alphacard.com/learning-center/intro-to-id-card-software/encoding-options/magnetic-stripe-encoding/
+29. How to Write Magnetic ID Cards: Data Encoding Walkthrough - Employee ID Badges, accessed January 28, 2026, https://instantcard.net/magnetic-id-card/
+30. Terminology Guide - NACCU, accessed January 28, 2026, https://www.naccu.org/terminology-guide
+31. Encoding Scheme of Mag Stripe Cards? - Google Groups, accessed January 28, 2026, https://groups.google.com/g/sci.electronics/c/h7JSZeIImlQ
+32. Understanding chip options for contactless campus cards - CampusIDNews, accessed January 28, 2026, https://www.campusidnews.com/understanding-chip-options-for-contactless-campus-cards/
+33. Higher Education Solutions - Idesco Corp., accessed January 28, 2026, https://www.idesco.com/files/articles/Higher%20Education%20Solutions%20Brochure.pdf
+34. Unsecure And Outdated Proximity Cards - LONG Building Technologies, accessed January 28, 2026, https://www.long.com/blog/unsecure-and-outdated-proximity-cards/
+35. Future of 125KHz Proximity Cards, MIFARE 13.56MHz Cards, and Biometrics., accessed January 28, 2026, http://smartcardamerica.us/future-of-125khz-proximity-cards-and-mifare-13-56mhz-cards-and-the-biometrics/
+36. ISO/IEC 14443 - Wikipedia, accessed January 28, 2026, https://en.wikipedia.org/wiki/ISO/IEC_14443
+37. Contactless card standards: Making sense of 10536, 14443, and 15693 - CampusIDNews, accessed January 28, 2026, https://www.campusidnews.com/contactless-card-standards-making-sense-of-10536-14443-and-15693/
+38. The difference between ISO15693 and ISO14443 - RFID Card, accessed January 28, 2026, https://www.rfidcard.com/the-difference-between-iso15693-and-iso14443/
+39. MIFARE DESFire - Universal Smart Cards, accessed January 28, 2026, https://www.usmartcards.com/mifare-desfire-info
+40. HID Seos provides one-card solution for university | ASSA ABLOY, accessed January 28, 2026, https://www.assaabloy.com/group/en/news-media/stories/news/hid-seos-provides-one-card-solution-for-university
+41. MIFARE® DESFire® Smart Credentials | Schlage Access Control, accessed January 28, 2026, https://commercial.schlage.com/en/products/credentials/schlage-1356-mhz-mifare-desfire-smart-credentials.html
+42. NFC & SE Platform for Secure Contactless Transactions - Support - Apple Developer, accessed January 28, 2026, https://developer.apple.com/support/nfc-se-platform/
+43. NFC & SE Platform security - Apple Support, accessed January 28, 2026, https://support.apple.com/guide/security/nfc-se-platform-security-secda20f3f41/web
+44. NFC vs BLE credentials: Determine which is right for you - rf IDEAS, accessed January 28, 2026, https://www.rfideas.com/about-us/blog/nfc-vs-ble-credentials-determine-which-right-you
+45. HID Mobile Access Solution Overview, accessed January 28, 2026, https://www.softconserv.com/downloads/HID/mobile_access_solution_overview.pdf
+46. GitHub - kormax/apple-enhanced-contactless-polling, accessed January 28, 2026, https://github.com/kormax/apple-enhanced-contactless-polling
+47. PN7150X:High-performance NFC controller IC with support for Apple Enhanced Contactless Polling (ECP) | NXP Semiconductors, accessed January 28, 2026, https://www.nxp.com/products/rfid-nfc/nfc-hf/nfc-readers/high-performance-nfc-controller-ic-with-support-for-apple-enhanced-contactless-polling-ecp:PN7150X
+48. Transact Mobile Credential for Higher Education, accessed January 28, 2026, https://www.transactcampus.com/solutions/campus-id/transact-mobile-credential
+49. Introducing the new Zebra Apple NFC VAS SDK, accessed January 28, 2026, https://www.zebra.com/content/dam/zebra_dam/en/presentation/customer-facing/zebra-devcon2023-presentation-customer-facing-introducing-the-new-zebra-apple-nfc-simone-pozzobon-en-us.pdf
+50. Apple Pay vs. Google Wallet: Key Features and Security Compared - Investopedia, accessed January 28, 2026, https://www.investopedia.com/articles/personal-finance/010215/apple-pay-vs-google-wallet-how-they-work.asp
+51. Monash University Launches Digital ID Card, Enabled by Transact Campus, accessed January 28, 2026, https://www.transactcampus.com/company/news-and-press/2023/02/23/monash-university-launches-digital-id-card-enabled-by-transact-campus
+52. Campus ID Solutions: Transforming Higher Ed With Technology, accessed January 28, 2026, https://www.transactcampus.com/resources/blog/campus-id-solutions-in-depth-guide-to-transforming-higher-education-through-technology
+53. Mobile ID App Instructions, accessed January 28, 2026, https://www.cmu.edu/housing/resident-services/CBORDMobileID.pdf
+54. Mobile Credentials - CBORD, accessed January 28, 2026, https://resources.cbord.com/hubfs/Collateral/HE-Collateral/HE-MobileCredentials-SellSheet.pdf
+55. How to Prevent Counterfeit ID Cards: Strategies and Technologies for Ensuring Authenticity, accessed January 28, 2026, https://bodno.com/blogs/spotlight/how-to-prevent-counterfeit-id-cards
+56. Ghost Student IDs: The Hidden Threat to Campus Security - IDScan.net, accessed January 28, 2026, https://idscan.net/blog/ghost-student-ids-the-hidden-threat-to-campus-security/
+57. Get a Card - Cal 1 Card - UC Berkeley, accessed January 28, 2026, https://cal1card.berkeley.edu/get-a-card/
+58. I. Record Retention Policy Whereas, current policy does not address the status of disciplinary records for those who do not grad, accessed January 28, 2026, https://www.policies.vt.edu/222-changes-to-university-policies-for-student-life-.pdf
+59. IN SUPPORT OF TRANSACT MOBILE CREDENTIALS FINANCIAL ALLOCATION - UW-Eau Claire, accessed January 28, 2026, https://publicwebuploads.uwec.edu/documents/64-R-42.pdf
+60. Mobile Student ID | Schlage, accessed January 28, 2026, https://commercial.schlage.com/content/dam/allegion-us-2/web-files/schlage/information-documents/Schlage_Mobile_Student_ID_Solution_Sheet_113287.pdf
+61. Using Wireless Locks | DukeCard - Duke University, accessed January 28, 2026, https://dukecard.duke.edu/mobile-dukecard/using-wireless-locks/
+62. DukeCard Access - Duke Student Affairs, accessed January 28, 2026, https://students.duke.edu/living/housing/dukecard/
+63. Institutional Membership Benefits - NACCU, accessed January 28, 2026, https://www.naccu.org/institutional-membership-benefits
+64. NEW: The NACCU Guide to Going Mobile, accessed January 28, 2026, https://www.naccu.org/news/new-the-naccu-guide-to-going-mobile
+65. Transact Mobile Credential now available on Samsung Galaxy Watches - CampusIDNews, accessed January 28, 2026, https://www.campusidnews.com/transact-mobile-credential-now-available-on-samsung-galaxy-watches/

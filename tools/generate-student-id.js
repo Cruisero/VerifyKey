@@ -71,9 +71,9 @@ Generate ONLY the portrait photo, no text, borders, or decorations.`;
     try {
         console.log('[Photo] Generating student photo via Gemini AI...');
 
-        // Add 60 second timeout to prevent hanging
+        // Add 120 second timeout (Gemini image generation can be slow)
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 60000);
+        const timeout = setTimeout(() => controller.abort(), 120000);
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,

@@ -838,7 +838,10 @@ class StudentIdGenerator {
                         }
                     };
 
-                    // Set form values
+                    // =============================
+                    // GENERIC TEMPLATE FIELDS
+                    // =============================
+                    // Set form values (hidden inputs)
                     setById('universityNameInput', studentData.university);
                     setById('nameInput', studentData.name);
                     setById('dobInput', studentData.dob);
@@ -847,7 +850,7 @@ class StudentIdGenerator {
                     setById('academicYearInput', studentData.academicYear);
                     setById('addressInput', studentData.address);
 
-                    // Set card element text content directly
+                    // Set card element text content directly (generic templates)
                     setById('cardUniversityName', studentData.university);
                     setById('cardName', studentData.name);
                     setById('cardDob', studentData.dob);
@@ -859,6 +862,64 @@ class StudentIdGenerator {
                     setById('cardIssueDate', studentData.issueDate);
                     setById('cardValidDate', studentData.validDate);
 
+                    // =============================
+                    // NORTHUMBRIA STYLE TEMPLATE
+                    // =============================
+                    // Split name into first/last for Northumbria template
+                    const nameParts = studentData.name.split(' ');
+                    const firstName = nameParts[0] || studentData.name;
+                    const lastName = nameParts.slice(1).join(' ') || '';
+
+                    setById('cardFirstName', firstName.toUpperCase());
+                    setById('cardLastName', lastName.toUpperCase());
+                    setById('cardUniName', studentData.university);
+                    setById('cardStudentType', 'STUDENT');
+                    setById('cardRegNum', studentData.studentId);
+                    // Generate expiry date for Northumbria (format: YYYY/YYYY+1)
+                    const currentYear = new Date().getFullYear();
+                    const expiryFormatted = `${currentYear}/${currentYear + 1}`;
+                    setById('cardExpiryDate', expiryFormatted);
+                    // Generate Library Number (random 9-digit)
+                    const libNum = String(Math.floor(Math.random() * 900000000) + 100000000);
+                    setById('cardLibNum', libNum);
+
+                    // =============================
+                    // SHEFFIELD STYLE TEMPLATE
+                    // =============================
+                    setById('cardStudentName', studentData.name);
+                    setById('cardDepartment', studentData.faculty || 'Sheffield University Management School');
+                    setById('cardRegistrationNo', studentData.studentId);
+                    // UCard No = slightly modified student ID
+                    const ucardNo = '00' + studentData.studentId.slice(-7);
+                    setById('cardUCardNo', ucardNo);
+                    // Expires date for Sheffield (format: DD/MM/YYYY)
+                    if (studentData.validDate) {
+                        const vd = new Date(studentData.validDate);
+                        const sheffieldExpires = `${String(vd.getDate()).padStart(2, '0')}/${String(vd.getMonth() + 1).padStart(2, '0')}/${vd.getFullYear()}`;
+                        setById('cardExpiresDate', sheffieldExpires);
+                    }
+                    setById('cardLevel', 'PG I');
+
+                    // =============================
+                    // OXFORD STYLE TEMPLATE
+                    // =============================
+                    setById('cardUniName', studentData.university.toUpperCase());
+                    // Oxford-specific fields
+                    const degrees = ['DPhil Mathematics', 'MSc Computer Science', 'BA Philosophy', 'MPhil Economics', 'BCL Law'];
+                    const colleges = ['Merton College', 'Balliol College', 'Christ Church', 'Magdalen College', 'Trinity College'];
+                    setById('cardDegree', degrees[Math.floor(Math.random() * degrees.length)]);
+                    setById('cardCollege', colleges[Math.floor(Math.random() * colleges.length)]);
+                    // Valid Until for Oxford (format: DD MMM YYYY)
+                    if (studentData.validDate) {
+                        const vd = new Date(studentData.validDate);
+                        const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+                        const oxfordValid = `${vd.getDate()} ${months[vd.getMonth()]} ${vd.getFullYear()}`;
+                        setById('cardValidUntil', oxfordValid);
+                    }
+                    // Left/Right codes for Oxford
+                    setById('cardLeftCode', studentData.studentId.slice(0, 6) || '718007');
+                    setById('cardRightCode', '22' + studentData.studentId.slice(-5) || '2250007');
+
                     // Set photo if provided
                     if (photo) {
                         const photoEl = document.getElementById('cardStudentPhoto');
@@ -869,7 +930,7 @@ class StudentIdGenerator {
                     if (logo) {
                         const logoImg = document.getElementById('cardUniversityLogo');
                         // Support both template types: cardLogoFallback (student-id-generator) and logoFallbackText (us-university-id)
-                        const logoFallback = document.getElementById('cardLogoFallback') || document.getElementById('logoFallbackText');
+                        const logoFallback = document.getElementById('cardLogoFallback') || document.getElementById('logoFallbackText') || document.getElementById('logoFallback');
                         // Get container to remove background when logo is loaded
                         const logoContainer = document.getElementById('universityLogoContainer') || logoImg?.parentElement;
                         if (logoImg) {

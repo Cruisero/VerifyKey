@@ -212,8 +212,11 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         # Use SheerID generator (Pillow-based class_schedule/transcript/id_card)
         elif provider == "sheerid":
             sheerid_config = config.get("aiGenerator", {}).get("sheerid", {})
-            doc_type = sheerid_config.get("docType", "class_schedule")
-            print(f"[Verify] Generating SheerID {doc_type} for {first} {last} @ {org['name']}...")
+            doc_types = sheerid_config.get("docTypes", ["class_schedule"])
+            # Randomly select one document type from the configured list
+            import random
+            doc_type = random.choice(doc_types) if doc_types else "class_schedule"
+            print(f"[Verify] Generating SheerID {doc_type} (from {doc_types}) for {first} {last} @ {org['name']}...")
             doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, org["name"], dob)
             if doc_data:
                 documents = [{"type": doc_type, "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
@@ -643,9 +646,12 @@ async def test_document_generation(request: TestDocumentRequest):
         # Use SheerID generator (Pillow-based)
         elif provider == "sheerid":
             sheerid_config = config.get("aiGenerator", {}).get("sheerid", {})
-            doc_type = sheerid_config.get("docType", "class_schedule")
+            doc_types = sheerid_config.get("docTypes", ["class_schedule"])
+            # Randomly select one document type from the configured list
+            import random
+            doc_type = random.choice(doc_types) if doc_types else "class_schedule"
             
-            print(f"[TestDoc] Using SheerID generator with docType: {doc_type}...")
+            print(f"[TestDoc] Using SheerID generator with docType: {doc_type} (from {doc_types})...")
             doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, university)
             
             if doc_data:

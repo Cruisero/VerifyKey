@@ -36,7 +36,7 @@ export default function Admin() {
         availableTemplates: []
     });
     const [sheeridSettings, setSheeridSettings] = useState({
-        docType: 'class_schedule'
+        docTypes: ['class_schedule']  // Default: class_schedule, array for multi-select
     });
     const [proxySettings, setProxySettings] = useState({
         enabled: true,
@@ -106,7 +106,7 @@ export default function Admin() {
                 if (data.aiGenerator?.sheerid) {
                     setSheeridSettings(prev => ({
                         ...prev,
-                        docType: data.aiGenerator.sheerid.docType || prev.docType
+                        docTypes: data.aiGenerator.sheerid.docTypes || prev.docTypes
                     }));
                 }
                 // Load proxy settings
@@ -171,7 +171,7 @@ export default function Admin() {
                     },
                     sheerid: {
                         enabled: aiProvider === 'sheerid',
-                        docType: sheeridSettings.docType
+                        docTypes: sheeridSettings.docTypes || ['class_schedule']
                     },
                     svgFallback: { enabled: true }
                 },
@@ -703,18 +703,55 @@ export default function Admin() {
                                         </div>
 
                                         <div className="input-group">
-                                            <label className="input-label">文档类型</label>
-                                            <select
-                                                className="input"
-                                                value={sheeridSettings?.docType || 'class_schedule'}
-                                                onChange={(e) => setSheeridSettings(s => ({ ...s, docType: e.target.value }))}
-                                            >
-                                                <option value="class_schedule">📅 课程表 (Class Schedule)</option>
-                                                <option value="transcript">📝 成绩单 (Transcript)</option>
-                                                <option value="id_card">🪪 学生证 (ID Card)</option>
-                                            </select>
+                                            <label className="input-label">文档类型（可多选）</label>
+                                            <div className="document-type-checkboxes" style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '10px',
+                                                marginTop: '8px'
+                                            }}>
+                                                {[
+                                                    { value: 'class_schedule', label: '📅 课程表 (Class Schedule)' },
+                                                    { value: 'transcript', label: '📝 成绩单 (Transcript)' },
+                                                    { value: 'id_card', label: '🪪 学生证 (ID Card)' }
+                                                ].map(docType => (
+                                                    <label key={docType.value} style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        cursor: 'pointer',
+                                                        padding: '8px 12px',
+                                                        background: (sheeridSettings?.docTypes || ['class_schedule']).includes(docType.value)
+                                                            ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)'
+                                                            : 'rgba(0,0,0,0.03)',
+                                                        borderRadius: '8px',
+                                                        border: (sheeridSettings?.docTypes || ['class_schedule']).includes(docType.value)
+                                                            ? '1px solid #667eea'
+                                                            : '1px solid transparent',
+                                                        transition: 'all 0.2s ease'
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={(sheeridSettings?.docTypes || ['class_schedule']).includes(docType.value)}
+                                                            onChange={(e) => {
+                                                                const currentTypes = sheeridSettings?.docTypes || ['class_schedule'];
+                                                                let newTypes;
+                                                                if (e.target.checked) {
+                                                                    newTypes = [...currentTypes, docType.value];
+                                                                } else {
+                                                                    newTypes = currentTypes.filter(t => t !== docType.value);
+                                                                    if (newTypes.length === 0) newTypes = ['class_schedule']; // At least one
+                                                                }
+                                                                setSheeridSettings(s => ({ ...s, docTypes: newTypes }));
+                                                            }}
+                                                            style={{ width: '16px', height: '16px' }}
+                                                        />
+                                                        <span style={{ fontSize: '14px' }}>{docType.label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
                                             <p className="input-hint">
-                                                选择生成的文档类型，不同类型适用于不同的验证场景
+                                                选择一个或多个文档类型，系统将随机选择其中一种生成
                                             </p>
                                         </div>
 
@@ -943,16 +980,34 @@ export default function Admin() {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <div className="test-document-form-data">
-                                                <h5>📝 表单数据 (将提交到 SheerID)</h5>
-                                                <table className="form-data-table">
+                                            {/* Form data inside content area */}
+                                            <div className="test-document-form-data" style={{
+                                                background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                                borderRadius: '8px',
+                                                padding: '12px 16px',
+                                                marginTop: '12px'
+                                            }}>
+                                                <h5 style={{
+                                                    margin: '0 0 10px 0',
+                                                    fontSize: '13px',
+                                                    color: '#667eea'
+                                                }}>📝 表单数据 (将提交到 SheerID)</h5>
+                                                <table className="form-data-table" style={{ width: '100%', fontSize: '13px' }}>
                                                     <tbody>
                                                         {Object.entries(testDocumentResult.formData || {})
-                                                            .filter(([key]) => ['firstName', 'lastName', 'university', 'birthDate', 'dob', 'email'].includes(key))
+                                                            .filter(([key]) => ['firstName', 'lastName', 'university', 'birthDate', 'dob', 'email', 'studentId'].includes(key))
                                                             .map(([key, value]) => (
                                                                 <tr key={key}>
-                                                                    <td className="key">{key}</td>
-                                                                    <td className="value">{value}</td>
+                                                                    <td className="key" style={{
+                                                                        padding: '4px 8px',
+                                                                        color: '#666',
+                                                                        fontWeight: 500,
+                                                                        width: '120px'
+                                                                    }}>{key}</td>
+                                                                    <td className="value" style={{
+                                                                        padding: '4px 8px',
+                                                                        fontFamily: 'monospace'
+                                                                    }}>{value}</td>
                                                                 </tr>
                                                             ))}
                                                     </tbody>

@@ -21,7 +21,8 @@ TEMPLATE_DIR = Path(__file__).parent / "templates" / "LionPATH"
 AVAILABLE_TEMPLATES = {
     "schedule.html": "经典风格 (Student Center)",
     "schedule_modern.html": "现代风格 (卡片式)",
-    "schedule_calendar.html": "日历视图 (周课表)"
+    "schedule_calendar.html": "日历视图 (周课表)",
+    "enrollment_verification.html": "注册验证 (SheerID推荐)"
 }
 
 
@@ -128,11 +129,24 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
     # 根据模板选择生成课程格式
     is_modern = 'modern' in template_name.lower()
     is_calendar = 'calendar' in template_name.lower()
+    is_enrollment = 'enrollment' in template_name.lower()
+    
+    # 生成 verification_date (当前日期，格式: January 30, 2026)
+    verification_date = datetime.now().strftime("%B %d, %Y")
+    
+    # 生成 class standing
+    class_standings = ['Freshman', 'Sophomore', 'Junior', 'Senior']
+    class_standing = random.choice(class_standings)
     
     if is_calendar:
         calendar_grid, courses_data, total_units = generate_calendar_grid()
         course_count = len(courses_data)
         courses = ''  # Not used in calendar view
+    elif is_enrollment:
+        # 使用表格格式课程 for enrollment verification
+        courses, total_units = generate_table_format_courses()
+        calendar_grid = ''
+        course_count = 0
     else:
         courses, total_units = generate_random_courses(modern_format=is_modern)
         calendar_grid = ''
@@ -153,6 +167,8 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         html = html.replace('{{total_units}}', str(total_units))
         html = html.replace('{{calendar_grid}}', calendar_grid)
         html = html.replace('{{course_count}}', str(course_count))
+        html = html.replace('{{verification_date}}', verification_date)
+        html = html.replace('{{class_standing}}', class_standing)
     else:
         # 回退到内联模板 (保留原始代码以防模板文件丢失)
         html = f"""<!DOCTYPE html>
@@ -516,6 +532,65 @@ def generate_random_courses(modern_format: bool = False) -> tuple:
                 <td>{room}</td>
                 <td>{instructor}</td>
             </tr>"""
+        rows.append(row)
+    
+    return '\n'.join(rows), total_units
+
+
+def generate_table_format_courses() -> tuple:
+    """生成表格格式课程列表 (用于 enrollment verification 模板)
+    
+    Returns:
+        tuple: (表格行 HTML, 总学分)
+    """
+    
+    # 使用预定义的合理课程组合 (从 generate_calendar_grid 复用)
+    course_sets = [
+        # CS 大一/大二课程组合
+        [
+            ('CMPSC 131', 'Programming and Computation I', 3, 'MWF', '9:00 - 9:50 AM', 'Willard 062'),
+            ('MATH 140', 'Calculus with Analytic Geometry I', 4, 'MWF', '10:10 - 11:00 AM', 'Thomas 102'),
+            ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '9:05 - 10:20 AM', 'Sparks 106'),
+            ('PHYS 211', 'General Physics: Mechanics', 4, 'TTh', '11:15 AM - 12:30 PM', 'Osmond 112'),
+        ],
+        # CS 大二课程组合
+        [
+            ('CMPSC 132', 'Programming and Computation II', 3, 'MWF', '9:00 - 9:50 AM', 'Westgate E201'),
+            ('MATH 141', 'Calculus with Analytic Geometry II', 4, 'MWF', '11:15 AM - 12:05 PM', 'Thomas 102'),
+            ('CMPSC 360', 'Discrete Mathematics for CS', 3, 'TTh', '9:05 - 10:20 AM', 'Willard 062'),
+            ('STAT 200', 'Elementary Statistics', 4, 'TTh', '1:35 - 2:50 PM', 'Forum 114'),
+        ],
+        # CS 大三课程组合
+        [
+            ('CMPSC 311', 'Introduction to Systems Programming', 3, 'MWF', '10:10 - 11:00 AM', 'Westgate E201'),
+            ('CMPSC 465', 'Data Structures and Algorithms', 3, 'TTh', '9:05 - 10:20 AM', 'Sackett 202'),
+            ('MATH 220', 'Matrices', 2, 'MWF', '1:25 - 2:15 PM', 'Thomas 102'),
+            ('PHYS 212', 'Electricity and Magnetism', 4, 'TTh', '11:15 AM - 12:30 PM', 'Osmond 112'),
+        ],
+        # IST/商科组合
+        [
+            ('IST 210', 'Organization of Data', 3, 'MWF', '9:00 - 9:50 AM', 'IST 220'),
+            ('ECON 102', 'Introductory Microeconomic Analysis', 3, 'TTh', '9:05 - 10:20 AM', 'Boucke 304'),
+            ('STAT 200', 'Elementary Statistics', 4, 'MWF', '11:15 AM - 12:05 PM', 'Forum 114'),
+            ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '1:35 - 2:50 PM', 'Sparks 106'),
+        ],
+    ]
+    
+    # 随机选择一个课程组合
+    selected_set = random.choice(course_sets)
+    
+    rows = []
+    total_units = 0
+    
+    for course_code, title, units, days, time_range, room in selected_set:
+        total_units += units
+        row = f"""                    <tr>
+                        <td class="course-code">{course_code}</td>
+                        <td>{title}</td>
+                        <td>{units}</td>
+                        <td>{days} {time_range}</td>
+                        <td>{room}</td>
+                    </tr>"""
         rows.append(row)
     
     return '\n'.join(rows), total_units

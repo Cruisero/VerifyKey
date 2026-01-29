@@ -13,6 +13,13 @@ from typing import Tuple, Optional
 from pathlib import Path
 import logging
 
+# 导入图像后处理模块
+try:
+    from image_processor import process_screenshot
+    HAS_IMAGE_PROCESSOR = True
+except ImportError:
+    HAS_IMAGE_PROCESSOR = False
+
 logger = logging.getLogger(__name__)
 
 # 模板路径
@@ -909,6 +916,14 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(run_playwright)
             screenshot_bytes, major = future.result(timeout=30)
+        
+        # 应用图像后处理（添加真实感效果）
+        if HAS_IMAGE_PROCESSOR:
+            try:
+                screenshot_bytes = process_screenshot(screenshot_bytes, aggressive=False)
+                logger.info("[LionPATH] ✓ Applied realistic image effects")
+            except Exception as proc_err:
+                logger.warning(f"[LionPATH] Image processing failed, using original: {proc_err}")
 
         filename = f"lionpath_{first_name.lower()}_{last_name.lower()}_{int(datetime.now().timestamp() * 1000)}.png"
         logger.info(f"[LionPATH] ✓ Generated: {filename} ({len(screenshot_bytes)} bytes)")

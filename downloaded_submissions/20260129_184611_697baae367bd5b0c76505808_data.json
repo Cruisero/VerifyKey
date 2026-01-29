@@ -1,0 +1,23 @@
+{
+  "verificationId": "697baae367bd5b0c76505808",
+  "timestamp": "20260129_184611",
+  "student": {
+    "firstName": "John",
+    "lastName": "Smith",
+    "email": "john.smith5517@psu.edu",
+    "birthDate": "2002-05-25"
+  },
+  "university": {
+    "id": 2565,
+    "idExtended": null,
+    "name": "Pennsylvania State University-Main Campus (University Park, PA)",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "lionpath",
+      "fileName": "lionpath_john_smith_1769712371459.png"
+    }
+  ],
+  "provider": "lionpath"
+}

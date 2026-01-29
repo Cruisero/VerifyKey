@@ -1,0 +1,23 @@
+{
+  "verificationId": "697b64a6d2c83f17deaa33df",
+  "timestamp": "20260129_154336",
+  "student": {
+    "firstName": "Jennifer",
+    "lastName": "Miller",
+    "email": "jennifer.miller7812@psu.edu",
+    "birthDate": "2001-11-12"
+  },
+  "university": {
+    "id": 1354,
+    "idExtended": null,
+    "name": "Pennsylvania State University",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "lionpath",
+      "fileName": "lionpath_jennifer_miller_1769701416811.png"
+    }
+  ],
+  "provider": "lionpath"
+}

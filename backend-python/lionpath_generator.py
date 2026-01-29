@@ -417,23 +417,37 @@ def generate_random_courses(modern_format: bool = False) -> tuple:
     """
     
     course_pool = [
+        # CMPSC - Computer Science (official Penn State bulletin)
+        ('CMPSC 121', 'Introduction to Programming Techniques', 3),
+        ('CMPSC 131', 'Programming and Computation I: Fundamentals', 3),
+        ('CMPSC 132', 'Programming and Computation II: Data Structures', 3),
+        ('CMPSC 221', 'Object-Oriented Programming with Web-Based Applications', 3),
+        ('CMPSC 311', 'Introduction to Systems Programming', 3),
+        ('CMPSC 360', 'Discrete Mathematics for Computer Science', 3),
         ('CMPSC 465', 'Data Structures and Algorithms', 3),
-        ('CMPSC 473', 'Operating Systems Design', 3),
+        ('CMPSC 473', 'Operating Systems Design and Construction', 3),
         ('CMPSC 431W', 'Database Management Systems', 3),
-        ('CMPSC 360', 'Discrete Mathematics', 3),
-        ('CMPSC 311', 'Systems Programming', 3),
-        ('MATH 230', 'Calculus and Vector Analysis', 4),
+        # MATH - Mathematics (official Penn State bulletin)
+        ('MATH 140', 'Calculus with Analytic Geometry I', 4),
+        ('MATH 141', 'Calculus with Analytic Geometry II', 4),
         ('MATH 220', 'Matrices', 2),
+        ('MATH 230', 'Calculus and Vector Analysis', 4),
         ('MATH 251', 'Ordinary Differential Equations', 4),
+        # STAT - Statistics
+        ('STAT 200', 'Elementary Statistics', 4),
         ('STAT 318', 'Elementary Probability', 3),
         ('STAT 414', 'Introduction to Probability Theory', 3),
+        # PHYS - Physics (official Penn State bulletin)
         ('PHYS 211', 'General Physics: Mechanics', 4),
         ('PHYS 212', 'General Physics: Electricity and Magnetism', 4),
-        ('ENGL 202C', 'Technical Writing', 3),
+        # Other common courses
+        ('ENGL 202C', 'Effective Writing: Technical Writing', 3),
         ('ECON 102', 'Introductory Microeconomic Analysis', 3),
         ('ECON 104', 'Introductory Macroeconomic Analysis', 3),
         ('IST 210', 'Organization of Data', 3),
         ('IST 256', 'Programming for the Web', 3),
+        ('CMPEN 270', 'Digital Design Lab', 2),
+        ('CMPEN 331', 'Computer Organization and Design', 3),
     ]
     
     time_slots = [
@@ -514,43 +528,44 @@ def generate_calendar_grid() -> tuple:
         tuple: (calendar HTML, courses list, total units)
     """
     
-    # Penn State 真实课程池
-    course_pool = [
-        ('CMPSC 131', 'Programming and Computation I', 3),
-        ('CMPSC 132', 'Programming and Computation II', 3),
-        ('CMPSC 221', 'Object-Oriented Programming', 3),
-        ('CMPSC 311', 'Introduction to Systems Programming', 3),
-        ('CMPSC 360', 'Discrete Mathematics for CS', 3),
-        ('CMPSC 465', 'Data Structures and Algorithms', 3),
-        ('CMPSC 473', 'Operating Systems Design', 3),
-        ('MATH 140', 'Calculus with Analytic Geometry I', 4),
-        ('MATH 141', 'Calculus with Analytic Geometry II', 4),
-        ('MATH 220', 'Matrices', 2),
-        ('MATH 230', 'Calculus and Vector Analysis', 4),
-        ('PHYS 211', 'General Physics: Mechanics', 4),
-        ('PHYS 212', 'Electricity and Magnetism', 4),
-        ('STAT 318', 'Elementary Probability', 3),
-        ('ENGL 202C', 'Technical Writing', 3),
-        ('ECON 102', 'Introductory Microeconomics', 3),
-        ('ECON 104', 'Introductory Macroeconomics', 3),
-        ('IST 210', 'Organization of Data', 3),
-        ('CMPEN 270', 'Digital Design Lab', 2),
-        ('CMPEN 331', 'Computer Organization', 3),
-    ]
-    
-    # 时间段和对应 CSS 类
-    time_slots = [
-        ('8:00 AM', 'MWF'),
-        ('9:05 AM', 'MWF'),
-        ('10:10 AM', 'MWF'),
-        ('11:15 AM', 'MWF'),
-        ('12:20 PM', 'MWF'),
-        ('1:25 PM', 'MWF'),
-        ('8:00 AM', 'TTh'),
-        ('9:30 AM', 'TTh'),
-        ('11:00 AM', 'TTh'),
-        ('12:30 PM', 'TTh'),
-        ('2:00 PM', 'TTh'),
+    # 预定义的合理课程组合 (避免前置课程冲突)
+    # 每组课程都是学术上合理的组合，不会同时选修有先后顺序的课程
+    course_sets = [
+        # CS 大一/大二课程组合
+        [
+            ('CMPSC 131', 'Programming and Computation I', 3, 'MWF', '9:00 AM'),
+            ('MATH 140', 'Calculus with Analytic Geometry I', 4, 'MWF', '10:00 AM'),
+            ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '9:00 AM'),
+            ('PHYS 211', 'General Physics: Mechanics', 4, 'TTh', '11:00 AM'),
+        ],
+        # CS 大二课程组合
+        [
+            ('CMPSC 132', 'Programming and Computation II', 3, 'MWF', '9:00 AM'),
+            ('MATH 141', 'Calculus with Analytic Geometry II', 4, 'MWF', '11:00 AM'),
+            ('CMPSC 360', 'Discrete Mathematics for CS', 3, 'TTh', '9:00 AM'),
+            ('STAT 200', 'Elementary Statistics', 4, 'TTh', '1:00 PM'),
+        ],
+        # CS 大三课程组合
+        [
+            ('CMPSC 311', 'Introduction to Systems Programming', 3, 'MWF', '10:00 AM'),
+            ('CMPSC 465', 'Data Structures and Algorithms', 3, 'TTh', '9:00 AM'),
+            ('MATH 220', 'Matrices', 2, 'MWF', '1:00 PM'),
+            ('PHYS 212', 'Electricity and Magnetism', 4, 'TTh', '11:00 AM'),
+        ],
+        # CS 大三/四课程组合
+        [
+            ('CMPSC 473', 'Operating Systems Design', 3, 'MWF', '9:00 AM'),
+            ('CMPSC 221', 'Object-Oriented Programming', 3, 'TTh', '10:00 AM'),
+            ('IST 210', 'Organization of Data', 3, 'MWF', '11:00 AM'),
+            ('ECON 102', 'Introductory Microeconomic Analysis', 3, 'TTh', '1:00 PM'),
+        ],
+        # IST/商科组合
+        [
+            ('IST 210', 'Organization of Data', 3, 'MWF', '9:00 AM'),
+            ('ECON 102', 'Introductory Microeconomic Analysis', 3, 'TTh', '9:00 AM'),
+            ('STAT 200', 'Elementary Statistics', 4, 'MWF', '11:00 AM'),
+            ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '11:00 AM'),
+        ],
     ]
     
     rooms = [
@@ -561,18 +576,15 @@ def generate_calendar_grid() -> tuple:
     
     color_classes = ['', 'alt-1', 'alt-2', 'alt-3', 'alt-4']
     
-    # 随机选择 4-5 门课程
-    num_courses = random.randint(4, 5)
-    selected_courses = random.sample(course_pool, num_courses)
-    selected_times = random.sample(time_slots, num_courses)
-    selected_rooms = random.sample(rooms, num_courses)
+    # 随机选择一个课程组合
+    selected_set = random.choice(course_sets)
+    selected_rooms = random.sample(rooms, len(selected_set))
     
-    total_units = sum(c[2] for c in selected_courses)
+    total_units = sum(c[2] for c in selected_set)
     courses_data = []
     
     # 构建课程数据
-    for i, (course_code, title, units) in enumerate(selected_courses):
-        time_str, days = selected_times[i]
+    for i, (course_code, title, units, days, time_str) in enumerate(selected_set):
         room = selected_rooms[i]
         color = color_classes[i % len(color_classes)]
         courses_data.append({

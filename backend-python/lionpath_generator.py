@@ -144,7 +144,8 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         courses = ''  # Not used in calendar view
     elif is_enrollment:
         # 使用表格格式课程 for enrollment verification
-        courses, total_units = generate_table_format_courses()
+        # 返回包含匹配的专业和年级信息
+        courses, total_units, major, class_standing = generate_table_format_courses()
         calendar_grid = ''
         course_count = 0
     else:
@@ -541,39 +542,66 @@ def generate_table_format_courses() -> tuple:
     """生成表格格式课程列表 (用于 enrollment verification 模板)
     
     Returns:
-        tuple: (表格行 HTML, 总学分)
+        tuple: (表格行 HTML, 总学分, 专业, 年级)
     """
     
-    # 使用预定义的合理课程组合 (从 generate_calendar_grid 复用)
+    # 课程组合 + 对应专业 + 对应年级 (确保逻辑一致性)
     course_sets = [
-        # CS 大一/大二课程组合
-        [
-            ('CMPSC 131', 'Programming and Computation I', 3, 'MWF', '9:00 - 9:50 AM', 'Willard 062'),
-            ('MATH 140', 'Calculus with Analytic Geometry I', 4, 'MWF', '10:10 - 11:00 AM', 'Thomas 102'),
-            ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '9:05 - 10:20 AM', 'Sparks 106'),
-            ('PHYS 211', 'General Physics: Mechanics', 4, 'TTh', '11:15 AM - 12:30 PM', 'Osmond 112'),
-        ],
-        # CS 大二课程组合
-        [
-            ('CMPSC 132', 'Programming and Computation II', 3, 'MWF', '9:00 - 9:50 AM', 'Westgate E201'),
-            ('MATH 141', 'Calculus with Analytic Geometry II', 4, 'MWF', '11:15 AM - 12:05 PM', 'Thomas 102'),
-            ('CMPSC 360', 'Discrete Mathematics for CS', 3, 'TTh', '9:05 - 10:20 AM', 'Willard 062'),
-            ('STAT 200', 'Elementary Statistics', 4, 'TTh', '1:35 - 2:50 PM', 'Forum 114'),
-        ],
-        # CS 大三课程组合
-        [
-            ('CMPSC 311', 'Introduction to Systems Programming', 3, 'MWF', '10:10 - 11:00 AM', 'Westgate E201'),
-            ('CMPSC 465', 'Data Structures and Algorithms', 3, 'TTh', '9:05 - 10:20 AM', 'Sackett 202'),
-            ('MATH 220', 'Matrices', 2, 'MWF', '1:25 - 2:15 PM', 'Thomas 102'),
-            ('PHYS 212', 'Electricity and Magnetism', 4, 'TTh', '11:15 AM - 12:30 PM', 'Osmond 112'),
-        ],
-        # IST/商科组合
-        [
-            ('IST 210', 'Organization of Data', 3, 'MWF', '9:00 - 9:50 AM', 'IST 220'),
-            ('ECON 102', 'Introductory Microeconomic Analysis', 3, 'TTh', '9:05 - 10:20 AM', 'Boucke 304'),
-            ('STAT 200', 'Elementary Statistics', 4, 'MWF', '11:15 AM - 12:05 PM', 'Forum 114'),
-            ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '1:35 - 2:50 PM', 'Sparks 106'),
-        ],
+        # CS Freshman (大一新生)
+        {
+            'major': 'Computer Science (BS)',
+            'standing': 'Freshman',
+            'courses': [
+                ('CMPSC 131', 'Programming and Computation I', 3, 'MWF', '9:00 - 9:50 AM', 'Willard 062'),
+                ('MATH 140', 'Calculus with Analytic Geometry I', 4, 'MWF', '10:10 - 11:00 AM', 'Thomas 102'),
+                ('ENGL 015', 'Rhetoric and Composition', 3, 'TTh', '9:05 - 10:20 AM', 'Sparks 106'),
+                ('PHYS 211', 'General Physics: Mechanics', 4, 'TTh', '11:15 AM - 12:30 PM', 'Osmond 112'),
+            ]
+        },
+        # CS Sophomore (大二)
+        {
+            'major': 'Computer Science (BS)',
+            'standing': 'Sophomore',
+            'courses': [
+                ('CMPSC 132', 'Programming and Computation II', 3, 'MWF', '9:00 - 9:50 AM', 'Westgate E201'),
+                ('MATH 141', 'Calculus with Analytic Geometry II', 4, 'MWF', '11:15 AM - 12:05 PM', 'Thomas 102'),
+                ('CMPSC 360', 'Discrete Mathematics for CS', 3, 'TTh', '9:05 - 10:20 AM', 'Willard 062'),
+                ('PHYS 212', 'Electricity and Magnetism', 4, 'TTh', '1:35 - 2:50 PM', 'Osmond 112'),
+            ]
+        },
+        # CS Junior (大三)
+        {
+            'major': 'Computer Science (BS)',
+            'standing': 'Junior',
+            'courses': [
+                ('CMPSC 311', 'Introduction to Systems Programming', 3, 'MWF', '10:10 - 11:00 AM', 'Westgate E201'),
+                ('CMPSC 465', 'Data Structures and Algorithms', 3, 'TTh', '9:05 - 10:20 AM', 'Sackett 202'),
+                ('MATH 220', 'Matrices', 2, 'MWF', '1:25 - 2:15 PM', 'Thomas 102'),
+                ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '11:15 AM - 12:30 PM', 'Sparks 106'),
+            ]
+        },
+        # IST Sophomore
+        {
+            'major': 'Information Sciences and Technology (BS)',
+            'standing': 'Sophomore',
+            'courses': [
+                ('IST 210', 'Organization of Data', 3, 'MWF', '9:00 - 9:50 AM', 'IST 220'),
+                ('IST 220', 'Networking and Telecommunications', 3, 'TTh', '9:05 - 10:20 AM', 'Westgate E201'),
+                ('STAT 200', 'Elementary Statistics', 4, 'MWF', '11:15 AM - 12:05 PM', 'Forum 114'),
+                ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '1:35 - 2:50 PM', 'Sparks 106'),
+            ]
+        },
+        # Business Freshman
+        {
+            'major': 'Business Administration (BS)',
+            'standing': 'Freshman',
+            'courses': [
+                ('ECON 102', 'Introductory Microeconomic Analysis', 3, 'MWF', '9:00 - 9:50 AM', 'Boucke 304'),
+                ('MATH 110', 'Techniques of Calculus I', 4, 'MWF', '10:10 - 11:00 AM', 'Thomas 102'),
+                ('ENGL 015', 'Rhetoric and Composition', 3, 'TTh', '9:05 - 10:20 AM', 'Sparks 106'),
+                ('BA 100', 'Introduction to Business', 3, 'TTh', '11:15 AM - 12:30 PM', 'Business Building 101'),
+            ]
+        },
     ]
     
     # 随机选择一个课程组合
@@ -582,7 +610,7 @@ def generate_table_format_courses() -> tuple:
     rows = []
     total_units = 0
     
-    for course_code, title, units, days, time_range, room in selected_set:
+    for course_code, title, units, days, time_range, room in selected_set['courses']:
         total_units += units
         row = f"""                    <tr>
                         <td class="course-code">{course_code}</td>
@@ -593,7 +621,8 @@ def generate_table_format_courses() -> tuple:
                     </tr>"""
         rows.append(row)
     
-    return '\n'.join(rows), total_units
+    return '\n'.join(rows), total_units, selected_set['major'], selected_set['standing']
+
 
 
 def generate_calendar_grid() -> tuple:

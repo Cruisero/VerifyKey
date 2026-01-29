@@ -25,6 +25,7 @@ from verifier import SheerIDVerifier, parse_verification_id, poll_verification_s
 from doc_generator import generate_document
 from puppeteer_doc_generator import generate_document_puppeteer
 from lionpath_generator import generate_lionpath_image, generate_psu_email
+from sheerid_generator import generate_document as generate_document_sheerid
 import auth
 
 # Load environment variables
@@ -207,6 +208,15 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                 documents = [{"type": "lionpath", "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
                 # Use email from LionPATH for form submission
                 email = student_data.get("email", email)
+        
+        # Use SheerID generator (Pillow-based class_schedule/transcript/id_card)
+        elif provider == "sheerid":
+            sheerid_config = config.get("aiGenerator", {}).get("sheerid", {})
+            doc_type = sheerid_config.get("docType", "class_schedule")
+            print(f"[Verify] Generating SheerID {doc_type} for {first} {last} @ {org['name']}...")
+            doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, org["name"], dob)
+            if doc_data:
+                documents = [{"type": doc_type, "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
         
         # Use Puppeteer if configured
         elif provider == "puppeteer":
@@ -627,6 +637,40 @@ async def test_document_generation(request: TestDocumentRequest):
                     "providerNote": provider_note,
                     "image": f"data:image/png;base64,{image_base64}",
                     "formData": student_data,
+                    "filename": filename
+                }
+        
+        # Use SheerID generator (Pillow-based)
+        elif provider == "sheerid":
+            sheerid_config = config.get("aiGenerator", {}).get("sheerid", {})
+            doc_type = sheerid_config.get("docType", "class_schedule")
+            
+            print(f"[TestDoc] Using SheerID generator with docType: {doc_type}...")
+            doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, university)
+            
+            if doc_data:
+                image_base64 = base64.b64encode(doc_data).decode('utf-8')
+                
+                doc_type_names = {
+                    "class_schedule": "📅 课程表",
+                    "transcript": "📝 成绩单",
+                    "id_card": "🪪 学生证"
+                }
+                doc_type_display = doc_type_names.get(doc_type, doc_type)
+                
+                provider_note = f"""📚 SheerID 文档生成器
+📄 类型: {doc_type_display}
+👤 姓名: {form_data.get('fullName', 'N/A')}
+🆔 学号: {form_data.get('studentId', 'N/A')}
+🎂 生日: {form_data.get('birthDate', 'N/A')}
+🏫 大学: {form_data.get('university', 'N/A')}"""
+                
+                return {
+                    "success": True,
+                    "provider": "sheerid",
+                    "providerNote": provider_note,
+                    "image": f"data:image/png;base64,{image_base64}",
+                    "formData": form_data,
                     "filename": filename
                 }
         

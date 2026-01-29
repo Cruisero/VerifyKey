@@ -35,6 +35,9 @@ export default function Admin() {
         useGeminiPhoto: true,
         availableTemplates: []
     });
+    const [sheeridSettings, setSheeridSettings] = useState({
+        docType: 'class_schedule'
+    });
     const [proxySettings, setProxySettings] = useState({
         enabled: true,
         host: 'proxy.global.ip2up.com',
@@ -99,6 +102,13 @@ export default function Admin() {
                         useGeminiPhoto: data.aiGenerator.puppeteer.useGeminiPhoto !== false
                     }));
                 }
+                // Load SheerID settings
+                if (data.aiGenerator?.sheerid) {
+                    setSheeridSettings(prev => ({
+                        ...prev,
+                        docType: data.aiGenerator.sheerid.docType || prev.docType
+                    }));
+                }
                 // Load proxy settings
                 if (data.proxy) {
                     setProxySettings(prev => ({
@@ -158,6 +168,10 @@ export default function Admin() {
                         enabled: aiProvider === 'puppeteer',
                         template: puppeteerSettings.template,
                         useGeminiPhoto: puppeteerSettings.useGeminiPhoto
+                    },
+                    sheerid: {
+                        enabled: aiProvider === 'sheerid',
+                        docType: sheeridSettings.docType
                     },
                     svgFallback: { enabled: true }
                 },
@@ -459,6 +473,20 @@ export default function Admin() {
                                         <span className="badge badge-info">备选</span>
                                     </div>
                                 </div>
+
+                                <div
+                                    className={`provider-card ${aiProvider === 'sheerid' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('sheerid')}
+                                >
+                                    <div className="provider-icon">📚</div>
+                                    <div className="provider-info">
+                                        <h4>SheerID Generator</h4>
+                                        <p>通用文档生成：课程表/成绩单/学生证</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-warning">通用</span>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* batch.1key.me API Settings */}
@@ -651,6 +679,51 @@ export default function Admin() {
                                             <br />• 📧 PSU 格式邮箱
                                             <br />• 📚 随机课程表 (4-6门课程)
                                             <br />• 📅 当前学期信息
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* SheerID Generator Settings */}
+                            {aiProvider === 'sheerid' && (
+                                <div className="provider-settings">
+                                    <h4>📚 SheerID Generator 配置</h4>
+                                    <div className="settings-form">
+                                        <div className="sheerid-info" style={{
+                                            background: 'linear-gradient(135deg, #4299E1 0%, #805AD5 100%)',
+                                            color: 'white',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>SheerID Generator</strong> 使用 Pillow 生成通用学术文档，
+                                                支持任意大学，适用于不需要特定大学样式的验证场景。
+                                            </p>
+                                        </div>
+
+                                        <div className="input-group">
+                                            <label className="input-label">文档类型</label>
+                                            <select
+                                                className="input"
+                                                value={sheeridSettings?.docType || 'class_schedule'}
+                                                onChange={(e) => setSheeridSettings(s => ({ ...s, docType: e.target.value }))}
+                                            >
+                                                <option value="class_schedule">📅 课程表 (Class Schedule)</option>
+                                                <option value="transcript">📝 成绩单 (Transcript)</option>
+                                                <option value="id_card">🪪 学生证 (ID Card)</option>
+                                            </select>
+                                            <p className="input-hint">
+                                                选择生成的文档类型，不同类型适用于不同的验证场景
+                                            </p>
+                                        </div>
+
+                                        <p className="input-hint" style={{ marginTop: '16px' }}>
+                                            ✨ 此模式将自动生成：
+                                            <br />• 📛 随机学生姓名 (Faker 美国)
+                                            <br />• 🆔 8位随机学号
+                                            <br />• 🎂 大学生年龄的随机生日 (2000-2006)
+                                            <br />• 📚 随机课程/成绩数据
                                         </p>
                                     </div>
                                 </div>

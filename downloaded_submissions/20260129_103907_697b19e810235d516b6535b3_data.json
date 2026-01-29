@@ -1,0 +1,23 @@
+{
+  "verificationId": "697b19e810235d516b6535b3",
+  "timestamp": "20260129_103907",
+  "student": {
+    "firstName": "William",
+    "lastName": "Davis",
+    "email": "william.davis300@psu.edu",
+    "birthDate": "2006-11-02"
+  },
+  "university": {
+    "id": 1354,
+    "idExtended": null,
+    "name": "Pennsylvania State University",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "lionpath",
+      "fileName": "lionpath_william_davis_1769683147272.png"
+    }
+  ],
+  "provider": "lionpath"
+}

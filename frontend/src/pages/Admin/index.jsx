@@ -924,9 +924,86 @@ export default function Admin() {
                                 <div className="test-document-result">
                                     <h4>📄 文档生成测试结果</h4>
                                     {testDocumentResult.success ? (
-                                        <div className="test-result success">
-                                            <span className="test-icon">✅</span>
-                                            <span className="test-message">文档生成成功</span>
+                                        <div className="test-document-content">
+                                            {testDocumentResult.providerNote && (
+                                                <div className="provider-note" style={{
+                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                    color: 'white',
+                                                    padding: '8px 16px',
+                                                    borderRadius: '6px',
+                                                    marginBottom: '16px',
+                                                    fontSize: '14px',
+                                                    whiteSpace: 'pre-line'
+                                                }}>
+                                                    {testDocumentResult.providerNote}
+                                                </div>
+                                            )}
+                                            {/* Display all generated documents */}
+                                            <div className="test-document-images" style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: testDocumentResult.images?.length > 1 ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr',
+                                                gap: '16px',
+                                                marginBottom: '20px'
+                                            }}>
+                                                {(testDocumentResult.images || [{ image: testDocumentResult.image, filename: testDocumentResult.filename, type: 'document' }]).map((doc, idx) => (
+                                                    <div key={idx} className="test-document-image" style={{
+                                                        background: '#f8f9fa',
+                                                        borderRadius: '12px',
+                                                        padding: '12px',
+                                                        textAlign: 'center'
+                                                    }}>
+                                                        <div style={{
+                                                            fontSize: '12px',
+                                                            color: '#667eea',
+                                                            fontWeight: 600,
+                                                            marginBottom: '8px',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            {doc.type === 'id_card' ? '🪪 学生卡' :
+                                                                doc.type === 'transcript' ? '📜 成绩单' :
+                                                                    doc.type === 'class_schedule' ? '📅 课程表' :
+                                                                        doc.type === 'schedule' ? '📅 课程表' : '📄 文档'}
+                                                        </div>
+                                                        <img
+                                                            src={doc.image}
+                                                            alt={doc.type || 'Generated Document'}
+                                                            style={{
+                                                                maxWidth: '100%',
+                                                                maxHeight: '300px',
+                                                                borderRadius: '8px',
+                                                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                                            }}
+                                                        />
+                                                        <p className="filename" style={{
+                                                            marginTop: '8px',
+                                                            fontSize: '12px',
+                                                            color: '#666'
+                                                        }}>{doc.filename}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {/* Form data */}
+                                            <div className="test-document-form-data" style={{
+                                                background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                                borderRadius: '8px',
+                                                padding: '12px 16px'
+                                            }}>
+                                                <h5 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#667eea' }}>
+                                                    📝 表单数据 (将提交到 SheerID)
+                                                </h5>
+                                                <table className="form-data-table" style={{ width: '100%', fontSize: '13px' }}>
+                                                    <tbody>
+                                                        {Object.entries(testDocumentResult.formData || {})
+                                                            .filter(([key]) => ['firstName', 'lastName', 'university', 'birthDate', 'dob', 'email', 'studentId'].includes(key))
+                                                            .map(([key, value]) => (
+                                                                <tr key={key}>
+                                                                    <td style={{ padding: '4px 8px', color: '#666', fontWeight: 500, width: '120px' }}>{key}</td>
+                                                                    <td style={{ padding: '4px 8px', fontFamily: 'monospace' }}>{value}</td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="test-result error">

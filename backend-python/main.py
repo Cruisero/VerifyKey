@@ -165,6 +165,7 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         if provider == "lionpath":
             org = {
                 "id": 1354,  # Penn State SheerID org ID
+                "idExtended": "1354",  # Required by SheerID API
                 "name": "Pennsylvania State University",
                 "country": "US",
                 "domain": "psu.edu"

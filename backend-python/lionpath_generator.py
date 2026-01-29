@@ -417,21 +417,29 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
         Tuple[bytes, str]: (PNG 图片数据, 文件名)
     """
     try:
-        from playwright.sync_api import sync_playwright
-
+        import concurrent.futures
+        
+        def run_playwright():
+            from playwright.sync_api import sync_playwright
+            
+            html_content = generate_html(first_name, last_name, school_id)
+            
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page(viewport={'width': 1200, 'height': 900})
+                page.set_content(html_content, wait_until='load')
+                page.wait_for_timeout(500)  # 等待样式加载
+                screenshot_bytes = page.screenshot(type='png', full_page=True)
+                browser.close()
+            
+            return screenshot_bytes
+        
         logger.info(f"[LionPATH] Generating schedule for {first_name} {last_name}")
         
-        # 生成 HTML
-        html_content = generate_html(first_name, last_name, school_id)
-
-        # 使用 Playwright 截图
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page(viewport={'width': 1200, 'height': 900})
-            page.set_content(html_content, wait_until='load')
-            page.wait_for_timeout(500)  # 等待样式加载
-            screenshot_bytes = page.screenshot(type='png', full_page=True)
-            browser.close()
+        # Run playwright in a separate thread to avoid asyncio loop conflict
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_playwright)
+            screenshot_bytes = future.result(timeout=30)
 
         filename = f"lionpath_{first_name.lower()}_{last_name.lower()}_{int(datetime.now().timestamp() * 1000)}.png"
         logger.info(f"[LionPATH] ✓ Generated: {filename} ({len(screenshot_bytes)} bytes)")

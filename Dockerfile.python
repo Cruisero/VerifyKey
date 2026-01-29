@@ -36,6 +36,9 @@ COPY backend-python/requirements.txt ./
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright browsers for LionPATH generator
+RUN python -m playwright install chromium --with-deps
+
 # Copy application code
 COPY backend-python/ ./
 

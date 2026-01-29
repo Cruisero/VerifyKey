@@ -581,11 +581,11 @@ async def test_document_generation(request: TestDocumentRequest):
             last = last or gen_last
     
     try:
-        # Use the SAVED server config (same as actual verification)
+        # Use request provider if specified, otherwise use saved server config
         config = config_manager.get_config()
-        provider = config.get("aiGenerator", {}).get("provider", "gemini")
+        provider = request.provider if request.provider else config.get("aiGenerator", {}).get("provider", "gemini")
         
-        print(f"[TestDoc] Using saved config provider: {provider}")
+        print(f"[TestDoc] Using provider: {provider}")
         
         doc_data = None
         filename = None

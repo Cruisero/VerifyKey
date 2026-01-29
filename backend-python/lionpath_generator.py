@@ -16,7 +16,37 @@ logger = logging.getLogger(__name__)
 
 # 模板路径
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "LionPATH"
-SCHEDULE_TEMPLATE = TEMPLATE_DIR / "schedule.html"
+
+# 可用模板列表
+AVAILABLE_TEMPLATES = {
+    "schedule.html": "经典风格 (Student Center)",
+    "schedule_modern.html": "现代风格 (卡片式)"
+}
+
+
+def get_available_templates() -> list:
+    """获取可用的 LionPATH 模板列表"""
+    templates = []
+    if TEMPLATE_DIR.exists():
+        for file in TEMPLATE_DIR.glob("*.html"):
+            templates.append({
+                "filename": file.name,
+                "label": AVAILABLE_TEMPLATES.get(file.name, file.name)
+            })
+    return templates
+
+
+def load_template(template_name: str = "schedule.html") -> str:
+    """加载指定的 HTML 模板文件"""
+    template_path = TEMPLATE_DIR / template_name
+    if not template_path.exists():
+        # 尝试默认模板
+        template_path = TEMPLATE_DIR / "schedule.html"
+        if not template_path.exists():
+            logger.warning(f"[LionPATH] Template not found, using fallback")
+            return None
+    logger.info(f"[LionPATH] Loading template: {template_path.name}")
+    return template_path.read_text(encoding='utf-8')
 
 
 def generate_psu_id() -> str:
@@ -35,16 +65,9 @@ def generate_psu_email(first_name: str, last_name: str) -> str:
     return email
 
 
-def load_template() -> str:
-    """加载 HTML 模板文件"""
-    if not SCHEDULE_TEMPLATE.exists():
-        logger.warning(f"[LionPATH] Template not found at {SCHEDULE_TEMPLATE}, using fallback")
-        return None
-    return SCHEDULE_TEMPLATE.read_text(encoding='utf-8')
-
-
 def generate_html(first_name: str, last_name: str, school_id: str = '2565', 
-                  psu_id: str = None, email: str = None) -> tuple:
+                  psu_id: str = None, email: str = None,
+                  template_name: str = "schedule.html") -> tuple:
     """
     生成 Penn State LionPATH HTML
 
@@ -54,6 +77,7 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         school_id: 学校 ID
         psu_id: PSU ID (可选，不传则自动生成)
         email: 邮箱 (可选，不传则自动生成)
+        template_name: 模板文件名
 
     Returns:
         tuple: (HTML 内容, PSU ID, email, major)
@@ -100,11 +124,12 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
     
     term_display = f"{term} {year}"
 
-    # 随机课程生成
-    courses = generate_random_courses()
+    # 根据模板选择生成课程格式
+    is_modern = 'modern' in template_name.lower()
+    courses, total_units = generate_random_courses(modern_format=is_modern)
 
     # 加载外部模板
-    template = load_template()
+    template = load_template(template_name)
     if template:
         # 使用简单字符串替换
         html = template.replace('{{name}}', name)
@@ -112,6 +137,10 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         html = html.replace('{{major}}', major)
         html = html.replace('{{term_display}}', term_display)
         html = html.replace('{{term_dates}}', term_dates)
+        html = html.replace('{{date}}', date)
+        html = html.replace('{{year}}', str(year))
+        html = html.replace('{{courses}}', courses)
+        html = html.replace('{{total_units}}', str(total_units))
         html = html.replace('{{date}}', date)
         html = html.replace('{{year}}', str(year))
         html = html.replace('{{courses}}', courses)
@@ -368,42 +397,49 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
     return html, psu_id, email, major
 
 
-def generate_random_courses() -> str:
-    """生成随机课程表 HTML"""
+def generate_random_courses(modern_format: bool = False) -> tuple:
+    """生成随机课程表 HTML
+    
+    Args:
+        modern_format: True 使用现代卡片格式, False 使用经典表格格式
+    
+    Returns:
+        tuple: (课程 HTML, 总学分)
+    """
     
     course_pool = [
-        ('CMPSC 465', 'Data Structures and Algorithms', '3.00'),
-        ('CMPSC 473', 'Operating Systems Design', '3.00'),
-        ('CMPSC 431W', 'Database Management Systems', '3.00'),
-        ('CMPSC 360', 'Discrete Mathematics', '3.00'),
-        ('CMPSC 311', 'Systems Programming', '3.00'),
-        ('MATH 230', 'Calculus and Vector Analysis', '4.00'),
-        ('MATH 220', 'Matrices', '2.00'),
-        ('MATH 251', 'Ordinary Differential Equations', '4.00'),
-        ('STAT 318', 'Elementary Probability', '3.00'),
-        ('STAT 414', 'Introduction to Probability Theory', '3.00'),
-        ('PHYS 211', 'General Physics: Mechanics', '4.00'),
-        ('PHYS 212', 'General Physics: Electricity and Magnetism', '4.00'),
-        ('ENGL 202C', 'Technical Writing', '3.00'),
-        ('ECON 102', 'Introductory Microeconomic Analysis', '3.00'),
-        ('ECON 104', 'Introductory Macroeconomic Analysis', '3.00'),
-        ('IST 210', 'Organization of Data', '3.00'),
-        ('IST 256', 'Programming for the Web', '3.00'),
+        ('CMPSC 465', 'Data Structures and Algorithms', 3),
+        ('CMPSC 473', 'Operating Systems Design', 3),
+        ('CMPSC 431W', 'Database Management Systems', 3),
+        ('CMPSC 360', 'Discrete Mathematics', 3),
+        ('CMPSC 311', 'Systems Programming', 3),
+        ('MATH 230', 'Calculus and Vector Analysis', 4),
+        ('MATH 220', 'Matrices', 2),
+        ('MATH 251', 'Ordinary Differential Equations', 4),
+        ('STAT 318', 'Elementary Probability', 3),
+        ('STAT 414', 'Introduction to Probability Theory', 3),
+        ('PHYS 211', 'General Physics: Mechanics', 4),
+        ('PHYS 212', 'General Physics: Electricity and Magnetism', 4),
+        ('ENGL 202C', 'Technical Writing', 3),
+        ('ECON 102', 'Introductory Microeconomic Analysis', 3),
+        ('ECON 104', 'Introductory Macroeconomic Analysis', 3),
+        ('IST 210', 'Organization of Data', 3),
+        ('IST 256', 'Programming for the Web', 3),
     ]
     
     time_slots = [
-        'MoWeFr 8:00AM - 8:50AM',
-        'MoWeFr 9:05AM - 9:55AM',
-        'MoWeFr 10:10AM - 11:00AM',
-        'MoWeFr 11:15AM - 12:05PM',
-        'MoWeFr 1:25PM - 2:15PM',
-        'TuTh 8:00AM - 9:15AM',
-        'TuTh 9:30AM - 10:45AM',
-        'TuTh 12:05PM - 1:20PM',
-        'TuTh 1:35PM - 2:50PM',
-        'TuTh 3:05PM - 4:20PM',
-        'MoWe 2:30PM - 3:45PM',
-        'MoWe 4:00PM - 5:15PM',
+        ('MoWeFr', '8:00AM – 8:50AM'),
+        ('MoWeFr', '9:05AM – 9:55AM'),
+        ('MoWeFr', '10:10AM – 11:00AM'),
+        ('MoWeFr', '11:15AM – 12:05PM'),
+        ('MoWeFr', '1:25PM – 2:15PM'),
+        ('TuTh', '8:00AM – 9:15AM'),
+        ('TuTh', '9:30AM – 10:45AM'),
+        ('TuTh', '12:05PM – 1:20PM'),
+        ('TuTh', '1:35PM – 2:50PM'),
+        ('TuTh', '3:05PM – 4:20PM'),
+        ('MoWe', '2:30PM – 3:45PM'),
+        ('MoWe', '4:00PM – 5:15PM'),
     ]
     
     rooms = [
@@ -412,32 +448,58 @@ def generate_random_courses() -> str:
         'IST 220', 'Sparks 106', 'Keller 115', 'Forum 114', 'Wartik 108',
     ]
     
-    # 随机选择 4-6 门课程
-    num_courses = random.randint(4, 6)
+    instructors = [
+        'Smith, J.', 'Johnson, M.', 'Williams, R.', 'Brown, K.', 'Davis, L.',
+        'Miller, S.', 'Wilson, T.', 'Anderson, P.', 'Taylor, C.', 'Thomas, A.',
+    ]
+    
+    # 随机选择 4-5 门课程
+    num_courses = random.randint(4, 5)
     selected_courses = random.sample(course_pool, num_courses)
     selected_times = random.sample(time_slots, num_courses)
     selected_rooms = random.sample(rooms, num_courses)
+    selected_instructors = random.sample(instructors, num_courses)
     
     rows = []
+    total_units = 0
+    
     for i, (course_code, title, units) in enumerate(selected_courses):
         class_nbr = str(random.randint(10000, 29999))
-        time_slot = selected_times[i]
+        days, time_range = selected_times[i]
         room = selected_rooms[i]
+        instructor = selected_instructors[i]
+        total_units += units
         
-        row = f"""                <tr>
-                    <td>{class_nbr}</td>
-                    <td class="course-code">{course_code}</td>
-                    <td class="course-title">{title}</td>
-                    <td>{time_slot}</td>
-                    <td>{room}</td>
-                    <td>{units}</td>
-                </tr>"""
+        if modern_format:
+            # 现代卡片格式
+            row = f"""            <div class="course">
+                <div>
+                    <div class="code">{course_code}</div>
+                    <div class="meta">Class {class_nbr}</div>
+                </div>
+                <div class="title">{title}</div>
+                <div class="meta">{days} · {time_range} · {room}</div>
+                <div class="units">{units} Units</div>
+            </div>"""
+        else:
+            # 经典表格格式 (Student Center 风格)
+            row = f"""            <tr>
+                <td class="status-enrolled">Enrolled</td>
+                <td><span class="course-link">{course_code}</span><br><small>Class #{class_nbr}</small></td>
+                <td>{title}</td>
+                <td>{units}.00</td>
+                <td>Graded</td>
+                <td>{days} {time_range}</td>
+                <td>{room}</td>
+                <td>{instructor}</td>
+            </tr>"""
         rows.append(row)
     
-    return '\n'.join(rows)
+    return '\n'.join(rows), total_units
 
 
-def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565') -> Tuple[bytes, str, dict]:
+def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565',
+                            template_name: str = "schedule.html") -> Tuple[bytes, str, dict]:
     """
     生成 Penn State LionPATH 截图 PNG
 
@@ -445,6 +507,7 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
         first_name: 名字
         last_name: 姓氏
         school_id: 学校 ID
+        template_name: 模板文件名
 
     Returns:
         Tuple[bytes, str, dict]: (PNG 图片数据, 文件名, 学生数据字典)
@@ -460,7 +523,7 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
         def run_playwright():
             from playwright.sync_api import sync_playwright
             
-            html_content, _, _, major = generate_html(first_name, last_name, school_id, psu_id, email)
+            html_content, _, _, major = generate_html(first_name, last_name, school_id, psu_id, email, template_name)
             
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -472,7 +535,7 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
             
             return screenshot_bytes, major
         
-        logger.info(f"[LionPATH] Generating schedule for {first_name} {last_name}")
+        logger.info(f"[LionPATH] Generating schedule for {first_name} {last_name} with template {template_name}")
         
         # Run playwright in a separate thread to avoid asyncio loop conflict
         with concurrent.futures.ThreadPoolExecutor() as executor:

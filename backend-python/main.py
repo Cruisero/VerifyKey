@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from verifier import SheerIDVerifier, parse_verification_id, poll_verification_status
 from doc_generator import generate_document
 from puppeteer_doc_generator import generate_document_puppeteer
-from lionpath_generator import generate_lionpath_image, generate_psu_email
+from lionpath_generator import generate_lionpath_image, generate_psu_email, get_available_templates
 from sheerid_generator import generate_document as generate_document_sheerid
 import auth
 

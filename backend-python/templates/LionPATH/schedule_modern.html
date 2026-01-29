@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penn State | Class Schedule</title>
+
+    <style>
+        :root {
+            --psu: #1E407C;
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --radius: 14px;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: #111827;
+        }
+
+        .app {
+            max-width: 1200px;
+            margin: auto;
+            padding: 32px;
+        }
+
+        /* Header */
+
+        .topbar {
+            background: var(--psu);
+            color: white;
+            padding: 18px 28px;
+            border-radius: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: .3px;
+        }
+
+        .user {
+            opacity: .9;
+            font-size: 14px;
+        }
+
+        /* Page header */
+
+        .page-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .page-head h1 {
+            font-size: 30px;
+            margin: 0;
+            color: var(--psu);
+        }
+
+        .term {
+            background: white;
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        /* Student info */
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 18px;
+            margin-bottom: 32px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 18px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .05);
+            border: 1px solid var(--border);
+        }
+
+        .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .value {
+            font-weight: 600;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: #e6fffa;
+            color: #047857;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* Courses */
+
+        .course-list {
+            display: grid;
+            gap: 16px;
+        }
+
+        .course {
+            background: white;
+            border-radius: var(--radius);
+            padding: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, .04);
+            display: grid;
+            grid-template-columns: 1.2fr 2.5fr 2fr 1fr;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .code {
+            font-weight: 700;
+            color: var(--psu);
+        }
+
+        .title {
+            font-weight: 600;
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .units {
+            font-weight: 700;
+            text-align: right;
+        }
+
+        /* Footer */
+
+        .footer {
+            margin-top: 60px;
+            text-align: center;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        @media(max-width:800px) {
+            .course {
+                grid-template-columns: 1fr;
+            }
+
+            .units {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app">
+
+        <div class="topbar">
+            <div class="brand">PennState · LionPATH</div>
+            <div class="user">Welcome, {{name}}</div>
+        </div>
+
+        <div class="page-head">
+            <h1>My Class Schedule</h1>
+            <div class="term">{{term_display}} {{term_dates}}</div>
+        </div>
+
+        <div class="info-grid">
+            <div class="card">
+                <div class="label">Student</div>
+                <div class="value">{{name}}</div>
+            </div>
+            <div class="card">
+                <div class="label">PSU ID</div>
+                <div class="value">{{psu_id}}</div>
+            </div>
+            <div class="card">
+                <div class="label">Program</div>
+                <div class="value">{{major}}</div>
+            </div>
+            <div class="card">
+                <div class="label">Status</div>
+                <div class="badge">Enrolled</div>
+            </div>
+        </div>
+
+        <div class="course-list">
+
+            <!-- 单个课程 -->
+            <div class="course">
+                <div>
+                    <div class="code">ECON 104</div>
+                    <div class="meta">Class 20553</div>
+                </div>
+                <div class="title">Introductory Macroeconomic Analysis</div>
+                <div class="meta">Mon Wed Fri · 11:15AM – 12:05PM · Forum 114</div>
+                <div class="units">3 Units</div>
+            </div>
+
+            <div class="course">
+                <div>
+                    <div class="code">CMPSC 465</div>
+                    <div class="meta">Class 23878</div>
+                </div>
+                <div class="title">Data Structures and Algorithms</div>
+                <div class="meta">Mon Wed Fri · 8:00AM – 8:50AM · Sparks 106</div>
+                <div class="units">3 Units</div>
+            </div>
+
+            <div class="course">
+                <div>
+                    <div class="code">PHYS 212</div>
+                    <div class="meta">Class 25627</div>
+                </div>
+                <div class="title">Electricity & Magnetism</div>
+                <div class="meta">Tue Thu · 9:30AM – 10:45AM · Westgate E201</div>
+                <div class="units">4 Units</div>
+            </div>
+
+        </div>
+
+        <div class="footer">
+            © {{year}} The Pennsylvania State University · LionPATH Student System
+        </div>
+
+    </div>
+
+</body>
+
+</html>

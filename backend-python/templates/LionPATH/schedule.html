@@ -4,212 +4,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LionPATH - Student Home</title>
+    <title>Student Center</title>
     <style>
-        :root {
-            --psu-blue: #1E407C;
-            /* Penn State Nittany Navy */
-            --psu-light-blue: #96BEE6;
-            --bg-gray: #f4f4f4;
-            --text-color: #333;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            font-family: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
-            background-color: #e0e0e0;
-            /* 浏览器背景 */
-            margin: 0;
-            padding: 20px;
-            color: var(--text-color);
-            display: flex;
-            justify-content: center;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            background: #fff;
+            color: #000;
+            line-height: 1.4;
         }
 
-        /* 模拟浏览器窗口 */
-        .viewport {
-            width: 100%;
-            max-width: 1100px;
-            background-color: #fff;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
-            min-height: 800px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* 顶部导航栏 LionPATH */
-        .header {
-            background-color: var(--psu-blue);
-            color: white;
-            padding: 0 20px;
-            height: 60px;
+        /* Penn State Header */
+        .psu-header {
+            background: #1E407C;
+            padding: 8px 15px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        /* PSU Logo 模拟 */
         .psu-logo {
-            font-family: "Georgia", serif;
-            font-size: 20px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            border-right: 1px solid rgba(255, 255, 255, 0.3);
-            padding-right: 15px;
-        }
-
-        .system-name {
+            color: #fff;
+            font-family: Georgia, serif;
             font-size: 18px;
-            font-weight: 300;
+            font-weight: bold;
         }
 
-        .user-menu {
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
+        .psu-header-right {
+            color: #fff;
+            font-size: 11px;
         }
 
+        .psu-header-right a {
+            color: #fff;
+            text-decoration: underline;
+            margin-left: 15px;
+        }
+
+        /* Navigation */
         .nav-bar {
-            background-color: #f8f8f8;
-            border-bottom: 1px solid #ddd;
-            padding: 10px 20px;
-            font-size: 13px;
-            color: #666;
+            background: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            padding: 0 15px;
             display: flex;
-            gap: 20px;
+            gap: 0;
         }
 
         .nav-item {
+            padding: 10px 15px;
+            color: #1E407C;
+            font-weight: bold;
+            font-size: 11px;
+            border-bottom: 3px solid transparent;
             cursor: pointer;
         }
 
+        .nav-item:hover,
         .nav-item.active {
-            color: var(--psu-blue);
-            font-weight: bold;
-            border-bottom: 2px solid var(--psu-blue);
-            padding-bottom: 8px;
+            background: #e0e0e0;
+            border-bottom-color: #1E407C;
         }
 
-        /* 主内容区 */
-        .content {
-            padding: 30px;
-            flex: 1;
+        /* Breadcrumb */
+        .breadcrumb {
+            background: #f8f8f8;
+            padding: 8px 15px;
+            font-size: 11px;
+            border-bottom: 1px solid #ddd;
         }
 
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
+        .breadcrumb a {
+            color: #1E407C;
+            text-decoration: none;
+        }
+
+        .breadcrumb span {
+            color: #666;
+            margin: 0 5px;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 20px;
+            max-width: 1000px;
         }
 
         .page-title {
-            font-size: 24px;
-            color: var(--psu-blue);
-            margin: 0;
+            color: #1E407C;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #1E407C;
         }
 
-        .term-selector {
-            background: #fff;
+        /* Student Info Box */
+        .student-info {
+            background: #f5f5f5;
             border: 1px solid #ccc;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 14px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        .student-info-row {
+            display: flex;
+            margin-bottom: 5px;
+        }
+
+        .student-info-label {
+            width: 120px;
+            font-weight: bold;
             color: #333;
+        }
+
+        .student-info-value {
+            color: #000;
+        }
+
+        /* Term Selector */
+        .term-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+
+        .term-label {
             font-weight: bold;
         }
 
-        /* 学生信息卡片 */
-        .student-card {
-            background: #fcfcfc;
-            border: 1px solid #e0e0e0;
-            padding: 15px;
-            margin-bottom: 25px;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            font-size: 13px;
-        }
-
-        .info-label {
-            color: #777;
-            font-size: 11px;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .info-val {
-            font-weight: bold;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .status-badge {
-            background-color: #e6fffa;
-            color: #007a5e;
+        .term-select {
+            border: 1px solid #999;
             padding: 4px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-            border: 1px solid #b2f5ea;
+            font-size: 12px;
+            background: #fff;
         }
 
-        /* 课程表 */
+        /* Schedule Table */
         .schedule-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 11px;
+            margin-top: 10px;
         }
 
         .schedule-table th {
+            background: #1E407C;
+            color: #fff;
+            padding: 8px 6px;
             text-align: left;
-            padding: 12px;
-            background-color: #f0f0f0;
-            border-bottom: 2px solid #ccc;
-            color: #555;
+            font-weight: bold;
+            border: 1px solid #1E407C;
         }
 
         .schedule-table td {
-            padding: 15px 12px;
-            border-bottom: 1px solid #eee;
+            padding: 8px 6px;
+            border: 1px solid #ccc;
+            vertical-align: top;
         }
 
-        .course-code {
+        .schedule-table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .schedule-table tr:hover {
+            background: #e8f4ff;
+        }
+
+        .course-link {
+            color: #1E407C;
+            text-decoration: underline;
             font-weight: bold;
-            color: var(--psu-blue);
         }
 
-        .course-title {
-            font-weight: 500;
+        .status-enrolled {
+            color: #006600;
+            font-weight: bold;
         }
 
-        /* 打印适配 */
+        /* Summary */
+        .summary-row {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            display: flex;
+            gap: 30px;
+        }
+
+        .summary-item {
+            display: flex;
+            gap: 8px;
+        }
+
+        .summary-label {
+            font-weight: bold;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 30px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-top: 1px solid #ccc;
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+        }
+
+        .footer a {
+            color: #1E407C;
+        }
+
+        /* Print styles */
         @media print {
-            body {
-                background: white;
-                padding: 0;
-            }
 
-            .viewport {
-                box-shadow: none;
-                max-width: 100%;
-                min-height: auto;
-            }
-
-            .nav-bar {
+            .nav-bar,
+            .breadcrumb {
                 display: none;
             }
 
-            @page {
-                margin: 1cm;
-                size: landscape;
+            body {
+                font-size: 10px;
             }
         }
     </style>
@@ -217,79 +239,92 @@
 
 <body>
 
-    <div class="viewport">
-        <div class="header">
-            <div class="brand">
-                <div class="psu-logo">PennState</div>
-                <div class="system-name">LionPATH</div>
+    <div class="psu-header">
+        <div class="psu-logo">PENN STATE</div>
+        <div class="psu-header-right">
+            {{name}} | <a href="#">Sign Out</a>
+        </div>
+    </div>
+
+    <div class="nav-bar">
+        <div class="nav-item">Student Center</div>
+        <div class="nav-item active">My Class Schedule</div>
+        <div class="nav-item">Enrollment</div>
+        <div class="nav-item">Grades</div>
+        <div class="nav-item">Finances</div>
+        <div class="nav-item">To Do List</div>
+    </div>
+
+    <div class="breadcrumb">
+        <a href="#">Student Center</a>
+        <span>›</span>
+        <a href="#">Enrollment</a>
+        <span>›</span>
+        My Class Schedule
+    </div>
+
+    <div class="main-content">
+        <div class="page-title">My Class Schedule</div>
+
+        <div class="student-info">
+            <div class="student-info-row">
+                <div class="student-info-label">Name:</div>
+                <div class="student-info-value">{{name}}</div>
             </div>
-            <div class="user-menu">
-                <span>Welcome, <strong>{{name}}</strong></span>
-                <span>|</span>
-                <span>Sign Out</span>
+            <div class="student-info-row">
+                <div class="student-info-label">Campus ID:</div>
+                <div class="student-info-value">{{psu_id}}</div>
+            </div>
+            <div class="student-info-row">
+                <div class="student-info-label">Academic Program:</div>
+                <div class="student-info-value">{{major}} - University Park</div>
+            </div>
+            <div class="student-info-row">
+                <div class="student-info-label">Academic Level:</div>
+                <div class="student-info-value">Junior</div>
             </div>
         </div>
 
-        <div class="nav-bar">
-            <div class="nav-item">Student Home</div>
-            <div class="nav-item active">My Class Schedule</div>
-            <div class="nav-item">Academics</div>
-            <div class="nav-item">Finances</div>
-            <div class="nav-item">Campus Life</div>
+        <div class="term-row">
+            <span class="term-label">Term:</span>
+            <select class="term-select">
+                <option selected>{{term_display}} {{term_dates}}</option>
+            </select>
         </div>
 
-        <div class="content">
-            <div class="page-header">
-                <h1 class="page-title">My Class Schedule</h1>
-                <div class="term-selector">
-                    Term: <strong>{{term_display}}</strong> {{term_dates}}
-                </div>
-            </div>
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th style="width:8%">Status</th>
+                    <th style="width:12%">Class</th>
+                    <th style="width:28%">Description</th>
+                    <th style="width:6%">Units</th>
+                    <th style="width:10%">Grading</th>
+                    <th style="width:18%">Days & Times</th>
+                    <th style="width:10%">Room</th>
+                    <th style="width:8%">Instructor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{courses}}
+            </tbody>
+        </table>
 
-            <div class="student-card">
-                <div>
-                    <div class="info-label">Student Name</div>
-                    <div class="info-val">{{name}}</div>
-                </div>
-                <div>
-                    <div class="info-label">PSU ID</div>
-                    <div class="info-val">{{psu_id}}</div>
-                </div>
-                <div>
-                    <div class="info-label">Academic Program</div>
-                    <div class="info-val">{{major}}</div>
-                </div>
-                <div>
-                    <div class="info-label">Enrollment Status</div>
-                    <div class="status-badge">✅ Enrolled</div>
-                </div>
+        <div class="summary-row">
+            <div class="summary-item">
+                <span class="summary-label">Total Units Enrolled:</span>
+                <span>{{total_units}}</span>
             </div>
-
-            <div style="margin-bottom: 10px; font-size: 12px; color: #666; text-align: right;">
-                Data retrieved: <span>{{date}}</span>
+            <div class="summary-item">
+                <span class="summary-label">Enrollment Status:</span>
+                <span class="status-enrolled">Enrolled</span>
             </div>
+        </div>
 
-            <table class="schedule-table">
-                <thead>
-                    <tr>
-                        <th width="10%">Class Nbr</th>
-                        <th width="15%">Course</th>
-                        <th width="35%">Title</th>
-                        <th width="20%">Days & Times</th>
-                        <th width="10%">Room</th>
-                        <th width="10%">Units</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{courses}}
-                </tbody>
-            </table>
-
-            <div
-                style="margin-top: 50px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 11px; color: #888; text-align: center;">
-                &copy; {{year}} The Pennsylvania State University. All rights reserved.<br>
-                LionPATH is the student information system for Penn State.
-            </div>
+        <div class="footer">
+            Last Updated: {{date}}<br>
+            © {{year}} The Pennsylvania State University | <a href="#">Privacy Policy</a> | <a
+                href="#">Accessibility</a>
         </div>
     </div>
 

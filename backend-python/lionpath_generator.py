@@ -115,13 +115,13 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
     
     if 1 <= month <= 5:
         term = "Spring"
-        term_dates = f"(Jan 13 - May 9)"
+        term_dates = f"(Jan 12 - May 8)"  # Penn State 2026 official calendar
     elif 6 <= month <= 7:
         term = "Summer"
-        term_dates = f"(May 19 - Aug 8)"
+        term_dates = f"(May 18 - Aug 7)"  # Penn State 2026 official calendar
     else:
         term = "Fall"
-        term_dates = f"(Aug 25 - Dec 12)"
+        term_dates = f"(Aug 24 - Dec 11)"  # Penn State 2026 official calendar
     
     term_display = f"{term} {year}"
 

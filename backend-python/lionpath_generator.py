@@ -905,7 +905,8 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
                 page = browser.new_page(viewport={'width': 1200, 'height': 900})
                 page.set_content(html_content, wait_until='load')
                 page.wait_for_timeout(500)  # 等待样式加载
-                screenshot_bytes = page.screenshot(type='png', full_page=True)
+                # 截取可见区域而不是全页面，避免底部空白
+                screenshot_bytes = page.screenshot(type='png', full_page=False)
                 browser.close()
             
             return screenshot_bytes, major

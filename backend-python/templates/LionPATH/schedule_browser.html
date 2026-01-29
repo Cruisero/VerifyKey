@@ -14,8 +14,22 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #e8eaed;
+            background: #fff;
             min-height: 100vh;
+        }
+
+        /* Scrollbar styling to look natural */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 6px;
         }
 
         /* Chrome Browser Chrome */
@@ -220,7 +234,7 @@
         .page-content {
             padding: 20px;
             background: #fff;
-            min-height: 500px;
+            min-height: 450px;
         }
 
         .page-header {

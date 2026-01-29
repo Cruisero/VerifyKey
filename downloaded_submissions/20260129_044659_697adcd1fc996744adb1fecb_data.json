@@ -1,0 +1,23 @@
+{
+  "verificationId": "697adcd1fc996744adb1fecb",
+  "timestamp": "20260129_044659",
+  "student": {
+    "firstName": "William",
+    "lastName": "Wilson",
+    "email": "william91@harvard.edu",
+    "birthDate": "2003-02-23"
+  },
+  "university": {
+    "id": 1426,
+    "idExtended": "1426",
+    "name": "Harvard University",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "id_card",
+      "fileName": "id_william_wilson_1769662002802.jpg"
+    }
+  ],
+  "provider": "puppeteer"
+}

@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 from verifier import SheerIDVerifier, parse_verification_id, poll_verification_status
 from doc_generator import generate_document
 from puppeteer_doc_generator import generate_document_puppeteer
+from lionpath_generator import generate_lionpath_image, generate_psu_email
 import auth
 
 # Load environment variables
@@ -186,8 +187,15 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         filename = None
         form_data = None
         
+        # Use LionPATH generator if configured (Penn State portal screenshot)
+        if provider == "lionpath":
+            print(f"[Verify] Generating LionPATH schedule screenshot...")
+            doc_data, filename = generate_lionpath_image(first, last)
+            if doc_data:
+                documents = [{"type": "lionpath", "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
+        
         # Use Puppeteer if configured
-        if provider == "puppeteer":
+        elif provider == "puppeteer":
             # Read puppeteer settings from config (same as test flow)
             puppeteer_config = config.get("aiGenerator", {}).get("puppeteer", {})
             template = puppeteer_config.get("template", "student-id-generator.html")
@@ -583,7 +591,30 @@ async def test_document_generation(request: TestDocumentRequest):
         filename = None
         form_data = None
         
-        if provider == "puppeteer":
+        # Use LionPATH generator (Penn State portal screenshot)
+        if provider == "lionpath":
+            print(f"[TestDoc] Using LionPATH generator...")
+            doc_data, filename = generate_lionpath_image(first, last)
+            
+            if doc_data:
+                image_base64 = base64.b64encode(doc_data).decode('utf-8')
+                
+                return {
+                    "success": True,
+                    "provider": "lionpath",
+                    "providerNote": "使用保存的配置: LionPATH 课程表截图 (Penn State)",
+                    "image": f"data:image/png;base64,{image_base64}",
+                    "formData": {
+                        "firstName": first,
+                        "lastName": last,
+                        "fullName": f"{first} {last}",
+                        "email": generate_psu_email(first, last),
+                        "university": "Pennsylvania State University"
+                    },
+                    "filename": filename
+                }
+        
+        elif provider == "puppeteer":
             # Use Puppeteer generator with saved config
             puppeteer_config = config.get("aiGenerator", {}).get("puppeteer", {})
             template = puppeteer_config.get("template", "student-id-generator.html")

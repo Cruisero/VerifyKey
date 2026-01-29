@@ -1,4 +1,4 @@
-/**
+ /**
  * US University Database for SheerID Verification
  * Based on SheerID-Verification-Tool analysis
  */
@@ -17,7 +17,7 @@ const UNIVERSITIES = [
 
     // Large State Universities
     { id: 1445, name: "University of California, Los Angeles", domain: "ucla.edu", weight: 38 },
-    { id: 1312, name: "University of California, Berkeley", domain: "berkeley.edu", weight: 37 },
+    { id: 1312, name: "University of California, ", domain: "berkeley.edu", weight: 37 },
     { id: 1446, name: "University of Michigan", domain: "umich.edu", weight: 36 },
     { id: 1447, name: "University of Texas at Austin", domain: "utexas.edu", weight: 35 },
     { id: 1448, name: "University of Florida", domain: "ufl.edu", weight: 34 },

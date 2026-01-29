@@ -445,6 +445,20 @@ export default function Admin() {
                                         <span className="badge badge-success">推荐</span>
                                     </div>
                                 </div>
+
+                                <div
+                                    className={`provider-card ${aiProvider === 'lionpath' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('lionpath')}
+                                >
+                                    <div className="provider-icon">🦁</div>
+                                    <div className="provider-info">
+                                        <h4>LionPATH 课程表</h4>
+                                        <p>Penn State 学生门户截图，备选验证方式</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-info">备选</span>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* batch.1key.me API Settings */}
@@ -610,6 +624,34 @@ export default function Admin() {
                                                 启用后将使用 Gemini AI 自动生成逼真的学生头像（使用上方 Gemini 配置中的 API Key）
                                             </p>
                                         </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* LionPATH Settings */}
+                            {aiProvider === 'lionpath' && (
+                                <div className="provider-settings">
+                                    <h4>🦁 LionPATH 配置</h4>
+                                    <div className="settings-form">
+                                        <div className="lionpath-info" style={{
+                                            background: 'linear-gradient(135deg, #1E407C 0%, #96BEE6 100%)',
+                                            color: 'white',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>Penn State LionPATH</strong> 是宾州州立大学的学生门户系统。
+                                                此模式生成模拟的课程表截图，作为验证的备选文档类型。
+                                            </p>
+                                        </div>
+                                        <p className="input-hint">
+                                            此模式不需要额外配置，将自动生成：
+                                            <br />• 🎓 随机 PSU 学号 (9位)
+                                            <br />• 📧 PSU 格式邮箱
+                                            <br />• 📚 随机课程表 (4-6门课程)
+                                            <br />• 📅 当前学期信息
+                                        </p>
                                     </div>
                                 </div>
                             )}

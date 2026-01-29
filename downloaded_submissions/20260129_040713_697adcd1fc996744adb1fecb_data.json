@@ -1,0 +1,23 @@
+{
+  "verificationId": "697adcd1fc996744adb1fecb",
+  "timestamp": "20260129_040713",
+  "student": {
+    "firstName": "Sarah",
+    "lastName": "Davis",
+    "email": "sdavis@northwestern.edu",
+    "birthDate": "2003-07-02"
+  },
+  "university": {
+    "id": 2420,
+    "idExtended": "2420",
+    "name": "Northwestern University",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "id_card",
+      "fileName": "id_sarah_davis_1769659608037.jpg"
+    }
+  ],
+  "provider": "puppeteer"
+}

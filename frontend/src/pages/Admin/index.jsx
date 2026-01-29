@@ -925,19 +925,6 @@ export default function Admin() {
                                     <h4>📄 文档生成测试结果</h4>
                                     {testDocumentResult.success ? (
                                         <div className="test-document-content">
-                                            {testDocumentResult.providerNote && (
-                                                <div className="provider-note" style={{
-                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                                    color: 'white',
-                                                    padding: '8px 16px',
-                                                    borderRadius: '6px',
-                                                    marginBottom: '16px',
-                                                    fontSize: '14px',
-                                                    whiteSpace: 'pre-line'
-                                                }}>
-                                                    {testDocumentResult.providerNote}
-                                                </div>
-                                            )}
                                             {/* Display all generated documents */}
                                             <div className="test-document-images" style={{
                                                 display: 'grid',

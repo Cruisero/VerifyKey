@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Northumbria Style Student ID Template</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #6b6b6b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            padding: 12px 14px;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .main-logo-box {
+            width: 32px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .main-logo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .uni-title-block {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+            color: #1a1a1a;
+        }
+
+        .uni-name {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .uni-city {
+            font-size: 12px;
+            font-weight: 300;
+            letter-spacing: 0.5px;
+            margin-top: 1px;
+        }
+
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 70px;
+        }
+
+        .union-logo-box {
+            width: 30px;
+            height: 30px;
+            margin-bottom: 2px;
+        }
+
+        .union-logo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 50%;
+        }
+
+        .union-text {
+            font-size: 6px;
+            text-align: center;
+            line-height: 1;
+            color: #333;
+        }
+
+        /* Main Content */
+        .content-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        /* Photo */
+        .photo-area {
+            width: 82px;
+            height: 104px;
+            background: #eee;
+            flex-shrink: 0;
+        }
+
+        .photo-area img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Info */
+        .info-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .student-bar {
+            background: #231f20;
+            /* Almost black */
+            color: white;
+            padding: 3px 6px;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            width: 100%;
+        }
+
+        .name-block {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #000;
+            line-height: 1.2;
+        }
+
+        .details-block {
+            font-size: 10px;
+            color: #000;
+            line-height: 1.4;
+            font-weight: 400;
+        }
+
+        .details-block span {
+            font-weight: 400;
+        }
+
+        /* Barcode Area */
+        .barcode-section {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .barcode {
+            height: 22px;
+            width: 100%;
+            background: repeating-linear-gradient(90deg,
+                    #000 0px, #000 2px,
+                    transparent 2px, transparent 4px,
+                    #000 4px, #000 5px,
+                    transparent 5px, transparent 7px);
+            margin-bottom: 2px;
+        }
+
+        .library-num {
+            font-size: 10px;
+            color: #000;
+            text-align: left;
+        }
+
+        /* Controls hidden */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="main-logo-box">
+                    <img id="cardUniversityLogo" src="" alt="Uni Logo" style="display:none;"
+                        onload="this.style.display='block'; document.getElementById('logoFallback').style.display='none';"
+                        onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
+                    <div id="logoFallback" style="font-size: 20px;">🛡️</div>
+                </div>
+                <div class="uni-title-block">
+                    <div id="cardUniName" class="uni-name">Northumbria<br>University</div>
+                    <div id="cardUniCity" class="uni-city">NEWCASTLE</div>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="union-logo-box">
+                    <img id="cardUnionLogo" src="https://placehold.co/50x50/eee/999?text=Union" alt="Union">
+                </div>
+                <div class="union-text">northumbria<br>students' union</div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content-row">
+            <div class="photo-area">
+                <img id="cardStudentPhoto" src="https://placehold.co/120x150/e5e7eb/9ca3af?text=Photo" alt="Student">
+            </div>
+
+            <div class="info-area">
+                <div class="student-bar" id="cardStudentType">STUDENT</div>
+
+                <div class="name-block">
+                    <div id="cardFirstName">CHENG</div>
+                    <div id="cardLastName">LUO</div>
+                </div>
+
+                <div class="details-block">
+                    <div>Registration Number: <span id="cardRegNum">20056001</span></div>
+                    <div>Expiry Date: <span id="cardExpiryDate">2023/2024</span></div>
+                </div>
+
+                <div class="barcode-section">
+                    <div class="barcode"></div>
+                    <div class="library-num">Library Number <span id="cardLibNum">021343007</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer automation -->
+    <div class="controls">
+        <input type="text" id="universityNameInput" placeholder="University Name">
+        <input type="text" id="firstNameInput" placeholder="First Name">
+        <input type="text" id="lastNameInput" placeholder="Last Name">
+        <input type="text" id="studentTypeInput" placeholder="Student Type">
+        <input type="text" id="regNumInput" placeholder="Registration Number">
+        <input type="text" id="expiryInput" placeholder="Expiry Date">
+        <input type="text" id="libNumInput" placeholder="Library Number">
+        <input type="text" id="photoUrlInput" placeholder="Photo URL">
+        <input type="text" id="unionLogoInput" placeholder="Union Logo URL">
+    </div>
+
+    <script>
+        // Logo file extensions to try
+        const LOGO_EXTENSIONS = ['.png', '.svg', '.webp', '.jpg', '.jpeg'];
+
+        function tryLoadLogo(universityName, extensionIndex = 0) {
+            if (extensionIndex >= LOGO_EXTENSIONS.length) return;
+            const logoImg = document.getElementById('cardUniversityLogo');
+            const extension = LOGO_EXTENSIONS[extensionIndex];
+            const logoPath = './College logo/' + universityName + extension;
+
+            logoImg.onerror = function () {
+                tryLoadLogo(universityName, extensionIndex + 1);
+            };
+            logoImg.src = logoPath;
+        }
+
+        function populateCard(data) {
+            if (data.universityName) {
+                tryLoadLogo(data.universityName);
+
+                // If custom name provided, try to split nicely or just display
+                // The template expects "Northumbria" and "University" on separate lines by default styling
+                // But for simple replacement we just set text
+                // Advanced logic: If matches "Northumbria University", we keep standard. 
+                // Else we replace innerHTML
+                if (data.universityName.toLowerCase() !== 'northumbria university') {
+                    document.getElementById('cardUniName').textContent = data.universityName;
+                }
+            } else {
+                tryLoadLogo("Northumbria University");
+            }
+
+            if (data.firstName) document.getElementById('cardFirstName').textContent = data.firstName.toUpperCase();
+            if (data.lastName) document.getElementById('cardLastName').textContent = data.lastName.toUpperCase();
+            if (data.studentType) document.getElementById('cardStudentType').textContent = data.studentType.toUpperCase();
+            if (data.regNum) document.getElementById('cardRegNum').textContent = data.regNum;
+            if (data.expiryDate) document.getElementById('cardExpiryDate').textContent = data.expiryDate;
+            if (data.libNum) document.getElementById('cardLibNum').textContent = data.libNum;
+            if (data.photoUrl) document.getElementById('cardStudentPhoto').src = data.photoUrl;
+            if (data.unionLogoUrl) document.getElementById('cardUnionLogo').src = data.unionLogoUrl;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const inputs = {
+                uni: document.getElementById('universityNameInput'),
+                first: document.getElementById('firstNameInput'),
+                last: document.getElementById('lastNameInput'),
+                type: document.getElementById('studentTypeInput'),
+                reg: document.getElementById('regNumInput'),
+                expiry: document.getElementById('expiryInput'),
+                lib: document.getElementById('libNumInput'),
+                photo: document.getElementById('photoUrlInput'),
+                union: document.getElementById('unionLogoInput')
+            };
+
+            if (inputs.uni) inputs.uni.addEventListener('input', function () {
+                if (this.value) tryLoadLogo(this.value);
+                // Keep text update simple for preview
+                if (this.value && this.value.toLowerCase() !== 'northumbria university') {
+                    document.getElementById('cardUniName').innerHTML = this.value;
+                }
+            });
+
+            if (inputs.first) inputs.first.addEventListener('input', function () { document.getElementById('cardFirstName').textContent = this.value || 'CHENG'; });
+            if (inputs.last) inputs.last.addEventListener('input', function () { document.getElementById('cardLastName').textContent = this.value || 'LUO'; });
+            if (inputs.type) inputs.type.addEventListener('input', function () { document.getElementById('cardStudentType').textContent = this.value || 'STUDENT'; });
+            if (inputs.reg) inputs.reg.addEventListener('input', function () { document.getElementById('cardRegNum').textContent = this.value || '20056001'; });
+            if (inputs.expiry) inputs.expiry.addEventListener('input', function () { document.getElementById('cardExpiryDate').textContent = this.value || '2023/2024'; });
+            if (inputs.lib) inputs.lib.addEventListener('input', function () { document.getElementById('cardLibNum').textContent = this.value || '021343007'; });
+            if (inputs.photo) inputs.photo.addEventListener('input', function () { if (this.value) document.getElementById('cardStudentPhoto').src = this.value; });
+            if (inputs.union) inputs.union.addEventListener('input', function () { if (this.value) document.getElementById('cardUnionLogo').src = this.value; });
+
+            // Initial
+            tryLoadLogo("Northumbria University");
+        });
+    </script>
+</body>
+
+</html>

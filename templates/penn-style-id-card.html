@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PennCard Style Student ID Template</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Open+Sans:wght@400;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #6b6b6b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Header Blue Bar */
+        .header-bar {
+            height: 56px;
+            background: #011F5B;
+            /* Penn Blue */
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* White area for photo to break into header */
+        .header-photo-cutout {
+            width: 90px;
+            height: 100%;
+        }
+
+        .header-logo-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-left: 10px;
+            gap: 12px;
+        }
+
+        .logo-box {
+            width: 36px;
+            height: 38px;
+            background: white;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2px;
+            /* Slight rounding */
+        }
+
+        .logo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .penn-titles {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .penn-card-text {
+            font-family: 'Libre Baskerville', serif;
+            color: white;
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        .uni-subtext {
+            font-family: 'Open Sans', sans-serif;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-style: italic;
+            margin-top: 2px;
+        }
+
+        .uni-subtext strong {
+            color: white;
+            font-style: normal;
+        }
+
+        /* Main Body with Background Image */
+        .card-body {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .bg-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Photo positioning - Overlapping header and body */
+        .student-photo-wrapper {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            width: 86px;
+            height: 106px;
+            background: white;
+            padding: 4px;
+            z-index: 20;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .student-photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #ddd;
+        }
+
+        /* Student Type Label */
+        .student-type-label {
+            position: absolute;
+            top: 4px;
+            left: 110px;
+            /* Right of photo */
+            font-family: 'Libre Baskerville', serif;
+            font-weight: 700;
+            font-size: 14px;
+            color: #000;
+            z-index: 5;
+            text-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
+        }
+
+        /* Bottom Info Overlay */
+        .bottom-info {
+            position: absolute;
+            bottom: 8px;
+            left: 0;
+            width: 100%;
+            padding: 0 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 5;
+        }
+
+        /* Slight gradient behind text for readability */
+        .text-protection-gradient {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            background: linear-gradient(to top, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.2) 80%, transparent 100%);
+            z-index: 2;
+        }
+
+        .left-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .student-name {
+            font-family: 'Libre Baskerville', serif;
+            font-size: 13px;
+            font-weight: 700;
+            color: #000;
+            text-transform: uppercase;
+        }
+
+        .id-row {
+            font-family: 'Open Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            color: #000;
+            display: flex;
+            gap: 10px;
+        }
+
+        .small-id {
+            font-size: 9px;
+            margin-left: 2px;
+        }
+
+        .right-info {
+            text-align: right;
+            font-family: 'Open Sans', sans-serif;
+            color: #000;
+        }
+
+        .expires-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .expires-date {
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .code-fg {
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        /* Controls hidden */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Student Photo (Absolute positioned to overlap) -->
+        <div class="student-photo-wrapper">
+            <img id="cardStudentPhoto" class="student-photo" src="https://placehold.co/150x200/e5e7eb/9ca3af?text=Photo"
+                alt="Student">
+        </div>
+
+        <!-- Header -->
+        <div class="header-bar">
+            <div class="header-photo-cutout"></div> <!-- Spacer for photo -->
+            <div class="header-logo-area">
+                <div class="logo-box">
+                    <img id="cardUniversityLogo" src="" alt="Logo" style="display:none;"
+                        onload="this.style.display='block'; document.getElementById('logoFallback').style.display='none';"
+                        onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
+                    <div id="logoFallback" style="font-size: 20px;">🛡️</div>
+                </div>
+                <div class="penn-titles">
+                    <div class="penn-card-text">PennCard</div>
+                    <div class="uni-subtext">UNIVERSITY <span style="font-style:italic">of</span> PENNSYLVANIA</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="card-body">
+            <!-- Background Image (Campus Flags) -->
+            <img id="cardBackgroundImage" class="bg-image"
+                src="https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=600&auto=format&fit=crop"
+                alt="Background">
+
+            <div class="text-protection-gradient"></div>
+
+            <div id="cardStudentType" class="student-type-label">Graduate</div>
+
+            <div class="bottom-info">
+                <div class="left-info">
+                    <div id="cardStudentName" class="student-name">XIANGUI ZHAN</div>
+                    <div class="id-row">
+                        <span id="cardStudentId">621337 50290007</span> <span class="small-id">01</span>
+                    </div>
+                </div>
+                <div class="right-info">
+                    <div class="expires-label">EXPIRES:</div>
+                    <div id="cardExpiresDate" class="expires-date">07/01/2026</div>
+                    <div class="code-fg">FG</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer automation -->
+    <div class="controls">
+        <input type="text" id="universityNameInput" placeholder="University Name (for Logo)">
+        <input type="text" id="studentNameInput" placeholder="Student Name">
+        <input type="text" id="studentTypeInput" placeholder="Student Type (Graduate/Undergraduate)">
+        <input type="text" id="studentIdInput" placeholder="Student ID">
+        <input type="text" id="expiresDateInput" placeholder="Expires Date (MM/DD/YYYY)">
+        <input type="text" id="photoUrlInput" placeholder="Photo URL">
+        <input type="text" id="backgroundUrlInput" placeholder="Background Image URL">
+    </div>
+
+    <script>
+        // Template variable mapping for document generation:
+        // - {{universityName}} - Used for logo loading
+        // - {{studentName}}
+        // - {{studentType}}
+        // - {{studentId}}
+        // - {{expiresDate}}
+        // - {{photoUrl}}
+        // - {{backgroundUrl}}
+
+        // Logo file extensions to try
+        const LOGO_EXTENSIONS = ['.png', '.svg', '.webp', '.jpg', '.jpeg'];
+
+        function tryLoadLogo(universityName, extensionIndex = 0) {
+            if (extensionIndex >= LOGO_EXTENSIONS.length) {
+                // Fallback handled by onerror in HTML
+                return;
+            }
+            const logoImg = document.getElementById('cardUniversityLogo');
+            const extension = LOGO_EXTENSIONS[extensionIndex];
+            const logoPath = './College logo/' + universityName + extension;
+
+            logoImg.onerror = function () {
+                tryLoadLogo(universityName, extensionIndex + 1);
+            };
+            logoImg.src = logoPath;
+        }
+
+        function populateCard(data) {
+            if (data.universityName) {
+                tryLoadLogo(data.universityName);
+            }
+            if (data.studentName) {
+                document.getElementById('cardStudentName').textContent = data.studentName.toUpperCase();
+            }
+            if (data.studentType) {
+                document.getElementById('cardStudentType').textContent = data.studentType;
+            }
+            if (data.studentId) {
+                document.getElementById('cardStudentId').textContent = data.studentId;
+            }
+            if (data.expiresDate) {
+                document.getElementById('cardExpiresDate').textContent = data.expiresDate;
+            }
+            if (data.photoUrl) {
+                document.getElementById('cardStudentPhoto').src = data.photoUrl;
+            }
+            if (data.backgroundUrl) {
+                document.getElementById('cardBackgroundImage').src = data.backgroundUrl;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const universityNameInput = document.getElementById('universityNameInput');
+            const studentNameInput = document.getElementById('studentNameInput');
+            const studentTypeInput = document.getElementById('studentTypeInput');
+            const studentIdInput = document.getElementById('studentIdInput');
+            const expiresDateInput = document.getElementById('expiresDateInput');
+            const photoUrlInput = document.getElementById('photoUrlInput');
+            const backgroundUrlInput = document.getElementById('backgroundUrlInput');
+
+            if (universityNameInput) {
+                universityNameInput.addEventListener('input', function () {
+                    if (this.value) tryLoadLogo(this.value);
+                });
+            }
+            if (studentNameInput) {
+                studentNameInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentName').textContent = (this.value || 'XIANGUI ZHAN').toUpperCase();
+                });
+            }
+            if (studentTypeInput) {
+                studentTypeInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentType').textContent = this.value || 'Graduate';
+                });
+            }
+            if (studentIdInput) {
+                studentIdInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentId').textContent = this.value || '621337 50290007';
+                });
+            }
+            if (expiresDateInput) {
+                expiresDateInput.addEventListener('input', function () {
+                    document.getElementById('cardExpiresDate').textContent = this.value || '07/01/2026';
+                });
+            }
+            if (photoUrlInput) {
+                photoUrlInput.addEventListener('input', function () {
+                    if (this.value) document.getElementById('cardStudentPhoto').src = this.value;
+                });
+            }
+            if (backgroundUrlInput) {
+                backgroundUrlInput.addEventListener('input', function () {
+                    if (this.value) document.getElementById('cardBackgroundImage').src = this.value;
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>

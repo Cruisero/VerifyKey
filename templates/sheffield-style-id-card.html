@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sheffield Style Student ID Template</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&family=Noto+Serif:wght@700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #6b6b6b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #259DD9;
+            /* Sheffield Blue approx */
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            /* Reduced padding */
+        }
+
+        /* Top Section - Modified for Absolute Photo */
+        .top-section {
+            margin-bottom: 2px;
+            /* Flex removed to allow block flow */
+        }
+
+        /* Logo Box */
+        .logo-box {
+            background: white;
+            padding: 6px 12px 6px 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-radius: 2px;
+            width: 175px;
+            height: 60px;
+            /* Reduced height */
+        }
+
+        .logo-img-container {
+            width: 36px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-img-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .uni-name {
+            font-family: 'Times New Roman', serif;
+            color: #2e1a47;
+            /* Dark purple/navy */
+            font-size: 13px;
+            /* Slightly reduced */
+            line-height: 1.1;
+        }
+
+        /* Photo - Absolute Positioned */
+        .photo-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 80px;
+            height: 100px;
+            background: white;
+            padding: 3px;
+            z-index: 10;
+        }
+
+        .photo-inner {
+            width: 100%;
+            height: 100%;
+            background: #eee;
+        }
+
+        .photo-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Middle Info */
+        .info-section {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 5px;
+            color: #1a1a1a;
+            font-family: 'Open Sans', sans-serif;
+            margin-right: 90px;
+            /* Prevent text from hitting absolute photo */
+        }
+
+        .student-name {
+            font-weight: 800;
+            font-size: 15px;
+            color: #1a1a1a;
+        }
+
+        .department-name {
+            font-size: 9px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .reg-row {
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .reg-label {
+            color: #000;
+        }
+
+        .reg-value {
+            color: #000;
+        }
+
+        /* Bottom Section - Absolute Positioning Fix */
+        .bottom-section {
+            position: absolute;
+            bottom: 6px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+        }
+
+        .barcode-container {
+            background: white;
+            padding: 4px 6px;
+            border-radius: 2px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            width: 140px;
+            /* Reduced width */
+        }
+
+        /* Simulated barcode */
+        .barcode {
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(90deg,
+                    #000 0px, #000 2px,
+                    transparent 2px, transparent 4px,
+                    #000 4px, #000 5px,
+                    transparent 5px, transparent 8px);
+        }
+
+        .bottom-right {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            position: relative;
+            z-index: 10;
+        }
+
+        .student-type {
+            font-family: 'Noto Serif', serif;
+            font-weight: 700;
+            font-size: 18px;
+            color: #1a1a1a;
+            margin-bottom: 2px;
+            line-height: 1;
+        }
+
+        .expires-text {
+            font-family: 'Open Sans', sans-serif;
+            font-size: 9px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .bottom-badge-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .small-logo-badge {
+            background: #005A9C;
+            /* A darker blue */
+            padding: 2px;
+            width: 45px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4px;
+            color: white;
+            text-align: center;
+            line-height: 1;
+        }
+
+        .pg-badge {
+            font-family: 'Open Sans', sans-serif;
+            font-weight: 800;
+            font-size: 13px;
+            color: #1a1a1a;
+        }
+
+        /* Controls hidden */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Top Section -->
+        <div class="top-section">
+            <div class="logo-box">
+                <div class="logo-img-container">
+                    <img id="cardUniversityLogo" src="" alt="Crest" style="display:none;"
+                        onload="this.style.display='block'; document.getElementById('logoFallback').style.display='none';"
+                        onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
+                    <div id="logoFallback" style="font-size: 24px;">🛡️</div>
+                </div>
+                <div id="cardUniversityName" class="uni-name">The<br>University<br>Of<br>Sheffield.</div>
+            </div>
+
+            <div class="photo-container">
+                <div class="photo-inner">
+                    <img id="cardStudentPhoto" src="https://placehold.co/120x150/e5e7eb/9ca3af?text=Photo"
+                        alt="Student">
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Info -->
+        <div class="info-section">
+            <div id="cardStudentName" class="student-name">Miss Wang Yu Yan</div>
+            <div id="cardDepartment" class="department-name">Sheffield University Management School</div>
+            <div class="reg-row">
+                <span class="reg-label">Registration No:</span> <span id="cardRegistrationNo"
+                    class="reg-value">170602007</span>
+            </div>
+            <div class="reg-row">
+                <span class="reg-label">UCard No:</span> <span id="cardUCardNo" class="reg-value">002602007</span>
+            </div>
+        </div>
+
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            <div class="barcode-container">
+                <div class="barcode"></div>
+            </div>
+
+            <div class="bottom-right">
+                <div id="cardStudentType" class="student-type">Student</div>
+                <div class="expires-text">Expires:<span id="cardExpiresDate">27/09/2029</span></div>
+                <div class="bottom-badge-row">
+                    <div class="small-logo-badge">Sheffield<br>Students'<br>Union</div>
+                    <div id="cardLevel" class="pg-badge">PG I</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer automation -->
+    <div class="controls">
+        <input type="text" id="universityNameInput" placeholder="University Name">
+        <input type="text" id="studentNameInput" placeholder="Student Name">
+        <input type="text" id="departmentInput" placeholder="Department">
+        <input type="text" id="registrationNoInput" placeholder="Registration No">
+        <input type="text" id="ucardNoInput" placeholder="UCard No">
+        <input type="text" id="studentTypeInput" placeholder="Student Type">
+        <input type="text" id="expiresDateInput" placeholder="Expires Date">
+        <input type="text" id="levelInput" placeholder="Level (e.g. PG I)">
+        <input type="text" id="photoUrlInput" placeholder="Photo URL">
+    </div>
+
+    <script>
+        // Template variables:
+        // - {{universityName}}
+        // - {{studentName}}
+        // - {{department}}
+        // - {{registrationNo}}
+        // - {{ucardNo}}
+        // - {{studentType}}
+        // - {{expiresDate}}
+        // - {{level}}
+        // - {{photoUrl}}
+
+        // Logo file extensions to try
+        const LOGO_EXTENSIONS = ['.png', '.svg', '.webp', '.jpg', '.jpeg'];
+
+        function tryLoadLogo(universityName, extensionIndex = 0) {
+            if (extensionIndex >= LOGO_EXTENSIONS.length) return;
+            const logoImg = document.getElementById('cardUniversityLogo');
+            const extension = LOGO_EXTENSIONS[extensionIndex];
+            const logoPath = './College logo/' + universityName + extension;
+
+            logoImg.onerror = function () {
+                tryLoadLogo(universityName, extensionIndex + 1);
+            };
+            logoImg.src = logoPath;
+        }
+
+        function formatUniversityNameMultiline(name) {
+            if (name === "The University Of Sheffield.") {
+                return "The<br>University<br>Of<br>Sheffield.";
+            }
+            return name;
+        }
+
+        function populateCard(data) {
+            if (data.universityName) {
+                tryLoadLogo(data.universityName);
+                const displayName = data.universityName.replace(/\s+/g, '<br>');
+                document.getElementById('cardUniversityName').innerHTML = displayName;
+            } else {
+                tryLoadLogo("The University Of Sheffield");
+            }
+
+            if (data.studentName) document.getElementById('cardStudentName').textContent = data.studentName;
+            if (data.department) document.getElementById('cardDepartment').textContent = data.department;
+            if (data.registrationNo) document.getElementById('cardRegistrationNo').textContent = data.registrationNo;
+            if (data.ucardNo) document.getElementById('cardUCardNo').textContent = data.ucardNo;
+            if (data.studentType) document.getElementById('cardStudentType').textContent = data.studentType;
+            if (data.expiresDate) document.getElementById('cardExpiresDate').textContent = data.expiresDate;
+            if (data.level) document.getElementById('cardLevel').textContent = data.level;
+            if (data.photoUrl) document.getElementById('cardStudentPhoto').src = data.photoUrl;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Inputs
+            const universityNameInput = document.getElementById('universityNameInput');
+            const studentNameInput = document.getElementById('studentNameInput');
+            const departmentInput = document.getElementById('departmentInput');
+            const registrationNoInput = document.getElementById('registrationNoInput');
+            const ucardNoInput = document.getElementById('ucardNoInput');
+            const studentTypeInput = document.getElementById('studentTypeInput');
+            const expiresDateInput = document.getElementById('expiresDateInput');
+            const levelInput = document.getElementById('levelInput');
+            const photoUrlInput = document.getElementById('photoUrlInput');
+
+            if (universityNameInput) {
+                universityNameInput.addEventListener('input', function () {
+                    const val = this.value || "The University Of Sheffield";
+                    document.getElementById('cardUniversityName').innerHTML = val.replace(/\s+/g, '<br>');
+                    if (this.value) tryLoadLogo(this.value);
+                });
+            }
+            if (studentNameInput) studentNameInput.addEventListener('input', function () { document.getElementById('cardStudentName').textContent = this.value || 'Miss Wang Yu Yan'; });
+            if (departmentInput) departmentInput.addEventListener('input', function () { document.getElementById('cardDepartment').textContent = this.value || 'Sheffield University Management School'; });
+            if (registrationNoInput) registrationNoInput.addEventListener('input', function () { document.getElementById('cardRegistrationNo').textContent = this.value || '170602007'; });
+            if (ucardNoInput) ucardNoInput.addEventListener('input', function () { document.getElementById('cardUCardNo').textContent = this.value || '002602007'; });
+            if (studentTypeInput) studentTypeInput.addEventListener('input', function () { document.getElementById('cardStudentType').textContent = this.value || 'Student'; });
+            if (expiresDateInput) expiresDateInput.addEventListener('input', function () { document.getElementById('cardExpiresDate').textContent = this.value || '27/09/2029'; });
+            if (levelInput) levelInput.addEventListener('input', function () { document.getElementById('cardLevel').textContent = this.value || 'PG I'; });
+            if (photoUrlInput) photoUrlInput.addEventListener('input', function () { if (this.value) document.getElementById('cardStudentPhoto').src = this.value; });
+
+            // Initial load
+            tryLoadLogo("The University Of Sheffield");
+        });
+    </script>
+</body>
+
+</html>

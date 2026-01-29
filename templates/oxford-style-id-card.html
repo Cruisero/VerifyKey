@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oxford Style Student ID Template</title>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #6b6b6b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            font-family: 'Open Sans', sans-serif;
+        }
+
+        /* Header */
+        .header {
+            height: 48px;
+            background: #1c2e4a;
+            /* Oxford Dark Blueish Grey */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .uni-name {
+            font-size: 18px;
+            font-weight: 400;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* Main Body */
+        .body-section {
+            display: flex;
+            padding: 10px 10px 5px 12px;
+            position: relative;
+        }
+
+        /* Left: Photo */
+        .photo-box {
+            width: 86px;
+            height: 108px;
+            border: 1px solid #999;
+            flex-shrink: 0;
+            margin-right: 12px;
+            background: #f0f0f0;
+        }
+
+        .photo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Right: Info */
+        .info-box {
+            flex: 1;
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding-top: 0px;
+        }
+
+        .student-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #222;
+            margin-bottom: 6px;
+        }
+
+        .details-block {
+            font-size: 11px;
+            color: #222;
+            line-height: 1.35;
+        }
+
+        .details-block strong {
+            font-weight: 700;
+        }
+
+        /* Watermark */
+        .watermark {
+            position: absolute;
+            right: 5px;
+            top: 35px;
+            width: 120px;
+            height: 80px;
+            opacity: 0.8;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .watermark img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: sepia(100%) saturate(1000%) hue-rotate(0deg) brightness(100%) contrast(100%);
+            /* Attempting to make it yellowish/gold via CSS filters if transparent png */
+        }
+
+        /* Codes row below photo */
+        .mid-code-row {
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 10px;
+            font-weight: 700;
+            margin-top: -8px;
+            /* Pull up closer */
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .code-left {
+            margin-left: 98px;
+            /* Align with text start (86px photo + 12px margin) */
+        }
+
+        .code-center {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* Footer Section */
+        .footer-section {
+            margin-top: auto;
+            display: flex;
+            align-items: flex-end;
+            padding: 0 12px 10px 12px;
+            justify-content: space-between;
+        }
+
+        .date-box {
+            background: #d4d8c8;
+            /* Beige/Greenish tint */
+            padding: 4px 8px;
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            width: 120px;
+            position: relative;
+        }
+
+        .valid-label {
+            font-size: 6px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+
+        .valid-date {
+            font-size: 14px;
+            font-weight: 700;
+            color: #000;
+        }
+
+        .tiny-one {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 8px;
+            font-weight: 600;
+        }
+
+        .barcode-area {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .barcode-num {
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .barcode {
+            height: 28px;
+            width: 140px;
+            background: repeating-linear-gradient(90deg,
+                    #000 0px, #000 2px,
+                    transparent 2px, transparent 4px,
+                    #000 4px, #000 5px,
+                    transparent 5px, transparent 8px);
+        }
+
+        /* Controls hidden */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Header -->
+        <div class="header">
+            <div id="cardUniName" class="uni-name">UNIVERSITY OF OXFORD</div>
+        </div>
+
+        <!-- Body -->
+        <div class="body-section">
+            <div class="watermark">
+                <!-- Fallback to a placehold image that looks like a building drawing -->
+                <!-- Ideally this is an SVG of the Radcliffe Camera -->
+                <img id="cardWatermark"
+                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Radcliffe_Camera_Oxford.svg/1200px-Radcliffe_Camera_Oxford.svg.png"
+                    style="opacity: 0.4; filter: sepia(1) saturate(5) hue-rotate(5deg);" alt="Landmark">
+            </div>
+
+            <div class="photo-box">
+                <img id="cardStudentPhoto" src="https://placehold.co/150x200/e5e7eb/9ca3af?text=Photo" alt="Student">
+            </div>
+
+            <div class="info-box">
+                <div id="cardStudentName" class="student-name">An Wang</div>
+                <div class="details-block">
+                    <span id="cardStudentType">GRADUATE</span> reading for<br>
+                    <span id="cardDegree">DPhil Mathematics</span><br>
+                    <span id="cardDepartment">Mathematics</span><br>
+                    <span id="cardCollege">Merton College</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mid Codes -->
+        <div class="mid-code-row">
+            <div id="cardLeftCode" class="code-left">718007</div>
+            <div class="code-center">S</div>
+            <div style="width: 20px;"></div> <!-- Spacer -->
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-section">
+            <div class="date-box">
+                <div class="valid-label">VALID UNTIL</div>
+                <div id="cardValidUntil" class="valid-date">20 JUN 2026</div>
+                <span class="tiny-one">1</span>
+            </div>
+
+            <div class="barcode-area">
+                <div id="cardRightCode" class="barcode-num">2250007</div>
+                <div class="barcode"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer automation -->
+    <div class="controls">
+        <input type="text" id="universityNameInput" placeholder="University Name">
+        <input type="text" id="studentNameInput" placeholder="Student Name">
+        <input type="text" id="studentTypeInput" placeholder="Student Type">
+        <input type="text" id="degreeInput" placeholder="Degree">
+        <input type="text" id="departmentInput" placeholder="Department">
+        <input type="text" id="collegeInput" placeholder="College">
+        <input type="text" id="validUntilInput" placeholder="Valid Until">
+        <input type="text" id="leftCodeInput" placeholder="Left Code">
+        <input type="text" id="rightCodeInput" placeholder="Right Code">
+        <input type="text" id="photoUrlInput" placeholder="Photo URL">
+        <input type="text" id="watermarkUrlInput" placeholder="Watermark URL">
+    </div>
+
+    <script>
+        // Template variables map
+
+        function populateCard(data) {
+            if (data.universityName) document.getElementById('cardUniName').textContent = data.universityName.toUpperCase();
+            if (data.studentName) document.getElementById('cardStudentName').textContent = data.studentName;
+
+            // For complex text block, we might just update inner parts if clear, or rebuild
+            // Here we have spans
+            if (data.studentType) document.getElementById('cardStudentType').textContent = data.studentType;
+            if (data.degree) document.getElementById('cardDegree').textContent = data.degree;
+            if (data.department) document.getElementById('cardDepartment').textContent = data.department;
+            if (data.college) document.getElementById('cardCollege').textContent = data.college;
+
+            if (data.validUntil) document.getElementById('cardValidUntil').textContent = data.validUntil;
+            if (data.leftCode) document.getElementById('cardLeftCode').textContent = data.leftCode;
+            if (data.rightCode) document.getElementById('cardRightCode').textContent = data.rightCode;
+
+            if (data.photoUrl) document.getElementById('cardStudentPhoto').src = data.photoUrl;
+            if (data.watermarkUrl) document.getElementById('cardWatermark').src = data.watermarkUrl;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const inputs = {
+                uni: document.getElementById('universityNameInput'),
+                name: document.getElementById('studentNameInput'),
+                type: document.getElementById('studentTypeInput'),
+                degree: document.getElementById('degreeInput'),
+                dept: document.getElementById('departmentInput'),
+                college: document.getElementById('collegeInput'),
+                valid: document.getElementById('validUntilInput'),
+                leftCode: document.getElementById('leftCodeInput'),
+                rightCode: document.getElementById('rightCodeInput'),
+                photo: document.getElementById('photoUrlInput'),
+                watermark: document.getElementById('watermarkUrlInput')
+            };
+
+            if (inputs.uni) inputs.uni.addEventListener('input', function () { document.getElementById('cardUniName').textContent = (this.value || 'UNIVERSITY OF OXFORD').toUpperCase(); });
+            if (inputs.name) inputs.name.addEventListener('input', function () { document.getElementById('cardStudentName').textContent = this.value || 'An Wang'; });
+            if (inputs.type) inputs.type.addEventListener('input', function () { document.getElementById('cardStudentType').textContent = this.value || 'GRADUATE'; });
+            if (inputs.degree) inputs.degree.addEventListener('input', function () { document.getElementById('cardDegree').textContent = this.value || 'DPhil Mathematics'; });
+            if (inputs.dept) inputs.dept.addEventListener('input', function () { document.getElementById('cardDepartment').textContent = this.value || 'Mathematics'; });
+            if (inputs.college) inputs.college.addEventListener('input', function () { document.getElementById('cardCollege').textContent = this.value || 'Merton College'; });
+            if (inputs.valid) inputs.valid.addEventListener('input', function () { document.getElementById('cardValidUntil').textContent = this.value || '20 JUN 2026'; });
+
+            if (inputs.leftCode) inputs.leftCode.addEventListener('input', function () { document.getElementById('cardLeftCode').textContent = this.value || '718007'; });
+            if (inputs.rightCode) inputs.rightCode.addEventListener('input', function () { document.getElementById('cardRightCode').textContent = this.value || '2250007'; });
+
+            if (inputs.photo) inputs.photo.addEventListener('input', function () { if (this.value) document.getElementById('cardStudentPhoto').src = this.value; });
+            if (inputs.watermark) inputs.watermark.addEventListener('input', function () { if (this.value) document.getElementById('cardWatermark').src = this.value; });
+        });
+    </script>
+</body>
+
+</html>

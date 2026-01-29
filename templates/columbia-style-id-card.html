@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Columbia Style Student ID Card Template</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Trajan+Pro:wght@400;700&family=Roboto:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #6b6b6b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+        }
+
+        /* Left sidebar image section */
+        .sidebar {
+            width: 75px;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .sidebar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Blue vertical divider line */
+        .divider-line {
+            width: 5px;
+            height: 100%;
+            background: #1d4f91;
+            /* Columbia Blue */
+            flex-shrink: 0;
+        }
+
+        /* Main content area */
+        .main-content {
+            flex: 1;
+            padding: 10px 15px 10px 15px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Header with Logo */
+        .header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .logo-container {
+            width: 38px;
+            height: 32px;
+            margin-top: 2px;
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .logo-fallback {
+            font-size: 24px;
+            color: #1d4f91;
+        }
+
+        .university-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .university-name {
+            font-family: 'Times New Roman', serif;
+            /* Trajan Pro approximation */
+            font-size: 19px;
+            color: #1d4f91;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            line-height: 1.1;
+            font-weight: 500;
+        }
+
+        /* Attempt to simulate Trajan Pro with CSS scale trick for small caps look if font not loaded */
+        .university-name {
+            font-variant: small-caps;
+        }
+
+        .university-subtext {
+            font-family: 'Times New Roman', serif;
+            font-size: 9px;
+            color: #1d4f91;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 3px;
+            font-weight: 600;
+        }
+
+        /* Student content area */
+        .student-area {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-left: 10px;
+        }
+
+        .content-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+
+        .photo-box {
+            width: 85px;
+            height: 85px;
+            border: 1px solid #999;
+            padding: 3px;
+            /* White padding inside border */
+            background: #fff;
+        }
+
+        .photo-inner {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #ddd;
+        }
+
+        .photo-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .student-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 85px;
+            /* Align with photo height */
+        }
+
+        .student-name {
+            font-family: 'Arial', sans-serif;
+            font-size: 16px;
+            color: #000;
+            font-weight: 500;
+            line-height: 1.2;
+        }
+
+        .expiry-date {
+            font-family: 'Arial', sans-serif;
+            font-size: 13px;
+            color: #000;
+            margin-top: 5px;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        /* Controls hidden */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Sidebar Image (Alma Mater statue) -->
+        <div class="sidebar">
+            <!-- Default placeholder is a statue-like image -->
+            <img id="cardSidebarImage"
+                src="https://images.unsplash.com/photo-1590634351368-2e06168c430a?q=80&w=300&auto=format&fit=crop"
+                alt="Campus">
+        </div>
+
+        <!-- Vertical Divider -->
+        <div class="divider-line"></div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <div class="logo-container">
+                    <!-- Crown Logo -->
+                    <svg id="defaultCrownLogo" viewBox="0 0 100 80" width="100%" height="100%" fill="#1d4f91"
+                        style="display:block;">
+                        <!-- Simplified Crown Shape -->
+                        <path
+                            d="M10,20 L30,20 L30,40 L10,40 Z M40,10 L60,10 L60,40 L40,40 Z M70,20 L90,20 L90,40 L70,40 Z M10,50 L90,50 L90,60 L50,70 L10,60 Z" />
+                        <foreignObject width="100" height="100">
+                            <!-- This will be replaced by actual logo if loaded -->
+                        </foreignObject>
+                    </svg>
+                    <img id="cardUniversityLogo" src="" alt="" style="display:none;"
+                        onload="this.style.display='block'; document.getElementById('defaultCrownLogo').style.display='none';"
+                        onerror="this.style.display='none'; document.getElementById('defaultCrownLogo').style.display='block';">
+                </div>
+                <div class="university-text">
+                    <div id="cardUniversityName" class="university-name">Columbia University</div>
+                    <div id="cardUniversitySubtext" class="university-subtext">IN THE CITY OF NEW YORK</div>
+                </div>
+            </div>
+
+            <!-- Student Content -->
+            <div class="student-area">
+                <div class="content-row">
+                    <div class="photo-box">
+                        <div class="photo-inner">
+                            <img id="cardStudentPhoto" src="https://placehold.co/150x150/e5e7eb/9ca3af?text=Photo"
+                                alt="Student">
+                        </div>
+                    </div>
+                    <div class="student-info">
+                        <div id="cardStudentName" class="student-name">FirstName LastName</div>
+                    </div>
+                </div>
+                <!-- Expiry Date under photo align logic -->
+                <div id="cardExpiryDate" class="expiry-date">EXP 06/29/2027</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer automation -->
+    <div class="controls">
+        <input type="text" id="universityNameInput" placeholder="University Name">
+        <input type="text" id="subtextInput" placeholder="Subtext (e.g. IN THE CITY OF NEW YORK)">
+        <input type="text" id="studentNameInput" placeholder="Student Name">
+        <input type="text" id="expiryDateInput" placeholder="Expiry Date (e.g. EXP 06/29/2027)">
+        <input type="text" id="photoUrlInput" placeholder="Photo URL">
+        <input type="text" id="sidebarUrlInput" placeholder="Sidebar Image URL">
+    </div>
+
+    <script>
+        // Template variable mapping for document generation:
+        // - {{universityName}}
+        // - {{subtext}}
+        // - {{studentName}}
+        // - {{expiryDate}}
+        // - {{photoUrl}}
+        // - {{sidebarUrl}}
+
+        // Logo file extensions to try
+        const LOGO_EXTENSIONS = ['.png', '.svg', '.webp', '.jpg', '.jpeg'];
+
+        // Function to try loading logo with different extensions
+        function tryLoadLogo(universityName, extensionIndex = 0) {
+            if (extensionIndex >= LOGO_EXTENSIONS.length) {
+                // All failed, use default crown svg
+                document.getElementById('cardUniversityLogo').style.display = 'none';
+                document.getElementById('defaultCrownLogo').style.display = 'block';
+                return;
+            }
+
+            const logoImg = document.getElementById('cardUniversityLogo');
+            const extension = LOGO_EXTENSIONS[extensionIndex];
+            const logoPath = './College logo/' + universityName + extension;
+
+            logoImg.onerror = function () {
+                tryLoadLogo(universityName, extensionIndex + 1);
+            };
+            logoImg.onload = function () {
+                this.style.display = 'block';
+                document.getElementById('defaultCrownLogo').style.display = 'none';
+            };
+            logoImg.src = logoPath;
+        }
+
+        function populateCard(data) {
+            if (data.universityName) {
+                document.getElementById('cardUniversityName').textContent = data.universityName;
+                tryLoadLogo(data.universityName);
+            }
+            if (data.subtext) {
+                document.getElementById('cardUniversitySubtext').textContent = data.subtext;
+            }
+            if (data.studentName) {
+                document.getElementById('cardStudentName').textContent = data.studentName;
+            }
+            if (data.expiryDate) {
+                document.getElementById('cardExpiryDate').textContent = data.expiryDate;
+            }
+            if (data.photoUrl) {
+                document.getElementById('cardStudentPhoto').src = data.photoUrl;
+            }
+            if (data.sidebarUrl) {
+                document.getElementById('cardSidebarImage').src = data.sidebarUrl;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const universityNameInput = document.getElementById('universityNameInput');
+            const subtextInput = document.getElementById('subtextInput');
+            const studentNameInput = document.getElementById('studentNameInput');
+            const expiryDateInput = document.getElementById('expiryDateInput');
+            const photoUrlInput = document.getElementById('photoUrlInput');
+            const sidebarUrlInput = document.getElementById('sidebarUrlInput');
+
+            if (universityNameInput) {
+                universityNameInput.addEventListener('input', function () {
+                    const uniName = this.value || 'Columbia University';
+                    document.getElementById('cardUniversityName').textContent = uniName;
+                    if (this.value) tryLoadLogo(this.value);
+                });
+            }
+            if (subtextInput) {
+                subtextInput.addEventListener('input', function () {
+                    document.getElementById('cardUniversitySubtext').textContent = (this.value || 'IN THE CITY OF NEW YORK').toUpperCase();
+                });
+            }
+            if (studentNameInput) {
+                studentNameInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentName').textContent = this.value || 'FirstName LastName';
+                });
+            }
+            if (expiryDateInput) {
+                expiryDateInput.addEventListener('input', function () {
+                    document.getElementById('cardExpiryDate').textContent = this.value || 'EXP 06/29/2027';
+                });
+            }
+            if (photoUrlInput) {
+                photoUrlInput.addEventListener('input', function () {
+                    if (this.value) document.getElementById('cardStudentPhoto').src = this.value;
+                });
+            }
+            if (sidebarUrlInput) {
+                sidebarUrlInput.addEventListener('input', function () {
+                    if (this.value) document.getElementById('cardSidebarImage').src = this.value;
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>

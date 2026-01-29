@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USC Style Student ID Card Template</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #6b6b6b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Red border frame */
+        .card-frame {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            right: 4px;
+            bottom: 4px;
+            border: 2px solid #990000;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Trojan watermark background */
+        .trojan-watermark {
+            position: absolute;
+            top: 20px;
+            right: -20px;
+            width: 180px;
+            height: 180px;
+            opacity: 0.12;
+            z-index: 0;
+            background: linear-gradient(135deg, #990000 0%, #660000 100%);
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5 L75 25 L75 45 L85 50 L75 55 L75 75 L60 95 L40 95 L25 75 L25 55 L15 50 L25 45 L25 25 Z'/%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5 L75 25 L75 45 L85 50 L75 55 L75 75 L60 95 L40 95 L25 75 L25 55 L15 50 L25 45 L25 25 Z'/%3E%3C/svg%3E");
+            -webkit-mask-size: contain;
+            mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+        }
+
+        /* Header section with logo and university name */
+        .header-section {
+            position: relative;
+            padding: 12px 15px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            z-index: 2;
+        }
+
+        .logo-container {
+            width: 45px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .logo-fallback {
+            font-size: 24px;
+        }
+
+        .university-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .university-name-line1 {
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #990000;
+            line-height: 1.1;
+        }
+
+        .university-name-line1 .usc {
+            font-weight: 800;
+        }
+
+        .university-name-line2 {
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #990000;
+            line-height: 1.2;
+        }
+
+        /* Content section */
+        .content-section {
+            position: relative;
+            padding: 8px 15px 0 15px;
+            display: flex;
+            gap: 12px;
+            z-index: 2;
+        }
+
+        .photo-container {
+            width: 55px;
+            height: 68px;
+            background: #e5e7eb;
+            border: 1px solid #d1d5db;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .info-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .student-name {
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a1a;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .student-id {
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .student-type {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            color: #1a1a1a;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Bottom bar - gold and cardinal */
+        .bottom-bar {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            height: 18px;
+            border-radius: 0 0 6px 6px;
+            overflow: hidden;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .gold-stripe {
+            height: 5px;
+            background: linear-gradient(90deg, #FFC72C 0%, #FFD700 50%, #FFC72C 100%);
+        }
+
+        .cardinal-stripe {
+            flex: 1;
+            background: linear-gradient(90deg, #990000 0%, #AA0000 50%, #990000 100%);
+        }
+
+        /* Controls hidden */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Red border frame -->
+        <div class="card-frame"></div>
+
+        <!-- Trojan watermark -->
+        <div class="trojan-watermark"></div>
+
+        <!-- Header Section -->
+        <div class="header-section">
+            <div id="universityLogoContainer" class="logo-container">
+                <img id="cardUniversityLogo" src="" alt="University Logo" style="display:none;"
+                    onload="this.style.display='block'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='none');"
+                    onerror="this.style.display='none'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='flex');">
+                <span id="logoFallbackText" class="logo-fallback">🏛️</span>
+            </div>
+            <div class="university-text">
+                <div id="cardUniversityName1" class="university-name-line1"><span class="usc">USC</span> University of
+                </div>
+                <div id="cardUniversityName2" class="university-name-line2">Southern California</div>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="content-section">
+            <div class="photo-container">
+                <img id="cardStudentPhoto" src="https://placehold.co/110x136/e5e7eb/9ca3af?text=Photo"
+                    alt="Student Photo">
+            </div>
+
+            <div class="info-container">
+                <div id="cardStudentName" class="student-name">STUDENT NAME</div>
+                <div class="info-row">
+                    <span id="cardStudentId" class="student-id">0000000000</span>
+                    <span id="cardStudentType" class="student-type">STUDENT</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Bar -->
+        <div class="bottom-bar">
+            <div class="gold-stripe"></div>
+            <div class="cardinal-stripe"></div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer automation -->
+    <div class="controls">
+        <input type="text" id="universityNameInput" placeholder="University Name">
+        <input type="text" id="studentNameInput" placeholder="Student Name">
+        <input type="text" id="studentIdInput" placeholder="Student ID">
+        <input type="text" id="studentTypeInput" placeholder="Student Type">
+        <input type="text" id="photoUrlInput" placeholder="Photo URL">
+    </div>
+
+    <script>
+        // Template variable mapping for document generation
+        // Variables that can be customized:
+        // - {{universityName}} - University name (used also to find logo from College logo folder)
+        // - {{studentName}} - Student's full name
+        // - {{studentId}} - Student ID number
+        // - {{studentType}} - Student type (STUDENT, FACULTY, STAFF, etc.)
+        // - {{photoUrl}} - URL to student photo
+
+        // Logo file extensions to try (in order of preference)
+        const LOGO_EXTENSIONS = ['.png', '.svg', '.webp', '.jpg', '.jpeg'];
+
+        // Function to try loading logo with different extensions
+        function tryLoadLogo(universityName, extensionIndex = 0) {
+            if (extensionIndex >= LOGO_EXTENSIONS.length) {
+                // All extensions failed, show fallback
+                document.getElementById('cardUniversityLogo').style.display = 'none';
+                document.getElementById('logoFallbackText').style.display = 'flex';
+                return;
+            }
+
+            const logoImg = document.getElementById('cardUniversityLogo');
+            const extension = LOGO_EXTENSIONS[extensionIndex];
+            const logoPath = './College logo/' + universityName + extension;
+
+            logoImg.onerror = function () {
+                // Try next extension
+                tryLoadLogo(universityName, extensionIndex + 1);
+            };
+            logoImg.onload = function () {
+                this.style.display = 'block';
+                document.getElementById('logoFallbackText').style.display = 'none';
+            };
+            logoImg.src = logoPath;
+        }
+
+        // Function to format university name for display
+        function formatUniversityName(name) {
+            // Try to split long names intelligently
+            const words = name.split(' ');
+            if (words.length <= 2) {
+                return { line1: name, line2: '' };
+            }
+            // Find "of" or "University" to split
+            const ofIndex = words.findIndex(w => w.toLowerCase() === 'of');
+            if (ofIndex > 0 && ofIndex < words.length - 1) {
+                const line1 = words.slice(0, ofIndex + 1).join(' ');
+                const line2 = words.slice(ofIndex + 1).join(' ');
+                return { line1, line2 };
+            }
+            // Default split in half
+            const mid = Math.ceil(words.length / 2);
+            return {
+                line1: words.slice(0, mid).join(' '),
+                line2: words.slice(mid).join(' ')
+            };
+        }
+
+        // Function to populate card data (called by Puppeteer or manually)
+        function populateCard(data) {
+            if (data.universityName) {
+                const formatted = formatUniversityName(data.universityName);
+                document.getElementById('cardUniversityName1').innerHTML = '<span class="usc">' + formatted.line1.split(' ')[0] + '</span> ' + formatted.line1.split(' ').slice(1).join(' ');
+                document.getElementById('cardUniversityName2').textContent = formatted.line2;
+                // Try to load corresponding logo
+                tryLoadLogo(data.universityName);
+            }
+            if (data.studentName) {
+                document.getElementById('cardStudentName').textContent = data.studentName.toUpperCase();
+            }
+            if (data.studentId) {
+                document.getElementById('cardStudentId').textContent = data.studentId;
+            }
+            if (data.studentType) {
+                document.getElementById('cardStudentType').textContent = data.studentType.toUpperCase();
+            }
+            if (data.photoUrl) {
+                document.getElementById('cardStudentPhoto').src = data.photoUrl;
+            }
+        }
+
+        // Listen for input changes (for Puppeteer automation)
+        document.addEventListener('DOMContentLoaded', function () {
+            const universityNameInput = document.getElementById('universityNameInput');
+            const studentNameInput = document.getElementById('studentNameInput');
+            const studentIdInput = document.getElementById('studentIdInput');
+            const studentTypeInput = document.getElementById('studentTypeInput');
+            const photoUrlInput = document.getElementById('photoUrlInput');
+
+            if (universityNameInput) {
+                universityNameInput.addEventListener('input', function () {
+                    if (this.value) {
+                        const formatted = formatUniversityName(this.value);
+                        const words = formatted.line1.split(' ');
+                        document.getElementById('cardUniversityName1').innerHTML = '<span class="usc">' + words[0] + '</span> ' + words.slice(1).join(' ');
+                        document.getElementById('cardUniversityName2').textContent = formatted.line2;
+                        tryLoadLogo(this.value);
+                    }
+                });
+            }
+            if (studentNameInput) {
+                studentNameInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentName').textContent = (this.value || 'STUDENT NAME').toUpperCase();
+                });
+            }
+            if (studentIdInput) {
+                studentIdInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentId').textContent = this.value || '0000000000';
+                });
+            }
+            if (studentTypeInput) {
+                studentTypeInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentType').textContent = (this.value || 'STUDENT').toUpperCase();
+                });
+            }
+            if (photoUrlInput) {
+                photoUrlInput.addEventListener('input', function () {
+                    if (this.value) {
+                        document.getElementById('cardStudentPhoto').src = this.value;
+                    }
+                });
+            }
+        });
+    </script>
+
+</body>
+
+</html>

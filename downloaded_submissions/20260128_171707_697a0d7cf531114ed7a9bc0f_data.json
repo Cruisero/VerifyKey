@@ -1,0 +1,23 @@
+{
+  "verificationId": "697a0d7cf531114ed7a9bc0f",
+  "timestamp": "20260128_171707",
+  "student": {
+    "firstName": "Emily",
+    "lastName": "Jones",
+    "email": "ejones@harvard.edu",
+    "birthDate": "2000-08-23"
+  },
+  "university": {
+    "id": 1426,
+    "idExtended": "1426",
+    "name": "Harvard University",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "id_card",
+      "fileName": "id_emily_jones_1769620551610.jpg"
+    }
+  ],
+  "provider": "puppeteer"
+}

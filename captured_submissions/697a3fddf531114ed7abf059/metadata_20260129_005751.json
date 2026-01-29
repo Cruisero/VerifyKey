@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "verificationId": "697a3fddf531114ed7abf059",
+  "currentStep": "pending",
+  "programId": null,
+  "segment": "student",
+  "organization": null,
+  "personInfo": null,
+  "documents": [],
+  "submissionUrl": null,
+  "metadata": null,
+  "created": 1769619421051,
+  "updated": 1769619458415,
+  "rejectionReasons": [],
+  "errorIds": [],
+  "captured_at": "20260129_005751"
+}

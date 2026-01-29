@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Student ID Card Template</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #6b6b6b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .id-card-container {
+            width: 3.375in;
+            height: 2.125in;
+            background: #2e7d32;
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Background campus image overlay */
+        .background-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 22px);
+            background: linear-gradient(135deg,
+                    rgba(135, 206, 235, 0.4) 0%,
+                    rgba(200, 230, 200, 0.3) 30%,
+                    rgba(210, 180, 140, 0.3) 70%,
+                    rgba(169, 169, 169, 0.3) 100%);
+            z-index: 0;
+        }
+
+        /* Left green sidebar */
+        .left-sidebar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 90px;
+            height: calc(100% - 22px);
+            background: linear-gradient(180deg, #2e7d32 0%, #43a047 50%, #ffeb3b 50%);
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Logo section */
+        .logo-section {
+            background: #2e7d32;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .logo-container {
+            width: 42px;
+            height: 42px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin-bottom: 4px;
+            padding: 3px;
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .logo-fallback {
+            font-family: 'Playfair Display', serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #2e7d32;
+        }
+
+        .university-name {
+            font-family: 'Inter', sans-serif;
+            color: #d4af37;
+            font-size: 6.5px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-align: center;
+            text-transform: uppercase;
+            max-width: 80px;
+            word-wrap: break-word;
+        }
+
+        /* Yellow info section */
+        .info-section {
+            background: #ffeb3b;
+            flex: 1;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .student-firstname {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1.2;
+        }
+
+        .student-lastname {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1.2;
+        }
+
+        .student-type {
+            font-family: 'Inter', sans-serif;
+            font-size: 9px;
+            font-weight: 500;
+            color: #333;
+            margin-top: 4px;
+        }
+
+        .issued-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 8px;
+            font-weight: 600;
+            color: #333;
+            margin-top: 6px;
+            text-transform: uppercase;
+        }
+
+        .issued-date {
+            font-family: 'Inter', sans-serif;
+            font-size: 9px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        /* Photo section */
+        .photo-section {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            width: 70px;
+            height: 85px;
+            background: #ddd;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 2;
+            overflow: hidden;
+        }
+
+        .photo-section img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Bottom green bar with slogan */
+        .bottom-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 22px;
+            background: linear-gradient(90deg, #2e7d32 0%, #388e3c 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3;
+        }
+
+        .slogan {
+            font-family: 'Playfair Display', serif;
+            font-size: 8px;
+            font-style: italic;
+            color: #d4af37;
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3);
+            letter-spacing: 0.5px;
+        }
+
+        /* Campus statue decoration (simplified) */
+        .campus-decoration {
+            position: absolute;
+            bottom: 25px;
+            left: 90px;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(to top,
+                    rgba(76, 175, 80, 0.3) 0%,
+                    transparent 100%);
+            z-index: 1;
+        }
+
+        /* Controls hidden */
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="idCardPreview" class="id-card-container">
+        <!-- Background -->
+        <div class="background-image"></div>
+
+        <!-- Campus decoration area -->
+        <div class="campus-decoration"></div>
+
+        <!-- Left Sidebar -->
+        <div class="left-sidebar">
+            <!-- Logo Area -->
+            <div class="logo-section">
+                <div id="universityLogoContainer" class="logo-container">
+                    <img id="cardUniversityLogo" src="" alt="University Logo" style="display:none;"
+                        onload="this.style.display='block'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='none');"
+                        onerror="this.style.display='none'; document.getElementById('logoFallbackText') && (document.getElementById('logoFallbackText').style.display='flex');">
+                    <span id="logoFallbackText" class="logo-fallback">🎓</span>
+                </div>
+                <div id="cardUniversityName" class="university-name">University Name</div>
+            </div>
+
+            <!-- Yellow Info Section -->
+            <div class="info-section">
+                <div id="cardFirstName" class="student-firstname">FirstName</div>
+                <div id="cardLastName" class="student-lastname">LastName</div>
+                <div id="cardStudentType" class="student-type">Undergraduate</div>
+                <div class="issued-label">ISSUED</div>
+                <div id="cardIssuedDate" class="issued-date">01/01/2024</div>
+            </div>
+        </div>
+
+        <!-- Photo Section -->
+        <div class="photo-section">
+            <img id="cardStudentPhoto" src="https://placehold.co/140x170/e5e7eb/9ca3af?text=Photo" alt="Student Photo">
+        </div>
+
+        <!-- Bottom Bar with Slogan -->
+        <div class="bottom-bar">
+            <div class="slogan">Educating minds and hearts to change the world</div>
+        </div>
+    </div>
+
+    <!-- Hidden inputs for Puppeteer automation -->
+    <div class="controls">
+        <input type="text" id="universityNameInput" placeholder="University Name">
+        <input type="text" id="firstNameInput" placeholder="First Name">
+        <input type="text" id="lastNameInput" placeholder="Last Name">
+        <input type="text" id="studentTypeInput" placeholder="Student Type (Undergraduate/Graduate)">
+        <input type="text" id="issuedDateInput" placeholder="Issued Date (MM/DD/YYYY)">
+        <input type="text" id="photoUrlInput" placeholder="Photo URL">
+    </div>
+
+    <script>
+        // Template variable mapping for document generation
+        // Variables that can be customized:
+        // - {{universityName}} - University name (used also to find logo from College logo folder)
+        // - {{firstName}} - Student's first name
+        // - {{lastName}} - Student's last name  
+        // - {{studentType}} - Student type (Undergraduate, Graduate, etc.)
+        // - {{issuedDate}} - Issue date in MM/DD/YYYY format
+        // - {{photoUrl}} - URL to student photo
+
+        // Logo file extensions to try (in order of preference)
+        const LOGO_EXTENSIONS = ['.png', '.svg', '.webp', '.jpg', '.jpeg'];
+
+        // Function to get logo URL based on university name
+        function getLogoUrl(universityName) {
+            // Logo files are in the "College logo" folder relative to templates
+            // Try different extensions
+            const basePath = './College logo/';
+            return basePath + encodeURIComponent(universityName);
+        }
+
+        // Function to try loading logo with different extensions
+        function tryLoadLogo(universityName, extensionIndex = 0) {
+            if (extensionIndex >= LOGO_EXTENSIONS.length) {
+                // All extensions failed, show fallback
+                document.getElementById('cardUniversityLogo').style.display = 'none';
+                document.getElementById('logoFallbackText').style.display = 'flex';
+                return;
+            }
+
+            const logoImg = document.getElementById('cardUniversityLogo');
+            const extension = LOGO_EXTENSIONS[extensionIndex];
+            const logoPath = './College logo/' + universityName + extension;
+
+            logoImg.onerror = function () {
+                // Try next extension
+                tryLoadLogo(universityName, extensionIndex + 1);
+            };
+            logoImg.onload = function () {
+                this.style.display = 'block';
+                document.getElementById('logoFallbackText').style.display = 'none';
+            };
+            logoImg.src = logoPath;
+        }
+
+        // Function to populate card data (called by Puppeteer or manually)
+        function populateCard(data) {
+            if (data.universityName) {
+                document.getElementById('cardUniversityName').textContent = data.universityName;
+                // Try to load corresponding logo
+                tryLoadLogo(data.universityName);
+            }
+            if (data.firstName) {
+                document.getElementById('cardFirstName').textContent = data.firstName;
+            }
+            if (data.lastName) {
+                document.getElementById('cardLastName').textContent = data.lastName;
+            }
+            if (data.studentType) {
+                document.getElementById('cardStudentType').textContent = data.studentType;
+            }
+            if (data.issuedDate) {
+                document.getElementById('cardIssuedDate').textContent = data.issuedDate;
+            }
+            if (data.photoUrl) {
+                document.getElementById('cardStudentPhoto').src = data.photoUrl;
+            }
+        }
+
+        // Listen for input changes (for Puppeteer automation)
+        document.addEventListener('DOMContentLoaded', function () {
+            const universityNameInput = document.getElementById('universityNameInput');
+            const firstNameInput = document.getElementById('firstNameInput');
+            const lastNameInput = document.getElementById('lastNameInput');
+            const studentTypeInput = document.getElementById('studentTypeInput');
+            const issuedDateInput = document.getElementById('issuedDateInput');
+            const photoUrlInput = document.getElementById('photoUrlInput');
+
+            if (universityNameInput) {
+                universityNameInput.addEventListener('input', function () {
+                    const uniName = this.value || 'University Name';
+                    document.getElementById('cardUniversityName').textContent = uniName;
+                    if (this.value) {
+                        tryLoadLogo(this.value);
+                    }
+                });
+            }
+            if (firstNameInput) {
+                firstNameInput.addEventListener('input', function () {
+                    document.getElementById('cardFirstName').textContent = this.value || 'FirstName';
+                });
+            }
+            if (lastNameInput) {
+                lastNameInput.addEventListener('input', function () {
+                    document.getElementById('cardLastName').textContent = this.value || 'LastName';
+                });
+            }
+            if (studentTypeInput) {
+                studentTypeInput.addEventListener('input', function () {
+                    document.getElementById('cardStudentType').textContent = this.value || 'Undergraduate';
+                });
+            }
+            if (issuedDateInput) {
+                issuedDateInput.addEventListener('input', function () {
+                    document.getElementById('cardIssuedDate').textContent = this.value || '01/01/2024';
+                });
+            }
+            if (photoUrlInput) {
+                photoUrlInput.addEventListener('input', function () {
+                    if (this.value) {
+                        document.getElementById('cardStudentPhoto').src = this.value;
+                    }
+                });
+            }
+        });
+    </script>
+
+</body>
+
+</html>

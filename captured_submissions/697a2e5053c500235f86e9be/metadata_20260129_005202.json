@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "verificationId": "697a2e5053c500235f86e9be",
+  "currentStep": "collectStudentPersonalInfo",
+  "programId": null,
+  "segment": "student",
+  "organization": null,
+  "personInfo": null,
+  "documents": [],
+  "submissionUrl": "https://services.sheerid.com/rest/v2/verification/697a2e5053c500235f86e9be/step/collectStudentPersonalInfo",
+  "metadata": null,
+  "created": 1769614928093,
+  "updated": 1769614928093,
+  "rejectionReasons": [],
+  "errorIds": [],
+  "captured_at": "20260129_005202"
+}

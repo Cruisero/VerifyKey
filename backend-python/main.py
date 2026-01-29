@@ -190,9 +190,11 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         # Use LionPATH generator if configured (Penn State portal screenshot)
         if provider == "lionpath":
             print(f"[Verify] Generating LionPATH schedule screenshot...")
-            doc_data, filename = generate_lionpath_image(first, last)
+            doc_data, filename, student_data = generate_lionpath_image(first, last)
             if doc_data:
                 documents = [{"type": "lionpath", "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
+                # Use email from LionPATH for form submission
+                email = student_data.get("email", email)
         
         # Use Puppeteer if configured
         elif provider == "puppeteer":
@@ -594,7 +596,7 @@ async def test_document_generation(request: TestDocumentRequest):
         # Use LionPATH generator (Penn State portal screenshot)
         if provider == "lionpath":
             print(f"[TestDoc] Using LionPATH generator...")
-            doc_data, filename = generate_lionpath_image(first, last)
+            doc_data, filename, student_data = generate_lionpath_image(first, last)
             
             if doc_data:
                 image_base64 = base64.b64encode(doc_data).decode('utf-8')
@@ -604,13 +606,7 @@ async def test_document_generation(request: TestDocumentRequest):
                     "provider": "lionpath",
                     "providerNote": "使用保存的配置: LionPATH 课程表截图 (Penn State)",
                     "image": f"data:image/png;base64,{image_base64}",
-                    "formData": {
-                        "firstName": first,
-                        "lastName": last,
-                        "fullName": f"{first} {last}",
-                        "email": generate_psu_email(first, last),
-                        "university": "Pennsylvania State University"
-                    },
+                    "formData": student_data,
                     "filename": filename
                 }
         

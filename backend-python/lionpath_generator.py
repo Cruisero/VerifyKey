@@ -29,7 +29,8 @@ def generate_psu_email(first_name: str, last_name: str) -> str:
     return email
 
 
-def generate_html(first_name: str, last_name: str, school_id: str = '2565') -> str:
+def generate_html(first_name: str, last_name: str, school_id: str = '2565', 
+                  psu_id: str = None, email: str = None) -> tuple:
     """
     生成 Penn State LionPATH HTML
 
@@ -37,11 +38,15 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565') -> s
         first_name: 名字
         last_name: 姓氏
         school_id: 学校 ID
+        psu_id: PSU ID (可选，不传则自动生成)
+        email: 邮箱 (可选，不传则自动生成)
 
     Returns:
-        str: HTML 内容
+        tuple: (HTML 内容, PSU ID, email, major)
     """
-    psu_id = generate_psu_id()
+    # 使用传入的 ID/email 或生成新的
+    psu_id = psu_id or generate_psu_id()
+    email = email or generate_psu_email(first_name, last_name)
     name = f"{first_name} {last_name}"
     date = datetime.now().strftime('%m/%d/%Y, %I:%M:%S %p')
 
@@ -332,7 +337,7 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565') -> s
 </html>
 """
 
-    return html
+    return html, psu_id, email, major
 
 
 def generate_random_courses() -> str:
@@ -404,7 +409,7 @@ def generate_random_courses() -> str:
     return '\n'.join(rows)
 
 
-def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565') -> Tuple[bytes, str]:
+def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565') -> Tuple[bytes, str, dict]:
     """
     生成 Penn State LionPATH 截图 PNG
 
@@ -414,15 +419,20 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
         school_id: 学校 ID
 
     Returns:
-        Tuple[bytes, str]: (PNG 图片数据, 文件名)
+        Tuple[bytes, str, dict]: (PNG 图片数据, 文件名, 学生数据字典)
+        学生数据字典包含: psu_id, email, major, university
     """
     try:
         import concurrent.futures
         
+        # 预先生成数据以保持一致性
+        psu_id = generate_psu_id()
+        email = generate_psu_email(first_name, last_name)
+        
         def run_playwright():
             from playwright.sync_api import sync_playwright
             
-            html_content = generate_html(first_name, last_name, school_id)
+            html_content, _, _, major = generate_html(first_name, last_name, school_id, psu_id, email)
             
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -432,19 +442,30 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
                 screenshot_bytes = page.screenshot(type='png', full_page=True)
                 browser.close()
             
-            return screenshot_bytes
+            return screenshot_bytes, major
         
         logger.info(f"[LionPATH] Generating schedule for {first_name} {last_name}")
         
         # Run playwright in a separate thread to avoid asyncio loop conflict
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(run_playwright)
-            screenshot_bytes = future.result(timeout=30)
+            screenshot_bytes, major = future.result(timeout=30)
 
         filename = f"lionpath_{first_name.lower()}_{last_name.lower()}_{int(datetime.now().timestamp() * 1000)}.png"
         logger.info(f"[LionPATH] ✓ Generated: {filename} ({len(screenshot_bytes)} bytes)")
         
-        return screenshot_bytes, filename
+        # 返回学生数据字典供表单提交使用
+        student_data = {
+            "psu_id": psu_id,
+            "email": email,
+            "major": major,
+            "university": "Pennsylvania State University",
+            "firstName": first_name,
+            "lastName": last_name,
+            "fullName": f"{first_name} {last_name}"
+        }
+        
+        return screenshot_bytes, filename, student_data
 
     except ImportError:
         raise Exception("需要安装 playwright: pip install playwright && playwright install chromium")

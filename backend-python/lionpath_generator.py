@@ -20,7 +20,8 @@ TEMPLATE_DIR = Path(__file__).parent / "templates" / "LionPATH"
 # 可用模板列表
 AVAILABLE_TEMPLATES = {
     "schedule.html": "经典风格 (Student Center)",
-    "schedule_modern.html": "现代风格 (卡片式)"
+    "schedule_modern.html": "现代风格 (卡片式)",
+    "schedule_calendar.html": "日历视图 (周课表)"
 }
 
 
@@ -126,7 +127,16 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
 
     # 根据模板选择生成课程格式
     is_modern = 'modern' in template_name.lower()
-    courses, total_units = generate_random_courses(modern_format=is_modern)
+    is_calendar = 'calendar' in template_name.lower()
+    
+    if is_calendar:
+        calendar_grid, courses_data, total_units = generate_calendar_grid()
+        course_count = len(courses_data)
+        courses = ''  # Not used in calendar view
+    else:
+        courses, total_units = generate_random_courses(modern_format=is_modern)
+        calendar_grid = ''
+        course_count = 0
 
     # 加载外部模板
     template = load_template(template_name)
@@ -141,9 +151,8 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         html = html.replace('{{year}}', str(year))
         html = html.replace('{{courses}}', courses)
         html = html.replace('{{total_units}}', str(total_units))
-        html = html.replace('{{date}}', date)
-        html = html.replace('{{year}}', str(year))
-        html = html.replace('{{courses}}', courses)
+        html = html.replace('{{calendar_grid}}', calendar_grid)
+        html = html.replace('{{course_count}}', str(course_count))
     else:
         # 回退到内联模板 (保留原始代码以防模板文件丢失)
         html = f"""<!DOCTYPE html>
@@ -496,6 +505,136 @@ def generate_random_courses(modern_format: bool = False) -> tuple:
         rows.append(row)
     
     return '\n'.join(rows), total_units
+
+
+def generate_calendar_grid() -> tuple:
+    """生成日历视图 HTML 课程表
+    
+    Returns:
+        tuple: (calendar HTML, courses list, total units)
+    """
+    
+    # Penn State 真实课程池
+    course_pool = [
+        ('CMPSC 131', 'Programming and Computation I', 3),
+        ('CMPSC 132', 'Programming and Computation II', 3),
+        ('CMPSC 221', 'Object-Oriented Programming', 3),
+        ('CMPSC 311', 'Introduction to Systems Programming', 3),
+        ('CMPSC 360', 'Discrete Mathematics for CS', 3),
+        ('CMPSC 465', 'Data Structures and Algorithms', 3),
+        ('CMPSC 473', 'Operating Systems Design', 3),
+        ('MATH 140', 'Calculus with Analytic Geometry I', 4),
+        ('MATH 141', 'Calculus with Analytic Geometry II', 4),
+        ('MATH 220', 'Matrices', 2),
+        ('MATH 230', 'Calculus and Vector Analysis', 4),
+        ('PHYS 211', 'General Physics: Mechanics', 4),
+        ('PHYS 212', 'Electricity and Magnetism', 4),
+        ('STAT 318', 'Elementary Probability', 3),
+        ('ENGL 202C', 'Technical Writing', 3),
+        ('ECON 102', 'Introductory Microeconomics', 3),
+        ('ECON 104', 'Introductory Macroeconomics', 3),
+        ('IST 210', 'Organization of Data', 3),
+        ('CMPEN 270', 'Digital Design Lab', 2),
+        ('CMPEN 331', 'Computer Organization', 3),
+    ]
+    
+    # 时间段和对应 CSS 类
+    time_slots = [
+        ('8:00 AM', 'MWF'),
+        ('9:05 AM', 'MWF'),
+        ('10:10 AM', 'MWF'),
+        ('11:15 AM', 'MWF'),
+        ('12:20 PM', 'MWF'),
+        ('1:25 PM', 'MWF'),
+        ('8:00 AM', 'TTh'),
+        ('9:30 AM', 'TTh'),
+        ('11:00 AM', 'TTh'),
+        ('12:30 PM', 'TTh'),
+        ('2:00 PM', 'TTh'),
+    ]
+    
+    rooms = [
+        'Willard 062', 'Thomas 102', 'Westgate E201', 'Boucke 304', 'Osmond 112',
+        'Sackett 202', 'Hammond 107', 'Fenske 112', 'Walker 203', 'Chambers 111',
+        'IST 220', 'Sparks 106', 'Keller 115', 'Forum 114', 'Wartik 108',
+    ]
+    
+    color_classes = ['', 'alt-1', 'alt-2', 'alt-3', 'alt-4']
+    
+    # 随机选择 4-5 门课程
+    num_courses = random.randint(4, 5)
+    selected_courses = random.sample(course_pool, num_courses)
+    selected_times = random.sample(time_slots, num_courses)
+    selected_rooms = random.sample(rooms, num_courses)
+    
+    total_units = sum(c[2] for c in selected_courses)
+    courses_data = []
+    
+    # 构建课程数据
+    for i, (course_code, title, units) in enumerate(selected_courses):
+        time_str, days = selected_times[i]
+        room = selected_rooms[i]
+        color = color_classes[i % len(color_classes)]
+        courses_data.append({
+            'code': course_code,
+            'title': title,
+            'units': units,
+            'time': time_str,
+            'days': days,
+            'room': room,
+            'color': color
+        })
+    
+    # 定义时间槽显示
+    display_times = [
+        '8:00 AM',
+        '9:00 AM', 
+        '10:00 AM',
+        '11:00 AM',
+        '12:00 PM',
+        '1:00 PM',
+        '2:00 PM',
+    ]
+    
+    # 生成日历 HTML
+    html_rows = []
+    
+    for time_display in display_times:
+        # 时间列
+        html_rows.append(f'                <div class="time-slot">{time_display}</div>')
+        
+        # 5 天列 (Mon-Fri)
+        for day_idx, day in enumerate(['M', 'T', 'W', 'Th', 'F']):
+            cell_content = ''
+            
+            # 查找这个时间和日期是否有课
+            for course in courses_data:
+                course_time = course['time'].split(':')[0]  # Get hour
+                slot_time = time_display.split(':')[0]
+                
+                # 简单匹配：同一个小时
+                if course_time == slot_time:
+                    # 检查是否是这一天
+                    days = course['days']
+                    has_class = False
+                    
+                    if days == 'MWF' and day in ['M', 'W', 'F']:
+                        has_class = True
+                    elif days == 'TTh' and day in ['T', 'Th']:
+                        has_class = True
+                    
+                    if has_class:
+                        color_class = f" {course['color']}" if course['color'] else ""
+                        cell_content = f'''<div class="course-block{color_class}">
+                            <div class="course-code">{course['code']}</div>
+                            <div class="course-room">{course['room']}</div>
+                        </div>'''
+                        break
+            
+            html_rows.append(f'                <div class="day-cell">{cell_content}</div>')
+    
+    calendar_html = '\n'.join(html_rows)
+    return calendar_html, courses_data, total_units
 
 
 def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565',

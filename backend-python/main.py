@@ -202,8 +202,10 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         
         # Use LionPATH generator if configured (Penn State portal screenshot)
         if provider == "lionpath":
-            print(f"[Verify] Generating LionPATH schedule screenshot...")
-            doc_data, filename, student_data = generate_lionpath_image(first, last)
+            lionpath_config = config.get("aiGenerator", {}).get("lionpath", {})
+            lionpath_template = lionpath_config.get("template", "schedule.html")
+            print(f"[Verify] Generating LionPATH schedule screenshot with template: {lionpath_template}...")
+            doc_data, filename, student_data = generate_lionpath_image(first, last, template_name=lionpath_template)
             if doc_data:
                 documents = [{"type": "lionpath", "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
                 # Use email from LionPATH for form submission
@@ -549,6 +551,15 @@ async def get_templates_endpoint():
     }
 
 
+@app.get("/api/lionpath-templates")
+async def get_lionpath_templates_endpoint():
+    """Get available LionPATH HTML templates"""
+    templates = get_available_templates()
+    return {
+        "templates": templates
+    }
+
+
 class TestDocumentRequest(BaseModel):
     provider: str = "puppeteer"
     firstName: Optional[str] = None
@@ -621,8 +632,10 @@ async def test_document_generation(request: TestDocumentRequest):
         
         # Use LionPATH generator (Penn State portal screenshot)
         if provider == "lionpath":
-            print(f"[TestDoc] Using LionPATH generator...")
-            doc_data, filename, student_data = generate_lionpath_image(first, last)
+            lionpath_config = config.get("aiGenerator", {}).get("lionpath", {})
+            lionpath_template = lionpath_config.get("template", "schedule.html")
+            print(f"[TestDoc] Using LionPATH generator with template: {lionpath_template}...")
+            doc_data, filename, student_data = generate_lionpath_image(first, last, template_name=lionpath_template)
             
             if doc_data:
                 image_base64 = base64.b64encode(doc_data).decode('utf-8')

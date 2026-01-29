@@ -38,6 +38,10 @@ export default function Admin() {
     const [sheeridSettings, setSheeridSettings] = useState({
         docTypes: ['class_schedule']  // Default: class_schedule, array for multi-select
     });
+    const [lionpathSettings, setLionpathSettings] = useState({
+        template: 'schedule.html',
+        availableTemplates: []
+    });
     const [proxySettings, setProxySettings] = useState({
         enabled: true,
         host: 'proxy.global.ip2up.com',
@@ -129,6 +133,13 @@ export default function Admin() {
                 if (data.aiGenerator?.universitySource) {
                     setUniversitySource(data.aiGenerator.universitySource);
                 }
+                // Load LionPATH settings
+                if (data.aiGenerator?.lionpath) {
+                    setLionpathSettings(prev => ({
+                        ...prev,
+                        template: data.aiGenerator.lionpath.template || prev.template
+                    }));
+                }
             }
 
             // Fetch available templates
@@ -138,6 +149,16 @@ export default function Admin() {
                 setPuppeteerSettings(prev => ({
                     ...prev,
                     availableTemplates: templatesData.templates || []
+                }));
+            }
+
+            // Fetch LionPATH templates
+            const lionpathTemplatesRes = await fetch(`${API_BASE}/api/lionpath-templates`);
+            if (lionpathTemplatesRes.ok) {
+                const lionpathTemplatesData = await lionpathTemplatesRes.json();
+                setLionpathSettings(prev => ({
+                    ...prev,
+                    availableTemplates: lionpathTemplatesData.templates || []
                 }));
             }
         } catch (error) {
@@ -172,6 +193,10 @@ export default function Admin() {
                     sheerid: {
                         enabled: aiProvider === 'sheerid',
                         docTypes: sheeridSettings.docTypes || ['class_schedule']
+                    },
+                    lionpath: {
+                        enabled: aiProvider === 'lionpath',
+                        template: lionpathSettings.template
                     },
                     svgFallback: { enabled: true }
                 },
@@ -673,11 +698,36 @@ export default function Admin() {
                                                 此模式生成模拟的课程表截图，作为验证的备选文档类型。
                                             </p>
                                         </div>
-                                        <p className="input-hint">
-                                            此模式不需要额外配置，将自动生成：
+                                        <div className="input-group">
+                                            <label className="input-label">选择 HTML 模板</label>
+                                            <select
+                                                className="input"
+                                                value={lionpathSettings.template}
+                                                onChange={(e) => setLionpathSettings(s => ({ ...s, template: e.target.value }))}
+                                            >
+                                                {lionpathSettings.availableTemplates.length > 0 ? (
+                                                    lionpathSettings.availableTemplates.map(tpl => (
+                                                        <option key={tpl.filename} value={tpl.filename}>
+                                                            {tpl.label} ({tpl.filename})
+                                                        </option>
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <option value="schedule.html">经典风格 (schedule.html)</option>
+                                                        <option value="schedule_modern.html">现代风格 (schedule_modern.html)</option>
+                                                        <option value="schedule_calendar.html">日历视图 (schedule_calendar.html)</option>
+                                                    </>
+                                                )}
+                                            </select>
+                                            <p className="input-hint">
+                                                模板文件位于 <code>templates/LionPATH/</code> 目录
+                                            </p>
+                                        </div>
+                                        <p className="input-hint" style={{ marginTop: '12px' }}>
+                                            此模式将自动生成：
                                             <br />• 🎓 随机 PSU 学号 (9位)
                                             <br />• 📧 PSU 格式邮箱
-                                            <br />• 📚 随机课程表 (4-6门课程)
+                                            <br />• 📚 随机课程表 (4-5门课程)
                                             <br />• 📅 当前学期信息
                                         </p>
                                     </div>

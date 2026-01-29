@@ -213,13 +213,14 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         elif provider == "sheerid":
             sheerid_config = config.get("aiGenerator", {}).get("sheerid", {})
             doc_types = sheerid_config.get("docTypes", ["class_schedule"])
-            # Randomly select one document type from the configured list
-            import random
-            doc_type = random.choice(doc_types) if doc_types else "class_schedule"
-            print(f"[Verify] Generating SheerID {doc_type} (from {doc_types}) for {first} {last} @ {org['name']}...")
-            doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, org["name"], dob)
-            if doc_data:
-                documents = [{"type": doc_type, "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
+            # Generate ALL selected document types (like Gemini)
+            print(f"[Verify] Generating SheerID documents {doc_types} for {first} {last} @ {org['name']}...")
+            documents = []
+            for doc_type in doc_types:
+                doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, org["name"], dob)
+                if doc_data:
+                    documents.append({"type": doc_type, "data": doc_data, "fileName": filename, "mimeType": "image/png"})
+                    print(f"[Verify] ✓ Generated {doc_type}: {filename}")
         
         # Use Puppeteer if configured
         elif provider == "puppeteer":
@@ -647,37 +648,47 @@ async def test_document_generation(request: TestDocumentRequest):
         elif provider == "sheerid":
             sheerid_config = config.get("aiGenerator", {}).get("sheerid", {})
             doc_types = sheerid_config.get("docTypes", ["class_schedule"])
-            # Randomly select one document type from the configured list
-            import random
-            doc_type = random.choice(doc_types) if doc_types else "class_schedule"
+            # Generate ALL selected document types (like Gemini)
+            print(f"[TestDoc] Using SheerID generator with docTypes: {doc_types}...")
             
-            print(f"[TestDoc] Using SheerID generator with docType: {doc_type} (from {doc_types})...")
-            doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, university)
+            doc_type_names = {
+                "class_schedule": "📅 课程表",
+                "transcript": "📝 成绩单",
+                "id_card": "🪪 学生证"
+            }
             
-            if doc_data:
-                image_base64 = base64.b64encode(doc_data).decode('utf-8')
-                
-                doc_type_names = {
-                    "class_schedule": "📅 课程表",
-                    "transcript": "📝 成绩单",
-                    "id_card": "🪪 学生证"
-                }
-                doc_type_display = doc_type_names.get(doc_type, doc_type)
-                
+            images = []
+            first_form_data = None
+            for doc_type in doc_types:
+                doc_data, filename, form_data = generate_document_sheerid(doc_type, first, last, university)
+                if doc_data:
+                    image_base64 = base64.b64encode(doc_data).decode('utf-8')
+                    images.append({
+                        "type": doc_type,
+                        "image": f"data:image/png;base64,{image_base64}",
+                        "filename": filename
+                    })
+                    if first_form_data is None:
+                        first_form_data = form_data
+                    print(f"[TestDoc] ✓ Generated {doc_type}: {filename}")
+            
+            if images:
+                doc_types_display = ", ".join([doc_type_names.get(dt, dt) for dt in doc_types])
                 provider_note = f"""📚 SheerID 文档生成器
-📄 类型: {doc_type_display}
-👤 姓名: {form_data.get('fullName', 'N/A')}
-🆔 学号: {form_data.get('studentId', 'N/A')}
-🎂 生日: {form_data.get('birthDate', 'N/A')}
-🏫 大学: {form_data.get('university', 'N/A')}"""
+📄 类型: {doc_types_display} ({len(images)}个文档)
+👤 姓名: {first_form_data.get('fullName', 'N/A')}
+🆔 学号: {first_form_data.get('studentId', 'N/A')}
+🎂 生日: {first_form_data.get('birthDate', 'N/A')}
+🏫 大学: {first_form_data.get('university', 'N/A')}"""
                 
                 return {
                     "success": True,
                     "provider": "sheerid",
                     "providerNote": provider_note,
-                    "image": f"data:image/png;base64,{image_base64}",
-                    "formData": form_data,
-                    "filename": filename
+                    "images": images,
+                    "image": images[0]["image"],  # For backward compatibility
+                    "formData": first_form_data,
+                    "filename": images[0]["filename"]
                 }
         
         elif provider == "puppeteer":

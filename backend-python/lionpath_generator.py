@@ -6,6 +6,7 @@ LionPATH Schedule Generator - Penn State Student Portal Screenshot
 """
 import random
 import os
+import base64
 from datetime import datetime
 from io import BytesIO
 from typing import Tuple, Optional
@@ -170,6 +171,14 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         html = html.replace('{{course_count}}', str(course_count))
         html = html.replace('{{verification_date}}', verification_date)
         html = html.replace('{{class_standing}}', class_standing)
+        
+        # 加载 PSU logo 并转换为 base64 (用于 enrollment_verification 模板)
+        if is_enrollment:
+            logo_path = TEMPLATE_DIR / 'psu_logo.png'
+            if logo_path.exists():
+                with open(logo_path, 'rb') as f:
+                    logo_base64 = base64.b64encode(f.read()).decode('utf-8')
+                    html = html.replace('{{psu_logo}}', f'data:image/png;base64,{logo_base64}')
     else:
         # 回退到内联模板 (保留原始代码以防模板文件丢失)
         html = f"""<!DOCTYPE html>

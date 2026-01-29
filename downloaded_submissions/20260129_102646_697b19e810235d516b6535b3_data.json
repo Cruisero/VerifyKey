@@ -1,0 +1,23 @@
+{
+  "verificationId": "697b19e810235d516b6535b3",
+  "timestamp": "20260129_102646",
+  "student": {
+    "firstName": "Emily",
+    "lastName": "Taylor",
+    "email": "emily.taylor4144@psu.edu",
+    "birthDate": "2000-01-13"
+  },
+  "university": {
+    "id": 3600,
+    "idExtended": "3600",
+    "name": "University of North Carolina at Chapel Hill",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "lionpath",
+      "fileName": "lionpath_emily_taylor_1769682406121.png"
+    }
+  ],
+  "provider": "lionpath"
+}

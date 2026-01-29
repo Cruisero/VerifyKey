@@ -158,9 +158,21 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         config = config_manager.get_config()
         region_mode = config.get("aiGenerator", {}).get("regionMode", "global")
         university_source = config.get("aiGenerator", {}).get("universitySource", "sheerid_api")
+        provider = config.get("aiGenerator", {}).get("provider", "gemini")
         
-        # Select university (use region mode and university source settings)
-        org = select_university(country=None, region_mode=region_mode, university_source=university_source) 
+        # For LionPATH mode, always use Penn State University
+        if provider == "lionpath":
+            org = {
+                "id": 1354,  # Penn State SheerID org ID
+                "name": "Pennsylvania State University",
+                "country": "US",
+                "domain": "psu.edu"
+            }
+            print(f"[Verify] LionPATH mode: Using Pennsylvania State University")
+        else:
+            # Select university (use region mode and university source settings)
+            org = select_university(country=None, region_mode=region_mode, university_source=university_source) 
+        
         first, last = generate_name(org.get("country", "US"))
         email = generate_email(first, last, org["domain"])
         dob = generate_birth_date()
@@ -601,10 +613,18 @@ async def test_document_generation(request: TestDocumentRequest):
             if doc_data:
                 image_base64 = base64.b64encode(doc_data).decode('utf-8')
                 
+                # Build providerNote with form data details
+                provider_note = f"""🦁 LionPATH 课程表 (Penn State)
+📧 邮箱: {student_data.get('email', 'N/A')}
+🆔 PSU ID: {student_data.get('psu_id', 'N/A')}
+🎓 专业: {student_data.get('major', 'N/A')}
+🏫 大学: {student_data.get('university', 'N/A')}
+👤 姓名: {student_data.get('fullName', 'N/A')}"""
+                
                 return {
                     "success": True,
                     "provider": "lionpath",
-                    "providerNote": "使用保存的配置: LionPATH 课程表截图 (Penn State)",
+                    "providerNote": provider_note,
                     "image": f"data:image/png;base64,{image_base64}",
                     "formData": student_data,
                     "filename": filename

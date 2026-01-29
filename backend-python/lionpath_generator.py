@@ -23,7 +23,8 @@ AVAILABLE_TEMPLATES = {
     "schedule.html": "经典风格 (Student Center)",
     "schedule_modern.html": "现代风格 (卡片式)",
     "schedule_calendar.html": "日历视图 (周课表)",
-    "enrollment_verification.html": "注册验证 (SheerID推荐)"
+    "enrollment_verification.html": "注册验证",
+    "schedule_browser.html": "浏览器截图 (SheerID推荐)"
 }
 
 
@@ -149,6 +150,11 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         courses, total_units, major, class_standing = generate_table_format_courses()
         calendar_grid = ''
         course_count = 0
+    elif 'browser' in template_name.lower():
+        # 浏览器截图模板 - 使用 Oracle PeopleSoft 风格
+        courses, total_units, major, class_standing = generate_browser_format_courses()
+        calendar_grid = ''
+        course_count = 0
     else:
         courses, total_units = generate_random_courses(modern_format=is_modern)
         calendar_grid = ''
@@ -172,8 +178,8 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         html = html.replace('{{verification_date}}', verification_date)
         html = html.replace('{{class_standing}}', class_standing)
         
-        # 加载 PSU logo 并转换为 base64 (用于 enrollment_verification 模板)
-        if is_enrollment:
+        # 加载 PSU logo 并转换为 base64 (用于 enrollment_verification 和 browser 模板)
+        if is_enrollment or 'browser' in template_name.lower():
             logo_path = TEMPLATE_DIR / 'psu_logo.png'
             if logo_path.exists():
                 with open(logo_path, 'rb') as f:
@@ -632,6 +638,104 @@ def generate_table_format_courses() -> tuple:
     
     return '\n'.join(rows), total_units, selected_set['major'], selected_set['standing']
 
+
+def generate_browser_format_courses() -> tuple:
+    """生成浏览器截图模板的课程列表 (Oracle PeopleSoft 风格)
+    
+    Returns:
+        tuple: (表格行 HTML, 总学分, 专业, 年级)
+    """
+    
+    # 教授名字池
+    instructors = [
+        'Dr. Sarah Chen', 'Prof. Michael Johnson', 'Dr. Emily Davis',
+        'Prof. Robert Williams', 'Dr. Jennifer Martinez', 'Prof. David Brown',
+        'Dr. Lisa Anderson', 'Prof. James Wilson', 'Dr. Maria Garcia',
+        'Prof. Thomas Moore', 'Dr. Karen Taylor', 'Prof. Christopher Lee'
+    ]
+    
+    # 课程组合 + 对应专业 + 对应年级
+    course_sets = [
+        # CS Freshman
+        {
+            'major': 'Computer Science (BS)',
+            'standing': 'Freshman',
+            'courses': [
+                ('CMPSC 131', 'Programming and Computation I: Fundamentals', 3, 'MWF', '9:05 AM - 9:55 AM'),
+                ('MATH 140', 'Calculus With Analytic Geometry I', 4, 'MWF', '10:10 AM - 11:00 AM'),
+                ('ENGL 015', 'Rhetoric and Composition', 3, 'TTh', '9:05 AM - 10:20 AM'),
+                ('PHYS 211', 'General Physics: Mechanics', 4, 'TTh', '11:15 AM - 12:30 PM'),
+            ]
+        },
+        # CS Sophomore
+        {
+            'major': 'Computer Science (BS)',
+            'standing': 'Sophomore',
+            'courses': [
+                ('CMPSC 132', 'Programming and Computation II: Data Structures', 3, 'MWF', '9:05 AM - 9:55 AM'),
+                ('MATH 141', 'Calculus With Analytic Geometry II', 4, 'MWF', '11:15 AM - 12:05 PM'),
+                ('CMPSC 360', 'Discrete Mathematics for Computer Science', 3, 'TTh', '9:05 AM - 10:20 AM'),
+                ('PHYS 212', 'General Physics: Electricity and Magnetism', 4, 'TTh', '1:35 PM - 2:50 PM'),
+            ]
+        },
+        # CS Junior
+        {
+            'major': 'Computer Science (BS)',
+            'standing': 'Junior',
+            'courses': [
+                ('CMPSC 311', 'Introduction to Systems Programming', 3, 'MWF', '10:10 AM - 11:00 AM'),
+                ('CMPSC 465', 'Data Structures and Algorithms', 3, 'TTh', '9:05 AM - 10:20 AM'),
+                ('CMPSC 473', 'Operating Systems Design and Construction', 3, 'MWF', '1:25 PM - 2:15 PM'),
+                ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '11:15 AM - 12:30 PM'),
+            ]
+        },
+        # IST Sophomore
+        {
+            'major': 'Information Sciences and Technology (BS)',
+            'standing': 'Sophomore',
+            'courses': [
+                ('IST 210', 'Organization of Data', 3, 'MWF', '9:05 AM - 9:55 AM'),
+                ('IST 220', 'Networking and Telecommunications', 3, 'TTh', '9:05 AM - 10:20 AM'),
+                ('STAT 200', 'Elementary Statistics', 4, 'MWF', '11:15 AM - 12:05 PM'),
+                ('ENGL 202C', 'Effective Writing: Technical Writing', 3, 'TTh', '1:35 PM - 2:50 PM'),
+            ]
+        },
+    ]
+    
+    # 教室池
+    rooms = [
+        'Willard Building 075', 'Thomas Building 102', 'Westgate Building E201',
+        'Sparks Building 106', 'Osmond Laboratory 112', 'Forum Building 114',
+        'Sackett Building 202', 'Boucke Building 304', 'IST Building 220',
+        'Hammond Building 112', 'Deike Building 217', 'Walker Building 140'
+    ]
+    
+    selected_set = random.choice(course_sets)
+    random.shuffle(instructors)
+    random.shuffle(rooms)
+    
+    rows = []
+    total_units = 0
+    
+    for i, (course_code, title, units, days, time_range) in enumerate(selected_set['courses']):
+        total_units += units
+        class_nbr = str(random.randint(10000, 29999))
+        instructor = instructors[i % len(instructors)]
+        room = rooms[i % len(rooms)]
+        
+        row = f"""                <tr>
+                    <td><span class="status-enrolled">Enrolled</span></td>
+                    <td><span class="course-link">{course_code}</span><br><small>Class #{class_nbr}</small></td>
+                    <td>{title}</td>
+                    <td class="units-column">{units}.00</td>
+                    <td>Graded</td>
+                    <td>{days}<br>{time_range}</td>
+                    <td>{room}</td>
+                    <td>{instructor}</td>
+                </tr>"""
+        rows.append(row)
+    
+    return '\n'.join(rows), total_units, selected_set['major'], selected_set['standing']
 
 
 def generate_calendar_grid() -> tuple:

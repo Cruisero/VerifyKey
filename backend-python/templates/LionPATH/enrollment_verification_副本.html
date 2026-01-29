@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enrollment Verification - LionPATH</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        /* Penn State Header */
+        .header {
+            background: linear-gradient(135deg, #1E407C 0%, #1a3a6e 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .psu-mark {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #1E407C;
+            font-size: 14px;
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .brand-text .university {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .brand-text .system {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .header-right {
+            text-align: right;
+            font-size: 13px;
+        }
+
+        .header-right .date-label {
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+
+        .header-right .date-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Document Title */
+        .doc-title {
+            background: #f8f9fa;
+            border-bottom: 3px solid #1E407C;
+            padding: 20px 30px;
+            text-align: center;
+        }
+
+        .doc-title h1 {
+            color: #1E407C;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .doc-title .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Student Info Section */
+        .student-section {
+            padding: 25px 30px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .section-title {
+            color: #1E407C;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #96BEE6;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .info-value.name {
+            font-size: 20px;
+            color: #1E407C;
+        }
+
+        /* Enrollment Status */
+        .enrollment-status {
+            padding: 25px 30px;
+            background: #f0f7f0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .status-badge .checkmark {
+            font-size: 16px;
+        }
+
+        .enrollment-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .enrollment-item {
+            background: white;
+            padding: 12px 15px;
+            border-radius: 6px;
+            border: 1px solid #d4edda;
+        }
+
+        .enrollment-item .label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .enrollment-item .value {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* Course Schedule */
+        .schedule-section {
+            padding: 25px 30px;
+        }
+
+        .course-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .course-table th {
+            background: #1E407C;
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .course-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .course-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .course-code {
+            font-weight: 600;
+            color: #1E407C;
+        }
+
+        /* Footer */
+        .footer {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .verification-stamp {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: white;
+            border: 2px solid #1E407C;
+            border-radius: 6px;
+        }
+
+        .verification-stamp .icon {
+            color: #28a745;
+            font-size: 20px;
+        }
+
+        .verification-stamp .text {
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .verification-stamp .text strong {
+            display: block;
+            color: #1E407C;
+            font-size: 12px;
+        }
+
+        .footer-copyright {
+            text-align: right;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header with Penn State Branding -->
+        <div class="header">
+            <div class="logo-area">
+                <img src="{{psu_logo}}" alt="Penn State" style="height: 45px; width: auto;">
+                <div class="brand-text">
+                    <span class="university">Pennsylvania State University</span>
+                    <span class="system">LionPATH Student Information System</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Title -->
+        <div class="doc-title">
+            <h1>Enrollment Verification</h1>
+            <div class="subtitle">Official Student Enrollment Status</div>
+        </div>
+
+        <!-- Student Information -->
+        <div class="student-section">
+            <div class="section-title">Student Information</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Student Name</span>
+                    <span class="info-value name">{{name}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Penn State ID</span>
+                    <span class="info-value">{{psu_id}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Academic Program</span>
+                    <span class="info-value">{{major}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Campus</span>
+                    <span class="info-value">University Park</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enrollment Status -->
+        <div class="enrollment-status">
+            <div class="status-badge">
+                <span class="checkmark">✓</span>
+                <span>Currently Enrolled</span>
+            </div>
+            <div class="enrollment-details">
+                <div class="enrollment-item">
+                    <div class="label">Term</div>
+                    <div class="value">{{term_display}}</div>
+                </div>
+                <div class="enrollment-item">
+                    <div class="label">Enrolled Credits</div>
+                    <div class="value">{{total_units}} Credits</div>
+                </div>
+                <div class="enrollment-item">
+                    <div class="label">Class Standing</div>
+                    <div class="value">{{class_standing}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Course Schedule -->
+        <div class="schedule-section">
+            <div class="section-title">Current Course Schedule - {{term_display}}</div>
+            <table class="course-table">
+                <thead>
+                    <tr>
+                        <th>Course</th>
+                        <th>Title</th>
+                        <th>Credits</th>
+                        <th>Days/Time</th>
+                        <th>Location</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{courses}}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-content">
+                <div class="footer-copyright" style="text-align: center; width: 100%;">
+                    © {{year}} The Pennsylvania State University
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

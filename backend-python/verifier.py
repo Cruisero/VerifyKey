@@ -24,7 +24,7 @@ UNIVERSITIES = [
     # ============================================
     # UNITED STATES
     # ============================================
-    {"id": 2565, "idExtended": "2565", "name": "Pennsylvania State University-Main Campus", "domain": "psu.edu", "country": "US", "weight": 100},
+    {"id": 2565, "idExtended": None, "name": "Pennsylvania State University-Main Campus", "domain": "psu.edu", "country": "US", "weight": 100},
     {"id": 3499, "idExtended": "3499", "name": "University of California, Los Angeles", "domain": "ucla.edu", "country": "US", "weight": 98},
     {"id": 3491, "idExtended": "3491", "name": "University of California, Berkeley", "domain": "berkeley.edu", "country": "US", "weight": 97},
     {"id": 1953, "idExtended": "1953", "name": "Massachusetts Institute of Technology", "domain": "mit.edu", "country": "US", "weight": 95},

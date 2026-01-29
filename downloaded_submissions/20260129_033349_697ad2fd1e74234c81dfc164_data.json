@@ -1,0 +1,23 @@
+{
+  "verificationId": "697ad2fd1e74234c81dfc164",
+  "timestamp": "20260129_033349",
+  "student": {
+    "firstName": "Robert",
+    "lastName": "Anderson",
+    "email": "roberta@berkeley.edu",
+    "birthDate": "2005-10-07"
+  },
+  "university": {
+    "id": 3491,
+    "idExtended": "3491",
+    "name": "University of California, Berkeley",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "id_card",
+      "fileName": "id_robert_anderson_1769657612276.jpg"
+    }
+  ],
+  "provider": "puppeteer"
+}

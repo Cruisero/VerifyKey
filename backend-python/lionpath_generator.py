@@ -1,16 +1,22 @@
 """
 LionPATH Schedule Generator - Penn State Student Portal Screenshot
-移植自 tgbot-verify 项目，保留原始的 HTML 字符串拼接 + Playwright 截图方式
+移植自 tgbot-verify 项目，使用外部 HTML 模板 + Playwright 截图方式
 
 生成 Penn State LionPATH 学生课程表截图，作为 VerifyKey 的备选验证文档类型。
 """
 import random
+import os
 from datetime import datetime
 from io import BytesIO
 from typing import Tuple, Optional
+from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
+
+# 模板路径
+TEMPLATE_DIR = Path(__file__).parent / "templates" / "LionPATH"
+SCHEDULE_TEMPLATE = TEMPLATE_DIR / "schedule.html"
 
 
 def generate_psu_id() -> str:
@@ -27,6 +33,14 @@ def generate_psu_email(first_name: str, last_name: str) -> str:
     digits = ''.join([str(random.randint(0, 9)) for _ in range(digit_count)])
     email = f"{first_name.lower()}.{last_name.lower()}{digits}@psu.edu"
     return email
+
+
+def load_template() -> str:
+    """加载 HTML 模板文件"""
+    if not SCHEDULE_TEMPLATE.exists():
+        logger.warning(f"[LionPATH] Template not found at {SCHEDULE_TEMPLATE}, using fallback")
+        return None
+    return SCHEDULE_TEMPLATE.read_text(encoding='utf-8')
 
 
 def generate_html(first_name: str, last_name: str, school_id: str = '2565', 
@@ -89,7 +103,21 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
     # 随机课程生成
     courses = generate_random_courses()
 
-    html = f"""<!DOCTYPE html>
+    # 加载外部模板
+    template = load_template()
+    if template:
+        # 使用简单字符串替换
+        html = template.replace('{{name}}', name)
+        html = html.replace('{{psu_id}}', psu_id)
+        html = html.replace('{{major}}', major)
+        html = html.replace('{{term_display}}', term_display)
+        html = html.replace('{{term_dates}}', term_dates)
+        html = html.replace('{{date}}', date)
+        html = html.replace('{{year}}', str(year))
+        html = html.replace('{{courses}}', courses)
+    else:
+        # 回退到内联模板 (保留原始代码以防模板文件丢失)
+        html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">

@@ -1,0 +1,27 @@
+{
+  "verificationId": "697b19e810235d516b6535b3",
+  "timestamp": "20260129_133420",
+  "student": {
+    "firstName": "David",
+    "lastName": "Williams",
+    "email": "david45@cornell.edu",
+    "birthDate": "2001-06-28"
+  },
+  "university": {
+    "id": 751,
+    "idExtended": "751",
+    "name": "Cornell University",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "class_schedule",
+      "fileName": "schedule_david_williams_1769693660269.png"
+    },
+    {
+      "type": "transcript",
+      "fileName": "transcript_david_williams_1769693660294.png"
+    }
+  ],
+  "provider": "sheerid"
+}

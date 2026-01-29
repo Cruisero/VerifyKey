@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LionPATH - Student Home</title>
+    <style>
+        :root {
+            --psu-blue: #1E407C;
+            /* Penn State Nittany Navy */
+            --psu-light-blue: #96BEE6;
+            --bg-gray: #f4f4f4;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: #e0e0e0;
+            /* 浏览器背景 */
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+        }
+
+        /* 模拟浏览器窗口 */
+        .viewport {
+            width: 100%;
+            max-width: 1100px;
+            background-color: #fff;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+            min-height: 800px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部导航栏 LionPATH */
+        .header {
+            background-color: var(--psu-blue);
+            color: white;
+            padding: 0 20px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* PSU Logo 模拟 */
+        .psu-logo {
+            font-family: "Georgia", serif;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            border-right: 1px solid rgba(255, 255, 255, 0.3);
+            padding-right: 15px;
+        }
+
+        .system-name {
+            font-size: 18px;
+            font-weight: 300;
+        }
+
+        .user-menu {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-bar {
+            background-color: #f8f8f8;
+            border-bottom: 1px solid #ddd;
+            padding: 10px 20px;
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-item {
+            cursor: pointer;
+        }
+
+        .nav-item.active {
+            color: var(--psu-blue);
+            font-weight: bold;
+            border-bottom: 2px solid var(--psu-blue);
+            padding-bottom: 8px;
+        }
+
+        /* 主内容区 */
+        .content {
+            padding: 30px;
+            flex: 1;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .page-title {
+            font-size: 24px;
+            color: var(--psu-blue);
+            margin: 0;
+        }
+
+        .term-selector {
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        /* 学生信息卡片 */
+        .student-card {
+            background: #fcfcfc;
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+            margin-bottom: 25px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            font-size: 13px;
+        }
+
+        .info-label {
+            color: #777;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .info-val {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            background-color: #e6fffa;
+            color: #007a5e;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            border: 1px solid #b2f5ea;
+        }
+
+        /* 课程表 */
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .schedule-table th {
+            text-align: left;
+            padding: 12px;
+            background-color: #f0f0f0;
+            border-bottom: 2px solid #ccc;
+            color: #555;
+        }
+
+        .schedule-table td {
+            padding: 15px 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .course-code {
+            font-weight: bold;
+            color: var(--psu-blue);
+        }
+
+        .course-title {
+            font-weight: 500;
+        }
+
+        /* 打印适配 */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .viewport {
+                box-shadow: none;
+                max-width: 100%;
+                min-height: auto;
+            }
+
+            .nav-bar {
+                display: none;
+            }
+
+            @page {
+                margin: 1cm;
+                size: landscape;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="viewport">
+        <div class="header">
+            <div class="brand">
+                <div class="psu-logo">PennState</div>
+                <div class="system-name">LionPATH</div>
+            </div>
+            <div class="user-menu">
+                <span>Welcome, <strong>{{name}}</strong></span>
+                <span>|</span>
+                <span>Sign Out</span>
+            </div>
+        </div>
+
+        <div class="nav-bar">
+            <div class="nav-item">Student Home</div>
+            <div class="nav-item active">My Class Schedule</div>
+            <div class="nav-item">Academics</div>
+            <div class="nav-item">Finances</div>
+            <div class="nav-item">Campus Life</div>
+        </div>
+
+        <div class="content">
+            <div class="page-header">
+                <h1 class="page-title">My Class Schedule</h1>
+                <div class="term-selector">
+                    Term: <strong>{{term_display}}</strong> {{term_dates}}
+                </div>
+            </div>
+
+            <div class="student-card">
+                <div>
+                    <div class="info-label">Student Name</div>
+                    <div class="info-val">{{name}}</div>
+                </div>
+                <div>
+                    <div class="info-label">PSU ID</div>
+                    <div class="info-val">{{psu_id}}</div>
+                </div>
+                <div>
+                    <div class="info-label">Academic Program</div>
+                    <div class="info-val">{{major}}</div>
+                </div>
+                <div>
+                    <div class="info-label">Enrollment Status</div>
+                    <div class="status-badge">✅ Enrolled</div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 10px; font-size: 12px; color: #666; text-align: right;">
+                Data retrieved: <span>{{date}}</span>
+            </div>
+
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th width="10%">Class Nbr</th>
+                        <th width="15%">Course</th>
+                        <th width="35%">Title</th>
+                        <th width="20%">Days & Times</th>
+                        <th width="10%">Room</th>
+                        <th width="10%">Units</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{courses}}
+                </tbody>
+            </table>
+
+            <div
+                style="margin-top: 50px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 11px; color: #888; text-align: center;">
+                &copy; {{year}} The Pennsylvania State University. All rights reserved.<br>
+                LionPATH is the student information system for Penn State.
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

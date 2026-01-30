@@ -11,22 +11,27 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Gemini API 配置
-GEMINI_MODEL = "gemini-2.0-flash-exp-image-generation"
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+# Gemini API 配置 (默认值，实际会从配置中读取)
+DEFAULT_GEMINI_MODEL = "gemini-2.0-flash-exp-image-generation"
 
 
-def get_gemini_api_key() -> str:
-    """从配置中获取 Gemini API Key"""
+def get_gemini_config() -> tuple:
+    """从配置中获取 Gemini API Key 和 Model"""
     try:
         from config_manager import get_config
         config = get_config()
-        api_key = config.get("aiGenerator", {}).get("gemini", {}).get("apiKey", "")
+        gemini_config = config.get("aiGenerator", {}).get("gemini", {})
+        
+        api_key = gemini_config.get("apiKey", "")
+        model = gemini_config.get("model", DEFAULT_GEMINI_MODEL)
+        
         if api_key:
             print(f"[GeminiPhoto] Found API key in config (length: {len(api_key)}, starts with: {api_key[:8]}...)")
         else:
             print("[GeminiPhoto] No API key found in config")
-        return api_key
+        
+        print(f"[GeminiPhoto] Using model: {model}")
+        return api_key, model
     except Exception as e:
         print(f"[GeminiPhoto] Failed to get config: {e}")
         logger.warning(f"[GeminiPhoto] Failed to get config: {e}")
@@ -34,7 +39,7 @@ def get_gemini_api_key() -> str:
         env_key = os.environ.get("GEMINI_API_KEY", "")
         if env_key:
             print(f"[GeminiPhoto] Using API key from environment variable")
-        return env_key
+        return env_key, DEFAULT_GEMINI_MODEL
 
 
 def generate_student_photo(first_name: str, last_name: str, gender: str = None) -> Optional[bytes]:
@@ -49,11 +54,14 @@ def generate_student_photo(first_name: str, last_name: str, gender: str = None) 
     Returns:
         bytes: 图片数据，失败返回 None
     """
-    api_key = get_gemini_api_key()
+    api_key, model = get_gemini_config()
     if not api_key:
         logger.warning("[GeminiPhoto] No GEMINI_API_KEY found in config or environment")
         print("[GeminiPhoto] No GEMINI_API_KEY found - returning None")
         return None
+    
+    # 构建 API URL（使用配置中的模型）
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     
     # 如果没有指定性别，随机选择
     if gender is None:
@@ -85,10 +93,11 @@ Generate ONLY the photo image, no text or explanation."""
 
     try:
         print(f"[GeminiPhoto] Calling API for {first_name} {last_name} ({gender}, {age}yo, {ethnicity})")
+        print(f"[GeminiPhoto] API URL: {api_url}")
         logger.info(f"[GeminiPhoto] Generating photo for {first_name} {last_name} ({gender}, {age}yo, {ethnicity})")
         
         response = httpx.post(
-            f"{GEMINI_API_URL}?key={api_key}",
+            f"{api_url}?key={api_key}",
             headers={"Content-Type": "application/json"},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],

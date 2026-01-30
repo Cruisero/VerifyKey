@@ -31,7 +31,8 @@ AVAILABLE_TEMPLATES = {
     "schedule_modern.html": "现代风格 (卡片式)",
     "schedule_calendar.html": "日历视图 (周课表)",
     "enrollment_verification.html": "注册验证",
-    "schedule_browser.html": "浏览器截图 (SheerID推荐)"
+    "schedule_browser.html": "浏览器截图 (SheerID推荐)",
+    "psu_id_card.html": "PSU学生证 (ID Card)"
 }
 
 
@@ -196,6 +197,30 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
                 with open(logo_path, 'rb') as f:
                     logo_base64 = base64.b64encode(f.read()).decode('utf-8')
                     html = html.replace('{{psu_logo}}', f'data:image/png;base64,{logo_base64}')
+        
+        # PSU ID Card 模板特殊处理
+        if 'id_card' in template_name.lower():
+            # 加载卡片背景图
+            card_bg_path = TEMPLATE_DIR / 'psu_id_card_bg.png'
+            if card_bg_path.exists():
+                with open(card_bg_path, 'rb') as f:
+                    bg_base64 = base64.b64encode(f.read()).decode('utf-8')
+                    html = html.replace('{{card_bg}}', f'data:image/png;base64,{bg_base64}')
+            
+            # 替换 ID Card 特有的占位符
+            html = html.replace('{{first_name}}', first_name.upper())
+            html = html.replace('{{last_name}}', last_name.upper())
+            
+            # 格式化 PSU ID: 9 1234 5678
+            formatted_id = f"{psu_id[0]} {psu_id[1:5]} {psu_id[5:]}"
+            html = html.replace('{{psu_id}}', formatted_id)
+            
+            # 签发日期
+            issued_date = datetime.now().strftime('%Y-%m-%d')
+            html = html.replace('{{issued_date}}', issued_date)
+            
+            # 照片占位符 - 将在外部处理
+            # html = html.replace('{{photo}}', photo_url)
     else:
         # 回退到内联模板 (保留原始代码以防模板文件丢失)
         html = f"""<!DOCTYPE html>

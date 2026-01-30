@@ -940,7 +940,8 @@ def generate_calendar_grid() -> tuple:
 
 
 def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565',
-                            template_name: str = "schedule.html") -> Tuple[bytes, str, dict]:
+                            template_name: str = "schedule.html",
+                            psu_id: str = None, email: str = None) -> Tuple[bytes, str, dict]:
     """
     生成 Penn State LionPATH 截图 PNG
 
@@ -949,6 +950,8 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
         last_name: 姓氏
         school_id: 学校 ID
         template_name: 模板文件名
+        psu_id: PSU ID (可选，不传则自动生成)
+        email: 邮箱 (可选，不传则自动生成)
 
     Returns:
         Tuple[bytes, str, dict]: (PNG 图片数据, 文件名, 学生数据字典)
@@ -957,9 +960,9 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
     try:
         import concurrent.futures
         
-        # 预先生成数据以保持一致性
-        psu_id = generate_psu_id()
-        email = generate_psu_email(first_name, last_name)
+        # 使用传入的 ID/email 或生成新的
+        psu_id = psu_id or generate_psu_id()
+        email = email or generate_psu_email(first_name, last_name)
         
         def run_playwright():
             from playwright.sync_api import sync_playwright

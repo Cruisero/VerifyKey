@@ -216,11 +216,20 @@ def verify_single(vid: str, proxy: str = None) -> dict:
 
             print(f"[Verify] Generating LionPATH documents with templates: {templates}...")
             
+            # Pre-generate student data to ensure consistency across all templates
+            from lionpath_generator import generate_psu_id, generate_psu_email
+            shared_psu_id = generate_psu_id()
+            shared_email = generate_psu_email(first, last)
+            print(f"[Verify] Using shared student data: PSU ID={shared_psu_id}, Email={shared_email}")
+            
             documents = []
             for tmpl in templates:
                 try:
                     print(f"[Verify] Generating LionPATH document: {tmpl}...")
-                    d_data, d_filename, student_data = generate_lionpath_image(first, last, template_name=tmpl)
+                    d_data, d_filename, student_data = generate_lionpath_image(
+                        first, last, template_name=tmpl, 
+                        psu_id=shared_psu_id, email=shared_email
+                    )
                     if d_data:
                         # Determine document type based on template name
                         doc_type = "id_card" if "id_card" in tmpl else "class_schedule"
@@ -668,13 +677,22 @@ async def test_document_generation(request: TestDocumentRequest):
 
             print(f"[TestDoc] Using LionPATH generator with templates: {templates}...")
             
+            # Pre-generate student data to ensure consistency across all templates
+            from lionpath_generator import generate_psu_id, generate_psu_email
+            shared_psu_id = generate_psu_id()
+            shared_email = generate_psu_email(first, last)
+            print(f"[TestDoc] Using shared student data: PSU ID={shared_psu_id}, Email={shared_email}")
+            
             images = []
             first_student_data = None
             
             for tmpl in templates:
                 try:
                     print(f"[TestDoc] Generating LionPATH document: {tmpl}...")
-                    d_data, d_filename, s_data = generate_lionpath_image(first, last, template_name=tmpl)
+                    d_data, d_filename, s_data = generate_lionpath_image(
+                        first, last, template_name=tmpl,
+                        psu_id=shared_psu_id, email=shared_email
+                    )
                     if d_data:
                         image_base64 = base64.b64encode(d_data).decode('utf-8')
                         doc_type = "id_card" if "id_card" in tmpl else "class_schedule"

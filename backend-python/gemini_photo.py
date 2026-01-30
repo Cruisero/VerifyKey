@@ -124,8 +124,20 @@ def generate_student_photo_base64(first_name: str, last_name: str, gender: str =
     return None
 
 
-# 备用：使用占位符图片
+# 备用：使用占位符图片 (白色 190x225 像素)
 def get_placeholder_photo() -> str:
-    """返回占位符照片的 base64 (简单灰色方块)"""
-    # 创建一个简单的占位符
-    return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    """返回占位符照片的 base64 (白色方块，匹配模板中的照片区域)"""
+    try:
+        from PIL import Image
+        from io import BytesIO
+        
+        # 创建白色图片 (190x225 是模板中照片区域的大小)
+        img = Image.new('RGB', (190, 225), color=(255, 255, 255))
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        return f"data:image/png;base64,{b64}"
+    except ImportError:
+        # 如果没有 PIL，使用预生成的白色图片 base64
+        # 这是一个 10x10 的白色 PNG
+        return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAADklEQVR4nGP4////GWQSAGPkBv+Qz5y/AAAAAElFTkSuQmCC"

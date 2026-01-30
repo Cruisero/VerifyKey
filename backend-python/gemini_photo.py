@@ -22,11 +22,19 @@ def get_gemini_api_key() -> str:
         from config_manager import get_config
         config = get_config()
         api_key = config.get("aiGenerator", {}).get("gemini", {}).get("apiKey", "")
+        if api_key:
+            print(f"[GeminiPhoto] Found API key in config (length: {len(api_key)}, starts with: {api_key[:8]}...)")
+        else:
+            print("[GeminiPhoto] No API key found in config")
         return api_key
     except Exception as e:
+        print(f"[GeminiPhoto] Failed to get config: {e}")
         logger.warning(f"[GeminiPhoto] Failed to get config: {e}")
         # 回退到环境变量
-        return os.environ.get("GEMINI_API_KEY", "")
+        env_key = os.environ.get("GEMINI_API_KEY", "")
+        if env_key:
+            print(f"[GeminiPhoto] Using API key from environment variable")
+        return env_key
 
 
 def generate_student_photo(first_name: str, last_name: str, gender: str = None) -> Optional[bytes]:
@@ -43,7 +51,8 @@ def generate_student_photo(first_name: str, last_name: str, gender: str = None) 
     """
     api_key = get_gemini_api_key()
     if not api_key:
-        logger.warning("[GeminiPhoto] No GEMINI_API_KEY found in config")
+        logger.warning("[GeminiPhoto] No GEMINI_API_KEY found in config or environment")
+        print("[GeminiPhoto] No GEMINI_API_KEY found - returning None")
         return None
     
     # 如果没有指定性别，随机选择

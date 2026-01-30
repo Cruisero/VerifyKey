@@ -1,0 +1,23 @@
+{
+  "verificationId": "697ce13a7710e431d63600d2",
+  "timestamp": "20260130_165034",
+  "student": {
+    "firstName": "Sarah",
+    "lastName": "Williams",
+    "email": "hpx3502@psu.edu",
+    "birthDate": "2001-01-11"
+  },
+  "university": {
+    "id": 2565,
+    "idExtended": null,
+    "name": "Pennsylvania State University-Main Campus (University Park, PA)",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "lionpath",
+      "fileName": "lionpath_sarah_williams_1769791834611.png"
+    }
+  ],
+  "provider": "lionpath"
+}

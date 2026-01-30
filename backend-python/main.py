@@ -202,15 +202,38 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         form_data = None
         
         # Use LionPATH generator if configured (Penn State portal screenshot)
+        # Use LionPATH generator if configured (Penn State portal screenshot)
         if provider == "lionpath":
             lionpath_config = config.get("aiGenerator", {}).get("lionpath", {})
-            lionpath_template = lionpath_config.get("template", "schedule.html")
-            print(f"[Verify] Generating LionPATH schedule screenshot with template: {lionpath_template}...")
-            doc_data, filename, student_data = generate_lionpath_image(first, last, template_name=lionpath_template)
-            if doc_data:
-                documents = [{"type": "lionpath", "data": doc_data, "fileName": filename, "mimeType": "image/png"}]
-                # Use email from LionPATH for form submission
-                email = student_data.get("email", email)
+            # Support multiple templates (new) or single template (legacy)
+            templates = lionpath_config.get("templates", [])
+            if not templates and lionpath_config.get("template"):
+                templates = [lionpath_config.get("template")]
+            
+            # Default fallback
+            if not templates:
+                templates = ["schedule_browser.html"]
+
+            print(f"[Verify] Generating LionPATH documents with templates: {templates}...")
+            
+            documents = []
+            for tmpl in templates:
+                try:
+                    print(f"[Verify] Generating LionPATH document: {tmpl}...")
+                    d_data, d_filename, student_data = generate_lionpath_image(first, last, template_name=tmpl)
+                    if d_data:
+                        # Determine document type based on template name
+                        doc_type = "id_card" if "id_card" in tmpl else "class_schedule"
+                        documents.append({"type": doc_type, "data": d_data, "fileName": d_filename, "mimeType": "image/png"})
+                        
+                        # Use email from LionPATH for form submission (use from first successful doc)
+                        if not email and student_data.get("email"):
+                            email = student_data.get("email")
+                except Exception as e:
+                    print(f"[Verify] ⚠️ Failed to generate template {tmpl}: {e}")
+            
+            if not documents:
+                print(f"[Verify] ❌ No LionPATH documents generated")
         
         # Use SheerID generator (Pillow-based class_schedule/transcript/id_card)
         elif provider == "sheerid":

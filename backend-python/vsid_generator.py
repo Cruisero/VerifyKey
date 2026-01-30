@@ -274,9 +274,38 @@ def generate_vsid_document(
             context = browser.new_context(viewport={'width': 1400, 'height': 1000})
             page = context.new_page()
             
+            # Pre-set localStorage to skip disclaimer (before navigation)
+            page.add_init_script("""
+                localStorage.setItem('disclaimerAccepted', 'true');
+                localStorage.setItem('vsid_disclaimer_accepted', 'true');
+                localStorage.setItem('disclaimer_accepted', 'true');
+            """)
+            
             logger.info(f"[VSID] Navigating to {VSID_URL}")
             page.goto(VSID_URL, wait_until='networkidle')
-            page.wait_for_timeout(2000)  # Wait for React to fully load
+            page.wait_for_timeout(1500)  # Wait for React to load
+            
+            # If disclaimer still appears, use JS to bypass it instantly
+            try:
+                page.evaluate("""
+                    // Try to close modal by clicking any visible agree button
+                    const agreeBtn = document.querySelector('button[class*="bg-primary"]') || 
+                                     document.querySelector('button:not(:disabled)');
+                    if (agreeBtn && agreeBtn.textContent.includes('同意')) {
+                        agreeBtn.disabled = false;
+                        agreeBtn.click();
+                    }
+                    // Or forcefully remove the modal overlay
+                    const modals = document.querySelectorAll('[role="dialog"], [class*="modal"], [class*="overlay"]');
+                    modals.forEach(m => m.remove());
+                    // Remove any body scroll locks
+                    document.body.style.overflow = 'auto';
+                    document.body.style.pointerEvents = 'auto';
+                """)
+                page.wait_for_timeout(500)
+                logger.info("[VSID] ✓ Bypassed disclaimer via JS")
+            except Exception as e:
+                logger.warning(f"[VSID] JS bypass: {e}")
             
             # Tab text mapping
             tab_texts = {

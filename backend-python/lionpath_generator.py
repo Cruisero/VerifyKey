@@ -207,22 +207,18 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         html = html.replace('{{verification_date}}', verification_date)
         html = html.replace('{{class_standing}}', class_standing)
         
-        # 加载 PSU logo 并转换为 base64 (支持占位符和文件名，以便本地预览)
-        logo_path = TEMPLATE_DIR / 'psu_logo.png'
-        if logo_path.exists():
-            with open(logo_path, 'rb') as f:
-                logo_base64 = base64.b64encode(f.read()).decode('utf-8')
-                logo_data_uri = f'data:image/png;base64,{logo_base64}'
-                
-                # Replace placeholder if exists
-                if '{{psu_logo}}' in html:
-                    logger.info(f"[LionPATH] Replaced {{psu_logo}} with base64 image")
-                    html = html.replace('{{psu_logo}}', logo_data_uri)
-                
-                # Replace filename if exists (for local preview support)
-                if 'psu_logo.png' in html:
-                    logger.info(f"[LionPATH] Replaced 'psu_logo.png' with base64 image")
-                    html = html.replace('psu_logo.png', logo_data_uri)
+        # 加载 PSU logo 并转换为 base64 (检查 HTML 中是否有占位符)
+        if '{{psu_logo}}' in html:
+            logo_path = TEMPLATE_DIR / 'psu_logo.png'
+            if logo_path.exists():
+                logger.info(f"[LionPATH] Found {{psu_logo}} placeholder, loading logo from {logo_path.name}")
+                with open(logo_path, 'rb') as f:
+                    logo_base64 = base64.b64encode(f.read()).decode('utf-8')
+                    html = html.replace('{{psu_logo}}', f'data:image/png;base64,{logo_base64}')
+            else:
+                logger.warning(f"[LionPATH] {{psu_logo}} placeholder found but file missing: {logo_path}")
+                # Fallback to empty to avoid broken image icon (though it will still be empty)
+                html = html.replace('{{psu_logo}}', '')
         
         # PSU ID Card 模板特殊处理
         if 'id_card' in template_name.lower():

@@ -657,28 +657,64 @@ async def test_document_generation(request: TestDocumentRequest):
         # Use LionPATH generator (Penn State portal screenshot)
         if provider == "lionpath":
             lionpath_config = config.get("aiGenerator", {}).get("lionpath", {})
-            lionpath_template = lionpath_config.get("template", "schedule.html")
-            print(f"[TestDoc] Using LionPATH generator with template: {lionpath_template}...")
-            doc_data, filename, student_data = generate_lionpath_image(first, last, template_name=lionpath_template)
+            # Support multiple templates (new) or single template (legacy)
+            templates = lionpath_config.get("templates", [])
+            if not templates and lionpath_config.get("template"):
+                templates = [lionpath_config.get("template")]
             
-            if doc_data:
-                image_base64 = base64.b64encode(doc_data).decode('utf-8')
-                
+            # Default fallback
+            if not templates:
+                templates = ["schedule_browser.html"]
+
+            print(f"[TestDoc] Using LionPATH generator with templates: {templates}...")
+            
+            images = []
+            first_student_data = None
+            
+            for tmpl in templates:
+                try:
+                    print(f"[TestDoc] Generating LionPATH document: {tmpl}...")
+                    d_data, d_filename, s_data = generate_lionpath_image(first, last, template_name=tmpl)
+                    if d_data:
+                        image_base64 = base64.b64encode(d_data).decode('utf-8')
+                        doc_type = "id_card" if "id_card" in tmpl else "class_schedule"
+                        
+                        images.append({
+                            "type": doc_type,
+                            "image": f"data:image/png;base64,{image_base64}",
+                            "filename": d_filename,
+                            "template": tmpl
+                        })
+                        
+                        if first_student_data is None:
+                            first_student_data = s_data
+                except Exception as e:
+                    print(f"[TestDoc] ⚠️ Failed to generate template {tmpl}: {e}")
+
+            if images and first_student_data:
                 # Build providerNote with form data details
-                provider_note = f"""🦁 LionPATH 课程表 (Penn State)
-📧 邮箱: {student_data.get('email', 'N/A')}
-🆔 PSU ID: {student_data.get('psu_id', 'N/A')}
-🎓 专业: {student_data.get('major', 'N/A')}
-🏫 大学: {student_data.get('university', 'N/A')}
-👤 姓名: {student_data.get('fullName', 'N/A')}"""
+                doc_types_display = ", ".join([img["template"] for img in images])
+                provider_note = f"""🦁 LionPATH 文档生成
+📄 模板: {doc_types_display}
+📧 邮箱: {first_student_data.get('email', 'N/A')}
+🆔 PSU ID: {first_student_data.get('psu_id', 'N/A')}
+🎓 专业: {first_student_data.get('major', 'N/A')}
+🏫 大学: {first_student_data.get('university', 'N/A')}
+👤 姓名: {first_student_data.get('fullName', 'N/A')}"""
                 
                 return {
                     "success": True,
                     "provider": "lionpath",
                     "providerNote": provider_note,
-                    "image": f"data:image/png;base64,{image_base64}",
-                    "formData": student_data,
-                    "filename": filename
+                    "images": images,
+                    "image": images[0]["image"], # Backward compatibility
+                    "formData": first_student_data,
+                    "filename": images[0]["filename"]
+                }
+            else:
+                 return {
+                    "success": False,
+                    "message": "Failed to generate any LionPATH documents"
                 }
         
         # Use SheerID generator (Pillow-based)

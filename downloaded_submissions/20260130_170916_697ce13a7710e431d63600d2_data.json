@@ -1,0 +1,23 @@
+{
+  "verificationId": "697ce13a7710e431d63600d2",
+  "timestamp": "20260130_170916",
+  "student": {
+    "firstName": "Emily",
+    "lastName": "Johnson",
+    "email": "kfi7746@psu.edu",
+    "birthDate": "2006-10-14"
+  },
+  "university": {
+    "id": 2565,
+    "idExtended": null,
+    "name": "Pennsylvania State University-Main Campus (University Park, PA)",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "lionpath",
+      "fileName": "lionpath_emily_johnson_1769792956613.png"
+    }
+  ],
+  "provider": "lionpath"
+}

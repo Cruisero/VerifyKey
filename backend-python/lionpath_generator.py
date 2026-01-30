@@ -93,7 +93,7 @@ def generate_psu_email(first_name: str, last_name: str) -> str:
 
 
 def generate_html(first_name: str, last_name: str, school_id: str = '2565', 
-                  psu_id: str = None, email: str = None, major: str = None,
+                  psu_id: str = None, email: str = None,
                   template_name: str = "schedule.html") -> tuple:
     """
     生成 Penn State LionPATH HTML
@@ -104,7 +104,6 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         school_id: 学校 ID
         psu_id: PSU ID (可选，不传则自动生成)
         email: 邮箱 (可选，不传则自动生成)
-        major: 专业 (可选，不传则自动生成)
         template_name: 模板文件名
 
     Returns:
@@ -116,7 +115,7 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
     name = f"{first_name} {last_name}"
     date = datetime.now().strftime('%m/%d/%Y, %I:%M:%S %p')
 
-    # 随机选择专业 (如果未指定)
+    # 随机选择专业
     majors = [
         'Computer Science (BS)',
         'Software Engineering (BS)',
@@ -132,13 +131,8 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         'Biology (BS)',
         'Chemistry (BS)',
         'Physics (BS)',
-        'Mathematics (BS)',
-        'Political Science (BA)',
-        'Communications (BA)',
-        'Nursing (BSN)',
     ]
-    if not major:
-        major = random.choice(majors)
+    major = random.choice(majors)
 
     # 动态生成学期信息
     now = datetime.now()
@@ -946,19 +940,15 @@ def generate_calendar_grid() -> tuple:
 
 
 def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565',
-                            template_name: str = "schedule.html",
-                            psu_id: str = None, email: str = None, major: str = None) -> Tuple[bytes, str, dict]:
+                            template_name: str = "schedule.html") -> Tuple[bytes, str, dict]:
     """
     生成 Penn State LionPATH 截图 PNG
-    
+
     Args:
         first_name: 名字
         last_name: 姓氏
         school_id: 学校 ID
         template_name: 模板文件名
-        psu_id: 指定 PSU ID (可选, 保持一致性)
-        email: 指定邮箱 (可选, 保持一致性)
-        major: 指定专业 (可选, 保持一致性)
 
     Returns:
         Tuple[bytes, str, dict]: (PNG 图片数据, 文件名, 学生数据字典)
@@ -967,26 +957,14 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
     try:
         import concurrent.futures
         
-        # 预先生成数据以保持一致性 (如果未提供)
-        if not psu_id:
-            psu_id = generate_psu_id()
-        if not email:
-            email = generate_psu_email(first_name, last_name)
-        
-        # Major is generated inside generate_html if not provided
-        # We need to capture the major generated inside generate_html if it wasn't provided
+        # 预先生成数据以保持一致性
+        psu_id = generate_psu_id()
+        email = generate_psu_email(first_name, last_name)
         
         def run_playwright():
-            nonlocal major
             from playwright.sync_api import sync_playwright
             
-            # Pass pre-generated psu_id and email to ensure consistency
-            # generate_html returns: html, psu_id, email, major
-            html_content, _, _, generated_major = generate_html(first_name, last_name, school_id, psu_id, email, template_name)
-            
-            # Update the outer major variable if it wasn't provided
-            if not major:
-                major = generated_major
+            html_content, _, _, major = generate_html(first_name, last_name, school_id, psu_id, email, template_name)
             
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -997,7 +975,6 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
                 screenshot_bytes = page.screenshot(type='png', full_page=False)
                 browser.close()
             
-            # Return major so it can be unpacked by the caller (executor.submit)
             return screenshot_bytes, major
         
         logger.info(f"[LionPATH] Generating schedule for {first_name} {last_name} with template {template_name}")
@@ -1005,12 +982,7 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
         # Run playwright in a separate thread to avoid asyncio loop conflict
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(run_playwright)
-            screenshot_bytes, generated_major = future.result(timeout=30)
-            
-            # Ensure outer major is updated if it was None 
-            # (though the nonlocal update in thread might be tricky, the return value is safer)
-            if not major:
-                major = generated_major
+            screenshot_bytes, major = future.result(timeout=30)
         
         # 应用图像后处理（添加真实感效果）
         if HAS_IMAGE_PROCESSOR:

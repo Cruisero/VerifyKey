@@ -217,33 +217,18 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             print(f"[Verify] Generating LionPATH documents with templates: {templates}...")
             
             documents = []
-            # Context specific to LionPATH to ensure consistency across multiple documents
-            lionpath_context = {} 
-            
             for tmpl in templates:
                 try:
                     print(f"[Verify] Generating LionPATH document: {tmpl}...")
-                    # Pass context data if available (psu_id, email, major)
-                    d_data, d_filename, s_data = generate_lionpath_image(
-                        first, last, 
-                        template_name=tmpl,
-                        psu_id=lionpath_context.get("psu_id"),
-                        email=lionpath_context.get("email"),
-                        major=lionpath_context.get("major")
-                    )
-                    
+                    d_data, d_filename, student_data = generate_lionpath_image(first, last, template_name=tmpl)
                     if d_data:
-                        # Update context with generated data for next iterations
-                        if not lionpath_context:
-                            lionpath_context = s_data
-                            
                         # Determine document type based on template name
                         doc_type = "id_card" if "id_card" in tmpl else "class_schedule"
                         documents.append({"type": doc_type, "data": d_data, "fileName": d_filename, "mimeType": "image/png"})
                         
                         # Use email from LionPATH for form submission (use from first successful doc)
-                        if not email and s_data.get("email"):
-                            email = s_data.get("email")
+                        if not email and student_data.get("email"):
+                            email = student_data.get("email")
                 except Exception as e:
                     print(f"[Verify] ⚠️ Failed to generate template {tmpl}: {e}")
             
@@ -685,24 +670,12 @@ async def test_document_generation(request: TestDocumentRequest):
             
             images = []
             first_student_data = None
-            lionpath_context = {}
             
             for tmpl in templates:
                 try:
                     print(f"[TestDoc] Generating LionPATH document: {tmpl}...")
-                    d_data, d_filename, s_data = generate_lionpath_image(
-                        first, last, 
-                        template_name=tmpl,
-                        psu_id=lionpath_context.get("psu_id"),
-                        email=lionpath_context.get("email"),
-                        major=lionpath_context.get("major")
-                    )
-                    
+                    d_data, d_filename, s_data = generate_lionpath_image(first, last, template_name=tmpl)
                     if d_data:
-                        # Update context with generated data for next iterations
-                        if not lionpath_context:
-                            lionpath_context = s_data
-                            
                         image_base64 = base64.b64encode(d_data).decode('utf-8')
                         doc_type = "id_card" if "id_card" in tmpl else "class_schedule"
                         

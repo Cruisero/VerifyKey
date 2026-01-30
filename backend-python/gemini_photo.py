@@ -84,6 +84,7 @@ This is for {first_name} {last_name}'s student ID card photo.
 Generate ONLY the photo image, no text or explanation."""
 
     try:
+        print(f"[GeminiPhoto] Calling API for {first_name} {last_name} ({gender}, {age}yo, {ethnicity})")
         logger.info(f"[GeminiPhoto] Generating photo for {first_name} {last_name} ({gender}, {age}yo, {ethnicity})")
         
         response = httpx.post(
@@ -98,29 +99,39 @@ Generate ONLY the photo image, no text or explanation."""
             timeout=60.0
         )
         
+        print(f"[GeminiPhoto] API response status: {response.status_code}")
+        
         if response.status_code != 200:
+            print(f"[GeminiPhoto] API error: {response.status_code} - {response.text[:500]}")
             logger.error(f"[GeminiPhoto] API error: {response.status_code} - {response.text[:200]}")
             return None
         
         data = response.json()
+        print(f"[GeminiPhoto] Response keys: {data.keys()}")
         
         # 从响应中提取图片
         candidates = data.get("candidates", [])
         if not candidates:
+            print(f"[GeminiPhoto] No candidates in response. Full response: {str(data)[:500]}")
             logger.warning("[GeminiPhoto] No candidates in response")
             return None
         
+        print(f"[GeminiPhoto] Got {len(candidates)} candidates")
         parts = candidates[0].get("content", {}).get("parts", [])
+        print(f"[GeminiPhoto] Got {len(parts)} parts")
         
-        for part in parts:
+        for i, part in enumerate(parts):
+            print(f"[GeminiPhoto] Part {i}: {list(part.keys())}")
             inline_data = part.get("inlineData")
             if inline_data and inline_data.get("mimeType", "").startswith("image/"):
                 image_base64 = inline_data.get("data")
                 if image_base64:
                     image_bytes = base64.b64decode(image_base64)
+                    print(f"[GeminiPhoto] ✓ Got image: {len(image_bytes)} bytes")
                     logger.info(f"[GeminiPhoto] ✓ Generated photo: {len(image_bytes)} bytes")
                     return image_bytes
         
+        print(f"[GeminiPhoto] No image found in parts")
         logger.warning("[GeminiPhoto] No image found in response parts")
         return None
         

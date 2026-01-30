@@ -137,7 +137,8 @@ export default function Admin() {
                 if (data.aiGenerator?.lionpath) {
                     setLionpathSettings(prev => ({
                         ...prev,
-                        template: data.aiGenerator.lionpath.template || prev.template
+                        template: data.aiGenerator.lionpath.template || prev.template,
+                        templates: data.aiGenerator.lionpath.templates || (data.aiGenerator.lionpath.template ? [data.aiGenerator.lionpath.template] : [])
                     }));
                 }
             }
@@ -196,7 +197,8 @@ export default function Admin() {
                     },
                     lionpath: {
                         enabled: aiProvider === 'lionpath',
-                        template: lionpathSettings.template
+                        template: lionpathSettings.template,
+                        templates: lionpathSettings.templates || (lionpathSettings.template ? [lionpathSettings.template] : [])
                     },
                     svgFallback: { enabled: true }
                 },
@@ -699,28 +701,57 @@ export default function Admin() {
                                             </p>
                                         </div>
                                         <div className="input-group">
-                                            <label className="input-label">选择 HTML 模板</label>
-                                            <select
-                                                className="input"
-                                                value={lionpathSettings.template}
-                                                onChange={(e) => setLionpathSettings(s => ({ ...s, template: e.target.value }))}
-                                            >
-                                                {lionpathSettings.availableTemplates.length > 0 ? (
-                                                    lionpathSettings.availableTemplates.map(tpl => (
-                                                        <option key={tpl.filename} value={tpl.filename}>
-                                                            {tpl.label} ({tpl.filename})
-                                                        </option>
-                                                    ))
-                                                ) : (
-                                                    <>
-                                                        <option value="schedule.html">经典风格 (schedule.html)</option>
-                                                        <option value="schedule_modern.html">现代风格 (schedule_modern.html)</option>
-                                                        <option value="schedule_calendar.html">日历视图 (schedule_calendar.html)</option>
-                                                    </>
-                                                )}
-                                            </select>
-                                            <p className="input-hint">
-                                                模板文件位于 <code>templates/LionPATH/</code> 目录
+                                            <label className="input-label">选择 HTML 模板 (支持多选)</label>
+                                            <div className="template-cards" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {(lionpathSettings.availableTemplates.length > 0 ? lionpathSettings.availableTemplates : [
+                                                    { filename: "schedule.html", label: "经典风格 (Student Center)" },
+                                                    { filename: "schedule_modern.html", label: "现代风格 (卡片式)" },
+                                                    { filename: "schedule_calendar.html", label: "日历视图 (周课表)" },
+                                                    { filename: "enrollment_verification.html", label: "注册验证" },
+                                                    { filename: "schedule_browser.html", label: "浏览器截图 (SheerID推荐)" },
+                                                    { filename: "psu_id_card.html", label: "PSU学生证 (ID Card)" }
+                                                ]).map(tpl => {
+                                                    const currentTemplates = lionpathSettings.templates || (lionpathSettings.template ? [lionpathSettings.template] : []);
+                                                    const isSelected = currentTemplates.includes(tpl.filename);
+
+                                                    return (
+                                                        <label key={tpl.filename} className={`template-card ${isSelected ? 'selected' : ''}`} style={{
+                                                            display: 'flex', alignItems: 'center', padding: '10px 14px',
+                                                            borderRadius: '6px', cursor: 'pointer',
+                                                            background: isSelected ? 'rgba(30, 64, 124, 0.1)' : '#f8f9fa',
+                                                            border: isSelected ? '1px solid #1E407C' : '1px solid #eee',
+                                                            transition: 'all 0.2s'
+                                                        }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={(e) => {
+                                                                    const checked = e.target.checked;
+                                                                    const current = lionpathSettings.templates || (lionpathSettings.template ? [lionpathSettings.template] : []);
+                                                                    let next;
+                                                                    if (checked) {
+                                                                        next = [...current, tpl.filename];
+                                                                    } else {
+                                                                        next = current.filter(t => t !== tpl.filename);
+                                                                    }
+                                                                    setLionpathSettings(s => ({
+                                                                        ...s,
+                                                                        templates: next,
+                                                                        template: next[0] || '' // Fallback for legacy
+                                                                    }));
+                                                                }}
+                                                                style={{ marginRight: '10px' }}
+                                                            />
+                                                            <div>
+                                                                <div style={{ fontWeight: 500, fontSize: '14px', color: '#333' }}>{tpl.label || tpl.filename}</div>
+                                                                <div style={{ fontSize: '12px', color: '#666' }}>{tpl.filename}</div>
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                            <p className="input-hint" style={{ marginTop: '5px' }}>
+                                                💡 推荐同时选择 "Browser Screenshot" (课程表) 和 "PSU ID Card" (学生证) 以提高通过率。
                                             </p>
                                         </div>
                                         <p className="input-hint" style={{ marginTop: '12px' }}>

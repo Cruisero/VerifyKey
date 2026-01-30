@@ -1,0 +1,23 @@
+{
+  "verificationId": "697baae367bd5b0c76505808",
+  "timestamp": "20260129_191658",
+  "student": {
+    "firstName": "Jessica",
+    "lastName": "Wilson",
+    "email": "jessica.wilson426@psu.edu",
+    "birthDate": "2001-02-25"
+  },
+  "university": {
+    "id": 2565,
+    "idExtended": null,
+    "name": "Pennsylvania State University-Main Campus (University Park, PA)",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "lionpath",
+      "fileName": "lionpath_jessica_wilson_1769714218148.png"
+    }
+  ],
+  "provider": "lionpath"
+}

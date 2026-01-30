@@ -26,6 +26,7 @@ from doc_generator import generate_document
 from puppeteer_doc_generator import generate_document_puppeteer
 from lionpath_generator import generate_lionpath_image, generate_psu_email, get_available_templates
 from sheerid_generator import generate_document as generate_document_sheerid
+from vsid_generator import generate_vsid_document, get_available_document_types as get_vsid_document_types
 import auth
 
 # Load environment variables
@@ -256,6 +257,43 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                 if doc_data:
                     documents.append({"type": doc_type, "data": doc_data, "fileName": filename, "mimeType": "image/png"})
                     print(f"[Verify] ✓ Generated {doc_type}: {filename}")
+        
+        # Use VSID Generator (Headless browser automation)
+        elif provider == "vsid":
+            vsid_config = config.get("aiGenerator", {}).get("vsid", {})
+            doc_types = vsid_config.get("docTypes", ["student_id", "schedule"])
+            
+            print(f"[Verify] Generating VSID documents {doc_types} for {first} {last} @ {org['name']}...")
+            
+            # Pre-generate shared student data for consistency
+            from vsid_generator import generate_student_id as vsid_gen_id
+            shared_student_id = vsid_gen_id()
+            shared_email = f"{first.lower()}.{last.lower()}@university.edu"
+            
+            documents = []
+            for doc_type in doc_types:
+                try:
+                    print(f"[Verify] Generating VSID document: {doc_type}...")
+                    doc_data, filename, student_data = generate_vsid_document(
+                        doc_type, first, last, org["name"],
+                        student_id=shared_student_id, email=shared_email
+                    )
+                    if doc_data:
+                        # Map to SheerID document types
+                        sheerid_type = {
+                            "student_id": "id_card",
+                            "enrollment": "enrollment_verification", 
+                            "schedule": "class_schedule",
+                            "admission": "other",
+                            "transcript": "transcript"
+                        }.get(doc_type, "other")
+                        documents.append({"type": sheerid_type, "data": doc_data, "fileName": filename, "mimeType": "image/png"})
+                        print(f"[Verify] ✓ Generated {doc_type}: {filename}")
+                except Exception as e:
+                    print(f"[Verify] ⚠️ Failed to generate VSID {doc_type}: {e}")
+            
+            if not documents:
+                print(f"[Verify] ❌ No VSID documents generated")
         
         # Use Puppeteer if configured
         elif provider == "puppeteer":
@@ -593,6 +631,14 @@ async def get_lionpath_templates_endpoint():
     }
 
 
+@app.get("/api/vsid-doctypes")
+async def get_vsid_doctypes_endpoint():
+    """Get available VSID document types"""
+    return {
+        "docTypes": get_vsid_document_types()
+    }
+
+
 class TestDocumentRequest(BaseModel):
     provider: str = "puppeteer"
     firstName: Optional[str] = None
@@ -780,6 +826,73 @@ async def test_document_generation(request: TestDocumentRequest):
                     "image": images[0]["image"],  # For backward compatibility
                     "formData": first_form_data,
                     "filename": images[0]["filename"]
+                }
+        
+        # Use VSID Generator (Headless browser automation)
+        elif provider == "vsid":
+            vsid_config = config.get("aiGenerator", {}).get("vsid", {})
+            doc_types = vsid_config.get("docTypes", ["student_id", "schedule"])
+            
+            print(f"[TestDoc] Using VSID generator with docTypes: {doc_types}...")
+            
+            doc_type_names = {
+                "student_id": "🪪 学生证",
+                "enrollment": "📜 在读证明",
+                "schedule": "📅 课程表",
+                "admission": "📬 录取通知书",
+                "transcript": "📊 成绩单"
+            }
+            
+            # Pre-generate shared student data
+            from vsid_generator import generate_student_id as vsid_gen_id
+            shared_student_id = vsid_gen_id()
+            shared_email = f"{first.lower()}.{last.lower()}@university.edu"
+            
+            images = []
+            first_student_data = None
+            
+            for doc_type in doc_types:
+                try:
+                    print(f"[TestDoc] Generating VSID document: {doc_type}...")
+                    doc_data, filename, student_data = generate_vsid_document(
+                        doc_type, first, last, university,
+                        student_id=shared_student_id, email=shared_email
+                    )
+                    if doc_data:
+                        image_base64 = base64.b64encode(doc_data).decode('utf-8')
+                        images.append({
+                            "type": doc_type,
+                            "image": f"data:image/png;base64,{image_base64}",
+                            "filename": filename
+                        })
+                        if first_student_data is None:
+                            first_student_data = student_data
+                        print(f"[TestDoc] ✓ Generated {doc_type}: {filename}")
+                except Exception as e:
+                    print(f"[TestDoc] ⚠️ Failed to generate VSID {doc_type}: {e}")
+            
+            if images and first_student_data:
+                doc_types_display = ", ".join([doc_type_names.get(dt, dt) for dt in doc_types])
+                provider_note = f"""🎓 VSID 文档生成器
+📄 类型: {doc_types_display} ({len(images)}个文档)
+👤 姓名: {first_student_data.get('fullName', 'N/A')}
+🆔 学号: {first_student_data.get('student_id', 'N/A')}
+🎓 专业: {first_student_data.get('major', 'N/A')}
+🏫 大学: {first_student_data.get('university', 'N/A')}"""
+                
+                return {
+                    "success": True,
+                    "provider": "vsid",
+                    "providerNote": provider_note,
+                    "images": images,
+                    "image": images[0]["image"],
+                    "formData": first_student_data,
+                    "filename": images[0]["filename"]
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Failed to generate any VSID documents"
                 }
         
         elif provider == "puppeteer":

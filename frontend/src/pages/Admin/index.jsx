@@ -42,6 +42,10 @@ export default function Admin() {
         template: 'schedule.html',
         availableTemplates: []
     });
+    const [vsidSettings, setVsidSettings] = useState({
+        docTypes: ['student_id', 'schedule'],  // Default: student ID and schedule
+        availableDocTypes: []
+    });
     const [proxySettings, setProxySettings] = useState({
         enabled: true,
         host: 'proxy.global.ip2up.com',
@@ -141,6 +145,13 @@ export default function Admin() {
                         templates: data.aiGenerator.lionpath.templates || (data.aiGenerator.lionpath.template ? [data.aiGenerator.lionpath.template] : [])
                     }));
                 }
+                // Load VSID settings
+                if (data.aiGenerator?.vsid) {
+                    setVsidSettings(prev => ({
+                        ...prev,
+                        docTypes: data.aiGenerator.vsid.docTypes || prev.docTypes
+                    }));
+                }
             }
 
             // Fetch available templates
@@ -160,6 +171,16 @@ export default function Admin() {
                 setLionpathSettings(prev => ({
                     ...prev,
                     availableTemplates: lionpathTemplatesData.templates || []
+                }));
+            }
+
+            // Fetch VSID document types
+            const vsidDocTypesRes = await fetch(`${API_BASE}/api/vsid-doctypes`);
+            if (vsidDocTypesRes.ok) {
+                const vsidDocTypesData = await vsidDocTypesRes.json();
+                setVsidSettings(prev => ({
+                    ...prev,
+                    availableDocTypes: vsidDocTypesData.docTypes || []
                 }));
             }
         } catch (error) {
@@ -199,6 +220,10 @@ export default function Admin() {
                         enabled: aiProvider === 'lionpath',
                         template: lionpathSettings.template,
                         templates: lionpathSettings.templates || (lionpathSettings.template ? [lionpathSettings.template] : [])
+                    },
+                    vsid: {
+                        enabled: aiProvider === 'vsid',
+                        docTypes: vsidSettings.docTypes || ['student_id', 'schedule']
                     },
                     svgFallback: { enabled: true }
                 },
@@ -512,6 +537,20 @@ export default function Admin() {
                                     </div>
                                     <div className="provider-status">
                                         <span className="badge badge-warning">通用</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    className={`provider-card ${aiProvider === 'vsid' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('vsid')}
+                                >
+                                    <div className="provider-icon">🎓</div>
+                                    <div className="provider-info">
+                                        <h4>VSID Generator</h4>
+                                        <p>国际学生证生成：支持5种文档类型</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-success">新</span>
                                     </div>
                                 </div>
                             </div>
@@ -842,6 +881,83 @@ export default function Admin() {
                                             <br />• 🆔 8位随机学号
                                             <br />• 🎂 大学生年龄的随机生日 (2000-2006)
                                             <br />• 📚 随机课程/成绩数据
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* VSID Generator Settings */}
+                            {aiProvider === 'vsid' && (
+                                <div className="provider-settings">
+                                    <h4>🎓 VSID Generator 配置</h4>
+                                    <div className="settings-form">
+                                        <div className="vsid-info" style={{
+                                            background: 'linear-gradient(135deg, #10B981 0%, #3B82F6 100%)',
+                                            color: 'white',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>VSID Generator</strong> 使用 Headless Browser 自动化生成多种学术文档，
+                                                支持学生证、在读证明、课程表、录取通知书和成绩单。
+                                            </p>
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">选择文档类型 (可多选)</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                                                {(vsidSettings.availableDocTypes.length > 0 ? vsidSettings.availableDocTypes : [
+                                                    { value: 'student_id', label: '🪪 学生证 (Student ID)' },
+                                                    { value: 'enrollment', label: '📜 在读证明 (Enrollment Certificate)' },
+                                                    { value: 'schedule', label: '📅 课程表 (Course Schedule)' },
+                                                    { value: 'admission', label: '📬 录取通知书 (Admission Letter)' },
+                                                    { value: 'transcript', label: '📊 成绩单 (Transcript)' }
+                                                ]).map(docType => (
+                                                    <label key={docType.value} style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '10px',
+                                                        padding: '10px 14px',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        background: (vsidSettings?.docTypes || ['student_id', 'schedule']).includes(docType.value)
+                                                            ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-secondary)',
+                                                        border: (vsidSettings?.docTypes || ['student_id', 'schedule']).includes(docType.value)
+                                                            ? '1px solid #10B981'
+                                                            : '1px solid transparent',
+                                                        transition: 'all 0.2s ease'
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={(vsidSettings?.docTypes || ['student_id', 'schedule']).includes(docType.value)}
+                                                            onChange={(e) => {
+                                                                const currentTypes = vsidSettings?.docTypes || ['student_id', 'schedule'];
+                                                                let newTypes;
+                                                                if (e.target.checked) {
+                                                                    newTypes = [...currentTypes, docType.value];
+                                                                } else {
+                                                                    newTypes = currentTypes.filter(t => t !== docType.value);
+                                                                    if (newTypes.length === 0) newTypes = ['student_id']; // At least one
+                                                                }
+                                                                setVsidSettings(s => ({ ...s, docTypes: newTypes }));
+                                                            }}
+                                                            style={{ width: '16px', height: '16px' }}
+                                                        />
+                                                        <span style={{ fontSize: '14px' }}>{docType.label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            <p className="input-hint">
+                                                💡 推荐同时选择 "学生证" 和 "课程表" 以提高验证通过率
+                                            </p>
+                                        </div>
+
+                                        <p className="input-hint" style={{ marginTop: '16px' }}>
+                                            ✨ 此模式将自动生成：
+                                            <br />• 📛 基于姓名的学生信息
+                                            <br />• 🆔 随机学号
+                                            <br />• 🎓 随机专业和学位
+                                            <br />• 📅 合理的入学和毕业日期
                                         </p>
                                     </div>
                                 </div>

@@ -227,8 +227,10 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
             formatted_id = f"{psu_id[0]} {psu_id[1:5]} {psu_id[5:]}"
             html = html.replace('{{psu_id}}', formatted_id)
             
-            # 签发日期
-            issued_date = datetime.now().strftime('%Y-%m-%d')
+            # 签发日期 - 随机生成 2025年10月到12月
+            issue_month = random.randint(10, 12)
+            issue_day = random.randint(1, 28)  # 保守使用28避免月份日期问题
+            issued_date = f"2025-{issue_month:02d}-{issue_day:02d}"
             html = html.replace('{{issued_date}}', issued_date)
             
             # 使用 Gemini 生成学生照片

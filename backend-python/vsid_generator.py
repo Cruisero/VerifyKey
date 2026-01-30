@@ -271,33 +271,35 @@ def generate_vsid_document(
         
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            context = browser.new_context(viewport={'width': 1400, 'height': 900})
+            context = browser.new_context(viewport={'width': 1400, 'height': 1000})
             page = context.new_page()
             
             logger.info(f"[VSID] Navigating to {VSID_URL}")
             page.goto(VSID_URL, wait_until='networkidle')
+            page.wait_for_timeout(2000)  # Wait for React to fully load
             
-            # Wait for disclaimer and agree if present
-            try:
-                agree_button = page.locator('button:has-text("Agree"), button:has-text("同意"), button:has-text("I Agree")')
-                if agree_button.count() > 0:
-                    page.wait_for_timeout(5500)  # Wait for timer
-                    agree_button.first.click()
-                    page.wait_for_timeout(500)
-            except:
-                pass
+            # Tab text mapping
+            tab_texts = {
+                "student_id": "学生证",
+                "enrollment": "在读证明",
+                "schedule": "课程表",
+                "admission": "录取通知书",
+                "transcript": "成绩单"
+            }
             
-            # Click on the appropriate document type tab
-            tab_index = doc_info["tab_index"]
+            # Document types that require clicking the Preview sub-tab
+            needs_preview_click = ["schedule", "admission", "transcript"]
+            
+            # Click the correct main tab
+            tab_text = tab_texts.get(doc_type, "学生证")
             try:
-                # Try clicking by tab role
-                tabs = page.locator('button[role="tab"], [data-state], .tab, nav button')
-                if tabs.count() > tab_index:
-                    tabs.nth(tab_index).click()
-                    page.wait_for_timeout(1000)
-                    logger.info(f"[VSID] Clicked tab {tab_index} for {doc_type}")
+                main_tab = page.locator(f'button[role="tab"]:has-text("{tab_text}")')
+                if main_tab.count() > 0:
+                    main_tab.first.click()
+                    page.wait_for_timeout(1500)
+                    logger.info(f"[VSID] Clicked main tab: {tab_text}")
             except Exception as e:
-                logger.warning(f"[VSID] Could not click tab: {e}")
+                logger.warning(f"[VSID] Could not click main tab {tab_text}: {e}")
             
             # Fill the form based on document type
             form_fillers = {
@@ -314,49 +316,58 @@ def generate_vsid_document(
             except Exception as e:
                 logger.warning(f"[VSID] Form filling error: {e}")
             
-            # Wait for rendering
-            page.wait_for_timeout(2000)
+            # Wait for form to update preview
+            page.wait_for_timeout(1000)
             
-            # Try to click Preview tab if available
-            try:
-                preview_tab = page.locator('button:has-text("Preview"), button:has-text("预览")')
-                if preview_tab.count() > 0:
-                    preview_tab.first.click()
-                    page.wait_for_timeout(1500)
-            except:
-                pass
+            # For schedule/admission/transcript, click the Preview sub-tab
+            if doc_type in needs_preview_click:
+                try:
+                    preview_button = page.locator('button[role="tab"]:has-text("预览")').first
+                    if preview_button.is_visible():
+                        preview_button.click()
+                        page.wait_for_timeout(2000)  # Wait for preview to render
+                        logger.info(f"[VSID] Clicked Preview sub-tab")
+                except Exception as e:
+                    logger.warning(f"[VSID] Could not click Preview sub-tab: {e}")
             
-            # Find and screenshot the preview/card element
+            # Wait for everything to render
+            page.wait_for_timeout(1500)
+            
+            # Screenshot the #student-card element (used by all document types)
+            screenshot_bytes = None
             try:
-                # Try various selectors for the document preview
-                preview_selectors = [
-                    '[class*="preview"]',
-                    '[class*="card"]',
-                    '[class*="document"]',
-                    '.bg-white.rounded',
-                    'main > div > div:nth-child(2)'
+                student_card = page.locator('#student-card')
+                if student_card.count() > 0 and student_card.first.is_visible():
+                    # Wait a bit more for any animations
+                    page.wait_for_timeout(500)
+                    screenshot_bytes = student_card.first.screenshot(type='png')
+                    logger.info(f"[VSID] Captured #student-card ({len(screenshot_bytes)} bytes)")
+            except Exception as e:
+                logger.warning(f"[VSID] Could not capture #student-card: {e}")
+            
+            # Fallback: try other selectors
+            if not screenshot_bytes or len(screenshot_bytes) < 5000:
+                fallback_selectors = [
+                    '.flex.justify-center.p-2 > div',
+                    '[class*="relative"][class*="rounded"]',
+                    '.bg-white.shadow-lg',
+                    'main'
                 ]
-                
-                screenshot_bytes = None
-                for selector in preview_selectors:
+                for selector in fallback_selectors:
                     try:
                         element = page.locator(selector).first
                         if element.is_visible():
                             screenshot_bytes = element.screenshot(type='png')
-                            if len(screenshot_bytes) > 5000:  # Reasonable image size
-                                logger.info(f"[VSID] Captured preview with selector: {selector}")
+                            if len(screenshot_bytes) > 10000:
+                                logger.info(f"[VSID] Captured with fallback selector: {selector}")
                                 break
                     except:
                         continue
-                
-                # Fallback to full page screenshot
-                if not screenshot_bytes or len(screenshot_bytes) < 5000:
-                    screenshot_bytes = page.screenshot(type='png', full_page=False)
-                    logger.info("[VSID] Using full page screenshot as fallback")
-                    
-            except Exception as e:
-                logger.warning(f"[VSID] Screenshot error, using full page: {e}")
+            
+            # Last fallback: full viewport
+            if not screenshot_bytes or len(screenshot_bytes) < 5000:
                 screenshot_bytes = page.screenshot(type='png', full_page=False)
+                logger.info("[VSID] Using full page screenshot as final fallback")
             
             browser.close()
             return screenshot_bytes

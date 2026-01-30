@@ -79,16 +79,20 @@ def generate_psu_id() -> str:
 
 def generate_psu_email(first_name: str, last_name: str) -> str:
     """
-    生成 PSU 邮箱
-    格式: 3个字母 + 4个数字 @psu.edu
-    例如: rvb6089@psu.edu
+    生成 PSU 邮箱 (Access ID 格式)
+    格式: 首字母(first) + 随机字母 + 首字母(last) + 4位数字 @psu.edu
+    例如: Emily Anderson -> eza5123@psu.edu
     """
     import string
-    # 3个随机小写字母
-    letters = ''.join(random.choices(string.ascii_lowercase, k=3))
+    # 第一个字母: First name 首字母
+    first_initial = first_name[0].lower() if first_name else 'a'
+    # 最后一个字母: Last name 首字母
+    last_initial = last_name[0].lower() if last_name else 'a'
+    # 中间字母: 随机一个小写字母
+    middle_letter = random.choice(string.ascii_lowercase)
     # 4个随机数字
     digits = ''.join([str(random.randint(0, 9)) for _ in range(4)])
-    email = f"{letters}{digits}@psu.edu"
+    email = f"{first_initial}{middle_letter}{last_initial}{digits}@psu.edu"
     return email
 
 

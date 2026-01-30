@@ -73,23 +73,24 @@ def generate_student_photo(first_name: str, last_name: str, gender: str = None) 
     ethnicity = random.choice(ethnicities)
     
     # 生成照片的 prompt
-    prompt = f"""Generate a realistic university student ID card photo:
+    prompt = f"""Generate a realistic university student ID card portrait photo:
 
+REQUIREMENTS:
 - Gender: {gender}
-- Age: {age} years old
+- Age: {age} years old  
 - Ethnicity: {ethnicity}
-- Expression: neutral, friendly smile
+- Neutral, friendly expression with slight smile
 - Looking directly at camera
-- Professional headshot style
-- Plain light gray or blue background (typical ID photo background)
-- Good lighting, no shadows on face
-- Shoulders visible at bottom of frame
-- High quality, looks like a real ID card photo
-- Resolution suitable for ID card (portrait orientation, face fills most of frame)
+- Close-up headshot, face fills 70-80% of the frame
+- Plain light blue or gray solid background, no gradients
+- Even professional lighting, no harsh shadows
+- Shoulders and upper chest visible at bottom
+- NO white borders, NO frames, NO margins around the image
+- Photo should extend to all edges with no padding
+- Aspect ratio: portrait (3:4 or similar)
+- High resolution, sharp details
 
-This is for {first_name} {last_name}'s student ID card photo.
-
-Generate ONLY the photo image, no text or explanation."""
+Generate ONLY the photo image extending to all edges. No text, no frames, no borders."""
 
     try:
         print(f"[GeminiPhoto] Calling API for {first_name} {last_name} ({gender}, {age}yo, {ethnicity})")

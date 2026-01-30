@@ -24,8 +24,10 @@ except ImportError:
 try:
     from gemini_photo import generate_student_photo_base64, get_placeholder_photo
     HAS_GEMINI_PHOTO = True
-except ImportError:
+    print("[LionPATH] ✓ Gemini photo module loaded")
+except ImportError as e:
     HAS_GEMINI_PHOTO = False
+    print(f"[LionPATH] ✗ Gemini photo module not available: {e}")
     def get_placeholder_photo():
         return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
@@ -231,17 +233,27 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
             
             # 使用 Gemini 生成学生照片
             photo_url = get_placeholder_photo()  # 默认占位符
+            logger.info(f"[LionPATH] HAS_GEMINI_PHOTO = {HAS_GEMINI_PHOTO}")
+            print(f"[LionPATH] HAS_GEMINI_PHOTO = {HAS_GEMINI_PHOTO}")
+            
             if HAS_GEMINI_PHOTO:
                 try:
-                    logger.info(f"[LionPATH] Generating student photo with Gemini...")
+                    logger.info(f"[LionPATH] Generating student photo with Gemini for {first_name} {last_name}...")
+                    print(f"[LionPATH] Generating student photo with Gemini for {first_name} {last_name}...")
                     generated_photo = generate_student_photo_base64(first_name, last_name)
                     if generated_photo:
                         photo_url = generated_photo
-                        logger.info(f"[LionPATH] ✓ Generated Gemini photo")
+                        logger.info(f"[LionPATH] ✓ Generated Gemini photo (length: {len(generated_photo)})")
+                        print(f"[LionPATH] ✓ Generated Gemini photo")
                     else:
-                        logger.warning(f"[LionPATH] Gemini photo generation failed, using placeholder")
+                        logger.warning(f"[LionPATH] Gemini photo generation returned None, using placeholder")
+                        print(f"[LionPATH] Gemini photo generation returned None")
                 except Exception as photo_err:
                     logger.warning(f"[LionPATH] Photo generation error: {photo_err}")
+                    print(f"[LionPATH] Photo generation error: {photo_err}")
+            else:
+                logger.info(f"[LionPATH] Skipping Gemini photo (module not available)")
+                print(f"[LionPATH] Skipping Gemini photo (module not available)")
             
             html = html.replace('{{photo}}', photo_url)
     else:

@@ -20,6 +20,15 @@ try:
 except ImportError:
     HAS_IMAGE_PROCESSOR = False
 
+# 导入 Gemini 照片生成模块
+try:
+    from gemini_photo import generate_student_photo_base64, get_placeholder_photo
+    HAS_GEMINI_PHOTO = True
+except ImportError:
+    HAS_GEMINI_PHOTO = False
+    def get_placeholder_photo():
+        return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
 logger = logging.getLogger(__name__)
 
 # 模板路径
@@ -220,8 +229,21 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
             issued_date = datetime.now().strftime('%Y-%m-%d')
             html = html.replace('{{issued_date}}', issued_date)
             
-            # 照片占位符 - 将在外部处理
-            # html = html.replace('{{photo}}', photo_url)
+            # 使用 Gemini 生成学生照片
+            photo_url = get_placeholder_photo()  # 默认占位符
+            if HAS_GEMINI_PHOTO:
+                try:
+                    logger.info(f"[LionPATH] Generating student photo with Gemini...")
+                    generated_photo = generate_student_photo_base64(first_name, last_name)
+                    if generated_photo:
+                        photo_url = generated_photo
+                        logger.info(f"[LionPATH] ✓ Generated Gemini photo")
+                    else:
+                        logger.warning(f"[LionPATH] Gemini photo generation failed, using placeholder")
+                except Exception as photo_err:
+                    logger.warning(f"[LionPATH] Photo generation error: {photo_err}")
+            
+            html = html.replace('{{photo}}', photo_url)
     else:
         # 回退到内联模板 (保留原始代码以防模板文件丢失)
         html = f"""<!DOCTYPE html>

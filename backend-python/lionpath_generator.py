@@ -200,12 +200,13 @@ def generate_html(first_name: str, last_name: str, school_id: str = '2565',
         
         # PSU ID Card 模板特殊处理
         if 'id_card' in template_name.lower():
-            # 加载卡片背景图
+            # 加载卡片背景图，替换相对路径为 base64 (Playwright 兼容)
             card_bg_path = TEMPLATE_DIR / 'psu_id_card_bg.png'
             if card_bg_path.exists():
                 with open(card_bg_path, 'rb') as f:
                     bg_base64 = base64.b64encode(f.read()).decode('utf-8')
-                    html = html.replace('{{card_bg}}', f'data:image/png;base64,{bg_base64}')
+                    # 替换相对路径为 base64
+                    html = html.replace("url('psu_id_card_bg.png')", f"url('data:image/png;base64,{bg_base64}')")
             
             # 替换 ID Card 特有的占位符
             html = html.replace('{{first_name}}', first_name.upper())

@@ -326,8 +326,10 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                         first, last, template_name=tmpl
                     )
                     if d_data:
-                        documents.append({"type": "id_card", "data": d_data, "fileName": d_filename, "mimeType": "image/png"})
-                        print(f"[Verify] ✓ Generated UIUC i-card: {d_filename}")
+                        # Map template to SheerID document type
+                        doc_type = "enrollment_verification" if "enrollment" in tmpl else "id_card"
+                        documents.append({"type": doc_type, "data": d_data, "fileName": d_filename, "mimeType": "image/png"})
+                        print(f"[Verify] ✓ Generated UIUC {doc_type}: {d_filename}")
                 except Exception as e:
                     print(f"[Verify] ⚠️ Failed to generate UIUC template {tmpl}: {e}")
             

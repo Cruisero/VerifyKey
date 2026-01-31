@@ -1,0 +1,27 @@
+{
+  "verificationId": "697d91285a98880f768eb321",
+  "timestamp": "20260131_083651",
+  "student": {
+    "firstName": "Emily",
+    "lastName": "Davis",
+    "email": "edavis@illinois.edu",
+    "birthDate": "2006-05-19"
+  },
+  "university": {
+    "id": 4836,
+    "idExtended": null,
+    "name": "University of Illinois Urbana-Champaign",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "id_card",
+      "fileName": "uiuc_icard_emily_davis_1769848610444.png"
+    },
+    {
+      "type": "id_card",
+      "fileName": "uiuc_enrollment_emily_davis_1769848611449.png"
+    }
+  ],
+  "provider": "uiuc"
+}

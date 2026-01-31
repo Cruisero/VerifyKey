@@ -172,11 +172,9 @@ def generate_gpa() -> str:
 
 def generate_matriculation_year() -> int:
     """
-    生成入学年份 (根据年级推算)
+    生成入学年份 (仅 2024 或 2025)
     """
-    current_year = datetime.now().year
-    # 2-5年前入学
-    return current_year - random.randint(1, 4)
+    return random.choice([2024, 2025])
 
 
 def generate_html(first_name: str, last_name: str,
@@ -385,9 +383,11 @@ def generate_uiuc_image(first_name: str, last_name: str,
             except Exception as proc_err:
                 logger.warning(f"[UIUC] Image processing failed, using original: {proc_err}")
 
-        # 生成文件名
-        doc_type = "enrollment" if "enrollment" in template_name else "icard"
-        filename = f"uiuc_{doc_type}_{first_name.lower()}_{last_name.lower()}_{int(datetime.now().timestamp() * 1000)}.png"
+        # 生成文件名 - 使用随机 ID 代替姓名
+        import string
+        random_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        doc_type = "enrollment_verification" if "enrollment" in template_name else "student_id"
+        filename = f"uiuc_{doc_type}_{random_id}.png"
         logger.info(f"[UIUC] ✓ Generated: {filename} ({len(screenshot_bytes)} bytes)")
         
         return screenshot_bytes, filename, student_data

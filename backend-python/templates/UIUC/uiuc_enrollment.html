@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UIUC Enrollment Verification Letter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Times New Roman', Times, serif;
+        }
+
+        .letter-container {
+            width: 816px;
+            min-height: 1056px;
+            background: white;
+            padding: 60px 80px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #13294B;
+        }
+
+        .header h1 {
+            color: #13294B;
+            font-size: 42px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            margin-bottom: 5px;
+            font-family: 'Georgia', serif;
+        }
+
+        .header p {
+            color: #13294B;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        /* Title */
+        .letter-title {
+            text-align: center;
+            margin: 40px 0 30px;
+        }
+
+        .letter-title h2 {
+            color: #13294B;
+            font-size: 22px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        /* Date */
+        .date {
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        /* Greeting */
+        .greeting {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #000;
+        }
+
+        /* Body text */
+        .body-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: #333;
+            margin-bottom: 25px;
+        }
+
+        /* Student Info Table */
+        .info-table {
+            width: 100%;
+            max-width: 500px;
+            border-collapse: collapse;
+            margin: 25px 0;
+            border: 1px solid #ddd;
+        }
+
+        .info-table tr {
+            border-bottom: 1px solid #ddd;
+        }
+
+        .info-table tr:last-child {
+            border-bottom: none;
+        }
+
+        .info-table td {
+            padding: 10px 15px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .info-table td:first-child {
+            width: 140px;
+            font-weight: 500;
+            color: #555;
+            background: #fafafa;
+        }
+
+        .info-table td:last-child {
+            font-weight: 500;
+        }
+
+        /* Contact paragraph */
+        .contact-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: #333;
+            margin: 30px 0;
+        }
+
+        /* Closing */
+        .closing {
+            margin-top: 40px;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .signature-line {
+            width: 200px;
+            border-top: 1px solid #333;
+            margin: 50px 0 15px;
+        }
+
+        .office-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #13294B;
+            margin-bottom: 5px;
+        }
+
+        .university-name {
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="letter-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>UIUC</h1>
+            <p>Champaign, IL • United States</p>
+        </div>
+
+        <!-- Title -->
+        <div class="letter-title">
+            <h2>ENROLLMENT VERIFICATION LETTER</h2>
+        </div>
+
+        <!-- Date -->
+        <div class="date">{{date}}</div>
+
+        <!-- Greeting -->
+        <div class="greeting">To Whom It May Concern:</div>
+
+        <!-- Intro text -->
+        <div class="body-text">
+            This letter is to certify that {{full_name}} is currently enrolled as a
+            {{class_standing}} student at UIUC. The student is
+            pursuing a degree in {{major}}.
+        </div>
+
+        <!-- Student Info Table -->
+        <table class="info-table">
+            <tr>
+                <td>Student Name:</td>
+                <td>{{full_name}}</td>
+            </tr>
+            <tr>
+                <td>Student ID:</td>
+                <td>UIU-{{uiu}}</td>
+            </tr>
+            <tr>
+                <td>Email:</td>
+                <td>{{email}}</td>
+            </tr>
+            <tr>
+                <td>Major/Program:</td>
+                <td>{{major}}</td>
+            </tr>
+            <tr>
+                <td>Current Status:</td>
+                <td>{{class_standing}} (Active)</td>
+            </tr>
+        </table>
+
+        <!-- Academic standing text -->
+        <div class="body-text">
+            The student matriculated in {{matriculation_year}} and is expected to graduate upon
+            successful completion of all degree requirements. The student is in good academic
+            standing with a current GPA of {{gpa}}.
+        </div>
+
+        <!-- Contact text -->
+        <div class="contact-text">
+            If you have any questions regarding this verification, please do not hesitate to contact
+            the Office of the Registrar.
+        </div>
+
+        <!-- Closing -->
+        <div class="closing">
+            Sincerely,
+        </div>
+
+        <!-- Signature -->
+        <div class="signature-line"></div>
+        <div class="office-name">Office of the Registrar</div>
+        <div class="university-name">University of Illinois Urbana-Champaign</div>
+    </div>
+</body>
+
+</html>

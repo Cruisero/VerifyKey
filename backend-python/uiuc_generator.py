@@ -38,7 +38,8 @@ TEMPLATE_DIR = Path(__file__).parent / "templates" / "UIUC"
 
 # 可用模板列表
 AVAILABLE_TEMPLATES = {
-    "uiuc_id_card.html": "UIUC i-card 学生证"
+    "uiuc_id_card.html": "UIUC i-card 学生证",
+    "uiuc_enrollment.html": "UIUC 在读证明 (Enrollment Verification)"
 }
 
 
@@ -125,12 +126,67 @@ def generate_uiuc_email(first_name: str, last_name: str) -> str:
     return f"{first_initial}{last}{suffix}@illinois.edu"
 
 
+def generate_class_standing() -> str:
+    """
+    生成学生年级
+    """
+    standings = ["Freshman", "Sophomore", "Junior", "Senior"]
+    weights = [15, 20, 30, 35]  # Senior更常见
+    return random.choices(standings, weights=weights)[0]
+
+
+def generate_major() -> str:
+    """
+    生成随机专业 (UIUC热门专业)
+    """
+    majors = [
+        "Computer Science",
+        "Electrical Engineering",
+        "Mechanical Engineering",
+        "Civil Engineering",
+        "Business Administration",
+        "Economics",
+        "Psychology",
+        "Biology",
+        "Chemistry",
+        "Mathematics",
+        "Physics",
+        "Accountancy",
+        "Finance",
+        "Communication",
+        "Political Science",
+        "Statistics",
+        "Data Science",
+        "Information Sciences"
+    ]
+    return random.choice(majors)
+
+
+def generate_gpa() -> str:
+    """
+    生成 GPA (2.5 - 4.0范围，保留两位小数)
+    """
+    gpa = round(random.uniform(2.5, 4.0), 2)
+    return f"{gpa:.2f}"
+
+
+def generate_matriculation_year() -> int:
+    """
+    生成入学年份 (根据年级推算)
+    """
+    current_year = datetime.now().year
+    # 2-5年前入学
+    return current_year - random.randint(1, 4)
+
+
 def generate_html(first_name: str, last_name: str,
                   uiu: str = None, library: str = None, 
                   card: str = None, card_expires: str = None,
-                  template_name: str = "uiuc_id_card.html") -> tuple:
+                  template_name: str = "uiuc_id_card.html",
+                  class_standing: str = None, major: str = None,
+                  gpa: str = None, matriculation_year: int = None) -> tuple:
     """
-    生成 UIUC i-card HTML
+    生成 UIUC HTML (支持 i-card 和 enrollment 模板)
 
     Args:
         first_name: 名字
@@ -140,9 +196,13 @@ def generate_html(first_name: str, last_name: str,
         card: Card 号码 (可选，不传则自动生成)
         card_expires: 过期日期 (可选，不传则自动生成)
         template_name: 模板文件名
+        class_standing: 年级 (enrollment模板使用)
+        major: 专业 (enrollment模板使用)
+        gpa: GPA (enrollment模板使用)
+        matriculation_year: 入学年份 (enrollment模板使用)
 
     Returns:
-        tuple: (HTML 内容, UIU, Library, Card, Card Expires)
+        tuple: (HTML 内容, 学生数据字典)
     """
     # 使用传入的值或生成新的
     uiu = uiu or generate_uiu()
@@ -150,62 +210,105 @@ def generate_html(first_name: str, last_name: str,
     card = card or generate_card()
     card_expires = card_expires or generate_card_expires()
     email = generate_uiuc_email(first_name, last_name)
+    
+    # Enrollment 模板专用字段
+    class_standing = class_standing or generate_class_standing()
+    major = major or generate_major()
+    gpa = gpa or generate_gpa()
+    matriculation_year = matriculation_year or generate_matriculation_year()
+    
+    full_name = f"{first_name} {last_name}"
+    current_date = datetime.now().strftime("%B %d, %Y")  # e.g., January 26, 2026
 
     # 加载外部模板
     template = load_template(template_name)
     
     if template:
-        # 加载背景图并转换为 base64
-        bg_path = TEMPLATE_DIR / 'uiuc_bg.png'
-        if bg_path.exists():
-            with open(bg_path, 'rb') as f:
-                bg_base64 = base64.b64encode(f.read()).decode('utf-8')
-                template = template.replace("url('uiuc_bg.png')", f"url('data:image/png;base64,{bg_base64}')")
+        # 对于 i-card 模板，加载背景图
+        if "id_card" in template_name:
+            bg_path = TEMPLATE_DIR / 'uiuc_bg.png'
+            if bg_path.exists():
+                with open(bg_path, 'rb') as f:
+                    bg_base64 = base64.b64encode(f.read()).decode('utf-8')
+                    template = template.replace("url('uiuc_bg.png')", f"url('data:image/png;base64,{bg_base64}')")
         
-        # 使用 Gemini 生成学生照片
-        photo_url = get_placeholder_photo()  # 默认占位符
-        logger.info(f"[UIUC] HAS_GEMINI_PHOTO = {HAS_GEMINI_PHOTO}")
-        print(f"[UIUC] HAS_GEMINI_PHOTO = {HAS_GEMINI_PHOTO}")
-        
-        if HAS_GEMINI_PHOTO:
-            try:
-                logger.info(f"[UIUC] Generating student photo with Gemini for {first_name} {last_name}...")
-                print(f"[UIUC] Generating student photo with Gemini for {first_name} {last_name}...")
-                generated_photo = generate_student_photo_base64(first_name, last_name)
-                if generated_photo:
-                    photo_url = generated_photo
-                    logger.info(f"[UIUC] ✓ Generated Gemini photo (length: {len(generated_photo)})")
-                    print(f"[UIUC] ✓ Generated Gemini photo")
-                else:
-                    logger.warning(f"[UIUC] Gemini photo generation returned None, using placeholder")
-                    print(f"[UIUC] Gemini photo generation returned None")
-            except Exception as photo_err:
-                logger.warning(f"[UIUC] Photo generation error: {photo_err}")
-                print(f"[UIUC] Photo generation error: {photo_err}")
+            # 使用 Gemini 生成学生照片 (仅 i-card 需要)
+            photo_url = get_placeholder_photo()  # 默认占位符
+            logger.info(f"[UIUC] HAS_GEMINI_PHOTO = {HAS_GEMINI_PHOTO}")
+            print(f"[UIUC] HAS_GEMINI_PHOTO = {HAS_GEMINI_PHOTO}")
+            
+            if HAS_GEMINI_PHOTO:
+                try:
+                    logger.info(f"[UIUC] Generating student photo with Gemini for {first_name} {last_name}...")
+                    print(f"[UIUC] Generating student photo with Gemini for {first_name} {last_name}...")
+                    generated_photo = generate_student_photo_base64(first_name, last_name)
+                    if generated_photo:
+                        photo_url = generated_photo
+                        logger.info(f"[UIUC] ✓ Generated Gemini photo (length: {len(generated_photo)})")
+                        print(f"[UIUC] ✓ Generated Gemini photo")
+                    else:
+                        logger.warning(f"[UIUC] Gemini photo generation returned None, using placeholder")
+                        print(f"[UIUC] Gemini photo generation returned None")
+                except Exception as photo_err:
+                    logger.warning(f"[UIUC] Photo generation error: {photo_err}")
+                    print(f"[UIUC] Photo generation error: {photo_err}")
+            else:
+                logger.info(f"[UIUC] Skipping Gemini photo (module not available)")
+                print(f"[UIUC] Skipping Gemini photo (module not available)")
+            
+            # i-card 模板占位符
+            html = template.replace('{{photo}}', photo_url)
+            html = html.replace('{{first_name}}', first_name.upper())
+            html = html.replace('{{last_name}}', last_name.upper())
         else:
-            logger.info(f"[UIUC] Skipping Gemini photo (module not available)")
-            print(f"[UIUC] Skipping Gemini photo (module not available)")
+            # enrollment 模板不需要照片
+            html = template
         
-        # 替换模板占位符
-        html = template.replace('{{photo}}', photo_url)
-        html = html.replace('{{first_name}}', first_name.upper())
-        html = html.replace('{{last_name}}', last_name.upper())
+        # 通用占位符 (所有模板都可能使用)
+        html = html.replace('{{full_name}}', full_name)
         html = html.replace('{{uiu}}', uiu)
         html = html.replace('{{library}}', library)
         html = html.replace('{{card}}', card)
         html = html.replace('{{card_expires}}', card_expires)
+        html = html.replace('{{email}}', email)
+        
+        # Enrollment 模板专用占位符
+        html = html.replace('{{date}}', current_date)
+        html = html.replace('{{class_standing}}', class_standing)
+        html = html.replace('{{major}}', major)
+        html = html.replace('{{gpa}}', gpa)
+        html = html.replace('{{matriculation_year}}', str(matriculation_year))
     else:
         raise Exception(f"[UIUC] Template not found: {template_name}")
 
-    return html, uiu, library, card, card_expires, email
+    # 返回学生数据字典
+    student_data = {
+        "uiu": uiu,
+        "library": library,
+        "card": card,
+        "card_expires": card_expires,
+        "email": email,
+        "class_standing": class_standing,
+        "major": major,
+        "gpa": gpa,
+        "matriculation_year": matriculation_year,
+        "fullName": full_name,
+        "firstName": first_name,
+        "lastName": last_name,
+        "university": "University of Illinois Urbana-Champaign"
+    }
+
+    return html, student_data
 
 
 def generate_uiuc_image(first_name: str, last_name: str,
                         template_name: str = "uiuc_id_card.html",
                         uiu: str = None, library: str = None,
-                        card: str = None, card_expires: str = None) -> Tuple[bytes, str, dict]:
+                        card: str = None, card_expires: str = None,
+                        class_standing: str = None, major: str = None,
+                        gpa: str = None, matriculation_year: int = None) -> Tuple[bytes, str, dict]:
     """
-    生成 UIUC i-card 截图 PNG
+    生成 UIUC 文档截图 PNG
 
     Args:
         first_name: 名字
@@ -215,76 +318,77 @@ def generate_uiuc_image(first_name: str, last_name: str,
         library: Library 号码 (可选，不传则自动生成)
         card: Card 号码 (可选，不传则自动生成)
         card_expires: 过期日期 (可选，不传则自动生成)
+        class_standing: 年级 (enrollment模板使用)
+        major: 专业 (enrollment模板使用)
+        gpa: GPA (enrollment模板使用)
+        matriculation_year: 入学年份 (enrollment模板使用)
 
     Returns:
         Tuple[bytes, str, dict]: (PNG 图片数据, 文件名, 学生数据字典)
-        学生数据字典包含: uiu, library, card, card_expires, email, university
     """
     try:
         import concurrent.futures
         
-        # 使用传入的值或生成新的
-        uiu = uiu or generate_uiu()
-        library = library or generate_library()
-        card = card or generate_card()
-        card_expires = card_expires or generate_card_expires()
-        
         def run_playwright():
             from playwright.sync_api import sync_playwright
             
-            html_content, _, _, _, _, email = generate_html(
-                first_name, last_name, uiu, library, card, card_expires, template_name
+            # 生成 HTML 和学生数据
+            html_content, student_data = generate_html(
+                first_name, last_name, uiu, library, card, card_expires, 
+                template_name, class_standing, major, gpa, matriculation_year
             )
             
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
-                # 设置视口大小以匹配卡片尺寸
-                page = browser.new_page(viewport={'width': 1100, 'height': 700})
+                
+                # 根据模板类型设置不同的视口大小
+                if "enrollment" in template_name:
+                    # 信函大小 (Letter: 8.5 x 11 英寸 @ 96 DPI)
+                    page = browser.new_page(viewport={'width': 900, 'height': 1200})
+                else:
+                    # ID 卡片大小
+                    page = browser.new_page(viewport={'width': 1100, 'height': 700})
+                
                 page.set_content(html_content, wait_until='load')
                 page.wait_for_timeout(500)  # 等待样式加载
                 
-                # 截取卡片元素
-                card_element = page.locator('.id-card')
-                if card_element.count() > 0:
-                    screenshot_bytes = card_element.screenshot(type='png')
+                # 截取相应元素
+                if "enrollment" in template_name:
+                    letter_element = page.locator('.letter-container')
+                    if letter_element.count() > 0:
+                        screenshot_bytes = letter_element.screenshot(type='png')
+                    else:
+                        screenshot_bytes = page.screenshot(type='png', full_page=True)
                 else:
-                    # 如果找不到卡片元素，截取整个页面
-                    screenshot_bytes = page.screenshot(type='png', full_page=False)
+                    card_element = page.locator('.id-card')
+                    if card_element.count() > 0:
+                        screenshot_bytes = card_element.screenshot(type='png')
+                    else:
+                        screenshot_bytes = page.screenshot(type='png', full_page=False)
                 
                 browser.close()
             
-            return screenshot_bytes, email
+            return screenshot_bytes, student_data
         
-        logger.info(f"[UIUC] Generating i-card for {first_name} {last_name} with template {template_name}")
+        logger.info(f"[UIUC] Generating document for {first_name} {last_name} with template {template_name}")
         
         # Run playwright in a separate thread to avoid asyncio loop conflict
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(run_playwright)
-            screenshot_bytes, email = future.result(timeout=60)  # 增加超时，因为需要生成照片
+            screenshot_bytes, student_data = future.result(timeout=60)  # 增加超时，因为需要生成照片
         
-        # 应用图像后处理（添加真实感效果）
-        if HAS_IMAGE_PROCESSOR:
+        # 应用图像后处理（仅对 id_card 应用，enrollment 保持清晰）
+        if HAS_IMAGE_PROCESSOR and "id_card" in template_name:
             try:
                 screenshot_bytes = process_screenshot(screenshot_bytes, aggressive=False)
                 logger.info("[UIUC] ✓ Applied realistic image effects")
             except Exception as proc_err:
                 logger.warning(f"[UIUC] Image processing failed, using original: {proc_err}")
 
-        filename = f"uiuc_{first_name.lower()}_{last_name.lower()}_{int(datetime.now().timestamp() * 1000)}.png"
+        # 生成文件名
+        doc_type = "enrollment" if "enrollment" in template_name else "icard"
+        filename = f"uiuc_{doc_type}_{first_name.lower()}_{last_name.lower()}_{int(datetime.now().timestamp() * 1000)}.png"
         logger.info(f"[UIUC] ✓ Generated: {filename} ({len(screenshot_bytes)} bytes)")
-        
-        # 返回学生数据字典供表单提交使用
-        student_data = {
-            "uiu": uiu,
-            "library": library,
-            "card": card,
-            "card_expires": card_expires,
-            "email": email,
-            "university": "University of Illinois Urbana-Champaign",
-            "firstName": first_name,
-            "lastName": last_name,
-            "fullName": f"{first_name} {last_name}"
-        }
         
         return screenshot_bytes, filename, student_data
 

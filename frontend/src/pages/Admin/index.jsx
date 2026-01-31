@@ -46,6 +46,10 @@ export default function Admin() {
         docTypes: ['student_id', 'schedule'],  // Default: student ID and schedule
         availableDocTypes: []
     });
+    const [uiucSettings, setUiucSettings] = useState({
+        templates: ['uiuc_id_card.html'],
+        availableTemplates: []
+    });
     const [proxySettings, setProxySettings] = useState({
         enabled: true,
         host: 'proxy.global.ip2up.com',
@@ -152,6 +156,13 @@ export default function Admin() {
                         docTypes: data.aiGenerator.vsid.docTypes || prev.docTypes
                     }));
                 }
+                // Load UIUC settings
+                if (data.aiGenerator?.uiuc) {
+                    setUiucSettings(prev => ({
+                        ...prev,
+                        templates: data.aiGenerator.uiuc.templates || prev.templates
+                    }));
+                }
             }
 
             // Fetch available templates
@@ -181,6 +192,16 @@ export default function Admin() {
                 setVsidSettings(prev => ({
                     ...prev,
                     availableDocTypes: vsidDocTypesData.docTypes || []
+                }));
+            }
+
+            // Fetch UIUC templates
+            const uiucTemplatesRes = await fetch(`${API_BASE}/api/uiuc-templates`);
+            if (uiucTemplatesRes.ok) {
+                const uiucTemplatesData = await uiucTemplatesRes.json();
+                setUiucSettings(prev => ({
+                    ...prev,
+                    availableTemplates: uiucTemplatesData.templates || []
                 }));
             }
         } catch (error) {
@@ -224,6 +245,10 @@ export default function Admin() {
                     vsid: {
                         enabled: aiProvider === 'vsid',
                         docTypes: vsidSettings.docTypes || ['student_id', 'schedule']
+                    },
+                    uiuc: {
+                        enabled: aiProvider === 'uiuc',
+                        templates: uiucSettings.templates || ['uiuc_id_card.html']
                     },
                     svgFallback: { enabled: true }
                 },
@@ -551,6 +576,20 @@ export default function Admin() {
                                     </div>
                                     <div className="provider-status">
                                         <span className="badge badge-success">新</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    className={`provider-card ${aiProvider === 'uiuc' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('uiuc')}
+                                >
+                                    <div className="provider-icon">🏛️</div>
+                                    <div className="provider-info">
+                                        <h4>UIUC i-card</h4>
+                                        <p>伊利诺伊大学厄巴纳-香槟分校学生证</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-info">专属</span>
                                     </div>
                                 </div>
                             </div>
@@ -958,6 +997,89 @@ export default function Admin() {
                                             <br />• 🆔 随机学号
                                             <br />• 🎓 随机专业和学位
                                             <br />• 📅 合理的入学和毕业日期
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* UIUC i-card Settings */}
+                            {aiProvider === 'uiuc' && (
+                                <div className="provider-settings">
+                                    <h4>🏛️ UIUC i-card 配置</h4>
+                                    <div className="settings-form">
+                                        <div className="uiuc-info" style={{
+                                            background: 'linear-gradient(135deg, #E84A27 0%, #13294B 100%)',
+                                            color: 'white',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>UIUC i-card Generator</strong> 专门用于生成伊利诺伊大学厄巴纳-香槟分校 (UIUC) 学生证。
+                                                自动生成照片、姓名、UIU号、Library号、Card号及过期日期。
+                                            </p>
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">选择模板 (可多选)</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                                                {(uiucSettings.availableTemplates.length > 0 ? uiucSettings.availableTemplates : [
+                                                    { filename: 'uiuc_id_card.html', label: 'UIUC i-card 学生证' }
+                                                ]).map(template => (
+                                                    <label key={template.filename} style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '10px',
+                                                        padding: '10px 14px',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        background: (uiucSettings?.templates || ['uiuc_id_card.html']).includes(template.filename)
+                                                            ? 'rgba(232, 74, 39, 0.1)' : 'var(--bg-secondary)',
+                                                        border: (uiucSettings?.templates || ['uiuc_id_card.html']).includes(template.filename)
+                                                            ? '1px solid #E84A27'
+                                                            : '1px solid transparent',
+                                                        transition: 'all 0.2s ease'
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={(uiucSettings?.templates || ['uiuc_id_card.html']).includes(template.filename)}
+                                                            onChange={(e) => {
+                                                                const currentTemplates = uiucSettings?.templates || ['uiuc_id_card.html'];
+                                                                let newTemplates;
+                                                                if (e.target.checked) {
+                                                                    newTemplates = [...currentTemplates, template.filename];
+                                                                } else {
+                                                                    newTemplates = currentTemplates.filter(t => t !== template.filename);
+                                                                    if (newTemplates.length === 0) newTemplates = ['uiuc_id_card.html'];
+                                                                }
+                                                                setUiucSettings(s => ({ ...s, templates: newTemplates }));
+                                                            }}
+                                                            style={{ width: '16px', height: '16px' }}
+                                                        />
+                                                        <span style={{ fontSize: '14px' }}>🪪 {template.label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            marginTop: '16px',
+                                            padding: '12px 16px',
+                                            background: 'var(--bg-secondary)',
+                                            borderRadius: '8px',
+                                            fontSize: '13px'
+                                        }}>
+                                            <strong>📋 生成的字段:</strong>
+                                            <ul style={{ margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
+                                                <li><strong>UIU:</strong> 76 + 5位随机数字</li>
+                                                <li><strong>Library:</strong> 2 + 13位随机数字</li>
+                                                <li><strong>Card:</strong> 563665 + 10位随机数字</li>
+                                                <li><strong>Card Expires:</strong> 2027年随机日期</li>
+                                                <li><strong>Photo:</strong> Gemini AI 生成</li>
+                                            </ul>
+                                        </div>
+
+                                        <p className="input-hint" style={{ marginTop: '16px' }}>
+                                            ⚠️ 此模式自动使用 University of Illinois Urbana-Champaign 作为学校
                                         </p>
                                     </div>
                                 </div>

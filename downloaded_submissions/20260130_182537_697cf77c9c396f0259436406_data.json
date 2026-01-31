@@ -1,0 +1,27 @@
+{
+  "verificationId": "697cf77c9c396f0259436406",
+  "timestamp": "20260130_182537",
+  "student": {
+    "firstName": "William",
+    "lastName": "Williams",
+    "email": "williamw@psu.edu",
+    "birthDate": "2003-12-10"
+  },
+  "university": {
+    "id": 2565,
+    "idExtended": null,
+    "name": "Pennsylvania State University-Main Campus (University Park, PA)",
+    "country": "US"
+  },
+  "documents": [
+    {
+      "type": "id_card",
+      "fileName": "lionpath_william_williams_1769797534118.png"
+    },
+    {
+      "type": "class_schedule",
+      "fileName": "lionpath_william_williams_1769797537337.png"
+    }
+  ],
+  "provider": "lionpath"
+}

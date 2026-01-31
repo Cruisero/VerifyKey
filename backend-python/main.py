@@ -25,6 +25,7 @@ from verifier import SheerIDVerifier, parse_verification_id, poll_verification_s
 from doc_generator import generate_document
 from puppeteer_doc_generator import generate_document_puppeteer
 from lionpath_generator import generate_lionpath_image, generate_psu_email, get_available_templates
+from uiuc_generator import generate_uiuc_image, generate_uiuc_email, get_available_templates as get_uiuc_templates
 from sheerid_generator import generate_document as generate_document_sheerid
 from vsid_generator import generate_vsid_document, get_available_document_types as get_vsid_document_types
 import auth
@@ -294,6 +295,44 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             
             if not documents:
                 print(f"[Verify] ❌ No VSID documents generated")
+        
+        # Use UIUC Generator (University of Illinois Urbana-Champaign i-card)
+        elif provider == "uiuc":
+            uiuc_config = config.get("aiGenerator", {}).get("uiuc", {})
+            templates = uiuc_config.get("templates", ["uiuc_id_card.html"])
+            
+            # For UIUC mode, always use University of Illinois Urbana-Champaign
+            org = {
+                "id": 4836,  # UIUC ID in SheerID
+                "idExtended": None,
+                "name": "University of Illinois Urbana-Champaign",
+                "country": "US",
+                "domain": "illinois.edu"
+            }
+            print(f"[Verify] UIUC mode: Using University of Illinois Urbana-Champaign")
+            
+            # Update verifier with UIUC org
+            verifier.org = org
+            email = generate_uiuc_email(first, last)
+            verifier.student_info["email"] = email
+            
+            print(f"[Verify] Generating UIUC i-card for {first} {last}...")
+            
+            documents = []
+            for tmpl in templates:
+                try:
+                    print(f"[Verify] Generating UIUC document: {tmpl}...")
+                    d_data, d_filename, student_data = generate_uiuc_image(
+                        first, last, template_name=tmpl
+                    )
+                    if d_data:
+                        documents.append({"type": "id_card", "data": d_data, "fileName": d_filename, "mimeType": "image/png"})
+                        print(f"[Verify] ✓ Generated UIUC i-card: {d_filename}")
+                except Exception as e:
+                    print(f"[Verify] ⚠️ Failed to generate UIUC template {tmpl}: {e}")
+            
+            if not documents:
+                print(f"[Verify] ❌ No UIUC documents generated")
         
         # Use Puppeteer if configured
         elif provider == "puppeteer":
@@ -639,6 +678,15 @@ async def get_vsid_doctypes_endpoint():
     }
 
 
+@app.get("/api/uiuc-templates")
+async def get_uiuc_templates_endpoint():
+    """Get available UIUC HTML templates"""
+    templates = get_uiuc_templates()
+    return {
+        "templates": templates
+    }
+
+
 class TestDocumentRequest(BaseModel):
     provider: str = "puppeteer"
     firstName: Optional[str] = None
@@ -893,6 +941,64 @@ async def test_document_generation(request: TestDocumentRequest):
                 return {
                     "success": False,
                     "message": "Failed to generate any VSID documents"
+                }
+        
+        # Use UIUC Generator (University of Illinois Urbana-Champaign i-card)
+        elif provider == "uiuc":
+            uiuc_config = config.get("aiGenerator", {}).get("uiuc", {})
+            templates = uiuc_config.get("templates", ["uiuc_id_card.html"])
+            
+            # Force UIUC university for test
+            university = "University of Illinois Urbana-Champaign"
+            
+            print(f"[TestDoc] Using UIUC generator with templates: {templates}...")
+            
+            images = []
+            first_student_data = None
+            
+            for tmpl in templates:
+                try:
+                    print(f"[TestDoc] Generating UIUC document: {tmpl}...")
+                    d_data, d_filename, student_data = generate_uiuc_image(
+                        first, last, template_name=tmpl
+                    )
+                    if d_data:
+                        image_base64 = base64.b64encode(d_data).decode('utf-8')
+                        images.append({
+                            "type": "id_card",
+                            "image": f"data:image/png;base64,{image_base64}",
+                            "filename": d_filename,
+                            "template": tmpl
+                        })
+                        if first_student_data is None:
+                            first_student_data = student_data
+                        print(f"[TestDoc] ✓ Generated UIUC i-card: {d_filename}")
+                except Exception as e:
+                    print(f"[TestDoc] ⚠️ Failed to generate UIUC template {tmpl}: {e}")
+            
+            if images and first_student_data:
+                provider_note = f"""🎓 UIUC i-card 文档生成
+📄 模板: {', '.join([img['template'] for img in images])}
+👤 姓名: {first_student_data.get('fullName', 'N/A')}
+🆔 UIU: {first_student_data.get('uiu', 'N/A')}
+📚 Library: {first_student_data.get('library', 'N/A')}
+💳 Card: {first_student_data.get('card', 'N/A')}
+📅 Expires: {first_student_data.get('card_expires', 'N/A')}
+🏫 大学: {first_student_data.get('university', 'N/A')}"""
+                
+                return {
+                    "success": True,
+                    "provider": "uiuc",
+                    "providerNote": provider_note,
+                    "images": images,
+                    "image": images[0]["image"],
+                    "formData": first_student_data,
+                    "filename": images[0]["filename"]
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Failed to generate any UIUC documents"
                 }
         
         elif provider == "puppeteer":

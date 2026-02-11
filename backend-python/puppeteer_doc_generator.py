@@ -159,7 +159,8 @@ def generate_student_id_puppeteer(
     gender: str = "any",
     photo_path: str = None,
     save_form_data: bool = True,
-    template: str = None
+    template: str = None,
+    format: str = "jpeg"
 ) -> Tuple[Optional[bytes], Optional[str], Optional[Dict]]:
     """
     Generate student ID card using Puppeteer HTML template renderer
@@ -215,7 +216,8 @@ def generate_student_id_puppeteer(
     # Generate unique output filename
     timestamp = int(time.time() * 1000)
     safe_name = f"{first}_{last}".lower().replace(" ", "_")
-    output_filename = f"id_{safe_name}_{timestamp}.jpg"
+    ext = "pdf" if format == "pdf" else "jpg"
+    output_filename = f"id_{safe_name}_{timestamp}.{ext}"
     output_path = OUTPUT_DIR / output_filename
     
     # Ensure output directory exists
@@ -234,7 +236,7 @@ def generate_student_id_puppeteer(
         f"--year={academic_year}",
         f"--gender={gender}",
         f"--output={output_path}",
-        "--format=jpeg",
+        f"--format={format}",
         "--quality=95"
     ]
     
@@ -342,7 +344,8 @@ def generate_document_puppeteer(
     birth_date: str = None,
     gender: str = "any",
     template: str = "student-id-generator.html",
-    use_gemini_photo: bool = True
+    use_gemini_photo: bool = True,
+    format: str = "jpeg"
 ) -> Tuple[bytes, str, Dict]:
     """
     Generate verification document using Puppeteer
@@ -375,7 +378,8 @@ def generate_document_puppeteer(
         birth_date=birth_date,
         gender=gender,
         save_form_data=True,
-        template=template
+        template=template,
+        format=format
     )
     
     if image_bytes:

@@ -17,7 +17,7 @@
  *   --year="2025"            学年
  *   --photo="path/to/photo"  照片路径 (可选，支持本地路径或URL)
  *   --output="output.jpg"    输出文件路径
- *   --format=jpeg|png        输出格式 (默认: jpeg)
+ *   --format=jpeg|png|pdf    输出格式 (默认: jpeg)
  *   --quality=95             JPEG 质量 (1-100, 默认: 95)
  *   --scale=4                截图缩放倍数 (默认: 4)
  * 
@@ -576,7 +576,8 @@ class StudentIdGenerator {
         if (!outputPath) {
             const timestamp = Date.now();
             const safeName = data.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            outputPath = path.join(config.outputDir, `id_${safeName}_${timestamp}.${config.format === 'png' ? 'png' : 'jpg'}`);
+            const ext = config.format === 'png' ? 'png' : config.format === 'pdf' ? 'pdf' : 'jpg';
+            outputPath = path.join(config.outputDir, `id_${safeName}_${timestamp}.${ext}`);
         }
 
         // Ensure output directory exists
@@ -623,6 +624,7 @@ class StudentIdGenerator {
                 // Detect template by checking for specific elements
                 if (document.getElementById('receiptPreview')) return 'fee-receipt';
                 if (document.getElementById('demandLetterPreview')) return 'demand-letter';
+                if (document.getElementById('enrollmentVerifyPreview')) return 'enrollment-verify';
                 if (document.getElementById('idCardPreview')) return 'student-id';
                 return 'unknown';
             });
@@ -638,8 +640,28 @@ class StudentIdGenerator {
                 await page.evaluate((studentData) => {
                     const setTextById = (id, text) => {
                         const el = document.getElementById(id);
-                        if (el) el.textContent = text;
+                        if (el) {
+                            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                                el.value = text;
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                            } else {
+                                el.textContent = text;
+                            }
+                        }
                     };
+
+                    // Seal & Signature
+                    const uniName = studentData.university || 'ROORKEE INSTITUTE OF TECHNOLOGY';
+                    setTextById('sealTextInput', uniName.toUpperCase());
+
+                    // Signatory (random name if not provided)
+                    const indianFirstNames = ['Rajesh', 'Suresh', 'Ramesh', 'Mahesh', 'Uttam', 'Dinesh', 'Rakesh', 'Mukesh', 'Anil', 'Vijay', 'Sanjay', 'Deepak', 'Ashok', 'Sunil', 'Mohan', 'S. K.'];
+                    const indianLastNames = ['Sharma', 'Patel', 'Singh', 'Kumar', 'Verma', 'Gupta', 'Joshi', 'Mishra', 'Yadav', 'Chauhan', 'Modak', 'Das', 'Reddy', 'Nair', 'Iyer'];
+
+                    const sigFirst = indianFirstNames[Math.floor(Math.random() * indianFirstNames.length)];
+                    const sigLast = indianLastNames[Math.floor(Math.random() * indianLastNames.length)];
+                    const sigName = studentData.signatory || `${sigFirst} ${sigLast}`;
+                    setTextById('signatoryNameInput', sigName);
 
                     // Generate date (random within last 60 days)
                     const now = new Date();
@@ -656,8 +678,6 @@ class StudentIdGenerator {
                     setTextById('cardStudentName', `${prefix} ${fullName}`);
 
                     // Father/Guardian name
-                    const indianLastNames = ['Sharma', 'Patel', 'Singh', 'Kumar', 'Verma', 'Gupta', 'Joshi', 'Mishra', 'Yadav', 'Chauhan', 'Modak', 'Das', 'Reddy', 'Nair', 'Iyer'];
-                    const indianFirstNames = ['Rajesh', 'Suresh', 'Ramesh', 'Mahesh', 'Uttam', 'Dinesh', 'Rakesh', 'Mukesh', 'Anil', 'Vijay', 'Sanjay', 'Deepak', 'Ashok', 'Sunil', 'Mohan'];
                     const fatherFirst = indianFirstNames[Math.floor(Math.random() * indianFirstNames.length)];
                     // Try to use same last name as student
                     const nameParts = fullName.split(' ');
@@ -721,6 +741,81 @@ class StudentIdGenerator {
                     const students = offers + Math.floor(Math.random() * 80) + 20;
                     setTextById('cardPlacementOffers', offers.toString());
                     setTextById('cardPlacementStudents', students.toString());
+                }, data);
+
+            } else if (templateType === 'enrollment-verify') {
+                // Fill enrollment verification certificate data
+                console.log('[Generator] Filling enrollment verification data...');
+
+                await page.evaluate((data) => {
+                    function setInputValue(id, value) {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.value = value;
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    }
+
+                    // Generate transaction ID (9 digits)
+                    const transactionId = '0' + Math.floor(10000000 + Math.random() * 90000000).toString();
+
+                    // Generate notification date (random date in last 2 years)
+                    const now = new Date();
+                    const notifyDate = new Date(now.getTime() - Math.random() * 365 * 2 * 24 * 60 * 60 * 1000);
+                    const notifyStr = `${(notifyDate.getMonth() + 1).toString().padStart(2, '0')}/${notifyDate.getDate().toString().padStart(2, '0')}/${notifyDate.getFullYear()} ${notifyDate.getHours()}:${notifyDate.getMinutes().toString().padStart(2, '0')}  EST`;
+
+                    // Generate graduation date (2-4 years from now)
+                    // OnepassHTML rule: graduation year must be between 2027-2029
+                    const gradYear = 2027 + Math.floor(Math.random() * 3);
+                    const gradMonth = (Math.floor(Math.random() * 12) + 1).toString().padStart(2, '0');
+                    const gradDay = (Math.floor(Math.random() * 28) + 1).toString().padStart(2, '0');
+                    const gradDate = `${gradMonth}/${gradDay}/${gradYear}`;
+
+                    // Set main fields
+                    setInputValue('studentNameInput', data.name);
+                    setInputValue('universityNameInput', data.university.toUpperCase());
+                    setInputValue('transactionIdInput', transactionId);
+                    setInputValue('dateNotifiedInput', notifyStr);
+                    setInputValue('gradDateInput', gradDate);
+
+                    // Generate enrollment records - 3 semesters
+                    const records = document.querySelectorAll('.enrollment-record');
+                    const baseYear = notifyDate.getFullYear();
+
+                    const semesters = [
+                        { startMonth: 8, startDay: 24, endMonth: 12, endDay: 10 },  // Fall
+                        { startMonth: 1, startDay: 13, endMonth: 5, endDay: 7 },     // Spring
+                        { startMonth: 8, startDay: 26, endMonth: 12, endDay: 12 },   // Previous Fall
+                    ];
+
+                    records.forEach((rec, i) => {
+                        const sem = semesters[i];
+                        const year = i < 2 ? baseYear : baseYear - 1;
+                        const certYear = i < 2 ? baseYear : baseYear - 1;
+
+                        const startStr = `${sem.startMonth.toString().padStart(2, '0')}/${sem.startDay.toString().padStart(2, '0')}/${year}`;
+                        const endStr = `${sem.endMonth.toString().padStart(2, '0')}/${sem.endDay.toString().padStart(2, '0')}/${year}`;
+
+                        // Effective date is always the initial enrollment date
+                        const effectiveStr = `${semesters[2].startMonth.toString().padStart(2, '0')}/${semesters[2].startDay.toString().padStart(2, '0')}/${baseYear - 1}`;
+
+                        // Certified date is shortly after the term end
+                        const certDate = new Date(year, sem.endMonth - 1, sem.endDay);
+                        certDate.setDate(certDate.getDate() + Math.floor(Math.random() * 14));
+                        const certStr = `${(certDate.getMonth() + 1).toString().padStart(2, '0')}/${certDate.getDate().toString().padStart(2, '0')}/${certDate.getFullYear()}`;
+
+                        rec.querySelector('.rec-start').value = startStr;
+                        rec.querySelector('.rec-end').value = endStr;
+                        rec.querySelector('.rec-effective').value = effectiveStr;
+                        rec.querySelector('.rec-certified').value = certStr;
+                    });
+
+                    // Update the copyright year
+                    const yearEl = document.getElementById('certYear');
+                    if (yearEl) yearEl.textContent = notifyDate.getFullYear().toString();
+
+                    // Trigger a final preview update
+                    if (typeof updatePreview === 'function') updatePreview();
                 }, data);
 
             } else if (templateType === 'fee-receipt') {
@@ -1070,23 +1165,63 @@ class StudentIdGenerator {
             await new Promise(resolve => setTimeout(resolve, 500));
 
             // Capture the document element based on template type
-            console.log('[Generator] Capturing screenshot...');
+            console.log(`[Generator] Capturing ${config.format.toUpperCase()}...`);
 
-            // Select the correct element based on template type
-            const previewSelector = templateType === 'fee-receipt' ? '#receiptPreview' : templateType === 'demand-letter' ? '#demandLetterPreview' : '#idCardPreview';
-            const cardElement = await page.$(previewSelector);
+            if (config.format === 'pdf') {
+                // PDF output using Puppeteer's page.pdf()
+                const previewSelector = templateType === 'fee-receipt' ? '#receiptPreview' : templateType === 'demand-letter' ? '#demandLetterPreview' : templateType === 'enrollment-verify' ? '#enrollmentVerifyPreview' : '#idCardPreview';
+                const cardElement = await page.$(previewSelector);
+                if (!cardElement) {
+                    throw new Error(`Could not find preview element (${previewSelector})`);
+                }
+                const box = await cardElement.boundingBox();
 
-            if (!cardElement) {
-                throw new Error(`Could not find preview element (${previewSelector})`);
+                // Replace the entire body with ONLY the preview element
+                await page.evaluate((selector) => {
+                    const preview = document.querySelector(selector);
+                    if (preview) {
+                        // Clone the preview so we keep all styles inline
+                        const clone = preview.cloneNode(true);
+                        // Reset any transform/scale applied by the editor
+                        clone.style.transform = 'none';
+                        clone.style.margin = '0';
+                        clone.style.boxShadow = 'none';
+                        clone.style.position = 'relative';
+
+                        // Replace body content entirely
+                        document.body.innerHTML = '';
+                        document.body.appendChild(clone);
+                        document.body.style.margin = '0';
+                        document.body.style.padding = '0';
+                        document.body.style.background = 'white';
+                    }
+                }, previewSelector);
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                await page.pdf({
+                    path: outputPath,
+                    width: `${Math.ceil(box.width) + 20}px`,
+                    height: `${Math.ceil(box.height) + 20}px`,
+                    printBackground: true,
+                    margin: { top: 10, right: 10, bottom: 10, left: 10 }
+                });
+            } else {
+                // Image output (JPEG/PNG)
+                const previewSelector = templateType === 'fee-receipt' ? '#receiptPreview' : templateType === 'demand-letter' ? '#demandLetterPreview' : templateType === 'enrollment-verify' ? '#enrollmentVerifyPreview' : '#idCardPreview';
+                const cardElement = await page.$(previewSelector);
+
+                if (!cardElement) {
+                    throw new Error(`Could not find preview element (${previewSelector})`);
+                }
+
+                await cardElement.screenshot({
+                    path: outputPath,
+                    type: config.format === 'png' ? 'png' : 'jpeg',
+                    quality: config.format === 'png' ? undefined : config.quality,
+                    captureBeyondViewport: true
+                });
             }
-
-            // Take screenshot
-            await cardElement.screenshot({
-                path: outputPath,
-                type: config.format === 'png' ? 'png' : 'jpeg',
-                quality: config.format === 'png' ? undefined : config.quality,
-                captureBeyondViewport: true
-            });
 
             console.log(`[Generator] ✓ Saved: ${outputPath}`);
 
@@ -1153,7 +1288,7 @@ Options:
   --year="2025"            学年
   --photo="path/to/photo"  照片路径 (支持本地路径或URL)
   --output="output.jpg"    输出文件路径
-  --format=jpeg|png        输出格式 (默认: jpeg)
+  --format=jpeg|png|pdf    输出格式 (默认: jpeg)
   --quality=95             JPEG 质量 (1-100, 默认: 95)
   --scale=4                截图缩放倍数 (默认: 4)
   --help                   显示帮助信息
@@ -1203,21 +1338,31 @@ Examples:
 
     // Handle custom template
     if (args.template) {
-        // Check multiple possible template directories
-        const possibleDirs = [
-            '/templates',                              // Docker: /templates/
-            path.join(__dirname, '../templates')       // Local: ../templates/
-        ];
-
         let templateFound = false;
-        for (const dir of possibleDirs) {
-            const templatePath = path.join(dir, args.template);
-            if (fs.existsSync(templatePath)) {
-                options.template = templatePath;
-                console.log(`[Generator] Using custom template: ${args.template}`);
-                console.log(`[Generator] Template path: ${templatePath}`);
-                templateFound = true;
-                break;
+
+        // If absolute path is provided and file exists, use it directly
+        if (path.isAbsolute(args.template) && fs.existsSync(args.template)) {
+            options.template = args.template;
+            console.log(`[Generator] Using absolute template path: ${args.template}`);
+            templateFound = true;
+        }
+
+        // Otherwise, check multiple possible template directories
+        if (!templateFound) {
+            const possibleDirs = [
+                '/templates',                              // Docker: /templates/
+                path.join(__dirname, '../templates')       // Local: ../templates/
+            ];
+
+            for (const dir of possibleDirs) {
+                const templatePath = path.join(dir, args.template);
+                if (fs.existsSync(templatePath)) {
+                    options.template = templatePath;
+                    console.log(`[Generator] Using custom template: ${args.template}`);
+                    console.log(`[Generator] Template path: ${templatePath}`);
+                    templateFound = true;
+                    break;
+                }
             }
         }
 

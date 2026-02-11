@@ -370,16 +370,26 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             
             print(f"[Verify] OnepassHTML mode: Generating with templates: {templates}")
             
+            # Resolve OnepassHTML template directory
+            from pathlib import Path
+            onepasshtml_dir = None
+            for p in [Path("/app/templates/OnepassHTML"), Path(__file__).parent / "templates" / "OnepassHTML"]:
+                if p.exists():
+                    onepasshtml_dir = p
+                    break
+            
             documents = []
             for tmpl in templates:
                 try:
-                    print(f"[Verify] Generating OnepassHTML document: {tmpl}...")
+                    # Build full path to template
+                    tmpl_path = str(onepasshtml_dir / tmpl) if onepasshtml_dir else tmpl
+                    print(f"[Verify] Generating OnepassHTML document: {tmpl} (path: {tmpl_path})...")
                     d_data, d_filename, form_data = generate_document_puppeteer(
                         "other",
                         first, last, org["name"],
                         country=org.get("country", "IN"),
                         gender="any",
-                        template=tmpl,
+                        template=tmpl_path,
                         use_gemini_photo=False
                     )
                     if d_data:
@@ -747,17 +757,26 @@ async def get_uiuc_templates_endpoint():
 
 @app.get("/api/onepasshtml-templates")
 async def get_onepasshtml_templates_endpoint():
-    """Get available OnepassHTML templates (fixed-school templates from templates/ root)"""
-    import config_manager
-    all_templates = config_manager.get_available_templates()
-    # OnepassHTML uses templates from the same root directory
-    # Return all templates; the frontend allows multi-select
-    return {
-        "templates": [{
-            "filename": t["filename"],
-            "label": t["name"]
-        } for t in all_templates]
-    }
+    """Get available OnepassHTML templates (fixed-school templates from backend-python/templates/OnepassHTML/)"""
+    from pathlib import Path
+    
+    # Scan OnepassHTML template directory
+    possible_paths = [
+        Path("/app/templates/OnepassHTML"),  # Docker
+        Path(__file__).parent / "templates" / "OnepassHTML"  # Local
+    ]
+    
+    templates = []
+    for tmpl_dir in possible_paths:
+        if tmpl_dir.exists():
+            for file in tmpl_dir.glob("*.html"):
+                templates.append({
+                    "filename": file.name,
+                    "label": file.stem.replace("-", " ").replace("_", " ").title()
+                })
+            break
+    
+    return {"templates": templates}
 
 
 class TestDocumentRequest(BaseModel):
@@ -1092,18 +1111,27 @@ async def test_document_generation(request: TestDocumentRequest):
             
             print(f"[TestDoc] OnepassHTML mode with templates: {templates}, university: {university}")
             
+            # Resolve OnepassHTML template directory
+            from pathlib import Path
+            onepasshtml_dir = None
+            for p in [Path("/app/templates/OnepassHTML"), Path(__file__).parent / "templates" / "OnepassHTML"]:
+                if p.exists():
+                    onepasshtml_dir = p
+                    break
+            
             images = []
             first_form_data = None
             
             for tmpl in templates:
                 try:
-                    print(f"[TestDoc] Generating OnepassHTML document: {tmpl}...")
+                    tmpl_path = str(onepasshtml_dir / tmpl) if onepasshtml_dir else tmpl
+                    print(f"[TestDoc] Generating OnepassHTML document: {tmpl} (path: {tmpl_path})...")
                     d_data, d_filename, form_data = generate_document_puppeteer(
                         "other",
                         first, last, university,
                         country="IN",
                         gender=gender,
-                        template=tmpl,
+                        template=tmpl_path,
                         use_gemini_photo=False
                     )
                     if d_data:

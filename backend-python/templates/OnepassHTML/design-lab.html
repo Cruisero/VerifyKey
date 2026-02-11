@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stamp Design Lab</title>
+    <!-- Importing a few messy handwriting fonts to try -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Nothing+You+Could+Do&family=Permanent+Marker&family=Rock+Salt&family=Reenie+Beanie&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            border: 1px solid #ccc;
+            padding: 50px;
+            background: white;
+            position: relative;
+        }
+
+        .label {
+            font-weight: bold;
+            font-size: 16px;
+            text-transform: uppercase;
+            font-family: Arial, sans-serif;
+            margin-bottom: 30px;
+            color: black;
+        }
+
+        .signature-area {
+            position: relative;
+            width: 300px;
+            height: 150px;
+        }
+
+        .signature {
+            font-family: 'Nothing You Could Do', cursive;
+            font-size: 40px;
+            color: #000000;
+            /* Black Ink */
+            position: absolute;
+            top: 20px;
+            left: 0;
+            z-index: 2;
+            transform: rotate(-5deg);
+            opacity: 0.85;
+        }
+
+        .stamp-container {
+            position: absolute;
+            top: -10px;
+            left: 60px;
+            z-index: 1;
+            transform: rotate(-12deg);
+            opacity: 0.85;
+            mix-blend-mode: multiply;
+            /* Blends like real ink */
+        }
+
+        /* SVG Stamp Styling */
+        .st0 {
+            fill: none;
+            stroke: #283593;
+            stroke-width: 2;
+        }
+
+        /* Outer Circle */
+        .st1 {
+            fill: none;
+            stroke: #283593;
+            stroke-width: 1;
+        }
+
+        /* Inner Circle */
+        .st2 {
+            font-family: 'Arial Black', sans-serif;
+            font-weight: 900;
+            fill: #283593;
+            font-size: 10px;
+        }
+
+        /* Text */
+
+        /* Ink Texture Filter */
+        .ink-texture {
+            filter: url(#rough-paper);
+        }
+
+        .signatory-label {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            font-size: 14px;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="label">AUTHORISED SIGNATORY</div>
+
+        <div class="signature-area">
+            <!-- Signature -->
+            <div class="signature">R. Sharma</div>
+
+            <!-- Stamp -->
+            <div class="stamp-container">
+                <svg width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg"
+                    class="ink-texture">
+                    <defs>
+                        <!-- Filter to create rough ink/paper texture -->
+                        <filter id="rough-paper">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" />
+                        </filter>
+
+                        <!-- Text Paths -->
+                        <path id="outerCircle" d="M 70, 70 m -55, 0 a 55,55 0 1,1 110,0 a 55,55 0 1,1 -110,0" />
+                        <path id="innerCircle" d="M 70, 70 m -38, 0 a 38,38 0 1,1 76,0 a 38,38 0 1,1 -76,0" />
+                    </defs>
+
+                    <!-- Circles -->
+                    <circle cx="70" cy="70" r="54" class="st0" />
+                    <circle cx="70" cy="70" r="40" class="st1" />
+
+                    <!-- Text on Path: Institute Name -->
+                    <text class="st2" font-size="9.5" letter-spacing="0.5">
+                        <textPath href="#outerCircle" startOffset="50%" text-anchor="middle" side="right">
+                            ROORKEE INSTITUTE OF TECHNOLOGY
+                        </textPath>
+                    </text>
+
+                    <!-- Inner Text: Location -->
+                    <text x="70" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold"
+                        font-size="10" fill="#283593">
+                        ROORKEE
+                    </text>
+
+                    <!-- Estd Text -->
+                    <text x="70" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-size="7"
+                        fill="#283593">
+                        ESTD 2005
+                    </text>
+                </svg>
+            </div>
+
+            <div class="signatory-label">(Authorized Signatory)</div>
+        </div>
+    </div>
+
+</body>
+
+</html>

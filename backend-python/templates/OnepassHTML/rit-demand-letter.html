@@ -9,7 +9,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nothing+You+Could+Do&display=swap" rel="stylesheet">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Nothing+You+Could+Do&display=swap');
+
         body {
             font-family: 'Inter', sans-serif;
         }
@@ -321,10 +326,12 @@
             border-radius: 3px;
             outline: none;
             -webkit-appearance: none;
+            appearance: none;
         }
 
         .processing-controls input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
+            appearance: none;
             width: 16px;
             height: 16px;
             background: white;
@@ -446,6 +453,26 @@
                             class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Students
                             Participated</label>
                         <input type="text" id="placementStudentsInput" value="350"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signature & Seal Info -->
+            <div class="space-y-4">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide border-b pb-2">Signature & Seal</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="signatoryNameInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Signatory
+                            Name</label>
+                        <input type="text" id="signatoryNameInput" value="S. K. Gupta"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                    <div>
+                        <label for="sealTextInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Seal Text</label>
+                        <input type="text" id="sealTextInput" value="ROORKEE INSTITUTE OF TECHNOLOGY"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
                     </div>
                 </div>
@@ -683,303 +710,373 @@
                         </table>
                     </div>
 
+
                     <!-- Signature Section -->
-                    <div class="signature-section">
-                        <p style="font-weight: bold; font-size: 13px;">AUTHORISED SIGNATORY</p>
-                        <div class="signature-stamp">
-                            <div class="stamp-circle">
-                                <span>ROORKEE<br>INSTITUTE OF<br>TECHNOLOGY</span>
+                    <div class="signature-section" style="position: relative; height: 120px; margin-top: 40px;">
+                        <!-- Label -->
+                        <div
+                            style="font-weight: bold; font-size: 14px; text-transform: uppercase; font-family: Arial, sans-serif; color: black; margin-bottom: 20px;">
+                            AUTHORISED SIGNATORY
+                        </div>
+
+                        <div style="position: relative; width: 300px; height: 100px;">
+                            <!-- Signature -->
+                            <div style="font-family: 'Nothing You Could Do', cursive; font-size: 32px; color: #000000; position: absolute; top: 10px; left: 0; z-index: 2; transform: rotate(-5deg); opacity: 0.85;"
+                                id="signatureText">
+                                S. K. Gupta
                             </div>
-                            <div class="signature-text">(Authorized Signatory)</div>
+
+                            <!-- Realistic SVG Stamp -->
+                            <div class="signature-stamp"
+                                style="position: absolute; top: -20px; left: 50px; transform: rotate(-12deg); opacity: 0.85; mix-blend-mode: multiply; z-index: 1;">
+                                <svg width="120" height="120" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg"
+                                    style="filter: url(#rough-paper);">
+                                    <defs>
+                                        <!-- Filter to create rough ink/paper texture -->
+                                        <filter id="rough-paper">
+                                            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3"
+                                                result="noise" />
+                                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" />
+                                        </filter>
+
+                                        <!-- Text Paths -->
+                                        <path id="outerCircle"
+                                            d="M 70, 70 m -55, 0 a 55,55 0 1,1 110,0 a 55,55 0 1,1 -110,0" />
+                                    </defs>
+
+                                    <!-- Circles -->
+                                    <circle cx="70" cy="70" r="54" fill="none" stroke="#283593" stroke-width="2" />
+                                    <circle cx="70" cy="70" r="40" fill="none" stroke="#283593" stroke-width="1" />
+
+                                    <!-- Text on Path: Institute Name -->
+                                    <text font-family="'Arial Black', sans-serif" font-weight="900" fill="#283593"
+                                        font-size="9.5" letter-spacing="0.5">
+                                        <textPath href="#outerCircle" startOffset="50%" text-anchor="middle"
+                                            side="right" id="stampTextPath">
+                                            ROORKEE INSTITUTE OF TECHNOLOGY
+                                        </textPath>
+                                    </text>
+
+                                    <!-- Inner Text: Location -->
+                                    <text x="70" y="75" text-anchor="middle" font-family="Arial, sans-serif"
+                                        font-weight="bold" font-size="10" fill="#283593">
+                                        ROORKEE
+                                    </text>
+
+                                    <!-- Estd Text -->
+                                    <text x="70" y="85" text-anchor="middle" font-family="Arial, sans-serif"
+                                        font-size="7" fill="#283593">
+                                        ESTD 2005
+
+                                        <!-- Bottom Label -->
+                                        <div class="signature-text"
+                                            style="position: absolute; bottom: 10px; left: 0; font-size: 13px; font-weight: bold; font-family: Arial, sans-serif; color: #000000; z-index: 10;">
+                                            (Authorized Signatory)</div>
+                            </div>
+                        </div>
+
+                        <!-- Footer Motto -->
+                        <div class="footer-motto">
+                            "Transforming Aspirations into Achievements"
                         </div>
                     </div>
-
-                    <!-- Footer Motto -->
-                    <div class="footer-motto">
-                        "Transforming Aspirations into Achievements"
-                    </div>
                 </div>
-            </div>
 
-            <!-- Download Buttons -->
-            <div class="flex gap-4 mt-6">
-                <button id="downloadPngButton" class="modern-button flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd"
-                            d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                            clip-rule="evenodd" />
-                    </svg>
-                    Download PNG
-                </button>
-                <button id="downloadJpegButton" class="modern-button success flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd"
-                            d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
-                            clip-rule="evenodd" />
-                    </svg>
-                    Download JPEG
-                </button>
-                <button id="downloadPdfButton" class="modern-button flex items-center justify-center gap-2"
-                    style="border-color: #e11d48; color: #e11d48; box-shadow: 0 4px #be123c;">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd"
-                            d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-                            clip-rule="evenodd" />
-                    </svg>
-                    Download PDF
-                </button>
+                <!-- Download Buttons -->
+                <div class="flex gap-4 mt-6">
+                    <button id="downloadPngButton" class="modern-button flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd"
+                                d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        Download PNG
+                    </button>
+                    <button id="downloadJpegButton"
+                        class="modern-button success flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd"
+                                d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        Download JPEG
+                    </button>
+                    <button id="downloadPdfButton" class="modern-button flex items-center justify-center gap-2"
+                        style="border-color: #e11d48; color: #e11d48; box-shadow: 0 4px #be123c;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd"
+                                d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        Download PDF
+                    </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-3 text-center">JPEG with post-processing for realistic scanned look
+                </p>
             </div>
-            <p class="text-xs text-gray-400 mt-3 text-center">JPEG with post-processing for realistic scanned look</p>
         </div>
-    </div>
 
-    <script>
-        // ============================================
-        // POST-PROCESSING FUNCTIONS
-        // ============================================
+        <script>
+            // ============================================
+            // POST-PROCESSING FUNCTIONS
+            // ============================================
 
-        function addNoise(ctx, width, height, intensity) {
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const noise = (Math.random() + Math.random() + Math.random() - 1.5) * intensity;
-                data[i] = Math.max(0, Math.min(255, data[i] + noise));
-                data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
-                data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+            function addNoise(ctx, width, height, intensity) {
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    const noise = (Math.random() + Math.random() + Math.random() - 1.5) * intensity;
+                    data[i] = Math.max(0, Math.min(255, data[i] + noise));
+                    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+                    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+                }
+                ctx.putImageData(imageData, 0, 0);
             }
-            ctx.putImageData(imageData, 0, 0);
-        }
 
-        function adjustBrightnessContrast(ctx, width, height, brightness, contrast) {
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-            for (let i = 0; i < data.length; i += 4) {
-                data[i] = Math.max(0, Math.min(255, factor * (data[i] - 128) + 128 + brightness));
-                data[i + 1] = Math.max(0, Math.min(255, factor * (data[i + 1] - 128) + 128 + brightness));
-                data[i + 2] = Math.max(0, Math.min(255, factor * (data[i + 2] - 128) + 128 + brightness));
+            function adjustBrightnessContrast(ctx, width, height, brightness, contrast) {
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+                const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = Math.max(0, Math.min(255, factor * (data[i] - 128) + 128 + brightness));
+                    data[i + 1] = Math.max(0, Math.min(255, factor * (data[i + 1] - 128) + 128 + brightness));
+                    data[i + 2] = Math.max(0, Math.min(255, factor * (data[i + 2] - 128) + 128 + brightness));
+                }
+                ctx.putImageData(imageData, 0, 0);
             }
-            ctx.putImageData(imageData, 0, 0);
-        }
 
-        function applyHueShift(ctx, width, height, degrees) {
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            const angle = degrees * Math.PI / 180;
-            const cosA = Math.cos(angle);
-            const sinA = Math.sin(angle);
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i], g = data[i + 1], b = data[i + 2];
-                data[i] = Math.max(0, Math.min(255, r * cosA + g * sinA * 0.3));
-                data[i + 1] = Math.max(0, Math.min(255, g * cosA + b * sinA * 0.3));
-                data[i + 2] = Math.max(0, Math.min(255, b * cosA + r * sinA * 0.3));
+            function applyHueShift(ctx, width, height, degrees) {
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+                const angle = degrees * Math.PI / 180;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i], g = data[i + 1], b = data[i + 2];
+                    data[i] = Math.max(0, Math.min(255, r * cosA + g * sinA * 0.3));
+                    data[i + 1] = Math.max(0, Math.min(255, g * cosA + b * sinA * 0.3));
+                    data[i + 2] = Math.max(0, Math.min(255, b * cosA + r * sinA * 0.3));
+                }
+                ctx.putImageData(imageData, 0, 0);
             }
-            ctx.putImageData(imageData, 0, 0);
-        }
 
-        function applyBlur(ctx, width, height, radius) {
-            if (radius < 0.5) return;
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            const copy = new Uint8ClampedArray(data);
-            const size = Math.ceil(radius);
-            const kernel = (size * 2 + 1) ** 2;
-            for (let y = size; y < height - size; y++) {
-                for (let x = size; x < width - size; x++) {
-                    let r = 0, g = 0, b = 0;
-                    for (let ky = -size; ky <= size; ky++) {
-                        for (let kx = -size; kx <= size; kx++) {
-                            const i = ((y + ky) * width + (x + kx)) * 4;
-                            r += copy[i]; g += copy[i + 1]; b += copy[i + 2];
+            function applyBlur(ctx, width, height, radius) {
+                if (radius < 0.5) return;
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+                const copy = new Uint8ClampedArray(data);
+                const size = Math.ceil(radius);
+                const kernel = (size * 2 + 1) ** 2;
+                for (let y = size; y < height - size; y++) {
+                    for (let x = size; x < width - size; x++) {
+                        let r = 0, g = 0, b = 0;
+                        for (let ky = -size; ky <= size; ky++) {
+                            for (let kx = -size; kx <= size; kx++) {
+                                const i = ((y + ky) * width + (x + kx)) * 4;
+                                r += copy[i]; g += copy[i + 1]; b += copy[i + 2];
+                            }
                         }
+                        const i = (y * width + x) * 4;
+                        data[i] = r / kernel; data[i + 1] = g / kernel; data[i + 2] = b / kernel;
                     }
-                    const i = (y * width + x) * 4;
-                    data[i] = r / kernel; data[i + 1] = g / kernel; data[i + 2] = b / kernel;
                 }
-            }
-            ctx.putImageData(imageData, 0, 0);
-        }
-
-        async function applyPostProcessing(canvas) {
-            const ctx = canvas.getContext('2d');
-            const width = canvas.width;
-            const height = canvas.height;
-            const noiseLevel = parseInt(document.getElementById('noiseLevel').value);
-            const blurLevel = parseFloat(document.getElementById('blurLevel').value) / 10;
-            const brightnessLevel = (parseInt(document.getElementById('brightnessLevel').value) - 100) * 2;
-            const contrastLevel = (parseInt(document.getElementById('contrastLevel').value) - 100) * 2;
-            const hueShift = parseInt(document.getElementById('hueShift').value);
-
-            if (blurLevel > 0) applyBlur(ctx, width, height, blurLevel);
-            if (noiseLevel > 0) addNoise(ctx, width, height, noiseLevel);
-            if (brightnessLevel !== 0 || contrastLevel !== 0) adjustBrightnessContrast(ctx, width, height, brightnessLevel, contrastLevel);
-            if (hueShift !== 0) applyHueShift(ctx, width, height, hueShift);
-
-            return canvas;
-        }
-
-        // ============================================
-        // UI FUNCTIONS
-        // ============================================
-
-        function showMessage(message, type = 'info') {
-            const existingModal = document.querySelector('.custom-modal');
-            if (existingModal) existingModal.remove();
-            const modal = document.createElement('div');
-            modal.className = `custom-modal ${type}`;
-            modal.textContent = message;
-            document.body.appendChild(modal);
-            void modal.offsetWidth;
-            modal.classList.add('show');
-            setTimeout(() => {
-                modal.classList.remove('show');
-                setTimeout(() => modal.remove(), 300);
-            }, 3000);
-        }
-
-        function updateField(inputId, ...cardIds) {
-            const inputElement = document.getElementById(inputId);
-            const update = () => {
-                cardIds.forEach(cardId => {
-                    const el = document.getElementById(cardId);
-                    if (el) el.textContent = inputElement.value;
-                });
-            };
-            update();
-            inputElement.addEventListener('input', update);
-            inputElement.addEventListener('change', update);
-        }
-
-        // Auto-calculate total
-        function updateTotal() {
-            const fees = ['academicFeeInput', 'examFeeInput', 'erpFeeInput', 'hostelFeeInput'];
-            let total = 0;
-            fees.forEach(id => {
-                const val = document.getElementById(id).value;
-                const num = parseInt(val.replace(/[^0-9]/g, '')) || 0;
-                total += num;
-            });
-            const formatted = `Rs.${total.toLocaleString('en-IN')}/-`;
-            document.getElementById('cardTotal').innerHTML = `<strong>${formatted}</strong>`;
-            document.getElementById('cardTotalPayable').innerHTML = `<strong>${formatted}</strong>`;
-        }
-
-        function setupSliderDisplays() {
-            const sliders = [
-                { id: 'noiseLevel', display: 'noiseValue' },
-                { id: 'blurLevel', display: 'blurValue', divisor: 10 },
-                { id: 'brightnessLevel', display: 'brightnessValue' },
-                { id: 'contrastLevel', display: 'contrastValue' },
-                { id: 'jpegQuality', display: 'qualityValue' },
-                { id: 'hueShift', display: 'hueValue' }
-            ];
-            sliders.forEach(({ id, display, divisor }) => {
-                const slider = document.getElementById(id);
-                const displayEl = document.getElementById(display);
-                slider.addEventListener('input', () => {
-                    displayEl.textContent = divisor ? (slider.value / divisor).toFixed(1) : slider.value;
-                });
-            });
-        }
-
-        // ============================================
-        // DOWNLOAD FUNCTIONS
-        // ============================================
-
-        async function captureDocument(format = 'jpeg') {
-            const element = document.getElementById('demandLetterPreview');
-            const canvas = await html2canvas(element, {
-                scale: 3,
-                useCORS: true,
-                backgroundColor: '#ffffff'
-            });
-
-            const enableProcessing = document.getElementById('enableProcessing').checked;
-            if (enableProcessing && format === 'jpeg') {
-                await applyPostProcessing(canvas);
+                ctx.putImageData(imageData, 0, 0);
             }
 
-            return canvas;
-        }
+            async function applyPostProcessing(canvas) {
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+                const noiseLevel = parseInt(document.getElementById('noiseLevel').value);
+                const blurLevel = parseFloat(document.getElementById('blurLevel').value) / 10;
+                const brightnessLevel = (parseInt(document.getElementById('brightnessLevel').value) - 100) * 2;
+                const contrastLevel = (parseInt(document.getElementById('contrastLevel').value) - 100) * 2;
+                const hueShift = parseInt(document.getElementById('hueShift').value);
 
-        async function downloadImage(format) {
-            showMessage(`Generating ${format.toUpperCase()}...`, 'info');
+                if (blurLevel > 0) applyBlur(ctx, width, height, blurLevel);
+                if (noiseLevel > 0) addNoise(ctx, width, height, noiseLevel);
+                if (brightnessLevel !== 0 || contrastLevel !== 0) adjustBrightnessContrast(ctx, width, height, brightnessLevel, contrastLevel);
+                if (hueShift !== 0) applyHueShift(ctx, width, height, hueShift);
 
-            try {
-                const canvas = await captureDocument(format);
+                return canvas;
+            }
 
-                if (format === 'jpeg') {
-                    const quality = parseInt(document.getElementById('jpegQuality').value) / 100;
-                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    const link = document.createElement('a');
-                    link.download = `RIT_Demand_Letter_${Date.now()}.jpg`;
-                    link.href = dataUrl;
-                    link.click();
-                } else {
-                    const dataUrl = canvas.toDataURL('image/png');
-                    const link = document.createElement('a');
-                    link.download = `RIT_Demand_Letter_${Date.now()}.png`;
-                    link.href = dataUrl;
-                    link.click();
+            // ============================================
+            // UI FUNCTIONS
+            // ============================================
+
+            function showMessage(message, type = 'info') {
+                const existingModal = document.querySelector('.custom-modal');
+                if (existingModal) existingModal.remove();
+                const modal = document.createElement('div');
+                modal.className = `custom-modal ${type}`;
+                modal.textContent = message;
+                document.body.appendChild(modal);
+                void modal.offsetWidth;
+                modal.classList.add('show');
+                setTimeout(() => {
+                    modal.classList.remove('show');
+                    setTimeout(() => modal.remove(), 300);
+                }, 3000);
+            }
+
+            function updateField(inputId, ...cardIds) {
+                const inputElement = document.getElementById(inputId);
+                const update = () => {
+                    cardIds.forEach(cardId => {
+                        const el = document.getElementById(cardId);
+                        if (el) el.textContent = inputElement.value;
+                    });
+                };
+                update();
+                inputElement.addEventListener('input', update);
+                inputElement.addEventListener('change', update);
+            }
+
+            // Auto-calculate total
+            function updateTotal() {
+                const fees = ['academicFeeInput', 'examFeeInput', 'erpFeeInput', 'hostelFeeInput'];
+                let total = 0;
+                fees.forEach(id => {
+                    const val = document.getElementById(id).value;
+                    const num = parseInt(val.replace(/[^0-9]/g, '')) || 0;
+                    total += num;
+                });
+                const formatted = `Rs.${total.toLocaleString('en-IN')}/-`;
+                document.getElementById('cardTotal').innerHTML = `<strong>${formatted}</strong>`;
+                document.getElementById('cardTotalPayable').innerHTML = `<strong>${formatted}</strong>`;
+            }
+
+            function setupSliderDisplays() {
+                const sliders = [
+                    { id: 'noiseLevel', display: 'noiseValue' },
+                    { id: 'blurLevel', display: 'blurValue', divisor: 10 },
+                    { id: 'brightnessLevel', display: 'brightnessValue' },
+                    { id: 'contrastLevel', display: 'contrastValue' },
+                    { id: 'jpegQuality', display: 'qualityValue' },
+                    { id: 'hueShift', display: 'hueValue' }
+                ];
+                sliders.forEach(({ id, display, divisor }) => {
+                    const slider = document.getElementById(id);
+                    const displayEl = document.getElementById(display);
+                    slider.addEventListener('input', () => {
+                        displayEl.textContent = divisor ? (slider.value / divisor).toFixed(1) : slider.value;
+                    });
+                });
+            }
+
+            // ============================================
+            // DOWNLOAD FUNCTIONS
+            // ============================================
+
+            async function captureDocument(format = 'jpeg') {
+                const element = document.getElementById('demandLetterPreview');
+                const canvas = await html2canvas(element, {
+                    scale: 3,
+                    useCORS: true,
+                    backgroundColor: '#ffffff'
+                });
+
+                const enableProcessing = document.getElementById('enableProcessing').checked;
+                if (enableProcessing && format === 'jpeg') {
+                    await applyPostProcessing(canvas);
                 }
 
-                showMessage('Document downloaded successfully!', 'success');
-            } catch (error) {
-                showMessage('Failed to generate document: ' + error.message, 'error');
+                return canvas;
             }
-        }
 
-        async function downloadPdf() {
-            showMessage('Generating PDF...', 'info');
+            async function downloadImage(format) {
+                showMessage(`Generating ${format.toUpperCase()}...`, 'info');
 
-            try {
-                const canvas = await captureDocument('png');
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-                pdf.save(`RIT_Demand_Letter_${Date.now()}.pdf`);
-                showMessage('PDF downloaded successfully!', 'success');
-            } catch (error) {
-                showMessage('Failed to generate PDF: ' + error.message, 'error');
+                try {
+                    const canvas = await captureDocument(format);
+
+                    if (format === 'jpeg') {
+                        const quality = parseInt(document.getElementById('jpegQuality').value) / 100;
+                        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                        const link = document.createElement('a');
+                        link.download = `RIT_Demand_Letter_${Date.now()}.jpg`;
+                        link.href = dataUrl;
+                        link.click();
+                    } else {
+                        const dataUrl = canvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.download = `RIT_Demand_Letter_${Date.now()}.png`;
+                        link.href = dataUrl;
+                        link.click();
+                    }
+
+                    showMessage('Document downloaded successfully!', 'success');
+                } catch (error) {
+                    showMessage('Failed to generate document: ' + error.message, 'error');
+                }
             }
-        }
 
-        // ============================================
-        // INITIALIZATION
-        // ============================================
+            async function downloadPdf() {
+                showMessage('Generating PDF...', 'info');
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Bind input fields to preview
-            updateField('studentNameInput', 'cardStudentName');
-            updateField('fatherNameInput', 'cardFatherName');
-            updateField('programYearInput', 'cardProgramYear');
-            updateField('programInput', 'cardProgram');
-            updateField('batchInput', 'cardBatch');
-            updateField('dateInput', 'cardDate');
-            updateField('academicFeeInput', 'cardAcademicFee', 'cardAcademicFeePayable');
-            updateField('examFeeInput', 'cardExamFee', 'cardExamFeePayable');
-            updateField('erpFeeInput', 'cardErpFee', 'cardErpFeePayable');
-            updateField('hostelFeeInput', 'cardHostelExpense', 'cardHostelExpensePayable');
-            updateField('placementOffersInput', 'cardPlacementOffers');
-            updateField('placementStudentsInput', 'cardPlacementStudents');
+                try {
+                    const canvas = await captureDocument('png');
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                    pdf.save(`RIT_Demand_Letter_${Date.now()}.pdf`);
+                    showMessage('PDF downloaded successfully!', 'success');
+                } catch (error) {
+                    showMessage('Failed to generate PDF: ' + error.message, 'error');
+                }
+            }
 
-            // Auto-calculate total on fee change
-            ['academicFeeInput', 'examFeeInput', 'erpFeeInput', 'hostelFeeInput'].forEach(id => {
-                document.getElementById(id).addEventListener('input', updateTotal);
+            // ============================================
+            // INITIALIZATION
+            // ============================================
+
+            document.addEventListener('DOMContentLoaded', () => {
+                // Initialize fields
+                updateField('studentNameInput', 'cardStudentName');
+                updateField('fatherNameInput', 'cardFatherName');
+                updateField('dateInput', 'cardDate');
+                updateField('programYearInput', 'cardProgramYear');
+                updateField('programInput', 'cardProgram');
+                updateField('batchInput', 'cardBatch');
+
+                // Signature & Seal
+                updateField('signatoryNameInput', 'signatureText');
+                // Special handler for SVG text path
+                const sealInput = document.getElementById('sealTextInput');
+                const updateSeal = () => {
+                    const text = sealInput.value.toUpperCase();
+                    document.getElementById('stampTextPath').textContent = text;
+                };
+                sealInput.addEventListener('input', updateSeal);
+                sealInput.addEventListener('change', updateSeal);
+
+                // Fee fields
+                const feeInputs = ['academicFeeInput', 'examFeeInput', 'erpFeeInput', 'hostelFeeInput'];
+                updateField('academicFeeInput', 'cardAcademicFee', 'cardAcademicFeePayable');
+                updateField('examFeeInput', 'cardExamFee', 'cardExamFeePayable');
+                updateField('erpFeeInput', 'cardErpFee', 'cardErpFeePayable');
+                updateField('hostelFeeInput', 'cardHostelExpense', 'cardHostelExpensePayable');
+                updateField('placementOffersInput', 'cardPlacementOffers');
+                updateField('placementStudentsInput', 'cardPlacementStudents');
+
+                // Auto-calculate total on fee change
+                ['academicFeeInput', 'examFeeInput', 'erpFeeInput', 'hostelFeeInput'].forEach(id => {
+                    document.getElementById(id).addEventListener('input', updateTotal);
+                });
+
+                // Download buttons
+                document.getElementById('downloadPngButton').addEventListener('click', () => downloadImage('png'));
+                document.getElementById('downloadJpegButton').addEventListener('click', () => downloadImage('jpeg'));
+                document.getElementById('downloadPdfButton').addEventListener('click', downloadPdf);
+
+                // Slider displays
+                setupSliderDisplays();
             });
-
-            // Download buttons
-            document.getElementById('downloadPngButton').addEventListener('click', () => downloadImage('png'));
-            document.getElementById('downloadJpegButton').addEventListener('click', () => downloadImage('jpeg'));
-            document.getElementById('downloadPdfButton').addEventListener('click', downloadPdf);
-
-            // Slider displays
-            setupSliderDisplays();
-        });
-    </script>
+        </script>
 </body>
 
 </html>

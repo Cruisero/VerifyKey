@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enrollment Verification Certificate Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Letter container - US Letter proportions */
+        .cert-container {
+            width: 8.5in;
+            min-height: 11in;
+            box-sizing: border-box;
+            background-color: white;
+            position: relative;
+            padding: 0.4in 0.5in 0.4in 0.5in;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #000;
+        }
+
+        /* Watermark: Tree/Seal in background */
+        .cert-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.08;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .cert-watermark svg {
+            width: 450px;
+            height: 450px;
+        }
+
+        /* Important Notice Box (top right) */
+        .important-box {
+            border: 2px solid #cc0000;
+            padding: 6px 8px;
+            font-size: 9px;
+            line-height: 1.3;
+            width: 260px;
+        }
+
+        .important-box .important-label {
+            background-color: #cc0000;
+            color: white;
+            padding: 1px 4px;
+            font-weight: bold;
+            font-size: 8px;
+            display: inline;
+        }
+
+        /* Main title */
+        .cert-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0;
+            font-family: 'Times New Roman', Times, serif;
+        }
+
+        /* Enrollment table */
+        .enrollment-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .enrollment-table th {
+            border-bottom: 1px solid #000;
+            padding: 4px 8px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 9.5px;
+        }
+
+        .enrollment-table td {
+            padding: 4px 8px;
+            text-align: center;
+            font-size: 10px;
+        }
+
+        .end-of-record {
+            border-top: 1px dashed #666;
+            border-bottom: 1px dashed #666;
+            text-align: center;
+            padding: 3px;
+            font-size: 9px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: #333;
+        }
+
+        /* Footer disclaimer */
+        .cert-disclaimer {
+            font-style: italic;
+            font-size: 8.5px;
+            line-height: 1.3;
+            border: 1px solid #999;
+            padding: 8px;
+            margin-top: 20px;
+        }
+
+        /* Accreditation text */
+        .cert-accreditation {
+            font-size: 9px;
+            line-height: 1.4;
+            margin-top: 15px;
+        }
+
+        /* Page number */
+        .page-number {
+            text-align: center;
+            font-size: 9px;
+            margin-top: 10px;
+        }
+
+        /* Policy box fields */
+        .policy-field {
+            border-bottom: 1px solid #000;
+            min-height: 16px;
+            padding: 2px 0;
+            font-size: 9px;
+        }
+
+        /* Input slider styling */
+        input[type="range"] {
+            appearance: none;
+            -webkit-appearance: none;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-100 min-h-screen">
+
+    <div class="flex flex-col lg:flex-row gap-6 p-6 max-w-[1600px] mx-auto">
+
+        <!-- ===== LEFT: EDITOR PANEL ===== -->
+        <div class="lg:w-[380px] flex-shrink-0">
+            <div class="bg-white rounded-2xl shadow-xl p-6 sticky top-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+                    📋 Enrollment Verification Editor
+                </h2>
+                <p class="text-xs text-gray-500 mb-5">National Student Clearinghouse Style</p>
+
+                <!-- Student Information -->
+                <div class="space-y-3">
+                    <h3 class="text-sm font-semibold text-indigo-600 uppercase tracking-wider">Student Information</h3>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">STUDENT NAME</label>
+                        <input type="text" id="studentNameInput" value="ABZAL TOKSANBAY"
+                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                            oninput="updatePreview()">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">UNIVERSITY NAME</label>
+                        <input type="text" id="universityNameInput" value="UNIVERSITY OF SOUTH FLORIDA"
+                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                            oninput="updatePreview()">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">TRANSACTION ID</label>
+                            <input type="text" id="transactionIdInput" value="036008780"
+                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                                oninput="updatePreview()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">GRADUATION DATE</label>
+                            <input type="text" id="gradDateInput" value="05/03/2023"
+                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                                oninput="updatePreview()">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">DATE/TIME NOTIFIED</label>
+                        <input type="text" id="dateNotifiedInput" value="11/25/2020 2:37  EST"
+                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                            oninput="updatePreview()">
+                    </div>
+                </div>
+
+                <!-- Enrollment Records -->
+                <div class="mt-5 space-y-3">
+                    <h3 class="text-sm font-semibold text-teal-600 uppercase tracking-wider">Enrollment Records</h3>
+
+                    <div id="enrollmentRecords">
+                        <!-- Record 1 -->
+                        <div class="enrollment-record bg-gray-50 p-3 rounded-lg mb-2">
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <label class="text-gray-500">Start Date</label>
+                                    <input type="text" class="rec-start w-full px-2 py-1 border rounded text-xs"
+                                        value="08/24/2020" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">End Date</label>
+                                    <input type="text" class="rec-end w-full px-2 py-1 border rounded text-xs"
+                                        value="12/10/2020" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Status</label>
+                                    <select class="rec-status w-full px-2 py-1 border rounded text-xs"
+                                        oninput="updatePreview()">
+                                        <option value="Full Time" selected>Full Time</option>
+                                        <option value="Half Time">Half Time</option>
+                                        <option value="Less Than Half Time">Less Than Half Time</option>
+                                        <option value="Leave of Absence">Leave of Absence</option>
+                                        <option value="Withdrawn">Withdrawn</option>
+                                        <option value="Graduated">Graduated</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Effective Date</label>
+                                    <input type="text" class="rec-effective w-full px-2 py-1 border rounded text-xs"
+                                        value="08/26/2019" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Certified Date</label>
+                                    <input type="text" class="rec-certified w-full px-2 py-1 border rounded text-xs"
+                                        value="10/26/2020" oninput="updatePreview()">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Record 2 -->
+                        <div class="enrollment-record bg-gray-50 p-3 rounded-lg mb-2">
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <label class="text-gray-500">Start Date</label>
+                                    <input type="text" class="rec-start w-full px-2 py-1 border rounded text-xs"
+                                        value="01/13/2020" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">End Date</label>
+                                    <input type="text" class="rec-end w-full px-2 py-1 border rounded text-xs"
+                                        value="05/07/2020" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Status</label>
+                                    <select class="rec-status w-full px-2 py-1 border rounded text-xs"
+                                        oninput="updatePreview()">
+                                        <option value="Full Time" selected>Full Time</option>
+                                        <option value="Half Time">Half Time</option>
+                                        <option value="Less Than Half Time">Less Than Half Time</option>
+                                        <option value="Leave of Absence">Leave of Absence</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Effective Date</label>
+                                    <input type="text" class="rec-effective w-full px-2 py-1 border rounded text-xs"
+                                        value="08/26/2019" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Certified Date</label>
+                                    <input type="text" class="rec-certified w-full px-2 py-1 border rounded text-xs"
+                                        value="05/08/2020" oninput="updatePreview()">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Record 3 -->
+                        <div class="enrollment-record bg-gray-50 p-3 rounded-lg mb-2">
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <label class="text-gray-500">Start Date</label>
+                                    <input type="text" class="rec-start w-full px-2 py-1 border rounded text-xs"
+                                        value="08/26/2019" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">End Date</label>
+                                    <input type="text" class="rec-end w-full px-2 py-1 border rounded text-xs"
+                                        value="12/12/2019" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Status</label>
+                                    <select class="rec-status w-full px-2 py-1 border rounded text-xs"
+                                        oninput="updatePreview()">
+                                        <option value="Full Time" selected>Full Time</option>
+                                        <option value="Half Time">Half Time</option>
+                                        <option value="Less Than Half Time">Less Than Half Time</option>
+                                        <option value="Leave of Absence">Leave of Absence</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Effective Date</label>
+                                    <input type="text" class="rec-effective w-full px-2 py-1 border rounded text-xs"
+                                        value="08/26/2019" oninput="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="text-gray-500">Certified Date</label>
+                                    <input type="text" class="rec-certified w-full px-2 py-1 border rounded text-xs"
+                                        value="12/10/2019" oninput="updatePreview()">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download Buttons -->
+                <div class="mt-6 flex gap-3">
+                    <button onclick="downloadImage('png')"
+                        class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm border-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50 transition-all">
+                        📥 PNG
+                    </button>
+                    <button onclick="downloadImage('jpeg')"
+                        class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm border-2 border-teal-500 text-teal-600 hover:bg-teal-50 transition-all">
+                        📥 JPEG
+                    </button>
+                    <button onclick="downloadPDF()"
+                        class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm border-2 border-rose-500 text-rose-600 hover:bg-rose-50 transition-all">
+                        📥 PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== RIGHT: LIVE PREVIEW ===== -->
+        <div class="flex-1 flex flex-col items-center">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">Live Preview</h3>
+
+            <div id="enrollmentVerifyPreview" class="cert-container shadow-2xl">
+
+                <!-- Watermark: Large tree/seal -->
+                <div class="cert-watermark">
+                    <svg viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Tree trunk -->
+                        <rect x="185" y="260" width="30" height="120" fill="#333" rx="4" />
+                        <!-- Roots -->
+                        <path
+                            d="M200 380 Q160 400 130 420 M200 380 Q240 400 270 420 M200 370 Q170 390 150 410 M200 370 Q230 390 250 410 M200 375 Q180 395 165 415 M200 375 Q220 395 235 415"
+                            stroke="#333" stroke-width="4" fill="none" />
+                        <!-- Canopy - layers of circles for the tree top -->
+                        <circle cx="200" cy="200" r="90" fill="#444" opacity="0.3" />
+                        <circle cx="170" cy="180" r="60" fill="#555" opacity="0.3" />
+                        <circle cx="230" cy="180" r="60" fill="#555" opacity="0.3" />
+                        <circle cx="200" cy="160" r="65" fill="#666" opacity="0.3" />
+                        <circle cx="155" cy="210" r="45" fill="#555" opacity="0.3" />
+                        <circle cx="245" cy="210" r="45" fill="#555" opacity="0.3" />
+                        <circle cx="200" cy="140" r="50" fill="#666" opacity="0.3" />
+                        <!-- Circular text around the tree -->
+                        <defs>
+                            <path id="watermarkCircle"
+                                d="M 200,200 m -160,0 a 160,160 0 1,1 320,0 a 160,160 0 1,1 -320,0" />
+                        </defs>
+                        <text font-family="'Times New Roman', serif" font-size="18" fill="#333" letter-spacing="4">
+                            <textPath href="#watermarkCircle" startOffset="10%">NATIONAL STUDENT CLEARINGHOUSE
+                            </textPath>
+                        </text>
+                    </svg>
+                </div>
+
+                <!-- Header Row -->
+                <div
+                    style="display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 1;">
+                    <!-- Left: NSC Info -->
+                    <div style="font-size: 11px; line-height: 1.4;">
+                        <strong>National Student Clearinghouse ®</strong><br>
+                        2300 Dulles Station Blvd., Suite 300, Herndon, Virginia 20171<br>
+                        PH (703) 742-4200 &nbsp; FX (703) 742-4239<br>
+                        www.studentclearinghouse.org<br>
+                        © <span id="certYear">2020</span> National Student Clearinghouse. All rights reserved
+                    </div>
+
+                    <!-- Right: Important Notice Box -->
+                    <div class="important-box">
+                        <span class="important-label">IMPORTANT:</span> If you are forwarding this certificate to a
+                        3<sup>rd</sup>-party, we advise
+                        that you print your policy, account or other identifying information on each page.
+                        <div class="policy-field" style="margin-top: 6px;">
+                            <span style="font-size: 8px; color: #666;">Policy/Acct. Holder Name</span>
+                        </div>
+                        <div class="policy-field" style="margin-top: 4px;">
+                            <span style="font-size: 8px; color: #666;">Policy/Account/Group or Other ID #</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Title -->
+                <h1 class="cert-title" style="position: relative; z-index: 1;">Enrollment Verification Certificate</h1>
+
+                <!-- Transaction Info -->
+                <div style="position: relative; z-index: 1; margin-bottom: 12px;">
+                    <div style="margin-left: 30px; margin-bottom: 4px;">
+                        <span style="font-size: 11px;">Transaction ID#: &nbsp;</span>
+                        <strong style="font-size: 13px;" id="certTransactionId">036008780</strong>
+                    </div>
+                    <div style="margin-left: 30px;">
+                        <span style="font-size: 11px;">Date/Time Notified: &nbsp;</span>
+                        <strong style="font-size: 12px;" id="certDateNotified">11/25/2020 2:37 EST</strong>
+                    </div>
+                </div>
+
+                <!-- Body Text -->
+                <div style="text-align: center; position: relative; z-index: 1; margin: 20px 30px;">
+                    <p style="font-size: 12px; margin-bottom: 12px;">
+                        The National Student Clearinghouse as Authorized Certifying Agent for
+                    </p>
+                    <p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;" id="certUniversityName">
+                        UNIVERSITY OF SOUTH FLORIDA
+                    </p>
+                    <p style="font-size: 12px; margin-bottom: 8px;">
+                        verifies the enrollment below for
+                    </p>
+                    <p style="font-size: 16px; font-weight: bold; margin-bottom: 12px;" id="certStudentName">
+                        ABZAL TOKSANBAY
+                    </p>
+                    <p style="font-size: 12px; margin-bottom: 15px;">
+                        The student's current anticipated graduation date is <strong
+                            id="certGradDate">05/03/2023</strong>.
+                    </p>
+                    <p style="font-size: 10px; margin-bottom: 15px; color: #333;">
+                        This document should not be used for loan deferment verification purposes. Those verifications
+                        are handled by lenders<br>
+                        using online access to the Clearinghouse. Refer lenders with questions to
+                        service@studentclearinghouse.org.
+                    </p>
+                </div>
+
+                <!-- Enrollment Table -->
+                <table class="enrollment-table" style="position: relative; z-index: 1;">
+                    <thead>
+                        <tr>
+                            <th>Term Start Date</th>
+                            <th>Term End Date</th>
+                            <th>Enrollment Status</th>
+                            <th>Status Effective Date</th>
+                            <th>Date Certified by School</th>
+                        </tr>
+                    </thead>
+                    <tbody id="enrollmentTableBody">
+                        <tr>
+                            <td>08/24/2020</td>
+                            <td>12/10/2020</td>
+                            <td>Full Time</td>
+                            <td>08/26/2019</td>
+                            <td>10/26/2020</td>
+                        </tr>
+                        <tr>
+                            <td>01/13/2020</td>
+                            <td>05/07/2020</td>
+                            <td>Full Time</td>
+                            <td>08/26/2019</td>
+                            <td>05/08/2020</td>
+                        </tr>
+                        <tr>
+                            <td>08/26/2019</td>
+                            <td>12/12/2019</td>
+                            <td>Full Time</td>
+                            <td>08/26/2019</td>
+                            <td>12/10/2019</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- End of Record -->
+                <div class="end-of-record" style="position: relative; z-index: 1; margin-top: 5px;">
+                    - - - - - - - - - - - - END OF RECORD - - - - - - - - - - - -
+                </div>
+
+                <!-- Spacer for the rest of the "page" -->
+                <div style="min-height: 180px;"></div>
+
+                <!-- Accreditation Paragraph -->
+                <div class="cert-accreditation" style="position: relative; z-index: 1; margin-top: auto;">
+                    <p id="certAccreditation">
+                        The <span id="certAccredUniv">University of South Florida</span> System is accredited by the
+                        Commission on Colleges of the Southern Association of Colleges and Schools to award
+                        degrees at the baccalaureate, masters, specialist and doctoral levels, including the Doctor of
+                        Medicine. &nbsp;&nbsp;Beginning Fall Term, 1981, the University
+                        adopted a modified semester calendar which is still in effect. Semesters begin in August and
+                        January with Summer Sessions beginning in May and July.
+                    </p>
+                </div>
+
+                <!-- Disclaimer Box -->
+                <div class="cert-disclaimer" style="position: relative; z-index: 1;">
+                    <p>
+                        This information verified has been obtained directly and exclusively from the individual's
+                        educational institution. The Clearinghouse specifically disclaims any
+                        responsibility or liability for errors or omissions in information supplied to the Clearinghouse
+                        by an educational institution, including direct, indirect, incidental, special, or
+                        consequential damages based in contract, tort, or any other cause of action, resulting from the
+                        use of information supplied by the educational institution and verified.
+                    </p>
+                </div>
+
+                <!-- Page Number -->
+                <div class="page-number" style="position: relative; z-index: 1;">
+                    Page 1 of 1
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updatePreview() {
+            // Update student info
+            document.getElementById('certStudentName').textContent = document.getElementById('studentNameInput').value;
+            document.getElementById('certUniversityName').textContent = document.getElementById('universityNameInput').value;
+            document.getElementById('certTransactionId').textContent = document.getElementById('transactionIdInput').value;
+            document.getElementById('certGradDate').textContent = document.getElementById('gradDateInput').value;
+            document.getElementById('certDateNotified').textContent = document.getElementById('dateNotifiedInput').value;
+
+            // Update accreditation university name
+            const univName = document.getElementById('universityNameInput').value;
+            // Title case for accreditation paragraph
+            const titleCase = univName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+            document.getElementById('certAccredUniv').textContent = titleCase;
+
+            // Update enrollment table
+            const records = document.querySelectorAll('.enrollment-record');
+            const tbody = document.getElementById('enrollmentTableBody');
+            tbody.innerHTML = '';
+
+            records.forEach(rec => {
+                const start = rec.querySelector('.rec-start').value;
+                const end = rec.querySelector('.rec-end').value;
+                const status = rec.querySelector('.rec-status').value;
+                const effective = rec.querySelector('.rec-effective').value;
+                const certified = rec.querySelector('.rec-certified').value;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${start}</td>
+                    <td>${end}</td>
+                    <td>${status}</td>
+                    <td>${effective}</td>
+                    <td>${certified}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function downloadImage(format) {
+            const preview = document.getElementById('enrollmentVerifyPreview');
+            const canvas = await html2canvas(preview, {
+                scale: 4,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            const link = document.createElement('a');
+            link.download = `enrollment_verification.${format === 'png' ? 'png' : 'jpg'}`;
+            link.href = canvas.toDataURL(`image/${format}`, 0.95);
+            link.click();
+        }
+
+        async function downloadPDF() {
+            const preview = document.getElementById('enrollmentVerifyPreview');
+            const canvas = await html2canvas(preview, {
+                scale: 3,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            const { jsPDF } = window.jspdf;
+            const imgWidth = 8.5;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            const pdf = new jsPDF('p', 'in', [imgWidth, imgHeight]);
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, imgWidth, imgHeight);
+            pdf.save('enrollment_verification.pdf');
+        }
+    </script>
+</body>
+
+</html>

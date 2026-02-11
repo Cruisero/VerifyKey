@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RIT Demand Letter Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Letter container - A4-ish proportions */
+        .letter-container {
+            width: 8.27in;
+            min-height: 11in;
+            box-sizing: border-box;
+            background-color: white;
+            position: relative;
+            padding: 0.4in 0.6in 0.5in 0.6in;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #111;
+        }
+
+        /* Header styling */
+        .letter-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            border-bottom: 3px solid #cc0000;
+            padding-bottom: 10px;
+            margin-bottom: 8px;
+        }
+
+        .letter-header .logo-section {
+            width: 80px;
+            flex-shrink: 0;
+        }
+
+        .letter-header .logo-section img {
+            width: 70px;
+            height: 70px;
+        }
+
+        .letter-header .title-section {
+            flex: 1;
+            text-align: center;
+            padding: 0 10px;
+        }
+
+        .letter-header .title-section h1 {
+            font-size: 22px;
+            font-weight: bold;
+            color: #cc0000;
+            margin: 0;
+            letter-spacing: 1px;
+        }
+
+        .letter-header .title-section .sub-info {
+            font-size: 8.5px;
+            color: #333;
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        .letter-header .title-section .contact-info {
+            font-size: 8px;
+            color: #555;
+            margin-top: 2px;
+        }
+
+        .letter-header .naac-section {
+            width: 100px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .naac-badge {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            border: 2px solid #cc0000;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: linear-gradient(135deg, #fff5f5, #fff);
+        }
+
+        .naac-badge .naac-text {
+            font-size: 10px;
+            font-weight: bold;
+            color: #cc0000;
+        }
+
+        .naac-badge .grade-text {
+            font-size: 18px;
+            font-weight: 900;
+            color: #0055aa;
+            line-height: 1;
+        }
+
+        .naac-badge .grade-plus {
+            font-size: 14px;
+            color: #cc0000;
+            font-weight: 900;
+        }
+
+        .naac-badge .accredited {
+            font-size: 7px;
+            color: #cc0000;
+            font-weight: bold;
+        }
+
+        /* Fee table */
+        .fee-table {
+            width: 80%;
+            margin: 12px auto;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .fee-table th,
+        .fee-table td {
+            border: 1px solid #333;
+            padding: 5px 10px;
+            text-align: center;
+        }
+
+        .fee-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+
+        .fee-table .total-row {
+            font-weight: bold;
+        }
+
+        /* Account details table */
+        .account-table {
+            width: 70%;
+            margin: 10px 0;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        .account-table td {
+            border: 1px solid #333;
+            padding: 4px 8px;
+        }
+
+        .account-table td:first-child {
+            font-weight: bold;
+            width: 35%;
+            background-color: #f8f8f8;
+        }
+
+        /* Signature section */
+        .signature-section {
+            margin-top: 30px;
+        }
+
+        .signature-stamp {
+            width: 160px;
+            height: 70px;
+            position: relative;
+            margin-top: 5px;
+        }
+
+        .stamp-circle {
+            width: 60px;
+            height: 60px;
+            border: 2px solid rgba(0, 0, 150, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 6px;
+            color: rgba(0, 0, 150, 0.6);
+            text-align: center;
+            transform: rotate(-10deg);
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        .signature-text {
+            font-style: italic;
+            font-size: 10px;
+            color: rgba(0, 0, 150, 0.7);
+            position: absolute;
+            left: 10px;
+            top: 25px;
+        }
+
+        /* Footer motto */
+        .footer-motto {
+            text-align: center;
+            font-style: italic;
+            font-size: 11px;
+            color: #cc0000;
+            margin-top: 30px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+
+        /* Editor controls */
+        .modern-button {
+            background-color: transparent;
+            color: #4F46E5;
+            padding: 0.6rem 1.2rem;
+            border-radius: 9999px;
+            cursor: pointer;
+            display: inline-block;
+            text-align: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.15s ease-out;
+            border: 2px solid #4F46E5;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 4px #4338CA;
+            position: relative;
+            top: 0;
+            user-select: none;
+        }
+
+        .modern-button:hover {
+            background-color: #4F46E5;
+            color: #fff;
+            top: 2px;
+            box-shadow: 0 2px #4338CA;
+        }
+
+        .modern-button:active {
+            top: 4px;
+            box-shadow: 0 0 #4338CA;
+        }
+
+        .modern-button.success {
+            border-color: #10B981;
+            color: #10B981;
+            box-shadow: 0 4px #059669;
+        }
+
+        .modern-button.success:hover {
+            background-color: #10B981;
+            color: #fff;
+        }
+
+        /* Custom modal */
+        .custom-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            text-align: center;
+            color: #333;
+            display: none;
+            min-width: 300px;
+            font-weight: 600;
+        }
+
+        .custom-modal.show {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        .custom-modal.success {
+            border-left: 6px solid #28a745;
+        }
+
+        .custom-modal.error {
+            border-left: 6px solid #dc3545;
+        }
+
+        .custom-modal.info {
+            border-left: 6px solid #4F46E5;
+        }
+
+        /* Processing controls */
+        .processing-controls {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .processing-controls label {
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .processing-controls input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .processing-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="flex flex-col lg:flex-row bg-white rounded-xl shadow-2xl overflow-hidden w-full max-w-7xl">
+        <!-- Left Panel: Edit Area -->
+        <div class="w-full lg:w-2/5 p-6 md:p-8 space-y-4 border-r border-gray-200 overflow-y-auto"
+            style="max-height: 90vh;">
+            <div class="flex items-center justify-center mb-6">
+                <h2 class="text-2xl font-extrabold text-gray-800 tracking-tight">📄 Demand Letter Editor</h2>
+            </div>
+
+            <!-- Student Information -->
+            <div class="space-y-4">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide border-b pb-2">Student Information
+                </h3>
+                <div>
+                    <label for="studentNameInput"
+                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Student Name</label>
+                    <input type="text" id="studentNameInput" value="Mr. Aman Kumar Modak"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                </div>
+                <div>
+                    <label for="fatherNameInput"
+                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Father/Guardian Name
+                        (S/O)</label>
+                    <input type="text" id="fatherNameInput" value="Mr. Uttam Modak"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="programYearInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Year of
+                            Study</label>
+                        <select id="programYearInput"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                            <option value="First Year" selected>First Year</option>
+                            <option value="Second Year">Second Year</option>
+                            <option value="Third Year">Third Year</option>
+                            <option value="Fourth Year">Fourth Year</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="dateInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Date</label>
+                        <input type="text" id="dateInput" value="29 Dec. 2023"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label for="programInput"
+                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Program /
+                        Branch</label>
+                    <input type="text" id="programInput" value="B.Tech in Computer Science and Engineering"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                </div>
+                <div>
+                    <label for="batchInput"
+                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Academic
+                        Batch</label>
+                    <input type="text" id="batchInput" value="2023-2027"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                </div>
+            </div>
+
+            <!-- Fee Structure -->
+            <div class="space-y-4">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide border-b pb-2">Fee Structure</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="academicFeeInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Academic
+                            Fee</label>
+                        <input type="text" id="academicFeeInput" value="Rs.34,000/-"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                    <div>
+                        <label for="examFeeInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Exam Fee</label>
+                        <input type="text" id="examFeeInput" value="Rs.6,200/-"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                    <div>
+                        <label for="erpFeeInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">ERP Fee</label>
+                        <input type="text" id="erpFeeInput" value="Rs.1,000/-"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                    <div>
+                        <label for="hostelFeeInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Hostel
+                            Expense</label>
+                        <input type="text" id="hostelFeeInput" value="Rs.38,500/-"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Placement Info -->
+            <div class="space-y-4">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide border-b pb-2">Placement Info</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="placementOffersInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Offer
+                            Letters</label>
+                        <input type="text" id="placementOffersInput" value="310"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                    <div>
+                        <label for="placementStudentsInput"
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Students
+                            Participated</label>
+                        <input type="text" id="placementStudentsInput" value="350"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post-Processing Controls -->
+            <div class="processing-controls">
+                <h3 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                        </path>
+                    </svg>
+                    Document Post-Processing
+                </h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label>Noise: <span id="noiseValue">3</span>%</label>
+                        <input type="range" id="noiseLevel" min="0" max="15" value="3">
+                    </div>
+                    <div>
+                        <label>Blur: <span id="blurValue">0.2</span>px</label>
+                        <input type="range" id="blurLevel" min="0" max="10" value="2" step="1">
+                    </div>
+                    <div>
+                        <label>Brightness: <span id="brightnessValue">98</span>%</label>
+                        <input type="range" id="brightnessLevel" min="85" max="105" value="98">
+                    </div>
+                    <div>
+                        <label>Contrast: <span id="contrastValue">98</span>%</label>
+                        <input type="range" id="contrastLevel" min="85" max="110" value="98">
+                    </div>
+                    <div>
+                        <label>JPEG Quality: <span id="qualityValue">88</span>%</label>
+                        <input type="range" id="jpegQuality" min="60" max="95" value="88">
+                    </div>
+                    <div>
+                        <label>Color Shift: <span id="hueValue">1</span>°</label>
+                        <input type="range" id="hueShift" min="-10" max="10" value="1">
+                    </div>
+                </div>
+                <div class="mt-3 flex items-center gap-2">
+                    <input type="checkbox" id="enableProcessing" checked class="w-4 h-4 rounded">
+                    <label for="enableProcessing" class="text-white text-xs">Enable Post-Processing
+                        (Recommended)</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Live Preview -->
+        <div class="w-full lg:w-3/5 p-6 md:p-8 flex flex-col items-center justify-start bg-gray-50 relative border-t lg:border-t-0 lg:border-l border-gray-200 overflow-y-auto"
+            style="max-height: 90vh;">
+            <h2 class="text-xl font-bold text-gray-400 mb-4 uppercase tracking-widest text-center">Live Preview</h2>
+
+            <!-- Demand Letter Preview Area -->
+            <div class="relative group" style="transform: scale(0.72); transform-origin: top center;">
+                <div id="demandLetterPreview" class="letter-container shadow-xl">
+                    <!-- Header -->
+                    <div class="letter-header">
+                        <!-- RIT Logo -->
+                        <div class="logo-section">
+                            <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" width="70" height="70">
+                                <circle cx="40" cy="40" r="38" fill="#0055aa" stroke="#cc0000" stroke-width="3" />
+                                <text x="40" y="30" font-family="serif" font-size="12" fill="white" text-anchor="middle"
+                                    font-weight="bold">RIT</text>
+                                <text x="40" y="45" font-family="serif" font-size="6" fill="#ffd700"
+                                    text-anchor="middle">ROORKEE</text>
+                                <text x="40" y="55" font-family="serif" font-size="5" fill="white"
+                                    text-anchor="middle">INSTITUTE OF</text>
+                                <text x="40" y="63" font-family="serif" font-size="5" fill="white"
+                                    text-anchor="middle">TECHNOLOGY</text>
+                                <circle cx="40" cy="40" r="35" fill="none" stroke="#ffd700" stroke-width="1"
+                                    stroke-dasharray="4 2" />
+                            </svg>
+                        </div>
+                        <!-- Title -->
+                        <div class="title-section">
+                            <h1>ROORKEE INSTITUTE OF TECHNOLOGY</h1>
+                            <div class="sub-info">
+                                Managed by : Himalayan Charitable Trust | Approved by : AICTE, Ministry of HRD (Govt. of
+                                India)<br>
+                                Affiliated to : Uttarakhand Technical University, Dehradun &amp; Uttarakhand Board of
+                                Technical Education, Roorkee<br>
+                                8th Km, Dehradun Road, Puhana, Roorkee - 247667 (Uttarakhand)
+                            </div>
+                            <div class="contact-info">
+                                Email : ritroorkee@gmail.com Website : www.ritroorkee.com Mob.: 9927099210, 9927099219
+                            </div>
+                        </div>
+                        <!-- NAAC Badge -->
+                        <div class="naac-section">
+                            <div class="naac-badge">
+                                <span class="naac-text">NAAC</span>
+                                <div>
+                                    <span class="grade-text">GRADE </span>
+                                    <span class="grade-text" style="color:#0055aa;">A</span><span
+                                        class="grade-plus">++</span>
+                                </div>
+                                <span class="accredited">Accredited Institute</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Date -->
+                    <div style="text-align: right; margin: 10px 0;">
+                        <strong>Dated: <span id="cardDate">29 Dec. 2023</span></strong>
+                    </div>
+
+                    <!-- Title -->
+                    <div style="text-align: center; margin: 8px 0;">
+                        <h2 style="font-size: 15px; font-weight: bold; text-decoration: underline; color: #cc0000;">TO
+                            WHOM IT MAY CONCERN</h2>
+                    </div>
+
+                    <!-- Subject -->
+                    <div style="margin: 10px 0;">
+                        <strong>SUB: DEMAND LETTER</strong>
+                    </div>
+
+                    <!-- Body -->
+                    <div style="margin: 8px 0;">
+                        <p>Dear Sir/ Ma'am,</p>
+                        <p style="margin-top: 6px; text-align: justify;">
+                            This is to certify that <strong><span id="cardStudentName">Mr. Aman Kumar Modak</span> S/O
+                                <span id="cardFatherName">Mr. Uttam Modak</span></strong> has been admitted in RIT –
+                            School of
+                            Technology, Roorkee in <strong><span id="cardProgramYear">First Year</span> of <span
+                                    id="cardProgram">B.Tech in Computer Science and Engineering</span></strong>,
+                            Academic Batch <span id="cardBatch">2023-2027</span>,
+                            on the basis of merit.
+                        </p>
+                    </div>
+
+                    <!-- Fee description -->
+                    <div style="margin: 10px 0; text-align: justify;">
+                        <p>The fee structure of the institute for the Programme is estimated to be as given below. This
+                            certificate is for Bank Loan
+                            Only, Government Scholarship and for Funds Transfer through Bank Only.</p>
+                    </div>
+
+                    <!-- Fee Table -->
+                    <table class="fee-table">
+                        <thead>
+                            <tr>
+                                <th>S.No.</th>
+                                <th>Particulars</th>
+                                <th>2nd Semester</th>
+                                <th>Amount Paid</th>
+                                <th>Amount Payable</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td>Academic Fee</td>
+                                <td id="cardAcademicFee">Rs.34,000/-</td>
+                                <td>-</td>
+                                <td id="cardAcademicFeePayable">Rs.34,000/-</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Exam Fee</td>
+                                <td id="cardExamFee">Rs.6,200/-</td>
+                                <td>-</td>
+                                <td id="cardExamFeePayable">Rs.6,200/-</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>ERP</td>
+                                <td id="cardErpFee">Rs.1,000/-</td>
+                                <td>-</td>
+                                <td id="cardErpFeePayable">Rs.1,000/-</td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>Hostel Expense</td>
+                                <td id="cardHostelExpense">Rs.38,500/-</td>
+                                <td>-</td>
+                                <td id="cardHostelExpensePayable">Rs.38,500/-</td>
+                            </tr>
+                            <tr class="total-row">
+                                <td colspan="2"><strong>Total</strong></td>
+                                <td id="cardTotal"><strong>Rs.79,700/-</strong></td>
+                                <td>-</td>
+                                <td id="cardTotalPayable"><strong>Rs.79,700/-</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Footnote -->
+                    <p style="margin-top: 8px; font-size: 11px;">* Examination, ERP and other Charges as per university
+                        norms.</p>
+
+                    <!-- Placement paragraph -->
+                    <div style="margin-top: 10px; text-align: justify; font-size: 11.5px;">
+                        <p>During academic year <span id="cardAcademicYear">2022-23</span>, <strong><span
+                                    id="cardPlacementOffers">310</span></strong> offer letters were issued on the basis
+                            of the placement drives held at RIT in which
+                            <strong><span id="cardPlacementStudents">350</span></strong> students had taken part.
+                        </p>
+                        <p style="margin-top: 4px;">However, the number of students selected from RIT in the same
+                            academic year (<span id="cardAcademicYear2">2022-23</span>) is much higher than this
+                            because many students are placed in different companies on the basis of pool campus drives
+                            or off campus drives, for
+                            which authentic information is not available with us at present. For other details you may
+                            visit our website
+                            <a href="http://www.ritroorkee.com" style="color: #0055aa;">www.ritroorkee.com</a>.
+                        </p>
+                    </div>
+
+                    <!-- Account Details -->
+                    <div style="margin-top: 14px;">
+                        <p style="font-weight: bold; text-decoration: underline; font-size: 12px;">Account Details</p>
+                        <table class="account-table" style="margin-top: 6px;">
+                            <tr>
+                                <td>Account Holder Name</td>
+                                <td>ROORKEE INSTITUTE OF TECHNOLOGY</td>
+                            </tr>
+                            <tr>
+                                <td>Account Number</td>
+                                <td id="cardAccountNumber">4044000100150612</td>
+                            </tr>
+                            <tr>
+                                <td>IFSC Number</td>
+                                <td id="cardIfscNumber">PUNB0404400</td>
+                            </tr>
+                            <tr>
+                                <td>Bank Name</td>
+                                <td>PUNJAB NATIONAL BANK (IIT ROORKEE), UTTARAKHAND INDIA</td>
+                            </tr>
+                            <tr>
+                                <td>SWIFT Code</td>
+                                <td id="cardSwiftCode">PUNBINBBRKU</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- Signature Section -->
+                    <div class="signature-section">
+                        <p style="font-weight: bold; font-size: 13px;">AUTHORISED SIGNATORY</p>
+                        <div class="signature-stamp">
+                            <div class="stamp-circle">
+                                <span>ROORKEE<br>INSTITUTE OF<br>TECHNOLOGY</span>
+                            </div>
+                            <div class="signature-text">(Authorized Signatory)</div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Motto -->
+                    <div class="footer-motto">
+                        "Transforming Aspirations into Achievements"
+                    </div>
+                </div>
+            </div>
+
+            <!-- Download Buttons -->
+            <div class="flex gap-4 mt-6">
+                <button id="downloadPngButton" class="modern-button flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    Download PNG
+                </button>
+                <button id="downloadJpegButton" class="modern-button success flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    Download JPEG
+                </button>
+                <button id="downloadPdfButton" class="modern-button flex items-center justify-center gap-2"
+                    style="border-color: #e11d48; color: #e11d48; box-shadow: 0 4px #be123c;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    Download PDF
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-3 text-center">JPEG with post-processing for realistic scanned look</p>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // POST-PROCESSING FUNCTIONS
+        // ============================================
+
+        function addNoise(ctx, width, height, intensity) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const noise = (Math.random() + Math.random() + Math.random() - 1.5) * intensity;
+                data[i] = Math.max(0, Math.min(255, data[i] + noise));
+                data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+                data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function adjustBrightnessContrast(ctx, width, height, brightness, contrast) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.max(0, Math.min(255, factor * (data[i] - 128) + 128 + brightness));
+                data[i + 1] = Math.max(0, Math.min(255, factor * (data[i + 1] - 128) + 128 + brightness));
+                data[i + 2] = Math.max(0, Math.min(255, factor * (data[i + 2] - 128) + 128 + brightness));
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function applyHueShift(ctx, width, height, degrees) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            const angle = degrees * Math.PI / 180;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                data[i] = Math.max(0, Math.min(255, r * cosA + g * sinA * 0.3));
+                data[i + 1] = Math.max(0, Math.min(255, g * cosA + b * sinA * 0.3));
+                data[i + 2] = Math.max(0, Math.min(255, b * cosA + r * sinA * 0.3));
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function applyBlur(ctx, width, height, radius) {
+            if (radius < 0.5) return;
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            const copy = new Uint8ClampedArray(data);
+            const size = Math.ceil(radius);
+            const kernel = (size * 2 + 1) ** 2;
+            for (let y = size; y < height - size; y++) {
+                for (let x = size; x < width - size; x++) {
+                    let r = 0, g = 0, b = 0;
+                    for (let ky = -size; ky <= size; ky++) {
+                        for (let kx = -size; kx <= size; kx++) {
+                            const i = ((y + ky) * width + (x + kx)) * 4;
+                            r += copy[i]; g += copy[i + 1]; b += copy[i + 2];
+                        }
+                    }
+                    const i = (y * width + x) * 4;
+                    data[i] = r / kernel; data[i + 1] = g / kernel; data[i + 2] = b / kernel;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        async function applyPostProcessing(canvas) {
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const noiseLevel = parseInt(document.getElementById('noiseLevel').value);
+            const blurLevel = parseFloat(document.getElementById('blurLevel').value) / 10;
+            const brightnessLevel = (parseInt(document.getElementById('brightnessLevel').value) - 100) * 2;
+            const contrastLevel = (parseInt(document.getElementById('contrastLevel').value) - 100) * 2;
+            const hueShift = parseInt(document.getElementById('hueShift').value);
+
+            if (blurLevel > 0) applyBlur(ctx, width, height, blurLevel);
+            if (noiseLevel > 0) addNoise(ctx, width, height, noiseLevel);
+            if (brightnessLevel !== 0 || contrastLevel !== 0) adjustBrightnessContrast(ctx, width, height, brightnessLevel, contrastLevel);
+            if (hueShift !== 0) applyHueShift(ctx, width, height, hueShift);
+
+            return canvas;
+        }
+
+        // ============================================
+        // UI FUNCTIONS
+        // ============================================
+
+        function showMessage(message, type = 'info') {
+            const existingModal = document.querySelector('.custom-modal');
+            if (existingModal) existingModal.remove();
+            const modal = document.createElement('div');
+            modal.className = `custom-modal ${type}`;
+            modal.textContent = message;
+            document.body.appendChild(modal);
+            void modal.offsetWidth;
+            modal.classList.add('show');
+            setTimeout(() => {
+                modal.classList.remove('show');
+                setTimeout(() => modal.remove(), 300);
+            }, 3000);
+        }
+
+        function updateField(inputId, ...cardIds) {
+            const inputElement = document.getElementById(inputId);
+            const update = () => {
+                cardIds.forEach(cardId => {
+                    const el = document.getElementById(cardId);
+                    if (el) el.textContent = inputElement.value;
+                });
+            };
+            update();
+            inputElement.addEventListener('input', update);
+            inputElement.addEventListener('change', update);
+        }
+
+        // Auto-calculate total
+        function updateTotal() {
+            const fees = ['academicFeeInput', 'examFeeInput', 'erpFeeInput', 'hostelFeeInput'];
+            let total = 0;
+            fees.forEach(id => {
+                const val = document.getElementById(id).value;
+                const num = parseInt(val.replace(/[^0-9]/g, '')) || 0;
+                total += num;
+            });
+            const formatted = `Rs.${total.toLocaleString('en-IN')}/-`;
+            document.getElementById('cardTotal').innerHTML = `<strong>${formatted}</strong>`;
+            document.getElementById('cardTotalPayable').innerHTML = `<strong>${formatted}</strong>`;
+        }
+
+        function setupSliderDisplays() {
+            const sliders = [
+                { id: 'noiseLevel', display: 'noiseValue' },
+                { id: 'blurLevel', display: 'blurValue', divisor: 10 },
+                { id: 'brightnessLevel', display: 'brightnessValue' },
+                { id: 'contrastLevel', display: 'contrastValue' },
+                { id: 'jpegQuality', display: 'qualityValue' },
+                { id: 'hueShift', display: 'hueValue' }
+            ];
+            sliders.forEach(({ id, display, divisor }) => {
+                const slider = document.getElementById(id);
+                const displayEl = document.getElementById(display);
+                slider.addEventListener('input', () => {
+                    displayEl.textContent = divisor ? (slider.value / divisor).toFixed(1) : slider.value;
+                });
+            });
+        }
+
+        // ============================================
+        // DOWNLOAD FUNCTIONS
+        // ============================================
+
+        async function captureDocument(format = 'jpeg') {
+            const element = document.getElementById('demandLetterPreview');
+            const canvas = await html2canvas(element, {
+                scale: 3,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            const enableProcessing = document.getElementById('enableProcessing').checked;
+            if (enableProcessing && format === 'jpeg') {
+                await applyPostProcessing(canvas);
+            }
+
+            return canvas;
+        }
+
+        async function downloadImage(format) {
+            showMessage(`Generating ${format.toUpperCase()}...`, 'info');
+
+            try {
+                const canvas = await captureDocument(format);
+
+                if (format === 'jpeg') {
+                    const quality = parseInt(document.getElementById('jpegQuality').value) / 100;
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    const link = document.createElement('a');
+                    link.download = `RIT_Demand_Letter_${Date.now()}.jpg`;
+                    link.href = dataUrl;
+                    link.click();
+                } else {
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.download = `RIT_Demand_Letter_${Date.now()}.png`;
+                    link.href = dataUrl;
+                    link.click();
+                }
+
+                showMessage('Document downloaded successfully!', 'success');
+            } catch (error) {
+                showMessage('Failed to generate document: ' + error.message, 'error');
+            }
+        }
+
+        async function downloadPdf() {
+            showMessage('Generating PDF...', 'info');
+
+            try {
+                const canvas = await captureDocument('png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`RIT_Demand_Letter_${Date.now()}.pdf`);
+                showMessage('PDF downloaded successfully!', 'success');
+            } catch (error) {
+                showMessage('Failed to generate PDF: ' + error.message, 'error');
+            }
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Bind input fields to preview
+            updateField('studentNameInput', 'cardStudentName');
+            updateField('fatherNameInput', 'cardFatherName');
+            updateField('programYearInput', 'cardProgramYear');
+            updateField('programInput', 'cardProgram');
+            updateField('batchInput', 'cardBatch');
+            updateField('dateInput', 'cardDate');
+            updateField('academicFeeInput', 'cardAcademicFee', 'cardAcademicFeePayable');
+            updateField('examFeeInput', 'cardExamFee', 'cardExamFeePayable');
+            updateField('erpFeeInput', 'cardErpFee', 'cardErpFeePayable');
+            updateField('hostelFeeInput', 'cardHostelExpense', 'cardHostelExpensePayable');
+            updateField('placementOffersInput', 'cardPlacementOffers');
+            updateField('placementStudentsInput', 'cardPlacementStudents');
+
+            // Auto-calculate total on fee change
+            ['academicFeeInput', 'examFeeInput', 'erpFeeInput', 'hostelFeeInput'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateTotal);
+            });
+
+            // Download buttons
+            document.getElementById('downloadPngButton').addEventListener('click', () => downloadImage('png'));
+            document.getElementById('downloadJpegButton').addEventListener('click', () => downloadImage('jpeg'));
+            document.getElementById('downloadPdfButton').addEventListener('click', downloadPdf);
+
+            // Slider displays
+            setupSliderDisplays();
+        });
+    </script>
+</body>
+
+</html>

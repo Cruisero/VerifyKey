@@ -163,6 +163,17 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         university_source = config.get("aiGenerator", {}).get("universitySource", "sheerid_api")
         provider = config.get("aiGenerator", {}).get("provider", "gemini")
         
+        # OnepassHTML template-to-org mapping (fixed schools)
+        ONEPASSHTML_ORG_MAP = {
+            "rit-demand-letter.html": {
+                "id": 0,
+                "idExtended": None,
+                "name": "Roorkee Institute of Technology",
+                "country": "IN",
+                "domain": "rit.ac.in"
+            }
+        }
+        
         # For LionPATH mode, always use Penn State University
         if provider == "lionpath":
             org = {
@@ -173,6 +184,19 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                 "domain": "psu.edu"
             }
             print(f"[Verify] LionPATH mode: Using Pennsylvania State University")
+        elif provider == "onepasshtml":
+            # OnepassHTML uses fixed org from template, pick first template's org
+            onepasshtml_config = config.get("aiGenerator", {}).get("onepasshtml", {})
+            onepasshtml_templates = onepasshtml_config.get("templates", [])
+            if onepasshtml_templates:
+                first_tmpl = onepasshtml_templates[0]
+                org = ONEPASSHTML_ORG_MAP.get(first_tmpl, {
+                    "id": 0, "idExtended": None,
+                    "name": "Unknown University", "country": "US", "domain": "university.edu"
+                })
+            else:
+                org = ONEPASSHTML_ORG_MAP.get("rit-demand-letter.html")
+            print(f"[Verify] OnepassHTML mode: Using {org['name']}")
         else:
             # Select university (use region mode and university source settings)
             org = select_university(country=None, region_mode=region_mode, university_source=university_source) 
@@ -303,9 +327,9 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             
             # For UIUC mode, always use University of Illinois Urbana-Champaign
             org = {
-                "id": 4836,  # UIUC ID in SheerID
-                "idExtended": None,
-                "name": "University of Illinois Urbana-Champaign",
+                "id": 3535,  # UIUC ID in SheerID (verified from verifier.py)
+                "idExtended": "3535",
+                "name": "University of Illinois at Urbana-Champaign",
                 "country": "US",
                 "domain": "illinois.edu"
             }
@@ -335,6 +359,38 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             
             if not documents:
                 print(f"[Verify] ❌ No UIUC documents generated")
+        
+        # Use OnepassHTML generator (fixed-school HTML templates via Puppeteer)
+        elif provider == "onepasshtml":
+            onepasshtml_config = config.get("aiGenerator", {}).get("onepasshtml", {})
+            templates = onepasshtml_config.get("templates", [])
+            
+            if not templates:
+                templates = ["rit-demand-letter.html"]
+            
+            print(f"[Verify] OnepassHTML mode: Generating with templates: {templates}")
+            
+            documents = []
+            for tmpl in templates:
+                try:
+                    print(f"[Verify] Generating OnepassHTML document: {tmpl}...")
+                    d_data, d_filename, form_data = generate_document_puppeteer(
+                        "other",
+                        first, last, org["name"],
+                        country=org.get("country", "IN"),
+                        gender="any",
+                        template=tmpl,
+                        use_gemini_photo=False
+                    )
+                    if d_data:
+                        doc_type = "other"
+                        documents.append({"type": doc_type, "data": d_data, "fileName": d_filename, "mimeType": "image/jpeg"})
+                        print(f"[Verify] ✓ Generated OnepassHTML {doc_type}: {d_filename}")
+                except Exception as e:
+                    print(f"[Verify] ⚠️ Failed to generate OnepassHTML template {tmpl}: {e}")
+            
+            if not documents:
+                print(f"[Verify] ❌ No OnepassHTML documents generated")
         
         # Use Puppeteer if configured
         elif provider == "puppeteer":
@@ -689,6 +745,21 @@ async def get_uiuc_templates_endpoint():
     }
 
 
+@app.get("/api/onepasshtml-templates")
+async def get_onepasshtml_templates_endpoint():
+    """Get available OnepassHTML templates (fixed-school templates from templates/ root)"""
+    import config_manager
+    all_templates = config_manager.get_available_templates()
+    # OnepassHTML uses templates from the same root directory
+    # Return all templates; the frontend allows multi-select
+    return {
+        "templates": [{
+            "filename": t["filename"],
+            "label": t["name"]
+        } for t in all_templates]
+    }
+
+
 class TestDocumentRequest(BaseModel):
     provider: str = "puppeteer"
     firstName: Optional[str] = None
@@ -1001,6 +1072,73 @@ async def test_document_generation(request: TestDocumentRequest):
                 return {
                     "success": False,
                     "message": "Failed to generate any UIUC documents"
+                }
+        
+        # OnepassHTML test document generation (fixed-school templates via Puppeteer)
+        elif provider == "onepasshtml":
+            onepasshtml_config = config.get("aiGenerator", {}).get("onepasshtml", {})
+            templates = onepasshtml_config.get("templates", [])
+            
+            if not templates:
+                templates = ["rit-demand-letter.html"]
+            
+            # OnepassHTML org mapping (same as verify_single)
+            ONEPASSHTML_ORG_MAP = {
+                "rit-demand-letter.html": "Roorkee Institute of Technology"
+            }
+            
+            # Use first template's school name
+            university = ONEPASSHTML_ORG_MAP.get(templates[0], "Unknown University")
+            
+            print(f"[TestDoc] OnepassHTML mode with templates: {templates}, university: {university}")
+            
+            images = []
+            first_form_data = None
+            
+            for tmpl in templates:
+                try:
+                    print(f"[TestDoc] Generating OnepassHTML document: {tmpl}...")
+                    d_data, d_filename, form_data = generate_document_puppeteer(
+                        "other",
+                        first, last, university,
+                        country="IN",
+                        gender=gender,
+                        template=tmpl,
+                        use_gemini_photo=False
+                    )
+                    if d_data:
+                        image_base64 = base64.b64encode(d_data).decode('utf-8')
+                        images.append({
+                            "type": "other",
+                            "image": f"data:image/jpeg;base64,{image_base64}",
+                            "filename": d_filename,
+                            "template": tmpl
+                        })
+                        if first_form_data is None:
+                            first_form_data = form_data
+                        print(f"[TestDoc] ✓ Generated OnepassHTML: {d_filename}")
+                except Exception as e:
+                    print(f"[TestDoc] ⚠️ Failed to generate OnepassHTML template {tmpl}: {e}")
+            
+            if images and first_form_data:
+                provider_note = f"""📝 OnepassHTML 固定模板生成
+📄 模板: {', '.join([img['template'] for img in images])}
+👤 姓名: {first_form_data.get('fullName', 'N/A')}
+🏫 学校: {university}"""
+                
+                return {
+                    "success": True,
+                    "provider": "onepasshtml",
+                    "providerNote": provider_note,
+                    "images": images,
+                    "image": images[0]["image"],
+                    "formData": first_form_data,
+                    "filename": images[0]["filename"]
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Failed to generate any OnepassHTML documents"
                 }
         
         elif provider == "puppeteer":

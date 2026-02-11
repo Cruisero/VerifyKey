@@ -50,6 +50,10 @@ export default function Admin() {
         templates: ['uiuc_id_card.html'],
         availableTemplates: []
     });
+    const [onepasshtmlSettings, setOnepasshtmlSettings] = useState({
+        templates: [],
+        availableTemplates: []
+    });
     const [proxySettings, setProxySettings] = useState({
         enabled: true,
         host: 'proxy.global.ip2up.com',
@@ -163,6 +167,13 @@ export default function Admin() {
                         templates: data.aiGenerator.uiuc.templates || prev.templates
                     }));
                 }
+                // Load OnepassHTML settings
+                if (data.aiGenerator?.onepasshtml) {
+                    setOnepasshtmlSettings(prev => ({
+                        ...prev,
+                        templates: data.aiGenerator.onepasshtml.templates || prev.templates
+                    }));
+                }
             }
 
             // Fetch available templates
@@ -202,6 +213,16 @@ export default function Admin() {
                 setUiucSettings(prev => ({
                     ...prev,
                     availableTemplates: uiucTemplatesData.templates || []
+                }));
+            }
+
+            // Fetch OnepassHTML templates
+            const onepasshtmlTemplatesRes = await fetch(`${API_BASE}/api/onepasshtml-templates`);
+            if (onepasshtmlTemplatesRes.ok) {
+                const onepasshtmlTemplatesData = await onepasshtmlTemplatesRes.json();
+                setOnepasshtmlSettings(prev => ({
+                    ...prev,
+                    availableTemplates: onepasshtmlTemplatesData.templates || []
                 }));
             }
         } catch (error) {
@@ -249,6 +270,10 @@ export default function Admin() {
                     uiuc: {
                         enabled: aiProvider === 'uiuc',
                         templates: uiucSettings.templates || ['uiuc_id_card.html']
+                    },
+                    onepasshtml: {
+                        enabled: aiProvider === 'onepasshtml',
+                        templates: onepasshtmlSettings.templates || []
                     },
                     svgFallback: { enabled: true }
                 },
@@ -590,6 +615,20 @@ export default function Admin() {
                                     </div>
                                     <div className="provider-status">
                                         <span className="badge badge-info">专属</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    className={`provider-card ${aiProvider === 'onepasshtml' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('onepasshtml')}
+                                >
+                                    <div className="provider-icon">📝</div>
+                                    <div className="provider-info">
+                                        <h4>OnepassHTML 固定模板</h4>
+                                        <p>固定学校 HTML 模板，仅修改学生信息</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-success">新</span>
                                     </div>
                                 </div>
                             </div>
@@ -1080,6 +1119,86 @@ export default function Admin() {
 
                                         <p className="input-hint" style={{ marginTop: '16px' }}>
                                             ⚠️ 此模式自动使用 University of Illinois Urbana-Champaign 作为学校
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* OnepassHTML Fixed Template Settings */}
+                            {aiProvider === 'onepasshtml' && (
+                                <div className="provider-settings">
+                                    <h4>📝 OnepassHTML 固定模板配置</h4>
+                                    <div className="settings-form">
+                                        <div className="onepasshtml-info" style={{
+                                            background: 'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                                            color: 'white',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>OnepassHTML 固定模板</strong> 使用预设的 HTML 模板为特定学校生成文档，
+                                                每个模板对应一所固定学校，仅动态填充学生个人信息。
+                                            </p>
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">选择模板 (可多选)</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                                                {(onepasshtmlSettings.availableTemplates.length > 0 ? onepasshtmlSettings.availableTemplates : [
+                                                    { filename: 'rit-demand-letter.html', label: 'RIT Demand Letter (催缴通知)' }
+                                                ]).map(template => (
+                                                    <label key={template.filename} style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '10px',
+                                                        padding: '10px 14px',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        background: (onepasshtmlSettings?.templates || []).includes(template.filename)
+                                                            ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-secondary)',
+                                                        border: (onepasshtmlSettings?.templates || []).includes(template.filename)
+                                                            ? '1px solid #F59E0B'
+                                                            : '1px solid transparent',
+                                                        transition: 'all 0.2s ease'
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={(onepasshtmlSettings?.templates || []).includes(template.filename)}
+                                                            onChange={(e) => {
+                                                                const currentTemplates = onepasshtmlSettings?.templates || [];
+                                                                let newTemplates;
+                                                                if (e.target.checked) {
+                                                                    newTemplates = [...currentTemplates, template.filename];
+                                                                } else {
+                                                                    newTemplates = currentTemplates.filter(t => t !== template.filename);
+                                                                }
+                                                                setOnepasshtmlSettings(s => ({ ...s, templates: newTemplates }));
+                                                            }}
+                                                            style={{ width: '16px', height: '16px' }}
+                                                        />
+                                                        <span style={{ fontSize: '14px' }}>📄 {template.label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            marginTop: '16px',
+                                            padding: '12px 16px',
+                                            background: 'var(--bg-secondary)',
+                                            borderRadius: '8px',
+                                            fontSize: '13px'
+                                        }}>
+                                            <strong>📋 特点说明:</strong>
+                                            <ul style={{ margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
+                                                <li><strong>固定学校:</strong> 每个模板对应特定学校，无需选择大学</li>
+                                                <li><strong>动态信息:</strong> 学生姓名、学号、费用等自动随机生成</li>
+                                                <li><strong>高质量:</strong> Puppeteer 渲染 + 截图，还原真实文档效果</li>
+                                            </ul>
+                                        </div>
+
+                                        <p className="input-hint" style={{ marginTop: '16px' }}>
+                                            ⚠️ 此模式使用模板中预设的学校信息，不会随机选择大学
                                         </p>
                                     </div>
                                 </div>

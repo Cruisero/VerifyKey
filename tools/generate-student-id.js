@@ -622,13 +622,108 @@ class StudentIdGenerator {
             const templateType = await page.evaluate(() => {
                 // Detect template by checking for specific elements
                 if (document.getElementById('receiptPreview')) return 'fee-receipt';
+                if (document.getElementById('demandLetterPreview')) return 'demand-letter';
                 if (document.getElementById('idCardPreview')) return 'student-id';
                 return 'unknown';
             });
 
             console.log(`[Generator] Detected template type: ${templateType}`);
 
-            if (templateType === 'fee-receipt') {
+            if (templateType === 'demand-letter') {
+                // =============================
+                // RIT DEMAND LETTER TEMPLATE
+                // =============================
+                console.log('[Generator] Filling demand letter data...');
+
+                await page.evaluate((studentData) => {
+                    const setTextById = (id, text) => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = text;
+                    };
+
+                    // Generate date (random within last 60 days)
+                    const now = new Date();
+                    const daysAgo = Math.floor(Math.random() * 60);
+                    const pastDate = new Date(now);
+                    pastDate.setDate(now.getDate() - daysAgo);
+                    const months = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
+                    const dateStr = `${pastDate.getDate()} ${months[pastDate.getMonth()]} ${pastDate.getFullYear()}`;
+                    setTextById('cardDate', dateStr);
+
+                    // Student name (use passed name, add Mr./Ms. prefix)
+                    const fullName = studentData.name || 'Aman Kumar Modak';
+                    const prefix = Math.random() > 0.4 ? 'Mr.' : 'Ms.';
+                    setTextById('cardStudentName', `${prefix} ${fullName}`);
+
+                    // Father/Guardian name
+                    const indianLastNames = ['Sharma', 'Patel', 'Singh', 'Kumar', 'Verma', 'Gupta', 'Joshi', 'Mishra', 'Yadav', 'Chauhan', 'Modak', 'Das', 'Reddy', 'Nair', 'Iyer'];
+                    const indianFirstNames = ['Rajesh', 'Suresh', 'Ramesh', 'Mahesh', 'Uttam', 'Dinesh', 'Rakesh', 'Mukesh', 'Anil', 'Vijay', 'Sanjay', 'Deepak', 'Ashok', 'Sunil', 'Mohan'];
+                    const fatherFirst = indianFirstNames[Math.floor(Math.random() * indianFirstNames.length)];
+                    // Try to use same last name as student
+                    const nameParts = fullName.split(' ');
+                    const fatherLast = nameParts.length > 1 ? nameParts[nameParts.length - 1] : indianLastNames[Math.floor(Math.random() * indianLastNames.length)];
+                    setTextById('cardFatherName', `Mr. ${fatherFirst} ${fatherLast}`);
+
+                    // Program
+                    const programs = [
+                        'B.Tech in Computer Science and Engineering',
+                        'B.Tech in Mechanical Engineering',
+                        'B.Tech in Electronics and Communication Engineering',
+                        'B.Tech in Civil Engineering',
+                        'B.Tech in Electrical Engineering',
+                        'B.Tech in Information Technology',
+                        'B.Tech in Chemical Engineering'
+                    ];
+                    const program = programs[Math.floor(Math.random() * programs.length)];
+                    setTextById('cardProgram', program);
+
+                    // Year of study
+                    const years = ['First Year', 'Second Year', 'Third Year', 'Fourth Year'];
+                    const yearIdx = Math.floor(Math.random() * years.length);
+                    setTextById('cardProgramYear', years[yearIdx]);
+
+                    // Batch
+                    const startYear = pastDate.getFullYear() - yearIdx;
+                    const endYear = startYear + 4;
+                    setTextById('cardBatch', `${startYear}-${endYear}`);
+
+                    // Fee amounts (realistic ranges in INR)
+                    const academicFee = 30000 + Math.floor(Math.random() * 10000);
+                    const examFee = 5000 + Math.floor(Math.random() * 3000);
+                    const erpFee = 800 + Math.floor(Math.random() * 500);
+                    const hostelFee = 30000 + Math.floor(Math.random() * 15000);
+                    const total = academicFee + examFee + erpFee + hostelFee;
+
+                    const formatINR = (num) => `Rs.${num.toLocaleString('en-IN')}/-`;
+                    setTextById('cardAcademicFee', formatINR(academicFee));
+                    setTextById('cardAcademicFeePayable', formatINR(academicFee));
+                    setTextById('cardExamFee', formatINR(examFee));
+                    setTextById('cardExamFeePayable', formatINR(examFee));
+                    setTextById('cardErpFee', formatINR(erpFee));
+                    setTextById('cardErpFeePayable', formatINR(erpFee));
+                    setTextById('cardHostelExpense', formatINR(hostelFee));
+                    setTextById('cardHostelExpensePayable', formatINR(hostelFee));
+
+                    // Total (bold)
+                    const totalEl = document.getElementById('cardTotal');
+                    if (totalEl) totalEl.innerHTML = `<strong>${formatINR(total)}</strong>`;
+                    const totalPayEl = document.getElementById('cardTotalPayable');
+                    if (totalPayEl) totalPayEl.innerHTML = `<strong>${formatINR(total)}</strong>`;
+
+                    // Academic year for placement section
+                    const prevYear = pastDate.getFullYear() - 1;
+                    const acadYear = `${prevYear}-${String(pastDate.getFullYear()).slice(-2)}`;
+                    setTextById('cardAcademicYear', acadYear);
+                    setTextById('cardAcademicYear2', acadYear);
+
+                    // Placement stats
+                    const offers = 250 + Math.floor(Math.random() * 150);
+                    const students = offers + Math.floor(Math.random() * 80) + 20;
+                    setTextById('cardPlacementOffers', offers.toString());
+                    setTextById('cardPlacementStudents', students.toString());
+                }, data);
+
+            } else if (templateType === 'fee-receipt') {
                 // Generate university logo for fee receipt
                 console.log('[Generator] Generating university logo for fee receipt...');
                 let logoUrl = await generateLogoWithGemini(data.university);
@@ -978,7 +1073,7 @@ class StudentIdGenerator {
             console.log('[Generator] Capturing screenshot...');
 
             // Select the correct element based on template type
-            const previewSelector = templateType === 'fee-receipt' ? '#receiptPreview' : '#idCardPreview';
+            const previewSelector = templateType === 'fee-receipt' ? '#receiptPreview' : templateType === 'demand-letter' ? '#demandLetterPreview' : '#idCardPreview';
             const cardElement = await page.$(previewSelector);
 
             if (!cardElement) {

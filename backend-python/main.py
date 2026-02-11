@@ -390,11 +390,12 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                         country=org.get("country", "IN"),
                         gender="any",
                         template=tmpl_path,
-                        use_gemini_photo=False
+                        use_gemini_photo=False,
+                        format="pdf"
                     )
                     if d_data:
                         doc_type = "other"
-                        documents.append({"type": doc_type, "data": d_data, "fileName": d_filename, "mimeType": "image/jpeg"})
+                        documents.append({"type": doc_type, "data": d_data, "fileName": d_filename, "mimeType": "application/pdf"})
                         print(f"[Verify] ✓ Generated OnepassHTML {doc_type}: {d_filename}")
                 except Exception as e:
                     print(f"[Verify] ⚠️ Failed to generate OnepassHTML template {tmpl}: {e}")
@@ -1132,13 +1133,14 @@ async def test_document_generation(request: TestDocumentRequest):
                         country="IN",
                         gender=gender,
                         template=tmpl_path,
-                        use_gemini_photo=False
+                        use_gemini_photo=False,
+                        format="pdf"
                     )
                     if d_data:
                         image_base64 = base64.b64encode(d_data).decode('utf-8')
                         images.append({
                             "type": "other",
-                            "image": f"data:image/jpeg;base64,{image_base64}",
+                            "image": f"data:application/pdf;base64,{image_base64}",
                             "filename": d_filename,
                             "template": tmpl
                         })

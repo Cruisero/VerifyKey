@@ -163,7 +163,7 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         university_source = config.get("aiGenerator", {}).get("universitySource", "sheerid_api")
         provider = config.get("aiGenerator", {}).get("provider", "gemini")
         
-        # OnepassHTML template-to-org mapping (fixed schools)
+        # OnepassHTML template-to-org mapping (each template has its own fixed school)
         ONEPASSHTML_ORG_MAP = {
             "rit-demand-letter.html": {
                 "id": 0,
@@ -175,9 +175,9 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             "rit-enrollment-verify.html": {
                 "id": 0,
                 "idExtended": None,
-                "name": "Roorkee Institute of Technology",
-                "country": "IN",
-                "domain": "rit.ac.in"
+                "name": "University of South Florida",
+                "country": "US",
+                "domain": "usf.edu"
             }
         }
         
@@ -192,17 +192,18 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             }
             print(f"[Verify] LionPATH mode: Using Pennsylvania State University")
         elif provider == "onepasshtml":
-            # OnepassHTML uses fixed org from template, pick first template's org
+            # OnepassHTML: each template has its own fixed school
+            # Use the first template's org for SheerID form submission
             onepasshtml_config = config.get("aiGenerator", {}).get("onepasshtml", {})
             onepasshtml_templates = onepasshtml_config.get("templates", [])
             if onepasshtml_templates:
                 first_tmpl = onepasshtml_templates[0]
-                org = ONEPASSHTML_ORG_MAP.get(first_tmpl, {
+                org = dict(ONEPASSHTML_ORG_MAP.get(first_tmpl, {
                     "id": 0, "idExtended": None,
                     "name": "Unknown University", "country": "US", "domain": "university.edu"
-                })
+                }))
             else:
-                org = ONEPASSHTML_ORG_MAP.get("rit-demand-letter.html")
+                org = dict(ONEPASSHTML_ORG_MAP.get("rit-demand-letter.html"))
             
             # Dynamically resolve correct org ID from SheerID API
             lookup_result = lookup_organization_id(org["name"], org.get("country", "US"))
@@ -398,13 +399,14 @@ def verify_single(vid: str, proxy: str = None) -> dict:
             documents = []
             for tmpl in templates:
                 try:
-                    # Build full path to template
+                    # Each template uses its own fixed school
+                    tmpl_org = ONEPASSHTML_ORG_MAP.get(tmpl, org)
                     tmpl_path = str(onepasshtml_dir / tmpl) if onepasshtml_dir else tmpl
-                    print(f"[Verify] Generating OnepassHTML document: {tmpl} (path: {tmpl_path})...")
+                    print(f"[Verify] Generating OnepassHTML document: {tmpl} (school: {tmpl_org['name']}, path: {tmpl_path})...")
                     d_data, d_filename, form_data = generate_document_puppeteer(
                         "other",
-                        first, last, org["name"],
-                        country=org.get("country", "IN"),
+                        first, last, tmpl_org["name"],
+                        country=tmpl_org.get("country", "US"),
                         gender="any",
                         template=tmpl_path,
                         use_gemini_photo=False,
@@ -1119,16 +1121,13 @@ async def test_document_generation(request: TestDocumentRequest):
             if not templates:
                 templates = ["rit-demand-letter.html"]
             
-            # OnepassHTML org mapping (same as verify_single)
+            # OnepassHTML org mapping (each template has its own fixed school)
             ONEPASSHTML_ORG_MAP = {
-                "rit-demand-letter.html": "Roorkee Institute of Technology",
-                "rit-enrollment-verify.html": "Roorkee Institute of Technology"
+                "rit-demand-letter.html": {"name": "Roorkee Institute of Technology", "country": "IN"},
+                "rit-enrollment-verify.html": {"name": "University of South Florida", "country": "US"}
             }
             
-            # Use first template's school name
-            university = ONEPASSHTML_ORG_MAP.get(templates[0], "Unknown University")
-            
-            print(f"[TestDoc] OnepassHTML mode with templates: {templates}, university: {university}")
+            print(f"[TestDoc] OnepassHTML mode with templates: {templates}")
             
             # Resolve OnepassHTML template directory
             from pathlib import Path
@@ -1143,12 +1142,16 @@ async def test_document_generation(request: TestDocumentRequest):
             
             for tmpl in templates:
                 try:
+                    # Each template uses its own fixed school
+                    tmpl_org = ONEPASSHTML_ORG_MAP.get(tmpl, {"name": "Unknown University", "country": "US"})
+                    tmpl_university = tmpl_org["name"]
+                    tmpl_country = tmpl_org["country"]
                     tmpl_path = str(onepasshtml_dir / tmpl) if onepasshtml_dir else tmpl
-                    print(f"[TestDoc] Generating OnepassHTML document: {tmpl} (path: {tmpl_path})...")
+                    print(f"[TestDoc] Generating OnepassHTML document: {tmpl} (school: {tmpl_university}, path: {tmpl_path})...")
                     d_data, d_filename, form_data = generate_document_puppeteer(
                         "other",
-                        first, last, university,
-                        country="IN",
+                        first, last, tmpl_university,
+                        country=tmpl_country,
                         gender=gender,
                         template=tmpl_path,
                         use_gemini_photo=False,
@@ -1169,10 +1172,11 @@ async def test_document_generation(request: TestDocumentRequest):
                     print(f"[TestDoc] ⚠️ Failed to generate OnepassHTML template {tmpl}: {e}")
             
             if images and first_form_data:
+                schools = ', '.join([ONEPASSHTML_ORG_MAP.get(img['template'], {}).get('name', 'Unknown') for img in images])
                 provider_note = f"""📝 OnepassHTML 固定模板生成
 📄 模板: {', '.join([img['template'] for img in images])}
 👤 姓名: {first_form_data.get('fullName', 'N/A')}
-🏫 学校: {university}"""
+🏫 学校: {schools}"""
                 
                 return {
                     "success": True,

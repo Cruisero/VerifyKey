@@ -154,7 +154,7 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         
         # Pre-generate student info so we can use it for document generation
         # This ensures the form data and document data match!
-        from verifier import select_university, generate_name, generate_email, generate_birth_date
+        from verifier import select_university, generate_name, generate_email, generate_birth_date, lookup_organization_id
         
         # Read region mode and university source from config
         import config_manager
@@ -166,6 +166,13 @@ def verify_single(vid: str, proxy: str = None) -> dict:
         # OnepassHTML template-to-org mapping (fixed schools)
         ONEPASSHTML_ORG_MAP = {
             "rit-demand-letter.html": {
+                "id": 0,
+                "idExtended": None,
+                "name": "Roorkee Institute of Technology",
+                "country": "IN",
+                "domain": "rit.ac.in"
+            },
+            "rit-enrollment-verify.html": {
                 "id": 0,
                 "idExtended": None,
                 "name": "Roorkee Institute of Technology",
@@ -196,6 +203,16 @@ def verify_single(vid: str, proxy: str = None) -> dict:
                 })
             else:
                 org = ONEPASSHTML_ORG_MAP.get("rit-demand-letter.html")
+            
+            # Dynamically resolve correct org ID from SheerID API
+            lookup_result = lookup_organization_id(org["name"], org.get("country", "US"))
+            if lookup_result:
+                org["id"] = lookup_result["id"]
+                org["idExtended"] = lookup_result["idExtended"]
+                org["name"] = lookup_result["name"]
+                print(f"[Verify] OnepassHTML: Resolved org ID {org['id']} for {org['name']}")
+            else:
+                print(f"[Verify] ⚠️ OnepassHTML: Could not resolve org ID for {org['name']}, submission may fail!")
             print(f"[Verify] OnepassHTML mode: Using {org['name']}")
         else:
             # Select university (use region mode and university source settings)
@@ -1104,7 +1121,8 @@ async def test_document_generation(request: TestDocumentRequest):
             
             # OnepassHTML org mapping (same as verify_single)
             ONEPASSHTML_ORG_MAP = {
-                "rit-demand-letter.html": "Roorkee Institute of Technology"
+                "rit-demand-letter.html": "Roorkee Institute of Technology",
+                "rit-enrollment-verify.html": "Roorkee Institute of Technology"
             }
             
             # Use first template's school name

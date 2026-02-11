@@ -1389,16 +1389,46 @@ export default function Admin() {
                                                                     doc.type === 'class_schedule' ? '📅 课程表' :
                                                                         doc.type === 'schedule' ? '📅 课程表' : '📄 文档'}
                                                         </div>
-                                                        <img
-                                                            src={doc.image}
-                                                            alt={doc.type || 'Generated Document'}
-                                                            style={{
-                                                                maxWidth: '100%',
-                                                                maxHeight: '300px',
-                                                                borderRadius: '8px',
-                                                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                                                            }}
-                                                        />
+                                                        {(doc.filename?.endsWith('.pdf') || doc.image?.startsWith('data:application/pdf')) ? (
+                                                            <div>
+                                                                <embed
+                                                                    src={doc.image}
+                                                                    type="application/pdf"
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        height: '400px',
+                                                                        borderRadius: '8px',
+                                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                                                    }}
+                                                                />
+                                                                <a
+                                                                    href={doc.image}
+                                                                    download={doc.filename || 'document.pdf'}
+                                                                    style={{
+                                                                        display: 'inline-block',
+                                                                        marginTop: '8px',
+                                                                        padding: '6px 16px',
+                                                                        background: '#667eea',
+                                                                        color: '#fff',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '12px',
+                                                                        textDecoration: 'none',
+                                                                        fontWeight: 600
+                                                                    }}
+                                                                >📥 下载 PDF</a>
+                                                            </div>
+                                                        ) : (
+                                                            <img
+                                                                src={doc.image}
+                                                                alt={doc.type || 'Generated Document'}
+                                                                style={{
+                                                                    maxWidth: '100%',
+                                                                    maxHeight: '300px',
+                                                                    borderRadius: '8px',
+                                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                                                }}
+                                                            />
+                                                        )}
                                                         <p className="filename" style={{
                                                             marginTop: '8px',
                                                             fontSize: '12px',

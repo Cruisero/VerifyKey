@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>NCSU Official Transcript</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 12px;
+            font-weight: bold;
+            /* Bold text matches the headers better */
+            line-height: 1.3;
+            color: #000;
+            background: #eee;
+        }
+
+        /* Editor panel */
+        .editor-panel {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 12px;
+            overflow-y: auto;
+            z-index: 1000;
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+        }
+
+        .editor-panel h2 {
+            color: #667eea;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .editor-panel label {
+            display: block;
+            margin: 6px 0 2px;
+            color: #999;
+        }
+
+        .editor-panel input {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #444;
+            border-radius: 3px;
+            background: #16213e;
+            color: #fff;
+            font-family: inherit;
+        }
+
+        .pages-container {
+            margin-left: 260px;
+            padding: 15px;
+        }
+
+        .page {
+            position: relative;
+            width: 1684px;
+            height: 1191px;
+            background-size: 1684px 1191px;
+            background-repeat: no-repeat;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            background-color: white;
+            /* overlay base */
+        }
+
+        .page1 {
+            background-image: url('ncsu-transcript-bg-page1.png');
+        }
+
+        .page2 {
+            background-image: url('ncsu-transcript-bg-page2.png');
+        }
+
+        /* Overlay text */
+        .ov {
+            position: absolute;
+            background: #fff;
+            /* Mask original text */
+            white-space: nowrap;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            /* Debug border: border: 1px solid red; */
+            padding-left: 2px;
+            /* Slight padding */
+        }
+
+        .ov.b {
+            font-weight: bold;
+        }
+
+        /* Adjust top offset globally if needed */
+        .page .ov {
+            transform: translateY(2px);
+        }
+
+        #transcriptPreview {
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- EDITOR -->
+    <div class="editor-panel">
+        <h2>📝 Editor</h2>
+        <label>Full Name</label> <input id="studentNameInput" value="Daniel James Clarke" oninput="updatePreview()">
+        <label>Student ID</label> <input id="studentIdInput" value="200542198" oninput="updatePreview()">
+        <label>Birthdate</label> <input id="birthdateInput" value="XXXX-03-12" oninput="updatePreview()">
+        <hr style="border-color:#333; margin:10px 0;">
+        <label>Degree Confer Date</label> <input id="conferDateInput" value="2027-05-08" oninput="updatePreview()">
+        <label>Print Date</label> <input id="printDateInput" value="2027-06-01" oninput="updatePreview()">
+
+        <h3 style="color:#667eea; margin-top:10px;">Semesters</h3>
+        <label>Term 1 (Old 2011 Fall)</label> <input id="term1Input" value="2023 Fall Term" oninput="updatePreview()">
+        <label>Term 2 (Old 2012 Spring)</label> <input id="term2Input" value="2024 Spring Term"
+            oninput="updatePreview()">
+        <label>Term 3 (Old 2012 Fall)</label> <input id="term3Input" value="2024 Fall Term" oninput="updatePreview()">
+        <label>Term 3b (Study Abroad)</label> <input id="term3bInput" value="Study Abroad Spring 2025-South Africa"
+            oninput="updatePreview()">
+        <label>Term 4 (Old 2013 Fall)</label> <input id="term4Input" value="2025 Fall Term" oninput="updatePreview()">
+        <label>Term 5 (Old 2014 Spring)</label> <input id="term5Input" value="2026 Spring Term"
+            oninput="updatePreview()">
+        <label>Term 6 (Old 2014 Fall)</label> <input id="term6Input" value="2026 Fall Term" oninput="updatePreview()">
+        <label>Term 7 (Old 2015 Spring)</label> <input id="term7Input" value="2027 Spring Term"
+            oninput="updatePreview()">
+    </div>
+
+    <div class="pages-container">
+        <div id="transcriptPreview">
+
+            <!-- PAGE 1 -->
+            <div class="page page1">
+                <!-- Header Info -->
+                <!-- Name: (88,28)-(286,49) -> Width 198, Height 21 -->
+                <div class="ov b" id="p1Name" style="left:88px; top:28px; width:220px; height:21px;"></div>
+                <!-- ID: (858,28)-(947,49) -->
+                <div class="ov" id="p1Sid" style="left:854px; top:28px; width:110px; height:21px;"></div>
+                <!-- Birthdate: (1558,28)-(1657,49) -->
+                <div class="ov" id="p1Bday" style="left:1550px; top:28px; width:120px; height:21px;"></div>
+
+                <!-- Degree Info -->
+                <!-- Degree: (186,91)-(374,111) -->
+                <div class="ov" style="left:186px; top:91px; width:200px; height:20px;">Bachelor of Science</div>
+                <!-- Confer Date: (186,108)-(285,129) -->
+                <div class="ov" id="p1Confer" style="left:186px; top:108px; width:120px; height:21px;"></div>
+                <!-- Honors: (186,126)-(335,147) -->
+                <div class="ov" style="left:186px; top:126px; width:180px; height:21px;">Magna Cum Laude</div>
+                <!-- Plan: (186,144)-(374,165) -->
+                <div class="ov" style="left:186px; top:144px; width:250px; height:21px;">Computer Science</div>
+                <!-- SubPlan: (186,162)-(364,182) -->
+                <div class="ov" style="left:186px; top:162px; width:500px; height:20px;">Artificial Intelligence
+                    Concentration</div>
+
+                <!-- SEMESTERS PAGE 1 -->
+                <!-- 2011 Fall (Test Credits): (353, 371) -->
+                <div class="ov b" style="left:350px; top:371px; width:150px; height:23px;">2023 Summer Term</div>
+
+                <!-- 2011 Fall (Begin Record): (353, 531) -->
+                <div class="ov b" id="p1Term1" style="left:350px; top:531px; width:180px; height:23px;"></div>
+
+                <!-- 2012 Spring: (1183, 71) -->
+                <div class="ov b" id="p1Term2" style="left:1180px; top:71px; width:180px; height:24px;"></div>
+
+                <!-- 2012 Fall: (1193, 338) -->
+                <div class="ov b" id="p1Term3" style="left:1190px; top:338px; width:180px; height:23px;"></div>
+
+                <!-- Study Abroad: (868, 586) -->
+                <div class="ov b" id="p1Term3b" style="left:865px; top:586px; width:380px; height:23px;"></div>
+
+                <!-- 2013 Fall: (1193, 620) -->
+                <div class="ov b" id="p1Term4" style="left:1190px; top:620px; width:180px; height:23px;"></div>
+
+                <!-- Footer Name -->
+                <div class="ov b" id="p1Footer" style="left:869px; top:1060px; width:150px; height:23px;"></div>
+                <!-- Print Date -->
+                <div class="ov" id="p1Print" style="left:1550px; top:1157px; width:120px; height:20px;"></div>
+            </div>
+
+            <!-- PAGE 2 -->
+            <div class="page page2">
+                <!-- Header -->
+                <div class="ov b" id="p2Name" style="left:88px; top:28px; width:220px; height:21px;"></div>
+                <div class="ov" id="p2Sid" style="left:854px; top:28px; width:110px; height:21px;"></div>
+                <div class="ov" id="p2Bday" style="left:1550px; top:28px; width:120px; height:21px;"></div>
+
+                <!-- SEMESTERS PAGE 2 -->
+                <!-- 2014 Spring: (343, 115) -->
+                <div class="ov b" id="p2Term5" style="left:340px; top:115px; width:180px; height:23px;"></div>
+
+                <!-- 2014 Fall: (353, 345) -->
+                <div class="ov b" id="p2Term6" style="left:350px; top:345px; width:180px; height:23px;"></div>
+
+                <!-- 2015 Spring: (343, 540) -->
+                <div class="ov b" id="p2Term7" style="left:340px; top:540px; width:180px; height:23px;"></div>
+
+                <!-- 2015 Spring (Milestone): (66, 895) -->
+                <div class="ov" id="p2Term7_milestone" style="left:60px; top:895px; width:170px; height:21px;">Spring
+                    2027</div>
+
+                <!-- Print Date -->
+                <div class="ov" id="p2Print" style="left:1550px; top:1157px; width:120px; height:20px;"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function updatePreview() {
+            // Inputs
+            const name = document.getElementById('studentNameInput').value;
+            const sid = document.getElementById('studentIdInput').value;
+            const bday = document.getElementById('birthdateInput').value;
+            const confer = document.getElementById('conferDateInput').value;
+            const print = document.getElementById('printDateInput').value;
+
+            // Terms
+            const t1 = document.getElementById('term1Input').value;
+            const t2 = document.getElementById('term2Input').value;
+            const t3 = document.getElementById('term3Input').value;
+            const t3b = document.getElementById('term3bInput').value;
+            const t4 = document.getElementById('term4Input').value;
+            const t5 = document.getElementById('term5Input').value;
+            const t6 = document.getElementById('term6Input').value;
+            const t7 = document.getElementById('term7Input').value;
+
+            // Apply Page 1
+            document.getElementById('p1Name').textContent = name;
+            document.getElementById('p1Sid').textContent = sid;
+            document.getElementById('p1Bday').textContent = bday;
+            document.getElementById('p1Confer').textContent = confer;
+            document.getElementById('p1Footer').textContent = name.toUpperCase();
+            document.getElementById('p1Print').textContent = 'Print Date: ' + print;
+
+            document.getElementById('p1Term1').textContent = t1;
+            document.getElementById('p1Term2').textContent = t2;
+            document.getElementById('p1Term3').textContent = t3;
+            document.getElementById('p1Term3b').textContent = t3b;
+            document.getElementById('p1Term4').textContent = t4;
+
+            // Apply Page 2
+            document.getElementById('p2Name').textContent = name;
+            document.getElementById('p2Sid').textContent = sid;
+            document.getElementById('p2Bday').textContent = bday;
+            document.getElementById('p2Term5').textContent = t5;
+            document.getElementById('p2Term6').textContent = t6;
+            document.getElementById('p2Term7').textContent = t7;
+            // Milestone logic: Extract "Spring 2027" from "2027 Spring Term" if possible, or just hardcode for now
+            // Actually, let's just make it match the term year/season
+            document.getElementById('p2Term7_milestone').textContent = t7.replace(' Term', ''); // "2027 Spring"
+            document.getElementById('p2Print').textContent = 'Print Date: ' + print;
+        }
+        updatePreview();
+    </script>
+</body>
+
+</html>

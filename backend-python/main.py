@@ -43,6 +43,10 @@ PROXY_PORT = os.getenv("PROXY_PORT", "12321")
 PROXY_USER = os.getenv("PROXY_USER", "")
 PROXY_PASS = os.getenv("PROXY_PASS", "")
 
+# Telegram Userbot instance
+from telegram_userbot import SheerIDUserbot
+telegram_bot: Optional[SheerIDUserbot] = None
+
 app = FastAPI(
     title="OnePass Python Backend",
     description="SheerID Verification with curl_cffi Anti-Detection",
@@ -1296,14 +1300,55 @@ async def update_config_endpoint(request: Request, authorization: Optional[str] 
         if not user or user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
     
-    import config_manager
-    body = await request.json()
-    updated = config_manager.update_config(body)
+    # Simple auth check (in production should be more robust)
+    # verify_token(authorization)
     
-    if updated:
-        return {"success": True, "config": updated}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to update config")
+    try:
+        data = await request.json()
+        import config_manager
+        
+        # Check if telegram config changed
+        old_config = config_manager.get_config()
+        old_telegram = old_config.get("verification", {}).get("telegram", {})
+        
+        updated_config = config_manager.update_config(data)
+        
+        if updated_config:
+            # Handle Telegram Bot restart if config changed
+            new_telegram = updated_config.get("verification", {}).get("telegram", {})
+            
+            # If enabled changed, or apiId/Hash changed
+            if (old_telegram.get("enabled") != new_telegram.get("enabled") or
+                old_telegram.get("apiId") != new_telegram.get("apiId") or
+                old_telegram.get("apiHash") != new_telegram.get("apiHash")):
+                
+                print("[Config] Telegram config changed, restarting bot...")
+                global telegram_bot
+                
+                # Stop existing bot
+                if telegram_bot:
+                    await telegram_bot.stop()
+                    telegram_bot = None
+                
+                # Start new bot if enabled
+                if new_telegram.get("enabled") and new_telegram.get("apiId") and new_telegram.get("apiHash"):
+                    try:
+                        api_id = int(new_telegram.get("apiId"))
+                        api_hash = new_telegram.get("apiHash")
+                        bot_username = new_telegram.get("botUsername") or "@SheerID_Bot"
+                        
+                        telegram_bot = SheerIDUserbot(api_id, api_hash, bot_username=bot_username)
+                        asyncio.create_task(telegram_bot.start())
+                        print("[Config] Telegram Bot restarted")
+                    except Exception as e:
+                        print(f"[Config] Failed to restart Telegram Bot: {e}")
+            
+            return {"success": True, "config": updated_config}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save config")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/verify-puppeteer")
@@ -1471,6 +1516,100 @@ async def get_verification_details(verification_id: str):
         )
     
     return details
+
+
+
+# Telegram Userbot Events
+@app.on_event("startup")
+async def startup_event():
+    global telegram_bot
+    import config_manager
+    config = config_manager.get_config()
+    telegram_config = config.get("verification", {}).get("telegram", {})
+    
+    if telegram_config.get("enabled"):
+        try:
+            api_id = telegram_config.get("apiId")
+            api_hash = telegram_config.get("apiHash")
+            # Default to SheerID_Bot if not specified
+            app_bot_username = telegram_config.get("botUsername") or "@SheerID_Bot"
+            
+            if api_id and api_hash:
+                print(f"[Telegram] Starting Userbot (ID: {api_id})...")
+                # Ensure api_id is int
+                telegram_bot = SheerIDUserbot(int(api_id), api_hash, bot_username=app_bot_username)
+                
+                # Start in background task to not block server startup
+                asyncio.create_task(telegram_bot.start())
+            else:
+                print("[Telegram] Missing API ID/Hash, skipping startup")
+        except Exception as e:
+            print(f"[Telegram] Startup failed: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global telegram_bot
+    if telegram_bot:
+        await telegram_bot.stop()
+
+
+@app.post("/api/verify/telegram")
+async def verify_via_telegram(request: VerifyRequest):
+    """
+    Verify using Telegram Userbot to call external SheerID Bot
+    """
+    if not telegram_bot or not telegram_bot.is_connected:
+        raise HTTPException(
+            status_code=503, 
+            detail="Telegram Userbot is not connected. Please enable it in settings."
+        )
+    
+    if not request.verificationIds:
+        raise HTTPException(status_code=400, detail="No verification IDs provided")
+        
+    results = []
+    
+    # Process each verification ID (sequentially for now to avoid flood wait)
+    for vid in request.verificationIds:
+        # Construct link (assuming standard format, user should provide raw ID or we construct it)
+        # The bot expects a full link
+        import config_manager
+        
+        # Use programId from request or default
+        program_id = request.programId or "programId"
+        link = f"https://services.sheerid.com/verify/{program_id}/?verificationId={vid}"
+        
+        # Verify via bot
+        result = await telegram_bot.verify(link)
+        
+        # Format result to match our standard VerifyResult
+        status = "success" if result.get("success") else "error"
+        message = result.get("message") or result.get("error", "Unknown")
+        
+        results.append({
+            "verificationId": vid,
+            "status": status,
+            "success": result.get("success", False),
+            "message": message,
+            # Add extra fields that might be useful
+            "student": None,
+            "email": None,
+            "school": None,
+            "raw_response": result.get("raw_response")
+        })
+        
+        # Small delay
+        await asyncio.sleep(2)
+        
+    return {
+        "results": results,
+        "stats": {
+            "total": len(results),
+            "success": sum(1 for r in results if r["success"]),
+            "failed": sum(1 for r in results if not r["success"])
+        }
+    }
 
 
 if __name__ == "__main__":

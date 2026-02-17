@@ -53,7 +53,13 @@ DEFAULT_CONFIG = {
     
     # Verification settings
     "verification": {
-        "maxBatchSize": 5,
+        "telegram": {
+            "enabled": False,
+            "apiId": "",
+            "apiHash": "",
+            "botUsername": "@SheerID_Bot"
+        },
+        "maxConcurrent": 2,
         "delayBetweenMs": 2000,
         "useCurlCffi": True  # Use curl_cffi for TLS spoofing
     },

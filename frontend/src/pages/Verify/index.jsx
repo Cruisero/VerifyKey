@@ -42,7 +42,6 @@ export default function Verify() {
     const [cdkValid, setCdkValid] = useState(false);
     const [cdkRemaining, setCdkRemaining] = useState(0);
     const [cdkChecking, setCdkChecking] = useState(false);
-    const [cdkExpanded, setCdkExpanded] = useState(() => !localStorage.getItem('verifykey-cdk'));
 
     const programs = [
         { value: 'google-student', label: 'Google Student' },
@@ -441,52 +440,6 @@ export default function Verify() {
 
                 {/* Main Verify Content */}
                 <div className="verify-content">
-                    {/* CDK Input Panel */}
-                    <div className="panel cdk-panel card">
-                        <div className="cdk-header" onClick={() => setCdkExpanded(!cdkExpanded)}>
-                            <div className="cdk-title">
-                                <span className="panel-icon">🔑</span>
-                                {cdkValid ? (
-                                    <span className="cdk-status-text valid">
-                                        CDK 已激活 — 剩余 <strong>{cdkRemaining}</strong> 次
-                                    </span>
-                                ) : (
-                                    <span className="cdk-status-text">输入 CDK（1/2/5/20/100 次）</span>
-                                )}
-                            </div>
-                            <span className="cdk-toggle">{cdkExpanded ? '收起' : '展开'}</span>
-                        </div>
-                        {cdkExpanded && (
-                            <div className="cdk-body">
-                                <div className="cdk-input-row">
-                                    <input
-                                        type="text"
-                                        className={`input cdk-input ${cdkValid ? 'valid' : cdkCode.trim() ? 'invalid' : ''}`}
-                                        placeholder="VK-XXXX-XXXX-XXXX"
-                                        value={cdkCode}
-                                        onChange={(e) => setCdkCode(e.target.value.toUpperCase())}
-                                    />
-                                    {cdkChecking && <span className="cdk-checking">验证中...</span>}
-                                    {!cdkChecking && cdkValid && <span className="cdk-valid">✅ 有效</span>}
-                                    {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">❌ 无效</span>}
-                                </div>
-                                {cdkValid && (
-                                    <button
-                                        className="btn btn-sm btn-ghost cdk-clear-btn"
-                                        onClick={() => {
-                                            setCdkCode('');
-                                            localStorage.removeItem('verifykey-cdk');
-                                            setCdkValid(false);
-                                            setCdkRemaining(0);
-                                        }}
-                                    >
-                                        清除 CDK
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
                     {/* Input Panel */}
                     <div className="panel input-panel card">
                         <div className="panel-header">
@@ -527,6 +480,34 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                 onChange={(e) => setInput(e.target.value)}
                                 disabled={verifyStatus === 'processing'}
                             />
+
+                            {/* CDK Input Row */}
+                            <div className="cdk-inline-row">
+                                <span className="cdk-inline-label">🔑 CDK</span>
+                                <input
+                                    type="text"
+                                    className={`input cdk-input ${cdkValid ? 'valid' : cdkCode.trim() ? 'invalid' : ''}`}
+                                    placeholder="VK-XXXX-XXXX-XXXX"
+                                    value={cdkCode}
+                                    onChange={(e) => setCdkCode(e.target.value.toUpperCase())}
+                                />
+                                {cdkChecking && <span className="cdk-checking">验证中...</span>}
+                                {!cdkChecking && cdkValid && <span className="cdk-valid">✅ {cdkRemaining}次</span>}
+                                {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">❌ 无效</span>}
+                                {cdkValid && (
+                                    <button
+                                        className="btn btn-sm btn-ghost cdk-clear-btn"
+                                        onClick={() => {
+                                            setCdkCode('');
+                                            localStorage.removeItem('verifykey-cdk');
+                                            setCdkValid(false);
+                                            setCdkRemaining(0);
+                                        }}
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
 
                             <div className="input-footer">
                                 <div className="input-info">

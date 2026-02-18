@@ -30,7 +30,10 @@ class SheerIDUserbot:
         if session_string:
             session = StringSession(session_string)
         else:
-            session = "verifykey"
+            # Store session in /app/data/ so it persists across Docker rebuilds
+            data_dir = os.path.join(os.path.dirname(__file__), "data")
+            os.makedirs(data_dir, exist_ok=True)
+            session = os.path.join(data_dir, "verifykey")
             
         self.client = TelegramClient(session, api_id, api_hash)
         self.bot_username = bot_username.lstrip("@") if bot_username else "SheerID_Bot"

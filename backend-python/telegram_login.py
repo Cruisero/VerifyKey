@@ -16,10 +16,16 @@ async def main():
     api_hash = sys.argv[2]
     
     print(f"Logging in with API ID: {api_id}")
-    print("Session will be saved as 'verifykey.session'")
+    
+    # Save session in data/ dir so it persists across Docker rebuilds
+    import os
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    session_path = os.path.join(data_dir, "verifykey")
+    print(f"Session will be saved as '{session_path}.session'")
     print()
     
-    client = TelegramClient("verifykey", api_id, api_hash)
+    client = TelegramClient(session_path, api_id, api_hash)
     await client.start()
     
     me = await client.get_me()

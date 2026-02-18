@@ -38,7 +38,7 @@ export default function Verify() {
     const [lastSuccess, setLastSuccess] = useState(null);
     const [statusData, setStatusData] = useState(() => generateInitialData(180));
     const [hoveredItem, setHoveredItem] = useState(null);
-    const [browserMode, setBrowserMode] = useState(false); // Puppeteer browser simulation mode
+    const [browserMode, setBrowserMode] = useState(false); // Read from admin config
 
     // 添加新状态
     const addNewStatus = useCallback(() => {
@@ -66,6 +66,22 @@ export default function Verify() {
         const timeoutId = scheduleNextUpdate();
         return () => clearTimeout(timeoutId);
     }, [addNewStatus]);
+
+    // Fetch browserMode from admin config
+    useEffect(() => {
+        const fetchMode = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/config`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setBrowserMode(data.verification?.browserMode === true);
+                }
+            } catch (e) {
+                console.warn('Failed to fetch config:', e);
+            }
+        };
+        fetchMode();
+    }, []);
 
     const programs = [
         { value: 'google-student', label: 'Google Student' },
@@ -526,19 +542,6 @@ export default function Verify() {
                                 <span>输入</span>
                             </div>
                             <div className="panel-controls">
-                                {/* Browser Mode Toggle */}
-                                <div className="browser-mode-toggle" title={browserMode ? "浏览器模式：使用 Chromium 模拟真实浏览器" : "API 模式：使用标准 API 请求"}>
-                                    <span className="toggle-label">{browserMode ? '🌐 浏览器' : '⚡ API'}</span>
-                                    <label className="toggle-switch">
-                                        <input
-                                            type="checkbox"
-                                            checked={browserMode}
-                                            onChange={(e) => setBrowserMode(e.target.checked)}
-                                            disabled={verifyStatus === 'processing'}
-                                        />
-                                        <span className="toggle-slider"></span>
-                                    </label>
-                                </div>
                                 <select
                                     className="program-select"
                                     value={program}

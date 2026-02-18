@@ -1596,6 +1596,8 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     """
     Verify by sending full verification links to Telegram SheerID Bot.
     Accepts full URLs like: https://services.sheerid.com/verify/xxx/?verificationId=yyy
+    
+    Links are processed concurrently — results are matched by verificationId from bot responses.
     """
     if not telegram_bot or not telegram_bot.is_connected:
         raise HTTPException(
@@ -1608,23 +1610,22 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     
     if len(request.links) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 links per request")
-        
-    results = []
     
-    for link in request.links:
-        link = link.strip()
-        if not link:
-            continue
-            
-        # Extract verificationId from URL for display
-        import re
+    # Clean up links
+    clean_links = [link.strip() for link in request.links if link.strip()]
+    if not clean_links:
+        raise HTTPException(status_code=400, detail="No valid links provided")
+    
+    # Send all links concurrently — results are matched by verificationId
+    import re
+    
+    async def process_link(link):
         vid_match = re.search(r'verificationId=([a-zA-Z0-9]+)', link)
         display_id = vid_match.group(1) if vid_match else link[:30]
         
-        # Send link to bot and wait for result
         result = await telegram_bot.verify(link)
         
-        results.append({
+        return {
             "link": link,
             "verificationId": result.get("verificationId") or display_id,
             "status": result.get("status", "unknown"),
@@ -1634,12 +1635,11 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
             "claimLink": result.get("claimLink"),
             "reason": result.get("reason"),
             "raw_response": result.get("raw_response")
-        })
-        
-        # Delay between verifications to avoid flood
-        if len(request.links) > 1:
-            await asyncio.sleep(3)
-        
+        }
+    
+    results = await asyncio.gather(*[process_link(link) for link in clean_links])
+    results = list(results)
+    
     return {
         "results": results,
         "stats": {

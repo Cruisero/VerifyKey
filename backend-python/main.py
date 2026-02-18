@@ -1554,6 +1554,39 @@ async def shutdown_event():
         await telegram_bot.stop()
 
 
+@app.post("/api/telegram/daily")
+async def telegram_daily():
+    """Claim daily free credits from SheerID Bot"""
+    if not telegram_bot or not telegram_bot.is_connected:
+        raise HTTPException(status_code=503, detail="Telegram Userbot is not connected")
+    
+    result = await telegram_bot.claim_daily()
+    return result
+
+
+@app.get("/api/telegram/balance")
+async def telegram_balance():
+    """Check SheerID Bot credit balance"""
+    if not telegram_bot or not telegram_bot.is_connected:
+        raise HTTPException(status_code=503, detail="Telegram Userbot is not connected")
+    
+    result = await telegram_bot.check_balance()
+    return result
+
+
+@app.get("/api/telegram/status")
+async def telegram_status():
+    """Get Telegram Userbot connection status"""
+    connected = telegram_bot is not None and telegram_bot.is_connected
+    last_daily = telegram_bot._last_daily_claim.isoformat() if telegram_bot and telegram_bot._last_daily_claim else None
+    
+    return {
+        "connected": connected,
+        "bot_username": telegram_bot.bot_username if telegram_bot else None,
+        "last_daily_claim": last_daily
+    }
+
+
 @app.post("/api/verify/telegram")
 async def verify_via_telegram(request: VerifyRequest):
     """
@@ -1570,21 +1603,17 @@ async def verify_via_telegram(request: VerifyRequest):
         
     results = []
     
-    # Process each verification ID (sequentially for now to avoid flood wait)
+    # Process each verification ID (sequentially to avoid flood wait)
     for vid in request.verificationIds:
-        # Construct link (assuming standard format, user should provide raw ID or we construct it)
-        # The bot expects a full link
-        import config_manager
-        
         # Use programId from request or default
         program_id = request.programId or "programId"
         link = f"https://services.sheerid.com/verify/{program_id}/?verificationId={vid}"
         
-        # Verify via bot
+        # Verify via bot (uses improved flow with _send_and_wait)
         result = await telegram_bot.verify(link)
         
-        # Format result to match our standard VerifyResult
-        status = "success" if result.get("success") else "error"
+        # Format result
+        status = result.get("status", "unknown")
         message = result.get("message") or result.get("error", "Unknown")
         
         results.append({
@@ -1592,14 +1621,13 @@ async def verify_via_telegram(request: VerifyRequest):
             "status": status,
             "success": result.get("success", False),
             "message": message,
-            # Add extra fields that might be useful
             "student": None,
             "email": None,
             "school": None,
             "raw_response": result.get("raw_response")
         })
         
-        # Small delay
+        # Small delay between verifications
         await asyncio.sleep(2)
         
     return {

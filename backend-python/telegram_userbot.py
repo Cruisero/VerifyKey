@@ -1,10 +1,12 @@
 """
 Telegram Userbot - Automatically call external SheerID Bot for verification
+Supports: /daily auto-claim, /verify flow, /balance check
 """
 import asyncio
 import re
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Optional, Dict
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -31,19 +33,31 @@ class SheerIDUserbot:
             session = "verifykey"
             
         self.client = TelegramClient(session, api_id, api_hash)
-        self.bot_username = bot_username
+        self.bot_username = bot_username.lstrip("@") if bot_username else "SheerID_Bot"
         self.pending_verifications: Dict[str, asyncio.Future] = {}
         self.is_connected = False
+        self._daily_task = None
+        self._last_daily_claim = None
+        self._response_waiters: list = []  # Generic response waiters
         
     async def start(self):
         """Start the client"""
         try:
             await self.client.start()
             self.is_connected = True
-            logger.info(f"Telegram Userbot started. Logged in as: {(await self.client.get_me()).username}")
+            me = await self.client.get_me()
+            username = me.username or me.first_name if me else "Unknown"
+            logger.info(f"Telegram Userbot started. Logged in as: {username}")
             
-            # Register event handler for new messages
+            # Register event handler for ALL messages from bot
             self.client.add_event_handler(self._on_message, events.NewMessage(from_users=self.bot_username))
+            
+            # Start daily claim scheduler
+            self._daily_task = asyncio.create_task(self._daily_claim_scheduler())
+            logger.info("Daily auto-claim scheduler started")
+            
+            # Claim daily right away on startup
+            asyncio.create_task(self._safe_claim_daily())
             
         except Exception as e:
             logger.error(f"Failed to start Telegram Userbot: {e}")
@@ -52,17 +66,107 @@ class SheerIDUserbot:
 
     async def stop(self):
         """Stop the client"""
+        if self._daily_task:
+            self._daily_task.cancel()
+            self._daily_task = None
         if self.client:
             await self.client.disconnect()
             self.is_connected = False
             logger.info("Telegram Userbot stopped")
 
-    async def verify(self, sheerid_link: str, timeout: int = 120) -> dict:
+    # ========== Daily Auto-Claim ==========
+    
+    async def _daily_claim_scheduler(self):
+        """Background task to claim /daily every 24 hours"""
+        while True:
+            try:
+                # Wait until next claim time
+                now = datetime.now()
+                if self._last_daily_claim:
+                    next_claim = self._last_daily_claim + timedelta(hours=24)
+                    wait_seconds = (next_claim - now).total_seconds()
+                    if wait_seconds > 0:
+                        logger.info(f"Next /daily claim in {wait_seconds/3600:.1f} hours")
+                        await asyncio.sleep(wait_seconds)
+                else:
+                    # First run - wait 24 hours for next auto-claim (we already claimed on startup)
+                    await asyncio.sleep(24 * 3600)
+                
+                await self._safe_claim_daily()
+                
+            except asyncio.CancelledError:
+                logger.info("Daily claim scheduler cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Daily claim scheduler error: {e}")
+                await asyncio.sleep(3600)  # Retry in 1 hour on error
+    
+    async def _safe_claim_daily(self):
+        """Safely claim daily credits"""
+        try:
+            result = await self.claim_daily()
+            logger.info(f"Daily claim result: {result}")
+        except Exception as e:
+            logger.error(f"Failed to claim daily: {e}")
+    
+    async def claim_daily(self) -> dict:
+        """Send /daily to claim free credits"""
+        if not self.is_connected:
+            return {"success": False, "error": "Userbot not connected"}
+        
+        logger.info("Claiming daily free credits...")
+        response = await self._send_and_wait("/daily", timeout=15)
+        
+        self._last_daily_claim = datetime.now()
+        
+        if response:
+            return {
+                "success": True,
+                "message": response,
+                "claimed_at": self._last_daily_claim.isoformat()
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No response from bot",
+                "claimed_at": self._last_daily_claim.isoformat()
+            }
+    
+    # ========== Balance Check ==========
+    
+    async def check_balance(self) -> dict:
+        """Send /balance to check remaining credits"""
+        if not self.is_connected:
+            return {"success": False, "error": "Userbot not connected"}
+        
+        response = await self._send_and_wait("/balance", timeout=15)
+        
+        if response:
+            # Try to extract credit number from response
+            credits = None
+            match = re.search(r'(\d+)\s*credit', response, re.IGNORECASE)
+            if match:
+                credits = int(match.group(1))
+            
+            return {
+                "success": True,
+                "message": response,
+                "credits": credits
+            }
+        return {"success": False, "error": "No response from bot"}
+    
+    # ========== Verification ==========
+
+    async def verify(self, verification_link: str, timeout: int = 120) -> dict:
         """
-        Send verification request and wait for result
+        Complete verification flow:
+        1. Send /verify command
+        2. Wait for bot prompt
+        3. Send the verification link
+        4. Wait for verification result
         
         Args:
-            sheerid_link: The verification link
+            verification_link: The full SheerID verification URL
             timeout: Timeout in seconds
             
         Returns:
@@ -71,80 +175,142 @@ class SheerIDUserbot:
         if not self.is_connected:
             return {"success": False, "error": "Userbot not connected"}
 
-        # Extract verificationId from link for tracking
-        vid = self._extract_vid(sheerid_link)
-        if not vid:
-            return {"success": False, "error": "Invalid SheerID link format"}
-            
-        logger.info(f"Starting verification for VID: {vid}")
-        
-        # Create Future to wait for result
-        future = asyncio.get_event_loop().create_future()
-        self.pending_verifications[vid] = future
+        logger.info(f"Starting verification flow for link: {verification_link[:60]}...")
         
         try:
-            # Send message to Bot
-            await self.client.send_message(self.bot_username, f"/verify {sheerid_link}")
+            # Step 1: Send the verification link directly to the bot
+            # Most SheerID bots accept a direct link or /verify <link>
+            response = await self._send_and_wait(verification_link, timeout=timeout)
             
-            # Wait for result
-            result = await asyncio.wait_for(future, timeout=timeout)
-            return result
+            if not response:
+                # Try with /verify prefix
+                logger.info("No response to direct link, trying /verify command...")
+                await self.client.send_message(self.bot_username, "/verify")
+                await asyncio.sleep(3)
+                
+                # Then send the link
+                response = await self._send_and_wait(verification_link, timeout=timeout)
+            
+            if not response:
+                return {"success": False, "error": "No response from bot (timeout)"}
+            
+            # Check if bot is asking for more input (multi-step flow)
+            if self._is_prompt(response):
+                # Bot is asking for input, send the link  
+                logger.info(f"Bot prompted, sending link...")
+                response = await self._send_and_wait(verification_link, timeout=timeout)
+            
+            # Parse the final response
+            return self._parse_verification_response(response)
             
         except asyncio.TimeoutError:
-            logger.warning(f"Verification timeout for VID: {vid}")
-            return {"success": False, "error": "Verification timeout (120s)"}
+            logger.warning(f"Verification timeout")
+            return {"success": False, "error": f"Verification timeout ({timeout}s)"}
         except Exception as e:
-            logger.error(f"Verification error for VID {vid}: {e}")
+            logger.error(f"Verification error: {e}")
             return {"success": False, "error": str(e)}
+
+    # ========== Helper Methods ==========
+    
+    async def _send_and_wait(self, message: str, timeout: int = 30) -> Optional[str]:
+        """
+        Send a message to the bot and wait for a response.
+        
+        Returns the bot's response text, or None if timeout.
+        """
+        future = asyncio.get_event_loop().create_future()
+        self._response_waiters.append(future)
+        
+        try:
+            await self.client.send_message(self.bot_username, message)
+            result = await asyncio.wait_for(future, timeout=timeout)
+            return result
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout waiting for bot response to: {message[:50]}")
+            return None
         finally:
-            # Cleanup
-            self.pending_verifications.pop(vid, None)
+            if future in self._response_waiters:
+                self._response_waiters.remove(future)
 
     async def _on_message(self, event):
-        """Handle incoming messages from Bot"""
+        """Handle ALL incoming messages from Bot"""
         try:
-            text = event.message.text
-            logger.info(f"Received message from Bot: {text[:100]}...")
+            text = event.message.text or ""
+            logger.info(f"Received from Bot: {text[:150]}...")
             
-            # Parse response
-            # Need to extract verificationId from the text to match with pending request
-            # Common formats:
-            # "ID: <verification_id>"
-            # Link containing verificationId
+            # First, check if any generic waiter is pending
+            if self._response_waiters:
+                waiter = self._response_waiters[0]
+                if not waiter.done():
+                    waiter.set_result(text)
+                    return
             
+            # Legacy: check for verification-specific responses
             vid = self._extract_vid_from_text(text)
-            
-            if not vid:
-                # Some bots might reply to the message, we can check reply_to_msg_id if needed
-                # But usually they include the ID or link
-                return
-
-            if vid not in self.pending_verifications:
-                return
-
-            result = None
-            
-            # Check for success keywords
-            if "VERIFICATION APPROVED" in text or "SUCCESS" in text.upper():
-                result = {
-                    "success": True, 
-                    "status": "verified",
-                    "message": "Verification Approved",
-                    "raw_response": text
-                }
-            # Check for failure keywords
-            elif "FAILED" in text.upper() or "ERROR" in text.upper() or "INVALID" in text.upper():
-                result = {
-                    "success": False, 
-                    "error": "Verification Failed by Bot",
-                    "raw_response": text
-                }
-            
-            if result:
-                self.pending_verifications[vid].set_result(result)
+            if vid and vid in self.pending_verifications:
+                result = self._parse_verification_response(text)
+                if not self.pending_verifications[vid].done():
+                    self.pending_verifications[vid].set_result(result)
                 
         except Exception as e:
             logger.error(f"Error processing message: {e}")
+    
+    def _is_prompt(self, text: str) -> bool:
+        """Check if bot response is asking for input"""
+        prompt_keywords = [
+            "send me", "paste", "enter", "provide", "link",
+            "url", "please send", "waiting for", "share"
+        ]
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in prompt_keywords)
+    
+    def _parse_verification_response(self, text: str) -> dict:
+        """Parse bot's verification response into structured result"""
+        text_upper = text.upper()
+        
+        # Success indicators
+        if any(kw in text_upper for kw in ["CONGRATULATIONS", "VERIFIED", "APPROVED", "SUCCESS", "YOU'VE BEEN VERIFIED"]):
+            return {
+                "success": True,
+                "status": "verified",
+                "message": "Verification Approved",
+                "raw_response": text
+            }
+        
+        # Processing indicator
+        if any(kw in text_upper for kw in ["PROCESSING", "PLEASE WAIT", "WORKING ON"]):
+            return {
+                "success": None,  # Still processing
+                "status": "processing", 
+                "message": "Verification in progress",
+                "raw_response": text
+            }
+        
+        # Failure indicators
+        if any(kw in text_upper for kw in ["FAILED", "ERROR", "INVALID", "REJECTED", "DENIED", "EXPIRED"]):
+            return {
+                "success": False,
+                "status": "failed",
+                "error": "Verification Failed",
+                "raw_response": text
+            }
+        
+        # Insufficient credits
+        if any(kw in text_upper for kw in ["INSUFFICIENT", "NO CREDIT", "NOT ENOUGH", "TOP UP"]):
+            return {
+                "success": False,
+                "status": "no_credits",
+                "error": "Insufficient credits",
+                "raw_response": text
+            }
+        
+        # Unknown response - return as-is
+        return {
+            "success": None,
+            "status": "unknown",
+            "message": text[:200],
+            "raw_response": text
+        }
 
     def _extract_vid(self, link: str) -> Optional[str]:
         """Extract verificationId from URL"""

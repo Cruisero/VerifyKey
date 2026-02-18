@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../stores/AuthContext';
 import './Verify.css';
 
 // API base URL
@@ -28,8 +26,6 @@ const generateInitialData = (count) => {
 };
 
 export default function Verify() {
-    const { user, updateCredits } = useAuth();
-
     const [input, setInput] = useState('');
     const [verifyStatus, setVerifyStatus] = useState('ready');
     const [results, setResults] = useState([]);
@@ -37,9 +33,16 @@ export default function Verify() {
     const [statusData, setStatusData] = useState(() => generateInitialData(180));
     const [hoveredItem, setHoveredItem] = useState(null);
     const [botStatus, setBotStatus] = useState(null);
-    const [provider, setProvider] = useState('telegram'); // Current AI provider
-    const [browserMode, setBrowserMode] = useState(false); // API vs Browser mode
+    const [provider, setProvider] = useState('telegram');
+    const [browserMode, setBrowserMode] = useState(false);
     const [program, setProgram] = useState('google-student');
+
+    // CDK state
+    const [cdkCode, setCdkCode] = useState(() => localStorage.getItem('verifykey-cdk') || '');
+    const [cdkValid, setCdkValid] = useState(false);
+    const [cdkRemaining, setCdkRemaining] = useState(0);
+    const [cdkChecking, setCdkChecking] = useState(false);
+    const [cdkExpanded, setCdkExpanded] = useState(() => !localStorage.getItem('verifykey-cdk'));
 
     const programs = [
         { value: 'google-student', label: 'Google Student' },
@@ -77,7 +80,7 @@ export default function Verify() {
         return () => clearTimeout(timeoutId);
     }, [addNewStatus]);
 
-    // 获取配置 (provider, browserMode) 和 Bot 状态
+    // 获取配置和 Bot 状态
     useEffect(() => {
         const fetchConfig = async () => {
             try {
@@ -108,6 +111,44 @@ export default function Verify() {
         return () => clearInterval(interval);
     }, []);
 
+    // 验证 CDK（当 cdkCode 变化时）
+    useEffect(() => {
+        if (!cdkCode.trim()) {
+            setCdkValid(false);
+            setCdkRemaining(0);
+            return;
+        }
+        const validateCdk = async () => {
+            setCdkChecking(true);
+            try {
+                const res = await fetch(`${API_BASE}/api/cdk/validate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: cdkCode })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setCdkValid(data.valid);
+                    setCdkRemaining(data.remaining || 0);
+                    if (data.valid) {
+                        localStorage.setItem('verifykey-cdk', cdkCode);
+                        setCdkExpanded(false);
+                    }
+                } else {
+                    setCdkValid(false);
+                    setCdkRemaining(0);
+                }
+            } catch (e) {
+                console.warn('CDK validation failed:', e);
+            } finally {
+                setCdkChecking(false);
+            }
+        };
+        // Debounce
+        const timer = setTimeout(validateCdk, 500);
+        return () => clearTimeout(timer);
+    }, [cdkCode]);
+
     const isTelegramMode = provider === 'telegram';
 
     // 提取输入内容（链接或ID）
@@ -118,13 +159,14 @@ export default function Verify() {
 
     // 统一验证入口
     const handleVerify = async () => {
-        if (!user) {
-            alert('请先登录后再验证');
+        if (!cdkValid) {
+            alert('请先输入有效的 CDK 激活码');
+            setCdkExpanded(true);
             return;
         }
         if (!input.trim()) return;
-        if (user.credits <= 0) {
-            alert('配额不足，请充值后再试');
+        if (cdkRemaining <= 0) {
+            alert('CDK 额度已用完，请更换 CDK');
             return;
         }
 
@@ -166,7 +208,7 @@ export default function Verify() {
             const response = await fetch(`${API_BASE}/api/verify/telegram`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ links })
+                body: JSON.stringify({ links, cdk: cdkCode })
             });
 
             if (!response.ok) {
@@ -187,7 +229,6 @@ export default function Verify() {
                             status = 'success';
                             message = result.message || '✅ 验证通过！';
                             setLastSuccess(new Date().toISOString());
-                            updateCredits(-1);
                             addNewStatus();
                         } else if (result.status === 'rejected') {
                             status = 'failed';
@@ -209,6 +250,10 @@ export default function Verify() {
                         ));
                     }
                 }
+            }
+            // Update CDK remaining from response
+            if (data.cdkRemaining !== undefined) {
+                setCdkRemaining(data.cdkRemaining);
             }
         } catch (error) {
             console.error('Telegram verify error:', error);
@@ -260,7 +305,6 @@ export default function Verify() {
                         const message = result.success ? '✅ 验证通过' : ('❌ ' + (result.message || '验证失败'));
                         if (result.success) {
                             setLastSuccess(new Date().toISOString());
-                            updateCredits(-1);
                             addNewStatus();
                         }
                         setResults(prev => prev.map(r =>
@@ -330,45 +374,29 @@ export default function Verify() {
     };
 
     const userStats = [
-        { label: '当前配额', value: user ? `${user.credits} 次` : '未登录', icon: '🎫', color: 'primary' },
+        { label: 'CDK 额度', value: cdkValid ? `${cdkRemaining} 次` : '未激活', icon: '🔑', color: 'primary' },
         { label: '本月验证', value: liveStats.pass + liveStats.fail + liveStats.timeout, icon: '⚡', color: 'success' },
         { label: '成功率', value: `${Math.round(liveStats.pass / statusData.length * 100)}%`, icon: '📈', color: 'info' },
-    ];
-
-    const quickActions = [
-        { label: '充值配额', icon: '💰', path: '/recharge' },
     ];
 
     return (
         <div className="verify-page">
             <div className="container">
-                {/* Welcome Section */}
+                {/* Header */}
                 <div className="welcome-section">
                     <div className="welcome-content">
                         <h1 className="welcome-title">
-                            {user ? (
-                                <>欢迎回来，<span className="gradient-text">{user.username}</span> 👋</>
-                            ) : (
-                                <>欢迎使用 <span className="gradient-text">OnePASS</span> 🚀</>
-                            )}
+                            <span className="gradient-text">Verification Console</span>
                         </h1>
                         <p className="welcome-desc">
-                            {user ? '开始您的验证任务吧！' : '请登录后开始验证任务'}
+                            提示：无需登录，直接使用链接即可开始验证。支持多线程并发处理。
                         </p>
                     </div>
                     <div className="quick-actions">
-                        {user ? (
-                            quickActions.map((action, index) => (
-                                <Link key={index} to={action.path} className="quick-action-btn">
-                                    <span className="action-icon">{action.icon}</span>
-                                    <span>{action.label}</span>
-                                </Link>
-                            ))
-                        ) : (
-                            <Link to="/login" className="quick-action-btn">
-                                <span className="action-icon">🔐</span>
-                                <span>登录 / 注册</span>
-                            </Link>
+                        {isTelegramMode && botStatus && (
+                            <span className={`bot-status-badge ${botStatus.connected ? 'online' : 'offline'}`}>
+                                {botStatus.connected ? '● System Ready' : '○ System Offline'}
+                            </span>
                         )}
                     </div>
                 </div>
@@ -413,6 +441,52 @@ export default function Verify() {
 
                 {/* Main Verify Content */}
                 <div className="verify-content">
+                    {/* CDK Input Panel */}
+                    <div className="panel cdk-panel card">
+                        <div className="cdk-header" onClick={() => setCdkExpanded(!cdkExpanded)}>
+                            <div className="cdk-title">
+                                <span className="panel-icon">🔑</span>
+                                {cdkValid ? (
+                                    <span className="cdk-status-text valid">
+                                        CDK 已激活 — 剩余 <strong>{cdkRemaining}</strong> 次
+                                    </span>
+                                ) : (
+                                    <span className="cdk-status-text">输入 CDK（1/2/5/20/100 次）</span>
+                                )}
+                            </div>
+                            <span className="cdk-toggle">{cdkExpanded ? '收起' : '展开'}</span>
+                        </div>
+                        {cdkExpanded && (
+                            <div className="cdk-body">
+                                <div className="cdk-input-row">
+                                    <input
+                                        type="text"
+                                        className={`input cdk-input ${cdkValid ? 'valid' : cdkCode.trim() ? 'invalid' : ''}`}
+                                        placeholder="VK-XXXX-XXXX-XXXX"
+                                        value={cdkCode}
+                                        onChange={(e) => setCdkCode(e.target.value.toUpperCase())}
+                                    />
+                                    {cdkChecking && <span className="cdk-checking">验证中...</span>}
+                                    {!cdkChecking && cdkValid && <span className="cdk-valid">✅ 有效</span>}
+                                    {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">❌ 无效</span>}
+                                </div>
+                                {cdkValid && (
+                                    <button
+                                        className="btn btn-sm btn-ghost cdk-clear-btn"
+                                        onClick={() => {
+                                            setCdkCode('');
+                                            localStorage.removeItem('verifykey-cdk');
+                                            setCdkValid(false);
+                                            setCdkRemaining(0);
+                                        }}
+                                    >
+                                        清除 CDK
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Input Panel */}
                     <div className="panel input-panel card">
                         <div className="panel-header">
@@ -459,14 +533,14 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                     <span className="id-count">
                                         {extractItems(input).length} 个{isTelegramMode ? '链接' : 'ID'}
                                     </span>
-                                    <span className="slots-info">剩余配额: {user ? `${user.credits} 次` : '未登录'}</span>
+                                    <span className="slots-info">剩余配额: {cdkValid ? `${cdkRemaining} 次` : '未激活'}</span>
                                 </div>
 
                                 <div className="input-actions">
                                     <button
                                         className="btn btn-primary btn-lg"
                                         onClick={handleVerify}
-                                        disabled={verifyStatus === 'processing' || !input.trim() || !user}
+                                        disabled={verifyStatus === 'processing' || !input.trim() || !cdkValid}
                                     >
                                         {verifyStatus === 'processing' ? (
                                             <>

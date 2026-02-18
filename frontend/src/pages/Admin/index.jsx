@@ -5,6 +5,209 @@ import './Admin.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+// CDK Management Component
+function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkGenerating, setCdkGenerating, cdkGenQuota, setCdkGenQuota, cdkGenCount, setCdkGenCount, cdkGenNote, setCdkGenNote, cdkFilter, setCdkFilter, cdkNewCodes, setCdkNewCodes }) {
+    const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+
+    const fetchCDKs = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/cdk/list`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setCdkList(data.cdks || []);
+                setCdkStats(data.stats || {});
+            }
+        } catch (e) { console.error('Failed to fetch CDKs:', e); }
+    };
+
+    useEffect(() => { fetchCDKs(); }, []);
+
+    const handleGenerate = async () => {
+        setCdkGenerating(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/cdk/generate`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ count: cdkGenCount, quota: cdkGenQuota, note: cdkGenNote })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCdkNewCodes(data.codes || []);
+                setCdkGenNote('');
+                await fetchCDKs();
+            } else {
+                const err = await res.json();
+                alert(err.detail || '生成失败');
+            }
+        } catch (e) { alert('生成失败: ' + e.message); }
+        finally { setCdkGenerating(false); }
+    };
+
+    const handleDelete = async (code) => {
+        if (!confirm(`确定删除 CDK: ${code}？`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/cdk/delete`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ code })
+            });
+            if (res.ok) await fetchCDKs();
+            else alert('删除失败');
+        } catch (e) { alert('删除失败: ' + e.message); }
+    };
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+    };
+
+    const copyAllNewCodes = () => {
+        navigator.clipboard.writeText(cdkNewCodes.join('\n'));
+    };
+
+    const filteredList = cdkList.filter(c => {
+        if (cdkFilter === 'unused') return c.status === 'unused';
+        if (cdkFilter === 'active') return c.status === 'active';
+        if (cdkFilter === 'used') return c.status === 'used';
+        return true;
+    });
+
+    const quotaOptions = [1, 2, 5, 20, 100];
+
+    return (
+        <div className="tab-content">
+            {/* CDK Stats */}
+            <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                <div className="stat-card card primary">
+                    <div className="stat-icon">🔑</div>
+                    <div className="stat-info">
+                        <span className="stat-value">{cdkStats.total || 0}</span>
+                        <span className="stat-label">总数</span>
+                    </div>
+                </div>
+                <div className="stat-card card success">
+                    <div className="stat-icon">✨</div>
+                    <div className="stat-info">
+                        <span className="stat-value">{cdkStats.unused || 0}</span>
+                        <span className="stat-label">未使用</span>
+                    </div>
+                </div>
+                <div className="stat-card card info">
+                    <div className="stat-icon">⚡</div>
+                    <div className="stat-info">
+                        <span className="stat-value">{cdkStats.totalRemaining || 0}</span>
+                        <span className="stat-label">剩余总额度</span>
+                    </div>
+                </div>
+                <div className="stat-card card warning">
+                    <div className="stat-icon">📊</div>
+                    <div className="stat-info">
+                        <span className="stat-value">{cdkStats.totalUsed || 0}</span>
+                        <span className="stat-label">已消耗</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Generate CDK */}
+            <div className="card" style={{ padding: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)' }}>
+                <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: 'var(--text-lg)' }}>🎲 生成 CDK</h3>
+                <div style={{ display: 'flex', gap: 'var(--spacing-md)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div>
+                        <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>面额</label>
+                        <select className="input" value={cdkGenQuota} onChange={e => setCdkGenQuota(Number(e.target.value))} style={{ width: '120px' }}>
+                            {quotaOptions.map(q => <option key={q} value={q}>{q} 次</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>数量</label>
+                        <input className="input" type="number" min={1} max={100} value={cdkGenCount} onChange={e => setCdkGenCount(Number(e.target.value))} style={{ width: '80px' }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                        <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>备注（可选）</label>
+                        <input className="input" type="text" placeholder="例如：测试用" value={cdkGenNote} onChange={e => setCdkGenNote(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    <button className="btn btn-primary" onClick={handleGenerate} disabled={cdkGenerating}>
+                        {cdkGenerating ? '⏳ 生成中...' : `🎲 生成 ${cdkGenCount} 个`}
+                    </button>
+                </div>
+            </div>
+
+            {/* Newly Generated Codes */}
+            {cdkNewCodes.length > 0 && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', border: '2px solid var(--color-success)', background: 'rgba(16, 185, 129, 0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-sm)' }}>
+                        <h3 style={{ fontSize: 'var(--text-base)', color: 'var(--color-success)' }}>✅ 新生成的 CDK</h3>
+                        <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                            <button className="btn btn-sm btn-secondary" onClick={copyAllNewCodes}>📋 复制全部</button>
+                            <button className="btn btn-sm btn-ghost" onClick={() => setCdkNewCodes([])}>✕ 关闭</button>
+                        </div>
+                    </div>
+                    <div style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: 'var(--text-sm)', lineHeight: '1.8' }}>
+                        {cdkNewCodes.map((code, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                <span>{code}</span>
+                                <button className="btn btn-sm btn-ghost" onClick={() => copyToClipboard(code)} style={{ padding: '2px 6px', fontSize: 'var(--text-xs)' }}>📋</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Filter + CDK Table */}
+            <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+                    <h3 style={{ fontSize: 'var(--text-lg)' }}>📋 CDK 列表 ({filteredList.length})</h3>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
+                        {['all', 'unused', 'active', 'used'].map(f => (
+                            <button key={f} className={`btn btn-sm ${cdkFilter === f ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCdkFilter(f)}>
+                                {f === 'all' ? '全部' : f === 'unused' ? '未使用' : f === 'active' ? '使用中' : '已用完'}
+                            </button>
+                        ))}
+                        <button className="btn btn-sm btn-secondary" onClick={fetchCDKs}>🔄</button>
+                    </div>
+                </div>
+                <div className="users-table">
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>CDK 代码</th>
+                                <th>面额</th>
+                                <th>使用情况</th>
+                                <th>状态</th>
+                                <th>备注</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredList.map(c => (
+                                <tr key={c.code}>
+                                    <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{c.code}</td>
+                                    <td>{c.quota} 次</td>
+                                    <td>{c.used} / {c.quota}</td>
+                                    <td>
+                                        <span className={`badge badge-${c.status === 'unused' ? 'info' : c.status === 'active' ? 'success' : 'error'}`}>
+                                            {c.status === 'unused' ? '未使用' : c.status === 'active' ? '使用中' : '已用完'}
+                                        </span>
+                                    </td>
+                                    <td style={{ color: 'var(--text-muted)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.note || '-'}</td>
+                                    <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{c.createdAt ? new Date(c.createdAt).toLocaleString() : '-'}</td>
+                                    <td>
+                                        <div className="action-btns">
+                                            <button className="btn btn-sm btn-secondary" onClick={() => copyToClipboard(c.code)}>📋</button>
+                                            <button className="btn btn-sm btn-outline" onClick={() => handleDelete(c.code)} style={{ color: 'var(--color-danger)' }}>🗑️</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredList.length === 0 && (
+                                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无 CDK 数据</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function Admin() {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
@@ -14,6 +217,16 @@ export default function Admin() {
     const [testResult, setTestResult] = useState(null);
     const [testing, setTesting] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    // CDK management state
+    const [cdkList, setCdkList] = useState([]);
+    const [cdkStats, setCdkStats] = useState({});
+    const [cdkGenerating, setCdkGenerating] = useState(false);
+    const [cdkGenQuota, setCdkGenQuota] = useState(5);
+    const [cdkGenCount, setCdkGenCount] = useState(1);
+    const [cdkGenNote, setCdkGenNote] = useState('');
+    const [cdkFilter, setCdkFilter] = useState('all');
+    const [cdkNewCodes, setCdkNewCodes] = useState([]);
 
     // Test document generation state
     const [testingDocument, setTestingDocument] = useState(false);
@@ -402,6 +615,7 @@ export default function Admin() {
 
     const tabs = [
         { id: 'overview', label: '概览', icon: '📊' },
+        { id: 'cdk', label: 'CDK 管理', icon: '🔑' },
         { id: 'users', label: '用户管理', icon: '👥' },
         { id: 'ai-generator', label: 'AI 文档生成', icon: '🤖' },
         { id: 'settings', label: '系统设置', icon: '⚙️' },
@@ -480,6 +694,29 @@ export default function Admin() {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* CDK Management Tab */}
+                {activeTab === 'cdk' && (
+                    <CDKManagement
+                        token={user?.token || localStorage.getItem('verifykey-token')}
+                        cdkList={cdkList}
+                        setCdkList={setCdkList}
+                        cdkStats={cdkStats}
+                        setCdkStats={setCdkStats}
+                        cdkGenerating={cdkGenerating}
+                        setCdkGenerating={setCdkGenerating}
+                        cdkGenQuota={cdkGenQuota}
+                        setCdkGenQuota={setCdkGenQuota}
+                        cdkGenCount={cdkGenCount}
+                        setCdkGenCount={setCdkGenCount}
+                        cdkGenNote={cdkGenNote}
+                        setCdkGenNote={setCdkGenNote}
+                        cdkFilter={cdkFilter}
+                        setCdkFilter={setCdkFilter}
+                        cdkNewCodes={cdkNewCodes}
+                        setCdkNewCodes={setCdkNewCodes}
+                    />
                 )}
 
                 {/* Users Tab */}

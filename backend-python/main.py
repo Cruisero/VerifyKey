@@ -29,6 +29,7 @@ from uiuc_generator import generate_uiuc_image, generate_uiuc_email, get_availab
 from sheerid_generator import generate_document as generate_document_sheerid
 from vsid_generator import generate_vsid_document, get_available_document_types as get_vsid_document_types
 import auth
+import cdk_manager
 
 # Load environment variables
 load_dotenv()
@@ -71,6 +72,21 @@ class VerifyRequest(BaseModel):
 
 class TelegramVerifyRequest(BaseModel):
     links: List[str]  # Full verification URLs
+    cdk: Optional[str] = None  # CDK code for quota
+
+
+class CDKGenerateRequest(BaseModel):
+    count: int = 1
+    quota: int = 5
+    note: str = ""
+
+
+class CDKValidateRequest(BaseModel):
+    code: str
+
+
+class CDKDeleteRequest(BaseModel):
+    code: str
 
 
 class VerifyResult(BaseModel):
@@ -1591,13 +1607,83 @@ async def telegram_status():
     }
 
 
+# ========== CDK API Endpoints ==========
+
+@app.post("/api/cdk/validate")
+async def validate_cdk_endpoint(request: CDKValidateRequest):
+    """Validate a CDK code and return remaining quota"""
+    result = cdk_manager.validate_cdk(request.code)
+    return result
+
+
+@app.post("/api/cdk/generate")
+async def generate_cdk_endpoint(request: CDKGenerateRequest, authorization: Optional[str] = Header(None)):
+    """Generate CDK codes (admin only)"""
+    # Verify admin
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    
+    token = authorization.split(' ')[1]
+    user_data = auth.verify_token(token)
+    if not user_data or user_data.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if request.count < 1 or request.count > 100:
+        raise HTTPException(status_code=400, detail="Count must be 1-100")
+    if request.quota not in [1, 2, 5, 20, 100]:
+        raise HTTPException(status_code=400, detail="Quota must be 1, 2, 5, 20, or 100")
+    
+    codes = cdk_manager.generate_cdks(request.count, request.quota, request.note)
+    return {"success": True, "codes": codes, "count": len(codes), "quota": request.quota}
+
+
+@app.get("/api/cdk/list")
+async def list_cdks_endpoint(authorization: Optional[str] = Header(None)):
+    """List all CDKs (admin only)"""
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    
+    token = authorization.split(' ')[1]
+    user_data = auth.verify_token(token)
+    if not user_data or user_data.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    cdks = cdk_manager.get_all_cdks()
+    stats = cdk_manager.get_cdk_stats()
+    return {"cdks": cdks, "stats": stats}
+
+
+@app.post("/api/cdk/delete")
+async def delete_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional[str] = Header(None)):
+    """Delete a CDK (admin only)"""
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    
+    token = authorization.split(' ')[1]
+    user_data = auth.verify_token(token)
+    if not user_data or user_data.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    success = cdk_manager.delete_cdk(request.code)
+    if not success:
+        raise HTTPException(status_code=404, detail="CDK not found")
+    return {"success": True, "message": "CDK 已删除"}
+
+
+@app.get("/api/cdk/stats")
+async def cdk_stats_endpoint():
+    """Get CDK statistics"""
+    return cdk_manager.get_cdk_stats()
+
+
+# ========== Telegram Verification ==========
+
 @app.post("/api/verify/telegram")
 async def verify_via_telegram(request: TelegramVerifyRequest):
     """
     Verify by sending full verification links to Telegram SheerID Bot.
-    Accepts full URLs like: https://services.sheerid.com/verify/xxx/?verificationId=yyy
-    
-    Links are processed concurrently — results are matched by verificationId from bot responses.
+    Requires a valid CDK with sufficient quota.
+    Links are processed concurrently — results are matched by verificationId.
     """
     if not telegram_bot or not telegram_bot.is_connected:
         raise HTTPException(
@@ -1611,12 +1697,27 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     if len(request.links) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 links per request")
     
+    # Validate CDK
+    if not request.cdk:
+        raise HTTPException(status_code=400, detail="请提供 CDK 激活码")
+    
+    cdk_check = cdk_manager.validate_cdk(request.cdk)
+    if not cdk_check["valid"]:
+        raise HTTPException(status_code=403, detail=cdk_check["message"])
+    
     # Clean up links
     clean_links = [link.strip() for link in request.links if link.strip()]
     if not clean_links:
         raise HTTPException(status_code=400, detail="No valid links provided")
     
-    # Send all links concurrently — results are matched by verificationId
+    # Check if CDK has enough quota
+    if cdk_check["remaining"] < len(clean_links):
+        raise HTTPException(
+            status_code=403, 
+            detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
+        )
+    
+    # Send all links concurrently
     import re
     
     async def process_link(link):
@@ -1640,13 +1741,21 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     results = await asyncio.gather(*[process_link(link) for link in clean_links])
     results = list(results)
     
+    # Deduct CDK quota for successful verifications
+    successful = sum(1 for r in results if r["status"] == "approved")
+    cdk_remaining = cdk_check["remaining"]
+    if successful > 0:
+        deduct = cdk_manager.use_cdk(request.cdk, successful)
+        cdk_remaining = deduct.get("remaining", cdk_remaining)
+    
     return {
         "results": results,
         "stats": {
             "total": len(results),
-            "approved": sum(1 for r in results if r["status"] == "approved"),
+            "approved": successful,
             "rejected": sum(1 for r in results if r["status"] == "rejected")
-        }
+        },
+        "cdkRemaining": cdk_remaining
     }
 
 

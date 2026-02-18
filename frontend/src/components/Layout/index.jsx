@@ -48,10 +48,6 @@ export default function Layout({ children }) {
 
                         {user ? (
                             <div className="user-menu-container" ref={dropdownRef}>
-                                <div className="credits-display">
-                                    <span className="credits-icon">🎫</span>
-                                    <span className="credits-amount">{user.credits} 次</span>
-                                </div>
                                 <button
                                     className="user-trigger"
                                     onClick={() => setShowDropdown(!showDropdown)}
@@ -70,22 +66,6 @@ export default function Layout({ children }) {
                                             <span className="dropdown-email">{user.email}</span>
                                         </div>
                                         <div className="dropdown-divider"></div>
-                                        <Link
-                                            to="/profile"
-                                            className="dropdown-item"
-                                            onClick={() => setShowDropdown(false)}
-                                        >
-                                            <span>👤</span>
-                                            <span>个人中心</span>
-                                        </Link>
-                                        <Link
-                                            to="/recharge"
-                                            className="dropdown-item"
-                                            onClick={() => setShowDropdown(false)}
-                                        >
-                                            <span>💰</span>
-                                            <span>充值配额</span>
-                                        </Link>
                                         {user.role === 'admin' && (
                                             <Link
                                                 to="/admin"
@@ -107,11 +87,7 @@ export default function Layout({ children }) {
                                     </div>
                                 )}
                             </div>
-                        ) : (
-                            <Link to="/login" className="btn btn-primary btn-sm">
-                                登录
-                            </Link>
-                        )}
+                        ) : null}
                     </div>
                 </div>
             </header>

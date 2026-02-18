@@ -4,7 +4,6 @@ import { AuthProvider } from './stores/AuthContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Verify from './pages/Verify';
-import Recharge from './pages/Recharge';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 
@@ -25,18 +24,11 @@ function App() {
                 </Layout>
               }
             />
-            {/* 登录页面 */}
+            {/* 管理员登录页面 */}
             <Route path="/login" element={<Home />} />
             <Route path="/verify" element={<Navigate to="/" replace />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
-            <Route
-              path="/recharge"
-              element={
-                <Layout>
-                  <Recharge />
-                </Layout>
-              }
-            />
+            <Route path="/recharge" element={<Navigate to="/" replace />} />
             <Route
               path="/profile"
               element={

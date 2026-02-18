@@ -639,6 +639,20 @@ export default function Admin() {
                                         <span className="badge badge-success">新</span>
                                     </div>
                                 </div>
+
+                                <div
+                                    className={`provider-card ${aiProvider === 'telegram' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('telegram')}
+                                >
+                                    <div className="provider-icon">📨</div>
+                                    <div className="provider-info">
+                                        <h4>Telegram Userbot</h4>
+                                        <p>调用外部 SheerID Bot 自动验证</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-warning">需配置</span>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* batch.1key.me API Settings */}
@@ -1212,6 +1226,136 @@ export default function Admin() {
                                 </div>
                             )}
 
+                            {/* Telegram Userbot Settings */}
+                            {aiProvider === 'telegram' && (
+                                <div className="provider-settings">
+                                    <h4>📨 Telegram Userbot 配置</h4>
+                                    <div className="settings-form">
+                                        <div className="telegram-info" style={{
+                                            background: 'linear-gradient(135deg, #0088cc 0%, #005fa3 100%)',
+                                            color: 'white',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>Telegram Userbot</strong> 通过 Telegram 用户账号自动调用外部 SheerID Bot，
+                                                将验证链接发送给 Bot 并获取验证结果。
+                                            </p>
+                                        </div>
+
+                                        <div className="input-group">
+                                            <label className="input-label">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={config?.verification?.telegram?.enabled || false}
+                                                    onChange={(e) => {
+                                                        setConfig(prev => ({
+                                                            ...prev,
+                                                            verification: {
+                                                                ...prev.verification || {},
+                                                                telegram: {
+                                                                    ...prev.verification?.telegram || {},
+                                                                    enabled: e.target.checked
+                                                                }
+                                                            }
+                                                        }));
+                                                    }}
+                                                    style={{ marginRight: '8px' }}
+                                                />
+                                                启用 Telegram Userbot
+                                            </label>
+                                        </div>
+
+                                        {config?.verification?.telegram?.enabled && (
+                                            <>
+                                                <div className="input-group">
+                                                    <label className="input-label">API ID (from my.telegram.org)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="input"
+                                                        value={config?.verification?.telegram?.apiId || ''}
+                                                        onChange={(e) => {
+                                                            setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    telegram: {
+                                                                        ...prev.verification?.telegram || {},
+                                                                        apiId: e.target.value
+                                                                    }
+                                                                }
+                                                            }));
+                                                        }}
+                                                        placeholder="12345678"
+                                                    />
+                                                </div>
+
+                                                <div className="input-group">
+                                                    <label className="input-label">API Hash</label>
+                                                    <input
+                                                        type="password"
+                                                        className="input"
+                                                        value={config?.verification?.telegram?.apiHash || ''}
+                                                        onChange={(e) => {
+                                                            setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    telegram: {
+                                                                        ...prev.verification?.telegram || {},
+                                                                        apiHash: e.target.value
+                                                                    }
+                                                                }
+                                                            }));
+                                                        }}
+                                                        placeholder="abcdef123456..."
+                                                    />
+                                                </div>
+
+                                                <div className="input-group">
+                                                    <label className="input-label">Target Bot Username</label>
+                                                    <input
+                                                        type="text"
+                                                        className="input"
+                                                        value={config?.verification?.telegram?.botUsername || ''}
+                                                        onChange={(e) => {
+                                                            setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    telegram: {
+                                                                        ...prev.verification?.telegram || {},
+                                                                        botUsername: e.target.value
+                                                                    }
+                                                                }
+                                                            }));
+                                                        }}
+                                                        placeholder="@SheerID_Bot"
+                                                    />
+                                                    <p className="input-hint">默认为 @SheerID_Bot，可自定义目标 Bot</p>
+                                                </div>
+
+                                                <div style={{
+                                                    marginTop: '16px',
+                                                    padding: '12px 16px',
+                                                    background: 'var(--bg-secondary)',
+                                                    borderRadius: '8px',
+                                                    fontSize: '13px'
+                                                }}>
+                                                    <strong>ℹ️ 使用说明:</strong>
+                                                    <ul style={{ margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
+                                                        <li>需要在 <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a> 获取 API ID 和 API Hash</li>
+                                                        <li>首次启用后，需在服务器日志中输入 Telegram 登录验证码</li>
+                                                        <li>Userbot 会自动将验证链接发送给目标 Bot 并解析结果</li>
+                                                    </ul>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Region Mode Settings - Always visible */}
                             <div className="provider-settings region-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                                 <h4>🌍 验证地区配置</h4>
@@ -1494,114 +1638,6 @@ export default function Admin() {
                 {/* Settings Tab */}
                 {activeTab === 'settings' && (
                     <div className="tab-content">
-                        {/* Telegram Userbot Configuration */}
-                        <div className="settings-section card">
-                            <h3>🤖 Telegram Userbot Configuration</h3>
-                            <p className="settings-desc">
-                                Configure the Userbot to interact with the external SheerID Bot.
-                            </p>
-
-                            <div className="admin-section">
-                                <div className="config-grid">
-                                    <div className="form-group checkbox-group" style={{ gridColumn: "1 / -1" }}>
-                                        <label>
-                                            <input
-                                                type="checkbox"
-                                                checked={config?.verification?.telegram?.enabled || false}
-                                                onChange={(e) => {
-                                                    setConfig(prev => ({
-                                                        ...prev,
-                                                        verification: {
-                                                            ...prev.verification || {},
-                                                            telegram: {
-                                                                ...prev.verification?.telegram || {},
-                                                                enabled: e.target.checked
-                                                            }
-                                                        }
-                                                    }));
-                                                }}
-                                            />
-                                            Enable Telegram Userbot (for calling external SheerID Bot)
-                                        </label>
-                                    </div>
-
-                                    {config?.verification?.telegram?.enabled && (
-                                        <>
-                                            <div className="form-group">
-                                                <label>API ID (from my.telegram.org)</label>
-                                                <input
-                                                    type="text"
-                                                    className="input"
-                                                    value={config?.verification?.telegram?.apiId || ''}
-                                                    onChange={(e) => {
-                                                        setConfig(prev => ({
-                                                            ...prev,
-                                                            verification: {
-                                                                ...prev.verification || {},
-                                                                telegram: {
-                                                                    ...prev.verification?.telegram || {},
-                                                                    apiId: e.target.value
-                                                                }
-                                                            }
-                                                        }));
-                                                    }}
-                                                    placeholder="12345678"
-                                                />
-                                            </div>
-
-                                            <div className="form-group">
-                                                <label>API Hash</label>
-                                                <input
-                                                    type="password"
-                                                    className="input"
-                                                    value={config?.verification?.telegram?.apiHash || ''}
-                                                    onChange={(e) => {
-                                                        setConfig(prev => ({
-                                                            ...prev,
-                                                            verification: {
-                                                                ...prev.verification || {},
-                                                                telegram: {
-                                                                    ...prev.verification?.telegram || {},
-                                                                    apiHash: e.target.value
-                                                                }
-                                                            }
-                                                        }));
-                                                    }}
-                                                    placeholder="abcdef123456..."
-                                                />
-                                            </div>
-
-                                            <div className="form-group">
-                                                <label>Target Bot Username</label>
-                                                <input
-                                                    type="text"
-                                                    className="input"
-                                                    value={config?.verification?.telegram?.botUsername || ''}
-                                                    onChange={(e) => {
-                                                        setConfig(prev => ({
-                                                            ...prev,
-                                                            verification: {
-                                                                ...prev.verification || {},
-                                                                telegram: {
-                                                                    ...prev.verification?.telegram || {},
-                                                                    botUsername: e.target.value
-                                                                }
-                                                            }
-                                                        }));
-                                                    }}
-                                                    placeholder="@SheerID_Bot"
-                                                />
-                                            </div>
-
-                                            <div className="info-box" style={{ gridColumn: "1 / -1", marginTop: "10px" }}>
-                                                <p>ℹ️ <strong>Note:</strong> After saving, the backend will restart the Userbot. If this is the first time, you may need to check the server logs to input the Telegram login code.</p>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                <button className="btn btn-primary" style={{ marginTop: "15px" }} onClick={handleSaveAiConfig}>Save Telegram Config</button>
-                            </div>
-                        </div>
 
                         <div className="settings-section card">
                             <h3>💰 定价设置</h3>

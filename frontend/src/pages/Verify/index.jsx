@@ -37,6 +37,18 @@ export default function Verify() {
     const [statusData, setStatusData] = useState(() => generateInitialData(180));
     const [hoveredItem, setHoveredItem] = useState(null);
     const [botStatus, setBotStatus] = useState(null);
+    const [provider, setProvider] = useState('telegram'); // Current AI provider
+    const [browserMode, setBrowserMode] = useState(false); // API vs Browser mode
+    const [program, setProgram] = useState('google-student');
+
+    const programs = [
+        { value: 'google-student', label: 'Google Student' },
+        { value: 'gemini-advanced', label: 'Gemini Advanced' },
+        { value: 'youtube-premium', label: 'YouTube Premium' },
+        { value: 'apple-unidays', label: 'Apple UNiDAYS' },
+        { value: 'github-education', label: 'GitHub Education' },
+        { value: 'notion-education', label: 'Notion Education' },
+    ];
 
     // 添加新状态点
     const addNewStatus = useCallback(() => {
@@ -65,8 +77,20 @@ export default function Verify() {
         return () => clearTimeout(timeoutId);
     }, [addNewStatus]);
 
-    // 获取 Bot 连接状态
+    // 获取配置 (provider, browserMode) 和 Bot 状态
     useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/config`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setProvider(data.aiGenerator?.provider || 'telegram');
+                    setBrowserMode(data.verification?.browserMode === true);
+                }
+            } catch (e) {
+                console.warn('Failed to fetch config:', e);
+            }
+        };
         const fetchBotStatus = async () => {
             try {
                 const res = await fetch(`${API_BASE}/api/telegram/status`);
@@ -78,18 +102,21 @@ export default function Verify() {
                 console.warn('Failed to fetch bot status:', e);
             }
         };
+        fetchConfig();
         fetchBotStatus();
         const interval = setInterval(fetchBotStatus, 60000);
         return () => clearInterval(interval);
     }, []);
 
-    // 提取验证链接
-    const extractLinks = (text) => {
+    const isTelegramMode = provider === 'telegram';
+
+    // 提取输入内容（链接或ID）
+    const extractItems = (text) => {
         const lines = text.split('\n').filter(line => line.trim());
         return lines.map(line => line.trim()).filter(line => line.length > 0);
     };
 
-    // 调用 Telegram Bot 验证
+    // 统一验证入口
     const handleVerify = async () => {
         if (!user) {
             alert('请先登录后再验证');
@@ -101,19 +128,26 @@ export default function Verify() {
             return;
         }
 
-        const links = extractLinks(input);
-        if (links.length === 0) {
-            alert('请输入有效的验证链接');
-            return;
-        }
-        if (links.length > 5) {
-            alert('每次最多验证 5 个链接');
+        const items = extractItems(input);
+        if (items.length === 0) {
+            alert(isTelegramMode ? '请输入有效的验证链接' : '请输入验证 ID 或链接');
             return;
         }
 
         setVerifyStatus('processing');
 
-        // 添加处理中的结果项
+        if (isTelegramMode) {
+            await handleTelegramVerify(items);
+        } else {
+            await handleApiVerify(items);
+        }
+
+        setVerifyStatus('ready');
+        setInput('');
+    };
+
+    // Telegram Bot 验证（发送完整链接）
+    const handleTelegramVerify = async (links) => {
         const resultItems = links.map((link, i) => {
             const vidMatch = link.match(/verificationId=([a-zA-Z0-9-]+)/);
             const displayId = vidMatch ? vidMatch[1] : link.substring(0, 30) + '...';
@@ -141,19 +175,14 @@ export default function Verify() {
             }
 
             const data = await response.json();
-            console.log('Telegram verify response:', data);
-
             if (data.results && Array.isArray(data.results)) {
                 for (const result of data.results) {
                     const resultItem = resultItems.find(r =>
-                        r.fullLink === result.link ||
-                        r.verificationId === result.verificationId
+                        r.fullLink === result.link || r.verificationId === result.verificationId
                     );
-
                     if (resultItem) {
                         let status = 'processing';
                         let message = result.message || '处理中...';
-
                         if (result.status === 'approved') {
                             status = 'success';
                             message = result.message || '✅ 验证通过！';
@@ -170,18 +199,11 @@ export default function Verify() {
                             status = 'failed';
                             message = '❌ Bot 额度不足';
                         }
-
                         setResults(prev => prev.map(r =>
                             r.id === resultItem.id
                                 ? {
-                                    ...r,
-                                    status,
-                                    message,
-                                    verificationId: result.verificationId || r.verificationId,
-                                    credits: result.credits,
-                                    claimLink: result.claimLink,
-                                    reason: result.reason,
-                                    raw_response: result.raw_response
+                                    ...r, status, message, verificationId: result.verificationId || r.verificationId,
+                                    credits: result.credits, claimLink: result.claimLink, reason: result.reason
                                 }
                                 : r
                         ));
@@ -189,16 +211,74 @@ export default function Verify() {
                 }
             }
         } catch (error) {
-            console.error('Verify error:', error);
+            console.error('Telegram verify error:', error);
             setResults(prev => prev.map(r =>
                 resultItems.find(ri => ri.id === r.id) && r.status === 'processing'
                     ? { ...r, status: 'failed', message: '❌ ' + error.message }
                     : r
             ));
         }
+    };
 
-        setVerifyStatus('ready');
-        setInput('');
+    // 传统 API/Browser 验证（发送 ID）
+    const handleApiVerify = async (items) => {
+        // 从 URL 或纯 ID 中提取 verificationId
+        const verificationIds = items.map(item => {
+            const urlMatch = item.match(/verificationId=([a-zA-Z0-9-]+)/);
+            return urlMatch ? urlMatch[1] : item.trim();
+        }).filter(id => id.length > 0);
+
+        const resultItems = verificationIds.map((vid, i) => ({
+            id: Date.now() + i,
+            verificationId: vid,
+            status: 'processing',
+            timestamp: new Date().toISOString(),
+            message: '⏳ 正在处理...'
+        }));
+        setResults(prev => [...resultItems, ...prev]);
+
+        const endpoint = browserMode ? '/api/verify-puppeteer' : '/api/verify';
+
+        try {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ verificationIds, programId: program })
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(err.detail || `请求失败: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.results && Array.isArray(data.results)) {
+                for (const result of data.results) {
+                    const resultItem = resultItems.find(r => r.verificationId === result.verificationId);
+                    if (resultItem) {
+                        const status = result.success ? 'success' : 'failed';
+                        const message = result.success ? '✅ 验证通过' : ('❌ ' + (result.message || '验证失败'));
+                        if (result.success) {
+                            setLastSuccess(new Date().toISOString());
+                            updateCredits(-1);
+                            addNewStatus();
+                        }
+                        setResults(prev => prev.map(r =>
+                            r.id === resultItem.id
+                                ? { ...r, status, message, verificationId: result.verificationId }
+                                : r
+                        ));
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('API verify error:', error);
+            setResults(prev => prev.map(r =>
+                resultItems.find(ri => ri.id === r.id) && r.status === 'processing'
+                    ? { ...r, status: 'failed', message: '❌ ' + error.message }
+                    : r
+            ));
+        }
     };
 
     const handleClear = () => setResults([]);
@@ -314,9 +394,14 @@ export default function Verify() {
                     <div className="header-right">
                         <div className="status-indicator">
                             {getStatusBadge()}
-                            {botStatus && (
+                            {isTelegramMode && botStatus && (
                                 <span className={`bot-status ${botStatus.connected ? 'connected' : 'disconnected'}`}>
                                     {botStatus.connected ? '🤖 Bot 在线' : '🔴 Bot 离线'}
+                                </span>
+                            )}
+                            {!isTelegramMode && (
+                                <span className="bot-status connected">
+                                    {browserMode ? '🌐 浏览器模式' : '⚡ API 模式'}
                                 </span>
                             )}
                             <span className="last-success">
@@ -333,19 +418,37 @@ export default function Verify() {
                         <div className="panel-header">
                             <div className="panel-title">
                                 <span className="panel-icon">📝</span>
-                                <span>输入验证链接</span>
+                                <span>{isTelegramMode ? '输入验证链接' : '输入验证 ID'}</span>
                             </div>
+                            {!isTelegramMode && (
+                                <select
+                                    className="program-select"
+                                    value={program}
+                                    onChange={(e) => setProgram(e.target.value)}
+                                >
+                                    {programs.map(p => (
+                                        <option key={p.value} value={p.value}>{p.label}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
 
                         <div className="panel-body">
                             <textarea
                                 className="input textarea verify-input"
-                                placeholder={`粘贴验证链接，每行一个...
+                                placeholder={isTelegramMode
+                                    ? `粘贴验证链接，每行一个...
 
 例如：
 https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699528d723c407520aeadc45
 
-⚠️ 注意：右键复制链接，不要点击打开！`}
+⚠️ 注意：右键复制链接，不要点击打开！`
+                                    : `粘贴验证 ID 或链接，每行一个...
+
+例如：
+699528d723c407520aeadc45
+https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
+                                }
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 disabled={verifyStatus === 'processing'}
@@ -353,7 +456,9 @@ https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699
 
                             <div className="input-footer">
                                 <div className="input-info">
-                                    <span className="id-count">{extractLinks(input).filter(l => l.includes('sheerid')).length} 个链接</span>
+                                    <span className="id-count">
+                                        {extractItems(input).length} 个{isTelegramMode ? '链接' : 'ID'}
+                                    </span>
                                     <span className="slots-info">剩余配额: {user ? `${user.credits} 次` : '未登录'}</span>
                                 </div>
 

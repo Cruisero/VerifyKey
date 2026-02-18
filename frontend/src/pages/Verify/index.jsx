@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import './Verify.css';
 
-// API base URL - 开发环境使用 localhost:3002，生产环境使用相对路径
+// API base URL
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3002' : '';
 
-// 生成随机状态 (pass为主, 每20个允许2个fail/timeout)
+// 生成随机状态 (视觉装饰用)
 const generateStatus = () => {
     const rand = Math.random();
     if (rand < 0.05) return 'fail';
@@ -14,7 +14,6 @@ const generateStatus = () => {
     return 'pass';
 };
 
-// 生成初始状态数据
 const generateInitialData = (count) => {
     const data = [];
     const now = Date.now();
@@ -32,15 +31,14 @@ export default function Verify() {
     const { user, updateCredits } = useAuth();
 
     const [input, setInput] = useState('');
-    const [program, setProgram] = useState('google-student');
     const [verifyStatus, setVerifyStatus] = useState('ready');
     const [results, setResults] = useState([]);
     const [lastSuccess, setLastSuccess] = useState(null);
     const [statusData, setStatusData] = useState(() => generateInitialData(180));
     const [hoveredItem, setHoveredItem] = useState(null);
-    const [browserMode, setBrowserMode] = useState(false); // Read from admin config
+    const [botStatus, setBotStatus] = useState(null);
 
-    // 添加新状态
+    // 添加新状态点
     const addNewStatus = useCallback(() => {
         setStatusData(prev => {
             const newData = [...prev];
@@ -54,7 +52,7 @@ export default function Verify() {
         });
     }, []);
 
-    // 每分钟更新3次
+    // 定时更新状态
     useEffect(() => {
         const scheduleNextUpdate = () => {
             const delay = 5000 + Math.random() * 20000;
@@ -67,44 +65,31 @@ export default function Verify() {
         return () => clearTimeout(timeoutId);
     }, [addNewStatus]);
 
-    // Fetch browserMode from admin config
+    // 获取 Bot 连接状态
     useEffect(() => {
-        const fetchMode = async () => {
+        const fetchBotStatus = async () => {
             try {
-                const res = await fetch(`${API_BASE}/api/config`);
+                const res = await fetch(`${API_BASE}/api/telegram/status`);
                 if (res.ok) {
                     const data = await res.json();
-                    setBrowserMode(data.verification?.browserMode === true);
+                    setBotStatus(data);
                 }
             } catch (e) {
-                console.warn('Failed to fetch config:', e);
+                console.warn('Failed to fetch bot status:', e);
             }
         };
-        fetchMode();
+        fetchBotStatus();
+        const interval = setInterval(fetchBotStatus, 60000);
+        return () => clearInterval(interval);
     }, []);
 
-    const programs = [
-        { value: 'google-student', label: 'Google Student' },
-        { value: 'gemini-advanced', label: 'Gemini Advanced' },
-    ];
-
-    const extractVerificationIds = (text) => {
+    // 提取验证链接
+    const extractLinks = (text) => {
         const lines = text.split('\n').filter(line => line.trim());
-        const ids = [];
-        lines.forEach(line => {
-            const urlMatch = line.match(/verificationId=([a-zA-Z0-9-]+)/);
-            if (urlMatch) {
-                ids.push(urlMatch[1]);
-            } else if (line.match(/^[a-zA-Z0-9-]{20,}$/)) {
-                ids.push(line.trim());
-            } else {
-                ids.push(line.trim());
-            }
-        });
-        return ids;
+        return lines.map(line => line.trim()).filter(line => line.length > 0);
     };
 
-    // 调用后端 API 进行验证
+    // 调用 Telegram Bot 验证
     const handleVerify = async () => {
         if (!user) {
             alert('请先登录后再验证');
@@ -116,298 +101,98 @@ export default function Verify() {
             return;
         }
 
-        const ids = extractVerificationIds(input);
-        if (ids.length === 0) {
-            alert('请输入有效的验证链接或 ID');
+        const links = extractLinks(input);
+        if (links.length === 0) {
+            alert('请输入有效的验证链接');
             return;
         }
-
-        if (ids.length > 5) {
-            alert('每次最多验证 5 个 ID');
+        if (links.length > 5) {
+            alert('每次最多验证 5 个链接');
             return;
         }
 
         setVerifyStatus('processing');
 
         // 添加处理中的结果项
-        const resultItems = ids.map((id, i) => ({
-            id: Date.now() + i,
-            verificationId: id.length > 25 ? id.substring(0, 25) + '...' : id,
-            fullId: id,
-            status: 'processing',
-            timestamp: new Date().toISOString(),
-            message: '正在验证...'
-        }));
-        setResults(prev => [...prev, ...resultItems]);
+        const resultItems = links.map((link, i) => {
+            const vidMatch = link.match(/verificationId=([a-zA-Z0-9-]+)/);
+            const displayId = vidMatch ? vidMatch[1] : link.substring(0, 30) + '...';
+            return {
+                id: Date.now() + i,
+                verificationId: displayId,
+                fullLink: link,
+                status: 'processing',
+                timestamp: new Date().toISOString(),
+                message: '⏳ 正在处理...'
+            };
+        });
+        setResults(prev => [...resultItems, ...prev]);
 
         try {
-            // 根据模式选择 API 端点
-            const endpoint = browserMode ? '/api/verify-puppeteer' : '/api/verify';
-            console.log(`[Verify] Using ${browserMode ? 'Puppeteer (Browser)' : 'API'} mode`);
-
-            const response = await fetch(`${API_BASE}${endpoint}`, {
+            const response = await fetch(`${API_BASE}/api/verify/telegram`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    verificationIds: ids,
-                    programId: program === 'google-student' ? '' : program
-                })
+                body: JSON.stringify({ links })
             });
 
             if (!response.ok) {
-                throw new Error(`请求失败: ${response.status}`);
+                const err = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(err.detail || `请求失败: ${response.status}`);
             }
 
-            // 检查响应类型 - 后端可能返回 SSE 流或 JSON
-            const contentType = response.headers.get('content-type') || '';
+            const data = await response.json();
+            console.log('Telegram verify response:', data);
 
-            if (contentType.includes('text/event-stream')) {
-                // 处理 SSE 流响应
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-                let pendingChecks = [];
+            if (data.results && Array.isArray(data.results)) {
+                for (const result of data.results) {
+                    const resultItem = resultItems.find(r =>
+                        r.fullLink === result.link ||
+                        r.verificationId === result.verificationId
+                    );
 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
+                    if (resultItem) {
+                        let status = 'processing';
+                        let message = result.message || '处理中...';
 
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                        if (line.startsWith('data:')) {
-                            try {
-                                const data = JSON.parse(line.slice(5).trim());
-                                console.log('SSE data:', data);
-
-                                // 处理验证结果
-                                if (data.verificationId) {
-                                    const resultId = resultItems.find(r =>
-                                        r.fullId === data.verificationId ||
-                                        r.fullId.includes(data.verificationId)
-                                    )?.id;
-
-                                    if (resultId) {
-                                        let status = 'processing';
-                                        let message = data.message || '处理中...';
-
-                                        if (data.currentStep === 'success') {
-                                            status = 'success';
-                                            message = '✓ 验证成功';
-                                            setLastSuccess(new Date().toISOString());
-                                            updateCredits(-1);
-                                            addNewStatus();
-                                        } else if (data.currentStep === 'failed' || data.currentStep === 'error') {
-                                            status = 'failed';
-                                            message = '✕ ' + (data.message || '验证失败');
-                                        } else if (data.currentStep === 'pending' && data.checkToken) {
-                                            // 需要轮询检查状态
-                                            pendingChecks.push({ resultId, checkToken: data.checkToken, verificationId: data.verificationId });
-                                        }
-
-                                        setResults(prev => prev.map(r =>
-                                            r.id === resultId ? { ...r, status, message } : r
-                                        ));
-                                    }
-                                }
-                            } catch (e) {
-                                console.warn('Parse error:', e, line);
-                            }
-                        }
-                    }
-                }
-            } else {
-                // 处理普通 JSON 响应 (Python 后端)
-                const data = await response.json();
-                console.log('JSON response:', data);
-
-                const pendingVerifications = []; // 收集需要轮询的验证
-
-                if (data.results && Array.isArray(data.results)) {
-                    for (const result of data.results) {
-                        const resultId = resultItems.find(r =>
-                            r.fullId === result.verificationId ||
-                            r.fullId.includes(result.verificationId)
-                        )?.id;
-
-                        if (resultId) {
-                            let status = 'processing';
-                            let message = result.message || '处理中...';
-
-
-                            if (result.status === 'pending') {
-                                // Pending status - waiting for SheerID review + start polling
-                                status = 'pending';
-                                message = '⏳ 已提交，正在等待 SheerID 审核...';
-
-                                // 收集需要轮询的验证
-                                pendingVerifications.push({
-                                    resultId,
-                                    verificationId: result.verificationId,
-                                    student: result.student,
-                                    email: result.email,
-                                    school: result.school
-                                });
-                            } else if (result.status === 'success') {
-                                // Only true success (not just success=true with pending status)
-                                status = 'success';
-                                message = '✓ ' + (result.message || '验证成功');
-                                setLastSuccess(new Date().toISOString());
-                                updateCredits(-1);
-                                addNewStatus();
-                            } else if (result.status === 'error' || result.status === 'failed') {
-                                status = 'failed';
-                                message = '✕ ' + (result.message || '验证失败');
-                            } else if (result.success && !result.status) {
-                                // Fallback for legacy success=true without explicit status
-                                status = 'success';
-                                message = '✓ ' + (result.message || '验证成功');
-                                setLastSuccess(new Date().toISOString());
-                                updateCredits(-1);
-                                addNewStatus();
-                            }
-
-                            setResults(prev => prev.map(r =>
-                                r.id === resultId ? { ...r, status, message, student: result.student, email: result.email, school: result.school } : r
-                            ));
-                        }
-                    }
-                }
-
-                // 🔄 自动轮询 pending 状态的验证
-                for (const pending of pendingVerifications) {
-                    (async () => {
-                        let attempts = 0;
-                        const maxAttempts = 60; // 最多等待 60 次 (5分钟)
-                        const interval = 5000; // 每 5 秒检查一次
-
-                        while (attempts < maxAttempts) {
-                            await new Promise(r => setTimeout(r, interval));
-                            attempts++;
-
-                            try {
-                                // 使用 GET 请求检查状态
-                                const checkResponse = await fetch(`${API_BASE}/api/check-status/${pending.verificationId}`);
-                                const checkData = await checkResponse.json();
-
-                                // 获取状态 (后端可能返回 currentStep 或 status)
-                                const step = checkData.currentStep || checkData.status || '';
-
-                                console.log(`[Poll ${attempts}/${maxAttempts}] ${pending.verificationId}: step=${step}`, checkData);
-
-                                // 检查最终状态
-                                if (step === 'success') {
-                                    setResults(prev => prev.map(r =>
-                                        r.id === pending.resultId
-                                            ? { ...r, status: 'success', message: '✓ 验证成功!' }
-                                            : r
-                                    ));
-                                    setLastSuccess(new Date().toISOString());
-                                    updateCredits(-1);
-                                    addNewStatus();
-                                    break;
-                                } else if (step === 'error') {
-                                    // 错误状态 - 显示详细错误信息
-                                    const errorMsg = checkData.systemErrorMessage ||
-                                        checkData.errorIds?.join(', ') ||
-                                        checkData.message ||
-                                        '验证失败';
-                                    setResults(prev => prev.map(r =>
-                                        r.id === pending.resultId
-                                            ? { ...r, status: 'failed', message: `✕ ${errorMsg}` }
-                                            : r
-                                    ));
-                                    break;
-                                } else if (step === 'docUpload' && checkData.rejectionReasons?.length > 0) {
-                                    // 文档被拒绝
-                                    const reasons = checkData.rejectionReasons.join(', ');
-                                    setResults(prev => prev.map(r =>
-                                        r.id === pending.resultId
-                                            ? { ...r, status: 'failed', message: `✕ 文档被拒: ${reasons}` }
-                                            : r
-                                    ));
-                                    break;
-                                } else if (step === 'pending') {
-                                    // 仍在审核中 - 更新进度消息
-                                    setResults(prev => prev.map(r =>
-                                        r.id === pending.resultId
-                                            ? { ...r, message: `⏳ 审核中... (${attempts}/${maxAttempts})` }
-                                            : r
-                                    ));
-                                } else {
-                                    // 其他状态 - 更新进度
-                                    setResults(prev => prev.map(r =>
-                                        r.id === pending.resultId
-                                            ? { ...r, message: `⏳ ${step || '等待中'}... (${attempts}/${maxAttempts})` }
-                                            : r
-                                    ));
-                                }
-                            } catch (e) {
-                                console.error('Poll status error:', e);
-                            }
-                        }
-
-                        // 超时处理
-                        if (attempts >= maxAttempts) {
-                            setResults(prev => prev.map(r =>
-                                r.id === pending.resultId && r.status === 'pending'
-                                    ? { ...r, message: '⏳ 审核超时，请稍后手动检查状态' }
-                                    : r
-                            ));
-                        }
-                    })();
-                }
-            }
-
-            // 处理 pending 状态的验证（轮询检查）
-            for (const pending of pendingChecks) {
-                let attempts = 0;
-                const maxAttempts = 30; // 最多等待30次
-
-                while (attempts < maxAttempts) {
-                    await new Promise(r => setTimeout(r, 2000));
-                    attempts++;
-
-                    try {
-                        const checkResponse = await fetch(`${API_BASE}/api/check-status`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ checkToken: pending.checkToken })
-                        });
-                        const checkData = await checkResponse.json();
-
-                        if (checkData.currentStep === 'success') {
-                            setResults(prev => prev.map(r =>
-                                r.id === pending.resultId ? { ...r, status: 'success', message: '✓ 验证成功' } : r
-                            ));
+                        if (result.status === 'approved') {
+                            status = 'success';
+                            message = result.message || '✅ 验证通过！';
                             setLastSuccess(new Date().toISOString());
                             updateCredits(-1);
                             addNewStatus();
-                            break;
-                        } else if (checkData.currentStep === 'failed' || checkData.currentStep === 'error') {
-                            setResults(prev => prev.map(r =>
-                                r.id === pending.resultId ? { ...r, status: 'failed', message: '✕ ' + (checkData.message || '验证失败') } : r
-                            ));
-                            break;
+                        } else if (result.status === 'rejected') {
+                            status = 'failed';
+                            message = result.message || '❌ 验证被拒绝';
+                        } else if (result.status === 'error' || result.status === 'timeout') {
+                            status = 'failed';
+                            message = result.message || '❌ 验证出错';
+                        } else if (result.status === 'no_credits') {
+                            status = 'failed';
+                            message = '❌ Bot 额度不足';
                         }
-                        // 继续等待
+
                         setResults(prev => prev.map(r =>
-                            r.id === pending.resultId ? { ...r, message: `等待中... (${attempts}/${maxAttempts})` } : r
+                            r.id === resultItem.id
+                                ? {
+                                    ...r,
+                                    status,
+                                    message,
+                                    verificationId: result.verificationId || r.verificationId,
+                                    credits: result.credits,
+                                    claimLink: result.claimLink,
+                                    reason: result.reason,
+                                    raw_response: result.raw_response
+                                }
+                                : r
                         ));
-                    } catch (e) {
-                        console.error('Check status error:', e);
                     }
                 }
             }
-
         } catch (error) {
             console.error('Verify error:', error);
-            // 标记所有处理中的为失败
             setResults(prev => prev.map(r =>
                 resultItems.find(ri => ri.id === r.id) && r.status === 'processing'
-                    ? { ...r, status: 'failed', message: '✕ ' + error.message }
+                    ? { ...r, status: 'failed', message: '❌ ' + error.message }
                     : r
             ));
         }
@@ -420,7 +205,11 @@ export default function Verify() {
 
     const handleExport = () => {
         const successResults = results.filter(r => r.status === 'success');
-        const text = successResults.map(r => r.verificationId).join('\n');
+        const text = successResults.map(r => {
+            let line = r.verificationId;
+            if (r.claimLink) line += '\n' + r.claimLink;
+            return line;
+        }).join('\n\n');
         const blob = new Blob([text], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -525,6 +314,11 @@ export default function Verify() {
                     <div className="header-right">
                         <div className="status-indicator">
                             {getStatusBadge()}
+                            {botStatus && (
+                                <span className={`bot-status ${botStatus.connected ? 'connected' : 'disconnected'}`}>
+                                    {botStatus.connected ? '🤖 Bot 在线' : '🔴 Bot 离线'}
+                                </span>
+                            )}
                             <span className="last-success">
                                 上次成功: {lastSuccess ? formatTime(lastSuccess) : '无'}
                             </span>
@@ -539,31 +333,19 @@ export default function Verify() {
                         <div className="panel-header">
                             <div className="panel-title">
                                 <span className="panel-icon">📝</span>
-                                <span>输入</span>
-                            </div>
-                            <div className="panel-controls">
-                                <select
-                                    className="program-select"
-                                    value={program}
-                                    onChange={(e) => setProgram(e.target.value)}
-                                >
-                                    {programs.map(p => (
-                                        <option key={p.value} value={p.value}>{p.label}</option>
-                                    ))}
-                                </select>
+                                <span>输入验证链接</span>
                             </div>
                         </div>
 
                         <div className="panel-body">
                             <textarea
                                 className="input textarea verify-input"
-                                placeholder={`Enter verification IDs or URLs, one per line...
+                                placeholder={`粘贴验证链接，每行一个...
 
-例如:
-https://verifications.sheerid.com/...?verificationId=abc123
-abc123-def456-ghi789
+例如：
+https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699528d723c407520aeadc45
 
-粘贴 URL 会自动提取 verificationId`}
+⚠️ 注意：右键复制链接，不要点击打开！`}
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 disabled={verifyStatus === 'processing'}
@@ -571,7 +353,7 @@ abc123-def456-ghi789
 
                             <div className="input-footer">
                                 <div className="input-info">
-                                    <span className="id-count">{extractVerificationIds(input).length} 个 ID</span>
+                                    <span className="id-count">{extractLinks(input).filter(l => l.includes('sheerid')).length} 个链接</span>
                                     <span className="slots-info">剩余配额: {user ? `${user.credits} 次` : '未登录'}</span>
                                 </div>
 
@@ -622,7 +404,7 @@ abc123-def456-ghi789
                                 <div className="empty-results">
                                     <div className="empty-icon">📭</div>
                                     <p>暂无结果</p>
-                                    <p className="empty-hint">输入验证 ID 后点击开始</p>
+                                    <p className="empty-hint">粘贴验证链接后点击开始</p>
                                 </div>
                             ) : (
                                 <div className="results-list">
@@ -637,6 +419,19 @@ abc123-def456-ghi789
                                             <div className="result-info">
                                                 <span className="result-id">{result.verificationId}</span>
                                                 <span className="result-message">{result.message || '处理中...'}</span>
+                                                {result.credits && (
+                                                    <span className="result-credits">💎 剩余 {result.credits} credits</span>
+                                                )}
+                                                {result.claimLink && (
+                                                    <a
+                                                        className="result-claim-link"
+                                                        href={result.claimLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        🎁 领取链接
+                                                    </a>
+                                                )}
                                             </div>
                                             <span className="result-time">{formatTime(result.timestamp)}</span>
                                         </div>

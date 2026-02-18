@@ -65,9 +65,6 @@ export default function Admin() {
     // Region mode state: 'global' (default) or 'us_only'
     const [regionMode, setRegionMode] = useState('global');
 
-    // Verification mode: 'api' (default) or 'browser' (Puppeteer)
-    const [verifyMode, setVerifyMode] = useState('api');
-
     // University source: 'sheerid_api' (dynamic) or 'custom_list' (local list)
     const [universitySource, setUniversitySource] = useState('sheerid_api');
 
@@ -147,10 +144,6 @@ export default function Admin() {
                 // Load university source setting
                 if (data.aiGenerator?.universitySource) {
                     setUniversitySource(data.aiGenerator.universitySource);
-                }
-                // Load verify mode setting
-                if (data.verification?.browserMode !== undefined) {
-                    setVerifyMode(data.verification.browserMode ? 'browser' : 'api');
                 }
                 // Load LionPATH settings
                 if (data.aiGenerator?.lionpath) {
@@ -292,7 +285,6 @@ export default function Admin() {
                     password: proxySettings.password || undefined
                 },
                 verification: {
-                    browserMode: verifyMode === 'browser',
                     telegram: {
                         enabled: config?.verification?.telegram?.enabled || false,
                         apiId: config?.verification?.telegram?.apiId,
@@ -1647,47 +1639,6 @@ export default function Admin() {
                 {activeTab === 'settings' && (
                     <div className="tab-content">
 
-                        <div className="settings-section card">
-                            <h3>⚡ 验证模式</h3>
-                            <p className="settings-desc">
-                                选择验证请求的发送方式。API 模式速度快，浏览器模式使用 Chromium 模拟真实浏览器，更不容易被检测。
-                            </p>
-                            <div className="settings-form">
-                                <div className="mode-selector" style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                                    <div
-                                        className={`mode-card ${verifyMode === 'api' ? 'active' : ''}`}
-                                        onClick={() => setVerifyMode('api')}
-                                        style={{
-                                            flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
-                                            border: verifyMode === 'api' ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
-                                            background: verifyMode === 'api' ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
-                                            transition: 'all 0.2s ease'
-                                        }}
-                                    >
-                                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚡</div>
-                                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>API 模式</div>
-                                        <div style={{ fontSize: '12px', color: '#64748b' }}>标准 HTTP 请求，速度快</div>
-                                    </div>
-                                    <div
-                                        className={`mode-card ${verifyMode === 'browser' ? 'active' : ''}`}
-                                        onClick={() => setVerifyMode('browser')}
-                                        style={{
-                                            flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
-                                            border: verifyMode === 'browser' ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
-                                            background: verifyMode === 'browser' ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
-                                            transition: 'all 0.2s ease'
-                                        }}
-                                    >
-                                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>🌐</div>
-                                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>浏览器模式</div>
-                                        <div style={{ fontSize: '12px', color: '#64748b' }}>Chromium 模拟真实浏览器</div>
-                                    </div>
-                                </div>
-                                <button className="btn btn-primary" onClick={handleSaveAiConfig} disabled={saving}>
-                                    {saving ? '保存中...' : '保存'}
-                                </button>
-                            </div>
-                        </div>
 
                         <div className="settings-section card">
                             <h3>💰 定价设置</h3>

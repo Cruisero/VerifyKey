@@ -4,33 +4,15 @@ import './Verify.css';
 // API base URL
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3002' : '';
 
-// 生成随机状态 (视觉装饰用)
-const generateStatus = () => {
-    const rand = Math.random();
-    if (rand < 0.05) return 'fail';
-    if (rand < 0.10) return 'timeout';
-    return 'pass';
-};
 
-const generateInitialData = (count) => {
-    const data = [];
-    const now = Date.now();
-    for (let i = 0; i < count; i++) {
-        data.push({
-            id: i,
-            status: generateStatus(),
-            timestamp: now - (count - i) * 20000
-        });
-    }
-    return data;
-};
+
 
 export default function Verify() {
     const [input, setInput] = useState('');
     const [verifyStatus, setVerifyStatus] = useState('ready');
     const [results, setResults] = useState([]);
     const [lastSuccess, setLastSuccess] = useState(null);
-    const [statusData, setStatusData] = useState(() => generateInitialData(180));
+    const [statusData, setStatusData] = useState([]);
     const [hoveredItem, setHoveredItem] = useState(null);
     const [botStatus, setBotStatus] = useState(null);
     const [provider, setProvider] = useState('telegram');
@@ -53,32 +35,26 @@ export default function Verify() {
         { value: 'notion-education', label: 'Notion Education' },
     ];
 
-    // 添加新状态点
-    const addNewStatus = useCallback(() => {
-        setStatusData(prev => {
-            const newData = [...prev];
-            newData.push({
-                id: Date.now(),
-                status: generateStatus(),
-                timestamp: Date.now()
-            });
-            if (newData.length > 200) newData.shift();
-            return newData;
-        });
+    // Fetch verification history from API
+    const fetchHistory = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/verify/history`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.history && Array.isArray(data.history)) {
+                    setStatusData(data.history);
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to fetch verification history:', e);
+        }
     }, []);
 
-    // 定时更新状态
     useEffect(() => {
-        const scheduleNextUpdate = () => {
-            const delay = 5000 + Math.random() * 20000;
-            return setTimeout(() => {
-                addNewStatus();
-                scheduleNextUpdate();
-            }, delay);
-        };
-        const timeoutId = scheduleNextUpdate();
-        return () => clearTimeout(timeoutId);
-    }, [addNewStatus]);
+        fetchHistory();
+        const interval = setInterval(fetchHistory, 30000);
+        return () => clearInterval(interval);
+    }, [fetchHistory]);
 
     // 获取配置和 Bot 状态
     useEffect(() => {
@@ -228,7 +204,7 @@ export default function Verify() {
                             status = 'success';
                             message = result.message || '✅ 验证通过！';
                             setLastSuccess(new Date().toISOString());
-                            addNewStatus();
+                            fetchHistory();
                         } else if (result.status === 'rejected') {
                             status = 'failed';
                             message = result.message || '❌ 验证被拒绝';
@@ -304,7 +280,7 @@ export default function Verify() {
                         const message = result.success ? '✅ 验证通过' : ('❌ ' + (result.message || '验证失败'));
                         if (result.success) {
                             setLastSuccess(new Date().toISOString());
-                            addNewStatus();
+                            fetchHistory();
                         }
                         setResults(prev => prev.map(r =>
                             r.id === resultItem.id
@@ -368,14 +344,15 @@ export default function Verify() {
     // 统计
     const liveStats = {
         pass: statusData.filter(d => d.status === 'pass').length,
-        fail: statusData.filter(d => d.status === 'fail').length,
-        timeout: statusData.filter(d => d.status === 'timeout').length
+        failed: statusData.filter(d => d.status === 'failed').length,
+        processing: statusData.filter(d => d.status === 'processing').length,
+        cancel: statusData.filter(d => d.status === 'cancel').length
     };
 
     const userStats = [
         { label: 'CDK 额度', value: cdkValid ? `${cdkRemaining} 次` : '未激活', icon: '🔑', color: 'primary' },
-        { label: '本月验证', value: liveStats.pass + liveStats.fail + liveStats.timeout, icon: '⚡', color: 'success' },
-        { label: '成功率', value: `${Math.round(liveStats.pass / statusData.length * 100)}%`, icon: '📈', color: 'info' },
+        { label: '本月验证', value: liveStats.pass + liveStats.failed + liveStats.processing + liveStats.cancel, icon: '⚡', color: 'success' },
+        { label: '成功率', value: statusData.length > 0 ? `${Math.round(liveStats.pass / statusData.length * 100)}%` : '0%', icon: '📈', color: 'info' },
     ];
 
     return (
@@ -423,7 +400,7 @@ export default function Verify() {
                             {getStatusBadge()}
                             {isTelegramMode && botStatus && (
                                 <span className={`bot-status ${botStatus.connected ? 'connected' : 'disconnected'}`}>
-                                    {botStatus.connected ? '🤖 Bot 在线' : '🔴 Bot 离线'}
+                                    {botStatus.connected ? '程序在线' : '程序离线'}
                                 </span>
                             )}
                             {!isTelegramMode && (
@@ -520,6 +497,14 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                             >
                                                 更改
                                             </button>
+                                            <a
+                                                href="#"
+                                                className="cdk-action-btn cdk-buy-btn"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                购买
+                                            </a>
                                         </div>
                                     </>
                                 ) : (
@@ -534,6 +519,14 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                         />
                                         {cdkChecking && <span className="cdk-checking">验证中...</span>}
                                         {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">❌ 无效</span>}
+                                        <a
+                                            href="#"
+                                            className="cdk-buy-btn-inline"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            购买CDK
+                                        </a>
                                     </>
                                 )}
                             </div>
@@ -621,24 +614,28 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                 {/* Dashboard Content - Live Status */}
                 <div className="live-status-section card">
                     <div className="section-header">
-                        <h2>📊 实时验证状态 (最近10分钟)</h2>
+                        <h2>📊 实时验证状态</h2>
                         <div className="status-legend">
                             <span className="legend-item">
                                 <span className="legend-dot pass"></span>
                                 {liveStats.pass} Pass
                             </span>
                             <span className="legend-item">
-                                <span className="legend-dot fail"></span>
-                                {liveStats.fail} Fail
+                                <span className="legend-dot failed"></span>
+                                {liveStats.failed} Failed
                             </span>
                             <span className="legend-item">
-                                <span className="legend-dot timeout"></span>
-                                {liveStats.timeout} Timeout
+                                <span className="legend-dot processing"></span>
+                                {liveStats.processing} Processing
+                            </span>
+                            <span className="legend-item">
+                                <span className="legend-dot cancel"></span>
+                                {liveStats.cancel} Cancel
                             </span>
                         </div>
                     </div>
                     <div className="status-grid-container">
-                        <div className="status-grid">
+                        <div className="status-grid three-rows">
                             {statusData.map((item) => (
                                 <div
                                     key={item.id}
@@ -650,17 +647,14 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                         <div className="status-tooltip">
                                             <span className="tooltip-status">
                                                 {item.status === 'pass' ? '✓ Pass' :
-                                                    item.status === 'fail' ? '✕ Fail' : '◷ Timeout'}
+                                                    item.status === 'failed' ? '✕ Failed' :
+                                                        item.status === 'processing' ? '⏳ Processing' : '◷ Cancel'}
                                             </span>
                                             <span className="tooltip-time">{formatTime(item.timestamp)}</span>
                                         </div>
                                     )}
                                 </div>
                             ))}
-                        </div>
-                        <div className="status-timeline">
-                            <span>10分钟前</span>
-                            <span>NOW</span>
                         </div>
                     </div>
                     <div className="tips-inline">

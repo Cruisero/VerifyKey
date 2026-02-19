@@ -604,14 +604,19 @@
 }
 
 .legend-dot.pass {
-    background: #22d3ee;
+    background: #22c55e;
 }
 
-.legend-dot.fail {
-    background: #a855f7;
+.legend-dot.failed {
+    background: #ef4444;
 }
 
-.legend-dot.timeout {
+.legend-dot.processing {
+    background: #3b82f6;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.legend-dot.cancel {
     background: #94a3b8;
 }
 
@@ -624,6 +629,11 @@
     flex-wrap: wrap;
     gap: 3px;
     margin-bottom: var(--spacing-md);
+}
+
+.status-grid.three-rows {
+    max-height: 12px;
+    overflow: hidden;
 }
 
 .status-block {
@@ -641,14 +651,19 @@
 }
 
 .status-block.pass {
-    background: #22d3ee;
+    background: #22c55e;
 }
 
-.status-block.fail {
-    background: #a855f7;
+.status-block.failed {
+    background: #ef4444;
 }
 
-.status-block.timeout {
+.status-block.processing {
+    background: #3b82f6;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-block.cancel {
     background: #94a3b8;
 }
 
@@ -915,4 +930,33 @@
 .cdk-action-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* CDK Buy Buttons */
+.cdk-buy-btn {
+    color: var(--color-primary) !important;
+    text-decoration: none;
+    font-weight: 600 !important;
+}
+
+.cdk-buy-btn:hover {
+    background: rgba(124, 92, 252, 0.12) !important;
+}
+
+.cdk-buy-btn-inline {
+    padding: 6px 14px;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.cdk-buy-btn-inline:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
 }

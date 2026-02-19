@@ -30,6 +30,7 @@ from sheerid_generator import generate_document as generate_document_sheerid
 from vsid_generator import generate_vsid_document, get_available_document_types as get_vsid_document_types
 import auth
 import cdk_manager
+import verification_history
 
 # Load environment variables
 load_dotenv()
@@ -646,6 +647,14 @@ async def verify(request: VerifyRequest):
         
         if result.get("success"):
             success_count += 1
+        
+        # Log verification result to history
+        if result.get("success"):
+            verification_history.log_verification("pass", vid)
+        elif result.get("status") == "pending":
+            verification_history.log_verification("processing", vid)
+        else:
+            verification_history.log_verification("failed", vid)
     
     return {
         "results": results,
@@ -1676,6 +1685,17 @@ async def cdk_stats_endpoint():
     return cdk_manager.get_cdk_stats()
 
 
+@app.get("/api/verify/history")
+async def get_verification_history_endpoint():
+    """Get recent verification history for the real-time status grid"""
+    history = verification_history.get_recent_history(200)
+    stats = verification_history.get_history_stats()
+    return {
+        "history": history,
+        "stats": stats
+    }
+
+
 # ========== Telegram Verification ==========
 
 @app.post("/api/verify/telegram")
@@ -1740,6 +1760,20 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     
     results = await asyncio.gather(*[process_link(link) for link in clean_links])
     results = list(results)
+    
+    # Log verification results to history
+    for r in results:
+        vid = r.get("verificationId", "")
+        if r["status"] == "approved":
+            verification_history.log_verification("pass", vid)
+        elif r["status"] == "rejected":
+            verification_history.log_verification("failed", vid)
+        elif r["status"] in ("error", "timeout"):
+            verification_history.log_verification("cancel", vid)
+        elif r["status"] == "no_credits":
+            verification_history.log_verification("failed", vid)
+        else:
+            verification_history.log_verification("processing", vid)
     
     # Deduct CDK quota for successful verifications
     successful = sum(1 for r in results if r["status"] == "approved")

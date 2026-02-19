@@ -60,26 +60,50 @@ def init_database():
 
 
 def ensure_admin_user(conn=None):
-    """Create admin user if not exists"""
+    """Create or update admin user"""
     close_conn = False
     if conn is None:
         conn = get_db()
         close_conn = True
     
     cursor = conn.cursor()
-    admin_email = "admin@verifykey.com"
+    admin_email = "Rawbump@gmail.com"
+    admin_password = "Pure314159"
     
+    # Check if new admin email already exists
     cursor.execute("SELECT id FROM users WHERE email = ?", (admin_email,))
     existing = cursor.fetchone()
     
     if not existing:
-        hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
+        # Check if old admin exists and update it
+        cursor.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
+        old_admin = cursor.fetchone()
+        
+        if old_admin:
+            hashed = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode()
+            cursor.execute("""
+                UPDATE users SET email = ?, password = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (admin_email, hashed, old_admin["id"]))
+            conn.commit()
+            print(f"[Auth] Admin user updated to: {admin_email}")
+        else:
+            hashed = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode()
+            cursor.execute("""
+                INSERT INTO users (email, username, password, role, credits)
+                VALUES (?, '管理员', ?, 'admin', 9999)
+            """, (admin_email, hashed))
+            conn.commit()
+            print(f"[Auth] Admin user created: {admin_email}")
+    else:
+        # Admin with correct email exists, update password
+        hashed = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode()
         cursor.execute("""
-            INSERT INTO users (email, username, password, role, credits)
-            VALUES (?, '管理员', ?, 'admin', 9999)
-        """, (admin_email, hashed))
+            UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        """, (hashed, admin_email))
         conn.commit()
-        print("[Auth] Admin user created: admin@verifykey.com / admin123")
+        print(f"[Auth] Admin password updated for: {admin_email}")
     
     if close_conn:
         conn.close()

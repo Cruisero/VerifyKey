@@ -448,7 +448,7 @@ export default function Verify() {
                                                 {t('change')}
                                             </button>
                                             <a
-                                                href="#"
+                                                href="https://haodongxi.shop/products/7cf0bd5e-9b12-45aa-b172-aceb4feb5eaa"
                                                 className="cdk-action-btn cdk-buy-btn"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
@@ -470,7 +470,7 @@ export default function Verify() {
                                         {cdkChecking && <span className="cdk-checking">{t('verifying')}</span>}
                                         {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">{t('invalidCdk')}</span>}
                                         <a
-                                            href="#"
+                                            href="https://haodongxi.shop/products/7cf0bd5e-9b12-45aa-b172-aceb4feb5eaa"
                                             className="cdk-buy-btn-inline"
                                             target="_blank"
                                             rel="noopener noreferrer"

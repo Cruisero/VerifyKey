@@ -374,28 +374,6 @@ export default function Verify() {
                                 {botStatus.connected ? '● System Ready' : '○ System Offline'}
                             </span>
                         )}
-                    </div>
-                </div>
-
-                {/* Stats Grid */}
-                <div className="stats-grid">
-                    {userStats.map((stat, index) => (
-                        <div key={index} className={`stat-card card ${stat.color}`}>
-                            <div className="stat-icon">{stat.icon}</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{stat.value}</span>
-                                <span className="stat-label">{stat.label}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Verify Header */}
-                <div className="verify-header">
-                    <div className="header-left">
-                        <h2 className="section-title">⚡ 批量验证工具</h2>
-                    </div>
-                    <div className="header-right">
                         <div className="status-indicator">
                             {getStatusBadge()}
                             {isTelegramMode && botStatus && (
@@ -468,23 +446,6 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                         </div>
                                         <span className="cdk-quota-display">{cdkRemaining}/{cdkQuota}</span>
                                         <div className="cdk-actions">
-                                            <button
-                                                className="cdk-action-btn"
-                                                onClick={() => {
-                                                    setCdkChecking(true);
-                                                    fetch(`${API_BASE}/api/cdk/validate`, {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ code: cdkCode })
-                                                    }).then(r => r.json()).then(data => {
-                                                        setCdkRemaining(data.remaining || 0);
-                                                        setCdkQuota(data.quota || 0);
-                                                    }).finally(() => setCdkChecking(false));
-                                                }}
-                                                disabled={cdkChecking}
-                                            >
-                                                ↻ 刷新
-                                            </button>
                                             <button
                                                 className="cdk-action-btn"
                                                 onClick={() => {

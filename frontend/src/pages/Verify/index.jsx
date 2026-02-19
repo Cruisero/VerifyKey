@@ -608,19 +608,6 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                             <div className="result-info">
                                                 <span className="result-id">{result.verificationId}</span>
                                                 <span className="result-message">{result.message || '处理中...'}</span>
-                                                {result.credits && (
-                                                    <span className="result-credits">💎 剩余 {result.credits} credits</span>
-                                                )}
-                                                {result.claimLink && (
-                                                    <a
-                                                        className="result-claim-link"
-                                                        href={result.claimLink}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                    >
-                                                        🎁 领取链接
-                                                    </a>
-                                                )}
                                             </div>
                                             <span className="result-time">{formatTime(result.timestamp)}</span>
                                         </div>

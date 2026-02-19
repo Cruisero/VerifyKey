@@ -161,7 +161,6 @@ export default function Verify() {
     const handleVerify = async () => {
         if (!cdkValid) {
             alert('请先输入有效的 CDK 激活码');
-            setCdkExpanded(true);
             return;
         }
         if (!input.trim()) return;

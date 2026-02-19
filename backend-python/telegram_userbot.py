@@ -243,7 +243,7 @@ class SheerIDUserbot:
         text_upper = text.upper()
 
         # Extract verification ID
-        id_match = re.search(r'ID:\s*([a-zA-Z0-9]+)', text)
+        id_match = re.search(r'ID:\s*`?([a-zA-Z0-9]+)`?', text)
         if id_match:
             result["verificationId"] = id_match.group(1)
 
@@ -339,7 +339,7 @@ class SheerIDUserbot:
             logger.info(f"Bot message received: {text[:120]}...")
 
             # Try to extract verificationId from the message
-            id_match = re.search(r'ID:\s*([a-zA-Z0-9]+)', text)
+            id_match = re.search(r'ID:\s*`?([a-zA-Z0-9]+)`?', text)
 
             if id_match:
                 vid = id_match.group(1)

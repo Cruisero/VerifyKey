@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLang } from '../../stores/LanguageContext';
 import './Verify.css';
 
 // API base URL
@@ -25,6 +26,8 @@ export default function Verify() {
     const [cdkRemaining, setCdkRemaining] = useState(0);
     const [cdkQuota, setCdkQuota] = useState(0);
     const [cdkChecking, setCdkChecking] = useState(false);
+
+    const { t } = useLang();
 
     const programs = [
         { value: 'google-student', label: 'Google Student' },
@@ -136,18 +139,18 @@ export default function Verify() {
     // 统一验证入口
     const handleVerify = async () => {
         if (!cdkValid) {
-            alert('请先输入有效的 CDK 激活码');
+            alert(t('invalidCdk'));
             return;
         }
         if (!input.trim()) return;
         if (cdkRemaining <= 0) {
-            alert('CDK 额度已用完，请更换 CDK');
+            alert(t('notActivated'));
             return;
         }
 
         const items = extractItems(input);
         if (items.length === 0) {
-            alert(isTelegramMode ? '请输入有效的验证链接' : '请输入验证 ID 或链接');
+            alert(isTelegramMode ? 'Please enter valid verification links' : 'Please enter verification IDs or links');
             return;
         }
 
@@ -174,7 +177,7 @@ export default function Verify() {
                 fullLink: link,
                 status: 'processing',
                 timestamp: new Date().toISOString(),
-                message: '⏳ 正在处理...'
+                message: `⏳ ${t('processing')}`
             };
         });
         setResults(prev => [...resultItems, ...prev]);
@@ -188,7 +191,7 @@ export default function Verify() {
 
             if (!response.ok) {
                 const err = await response.json().catch(() => ({ detail: response.statusText }));
-                throw new Error(err.detail || `请求失败: ${response.status}`);
+                throw new Error(err.detail || `Request failed: ${response.status}`);
             }
 
             const data = await response.json();
@@ -199,21 +202,21 @@ export default function Verify() {
                     );
                     if (resultItem) {
                         let status = 'processing';
-                        let message = result.message || '处理中...';
+                        let message = result.message || t('processing');
                         if (result.status === 'approved') {
                             status = 'success';
-                            message = result.message || '✅ 验证通过！';
+                            message = result.message || t('msgApproved');
                             setLastSuccess(new Date().toISOString());
                             fetchHistory();
                         } else if (result.status === 'rejected') {
                             status = 'failed';
-                            message = result.message || '❌ 验证被拒绝';
+                            message = result.message || t('msgRejected');
                         } else if (result.status === 'error' || result.status === 'timeout') {
                             status = 'failed';
-                            message = result.message || '❌ 验证出错';
+                            message = result.message || t('msgError');
                         } else if (result.status === 'no_credits') {
                             status = 'failed';
-                            message = '❌ Bot 额度不足';
+                            message = t('msgNoCredits');
                         }
                         setResults(prev => prev.map(r =>
                             r.id === resultItem.id
@@ -253,7 +256,7 @@ export default function Verify() {
             verificationId: vid,
             status: 'processing',
             timestamp: new Date().toISOString(),
-            message: '⏳ 正在处理...'
+            message: `⏳ ${t('processing')}`
         }));
         setResults(prev => [...resultItems, ...prev]);
 
@@ -268,7 +271,7 @@ export default function Verify() {
 
             if (!response.ok) {
                 const err = await response.json().catch(() => ({ detail: response.statusText }));
-                throw new Error(err.detail || `请求失败: ${response.status}`);
+                throw new Error(err.detail || `Request failed: ${response.status}`);
             }
 
             const data = await response.json();
@@ -277,7 +280,7 @@ export default function Verify() {
                     const resultItem = resultItems.find(r => r.verificationId === result.verificationId);
                     if (resultItem) {
                         const status = result.success ? 'success' : 'failed';
-                        const message = result.success ? '✅ 验证通过' : ('❌ ' + (result.message || '验证失败'));
+                        const message = result.success ? t('msgApiSuccess') : (t('msgApiFail') + (result.message || ''));
                         if (result.success) {
                             setLastSuccess(new Date().toISOString());
                             fetchHistory();
@@ -321,13 +324,13 @@ export default function Verify() {
     const getStatusBadge = () => {
         switch (verifyStatus) {
             case 'processing':
-                return <span className="badge badge-warning"><span className="pulse-dot"></span>处理中...</span>;
+                return <span className="badge badge-warning"><span className="pulse-dot"></span>{t('statusProcessing')}...</span>;
             case 'success':
-                return <span className="badge badge-success">✓ 完成</span>;
+                return <span className="badge badge-success">✓ {t('statusComplete')}</span>;
             case 'error':
-                return <span className="badge badge-error">✕ 错误</span>;
+                return <span className="badge badge-error">✕ Error</span>;
             default:
-                return <span className="badge badge-info">● 就绪</span>;
+                return <span className="badge badge-info">● {t('statusReady')}</span>;
         }
     };
 
@@ -336,9 +339,9 @@ export default function Verify() {
         const diff = Date.now() - (typeof timestamp === 'string' ? new Date(timestamp).getTime() : timestamp);
         const seconds = Math.floor(diff / 1000);
         const minutes = Math.floor(seconds / 60);
-        if (minutes < 1) return '刚刚';
-        if (minutes < 60) return `${minutes}分钟前`;
-        return `${Math.floor(minutes / 60)}小时前`;
+        if (minutes < 1) return t('justNow');
+        if (minutes < 60) return `${minutes}${t('minutesAgo')}`;
+        return `${Math.floor(minutes / 60)}${t('hoursAgo')}`;
     };
 
     // 统计
@@ -365,29 +368,24 @@ export default function Verify() {
                             <span className="gradient-text">Verification Console</span>
                         </h1>
                         <p className="welcome-desc">
-                            提示：无需登录，直接使用链接即可开始验证。支持多线程并发处理。
+                            {t('welcomeDesc')}
                         </p>
                     </div>
                     <div className="quick-actions">
-                        {isTelegramMode && botStatus && (
-                            <span className={`bot-status-badge ${botStatus.connected ? 'online' : 'offline'}`}>
-                                {botStatus.connected ? '● System Ready' : '○ System Offline'}
-                            </span>
-                        )}
                         <div className="status-indicator">
                             {getStatusBadge()}
                             {isTelegramMode && botStatus && (
                                 <span className={`bot-status ${botStatus.connected ? 'connected' : 'disconnected'}`}>
-                                    {botStatus.connected ? '程序在线' : '程序离线'}
+                                    {botStatus.connected ? t('programOnline') : t('programOffline')}
                                 </span>
                             )}
                             {!isTelegramMode && (
                                 <span className="bot-status connected">
-                                    {browserMode ? '🌐 浏览器模式' : '⚡ API 模式'}
+                                    {browserMode ? t('browserModeLabel') : t('apiModeLabel')}
                                 </span>
                             )}
                             <span className="last-success">
-                                上次成功: {lastSuccess ? formatTime(lastSuccess) : '无'}
+                                {t('lastSuccess')}: {lastSuccess ? formatTime(lastSuccess) : t('none')}
                             </span>
                         </div>
                     </div>
@@ -400,7 +398,7 @@ export default function Verify() {
                         <div className="panel-header">
                             <div className="panel-title">
                                 <span className="panel-icon">📝</span>
-                                <span>{isTelegramMode ? '输入验证链接' : '输入验证 ID'}</span>
+                                <span>{isTelegramMode ? t('inputVerifyLinks') : t('inputVerifyIds')}</span>
                             </div>
                             {!isTelegramMode && (
                                 <select
@@ -419,17 +417,8 @@ export default function Verify() {
                             <textarea
                                 className="input textarea verify-input"
                                 placeholder={isTelegramMode
-                                    ? `粘贴验证链接，每行一个...
-
-例如：
-https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699528d723c407520aeadc45
-
-⚠️ 注意：右键复制链接，不要点击打开！`
-                                    : `粘贴验证 ID 或链接，每行一个...
-
-例如：
-699528d723c407520aeadc45
-https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
+                                    ? t('textareaPlaceholderTelegram')
+                                    : t('textareaPlaceholderApi')
                                 }
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
@@ -441,7 +430,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                 {cdkValid ? (
                                     <>
                                         <div className="cdk-info">
-                                            <span className="cdk-info-label">CDK 剩余额度</span>
+                                            <span className="cdk-info-label">{t('cdkRemaining')}</span>
                                             <span className="cdk-info-code">{cdkCode.length > 12 ? cdkCode.slice(0, 8) + '...' + cdkCode.slice(-4) : cdkCode}</span>
                                         </div>
                                         <span className="cdk-quota-display">{cdkRemaining}/{cdkQuota}</span>
@@ -456,7 +445,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                                     setCdkQuota(0);
                                                 }}
                                             >
-                                                更改
+                                                {t('change')}
                                             </button>
                                             <a
                                                 href="#"
@@ -464,7 +453,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                             >
-                                                购买
+                                                {t('buy')}
                                             </a>
                                         </div>
                                     </>
@@ -478,15 +467,15 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                             value={cdkCode}
                                             onChange={(e) => setCdkCode(e.target.value.toUpperCase())}
                                         />
-                                        {cdkChecking && <span className="cdk-checking">验证中...</span>}
-                                        {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">❌ 无效</span>}
+                                        {cdkChecking && <span className="cdk-checking">{t('verifying')}</span>}
+                                        {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">{t('invalidCdk')}</span>}
                                         <a
                                             href="#"
                                             className="cdk-buy-btn-inline"
                                             target="_blank"
                                             rel="noopener noreferrer"
                                         >
-                                            购买CDK
+                                            {t('buyCdk')}
                                         </a>
                                     </>
                                 )}
@@ -495,9 +484,9 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                             <div className="input-footer">
                                 <div className="input-info">
                                     <span className="id-count">
-                                        {extractItems(input).length} 个{isTelegramMode ? '链接' : 'ID'}
+                                        {extractItems(input).length} {isTelegramMode ? t('linksCount') : t('idsCount')}
                                     </span>
-                                    <span className="slots-info">剩余配额: {cdkValid ? `${cdkRemaining} 次` : '未激活'}</span>
+                                    <span className="slots-info">{t('remainingQuota')}: {cdkValid ? `${cdkRemaining} ${t('quotaTimes')}` : t('notActivated')}</span>
                                 </div>
 
                                 <div className="input-actions">
@@ -509,10 +498,10 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                         {verifyStatus === 'processing' ? (
                                             <>
                                                 <span className="loading-spinner small"></span>
-                                                处理中...
+                                                {t('processing')}
                                             </>
                                         ) : (
-                                            '🚀 开始验证'
+                                            t('startVerify')
                                         )}
                                     </button>
                                 </div>
@@ -525,19 +514,19 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                         <div className="panel-header">
                             <div className="panel-title">
                                 <span className="panel-icon">📋</span>
-                                <span>结果</span>
+                                <span>{t('results')}</span>
                                 <span className="result-count">({results.length})</span>
                             </div>
                             <div className="panel-actions">
                                 <button className="btn btn-sm btn-secondary" onClick={handleClear}>
-                                    🗑️ 清空
+                                    {t('clear')}
                                 </button>
                                 <button
                                     className="btn btn-sm btn-secondary"
                                     onClick={handleExport}
                                     disabled={results.filter(r => r.status === 'success').length === 0}
                                 >
-                                    📤 导出
+                                    {t('export')}
                                 </button>
                             </div>
                         </div>
@@ -546,8 +535,8 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                             {results.length === 0 ? (
                                 <div className="empty-results">
                                     <div className="empty-icon">📭</div>
-                                    <p>暂无结果</p>
-                                    <p className="empty-hint">粘贴验证链接后点击开始</p>
+                                    <p>{t('noResults')}</p>
+                                    <p className="empty-hint">{t('noResultsHint')}</p>
                                 </div>
                             ) : (
                                 <div className="results-list">
@@ -561,7 +550,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                                             </div>
                                             <div className="result-info">
                                                 <span className="result-id">{result.verificationId}</span>
-                                                <span className="result-message">{result.message || '处理中...'}</span>
+                                                <span className="result-message">{result.message || t('resultProcessing')}</span>
                                             </div>
                                             <span className="result-time">{formatTime(result.timestamp)}</span>
                                         </div>
@@ -575,7 +564,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                 {/* Dashboard Content - Live Status */}
                 <div className="live-status-section card">
                     <div className="section-header">
-                        <h2>📊 实时验证状态</h2>
+                        <h2>{t('liveStatusTitle')}</h2>
                         <div className="status-legend">
                             <span className="legend-item">
                                 <span className="legend-dot pass"></span>
@@ -621,9 +610,9 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
                     <div className="tips-inline">
 
                         <div className="tips-content">
-                            <p>在 <a href="https://one.google.com/ai-student" target="_blank" rel="noopener noreferrer">one.google.com/ai-student</a> 的蓝色按钮上<strong>右键复制链接</strong>，不要点进去！建议用无痕窗口登录账户获取。</p>
-                            <p>如果验证链接中 verificationId= 后面是空的，建议直接换号。</p>
-                            <p>一次消耗一个配额，成功后自动扣除。</p>
+                            <p>{t('tip1pre')}<a href="https://one.google.com/ai-student" target="_blank" rel="noopener noreferrer">{t('tip1link')}</a>{t('tip1post')}<strong>{t('tip1bold')}</strong>{t('tip1end')}</p>
+                            <p>{t('tip2')}</p>
+                            <p>{t('tip3')}</p>
                         </div>
                     </div>
                 </div>

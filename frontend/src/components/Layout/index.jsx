@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../stores/ThemeContext';
+import { useLang } from '../../stores/LanguageContext';
 import { useAuth } from '../../stores/AuthContext';
 import logoImg from '../../assets/logo.png';
 import logoDarkImg from '../../assets/logo-dark.png';
@@ -8,6 +9,7 @@ import './Layout.css';
 
 export default function Layout({ children }) {
     const { theme, toggleTheme } = useTheme();
+    const { lang, toggleLang, t } = useLang();
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [showDropdown, setShowDropdown] = useState(false);
@@ -40,9 +42,16 @@ export default function Layout({ children }) {
 
                     <div className="header-actions">
                         <button
+                            className="lang-toggle"
+                            onClick={toggleLang}
+                            title={lang === 'zh' ? 'Switch to English' : '切换到中文'}
+                        >
+                            {lang === 'zh' ? 'EN' : '中'}
+                        </button>
+                        <button
                             className="theme-toggle"
                             onClick={toggleTheme}
-                            title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+                            title={theme === 'dark' ? t('switchThemeLight') : t('switchThemeDark')}
                         >
                             {theme === 'dark' ? '☀️' : '🌙'}
                         </button>
@@ -74,7 +83,7 @@ export default function Layout({ children }) {
                                                 onClick={() => setShowDropdown(false)}
                                             >
                                                 <span>⚙️</span>
-                                                <span>管理后台</span>
+                                                <span>{t('adminPanel')}</span>
                                             </Link>
                                         )}
                                         <div className="dropdown-divider"></div>
@@ -83,7 +92,7 @@ export default function Layout({ children }) {
                                             onClick={handleLogout}
                                         >
                                             <span>🚪</span>
-                                            <span>退出登录</span>
+                                            <span>{t('logout')}</span>
                                         </button>
                                     </div>
                                 )}
@@ -99,11 +108,11 @@ export default function Layout({ children }) {
 
             <footer className="footer">
                 <div className="footer-content">
-                    <p>© 2026 OnePASS. All rights reserved.</p>
+                    <p>{t('footerRights')}</p>
                     <div className="footer-links">
-                        <a href="#">使用条款</a>
-                        <a href="#">隐私政策</a>
-                        <a href="#">联系我们</a>
+                        <a href="#">{t('terms')}</a>
+                        <a href="#">{t('privacy')}</a>
+                        <a href="#">{t('contact')}</a>
                     </div>
                 </div>
             </footer>

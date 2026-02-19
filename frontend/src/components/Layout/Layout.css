@@ -81,6 +81,27 @@
     gap: var(--spacing-md);
 }
 
+.lang-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.lang-toggle:hover {
+    background: var(--border-primary);
+    color: var(--text-primary);
+}
+
 .theme-toggle {
     display: flex;
     align-items: center;

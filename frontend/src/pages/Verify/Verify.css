@@ -957,6 +957,7 @@
 }
 
 .cdk-buy-btn-inline:hover {
+    color: #fff;
     opacity: 0.85;
     transform: translateY(-1px);
 }

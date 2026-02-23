@@ -2065,7 +2065,7 @@ export default function Admin() {
                             </div>
                             <div className="status-grid-container">
                                 <div className="status-grid three-rows">
-                                    {historyData.slice(-50).map((item) => (
+                                    {historyData.slice(-60).map((item) => (
                                         <div
                                             key={item.id}
                                             className={`status-block ${item.status}`}

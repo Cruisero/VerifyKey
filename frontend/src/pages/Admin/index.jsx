@@ -224,7 +224,8 @@ export default function Admin() {
     const [historyStats, setHistoryStats] = useState({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
     const [hoveredStatusItem, setHoveredStatusItem] = useState(null);
     const [addCount, setAddCount] = useState(1);
-    const [addingStatus, setAddingStatus] = useState(null); // which status is currently being added
+    const [addingStatus, setAddingStatus] = useState(null);
+    const [lastAction, setLastAction] = useState('');
 
     // CDK management state
     const [cdkList, setCdkList] = useState([]);
@@ -2137,16 +2138,17 @@ export default function Admin() {
                                                 });
                                                 if (res.ok) {
                                                     const data = await res.json();
-                                                    // Optimistic update: append new records directly
-                                                    setHistoryData(prev => [...prev, ...(data.records || [])]);
-                                                    setHistoryStats(prev => ({
-                                                        ...prev,
-                                                        [item.status]: prev[item.status] + (data.added || 0),
-                                                        total: prev.total + (data.added || 0)
-                                                    }));
+                                                    setLastAction(`已添加 ${data.added} 条 ${item.label}`);
+                                                    // Re-fetch to get accurate grid
+                                                    const hRes = await fetch(`${API_BASE}/api/verify/history`);
+                                                    if (hRes.ok) {
+                                                        const hData = await hRes.json();
+                                                        setHistoryData(hData.history || []);
+                                                        setHistoryStats(hData.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                                    }
                                                 }
                                             } catch (e) {
-                                                alert('添加失败: ' + e.message);
+                                                setLastAction('❗添加失败: ' + e.message);
                                             } finally {
                                                 setAddingStatus(null);
                                             }
@@ -2175,11 +2177,15 @@ export default function Admin() {
                                     onClick={async () => {
                                         if (!confirm('确定要清空所有验证状态记录吗？此操作不可撤销。')) return;
                                         try {
-                                            await fetch(`${API_BASE}/api/verify/history`, { method: 'DELETE' });
-                                            setHistoryData([]);
-                                            setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                            const res = await fetch(`${API_BASE}/api/verify/history`, { method: 'DELETE' });
+                                            if (res.ok) {
+                                                const data = await res.json();
+                                                setHistoryData([]);
+                                                setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                                setLastAction(`已清空 ${data.count} 条记录`);
+                                            }
                                         } catch (e) {
-                                            alert('清空失败: ' + e.message);
+                                            setLastAction('❗清空失败: ' + e.message);
                                         }
                                     }}
                                 >
@@ -2189,6 +2195,11 @@ export default function Admin() {
                                     共 {historyStats.total || 0} 条记录
                                 </span>
                             </div>
+                            {lastAction && (
+                                <div style={{ marginTop: '12px', padding: '8px 12px', background: 'var(--bg-secondary, #f5f0eb)', borderRadius: '6px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                                    {lastAction}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

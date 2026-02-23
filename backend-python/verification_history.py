@@ -125,3 +125,23 @@ def get_history_stats() -> Dict:
     }
     
     return stats
+
+
+def delete_verification(record_id: str) -> bool:
+    """Delete a verification record by ID."""
+    with _lock:
+        history = _load_history()
+        new_history = [r for r in history if r["id"] != record_id]
+        if len(new_history) < len(history):
+            _save_history(new_history)
+            return True
+    return False
+
+
+def clear_history() -> int:
+    """Clear all verification history. Returns count of deleted records."""
+    with _lock:
+        history = _load_history()
+        count = len(history)
+        _save_history([])
+        return count

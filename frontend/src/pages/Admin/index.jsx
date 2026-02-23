@@ -642,6 +642,7 @@ export default function Admin() {
         { id: 'cdk', label: 'CDK 管理', icon: '🔑' },
         { id: 'users', label: '用户管理', icon: '👥' },
         { id: 'ai-generator', label: 'AI 文档生成', icon: '🤖' },
+        { id: 'verify-status', label: '验证状态', icon: '📋' },
         { id: 'settings', label: '系统设置', icon: '⚙️' },
     ];
 
@@ -2005,6 +2006,109 @@ export default function Admin() {
                                 <p><strong>Gemini 官方 API：</strong>直接调用 Google Gemini API 生成学生证图像，需要有效的 API Key。</p>
                                 <p><strong>batch.1key.me API：</strong>使用第三方批量验证 API，需要配置 API Key。</p>
                                 <p className="info-warning">⚠️ 如果 AI 生成失败，系统会自动回退到备用生成方式。</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Verify Status Tab */}
+                {activeTab === 'verify-status' && (
+                    <div className="tab-content">
+                        <div className="settings-section card">
+                            <h3>📋 实时验证状态管理</h3>
+                            <p className="settings-desc">
+                                手动添加或删除验证状态记录。这些记录会显示在首页的实时验证状态网格中。
+                            </p>
+
+                            {/* Quick Add */}
+                            <div style={{ marginTop: '16px' }}>
+                                <h4 style={{ fontSize: '14px', marginBottom: '12px', fontWeight: 600 }}>快速添加</h4>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="50"
+                                        defaultValue="1"
+                                        id="add-count"
+                                        className="input"
+                                        style={{ width: '70px', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条</span>
+                                    {[
+                                        { status: 'pass', label: '✅ Pass', color: '#10b981' },
+                                        { status: 'failed', label: '❌ Failed', color: '#ef4444' },
+                                        { status: 'processing', label: '⏳ Processing', color: '#6366f1' },
+                                        { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
+                                    ].map(item => (
+                                        <button
+                                            key={item.status}
+                                            className="btn btn-sm"
+                                            style={{
+                                                background: item.color,
+                                                color: '#fff',
+                                                border: 'none',
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer'
+                                            }}
+                                            onClick={async () => {
+                                                const count = parseInt(document.getElementById('add-count').value) || 1;
+                                                try {
+                                                    const res = await fetch(`${API_BASE}/api/verify/history`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ status: item.status, count })
+                                                    });
+                                                    if (res.ok) {
+                                                        const data = await res.json();
+                                                        alert(`已添加 ${data.added} 条 ${item.label} 记录`);
+                                                        fetchConfig();
+                                                    }
+                                                } catch (e) {
+                                                    alert('添加失败: ' + e.message);
+                                                }
+                                            }}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Clear All */}
+                            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border, #e2ddd8)' }}>
+                                <button
+                                    className="btn btn-sm"
+                                    style={{
+                                        background: 'transparent',
+                                        color: '#ef4444',
+                                        border: '1px solid #ef4444',
+                                        padding: '6px 16px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={async () => {
+                                        if (!confirm('确定要清空所有验证状态记录吗？此操作不可撤销。')) return;
+                                        try {
+                                            const res = await fetch(`${API_BASE}/api/verify/history`, {
+                                                method: 'DELETE'
+                                            });
+                                            if (res.ok) {
+                                                const data = await res.json();
+                                                alert(`已清空 ${data.count} 条记录`);
+                                                fetchConfig();
+                                            }
+                                        } catch (e) {
+                                            alert('清空失败: ' + e.message);
+                                        }
+                                    }}
+                                >
+                                    🗑️ 清空所有记录
+                                </button>
                             </div>
                         </div>
                     </div>

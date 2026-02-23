@@ -1698,6 +1698,47 @@ async def get_verification_history_endpoint():
     }
 
 
+class AddVerificationRecord(BaseModel):
+    status: str  # pass, failed, processing, cancel
+    verificationId: Optional[str] = ""
+    count: Optional[int] = 1  # How many records to add
+
+
+@app.post("/api/verify/history")
+async def add_verification_history(request: AddVerificationRecord):
+    """Admin: Manually add verification history records"""
+    valid_statuses = ["pass", "failed", "processing", "cancel"]
+    if request.status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+
+    count = min(max(request.count or 1, 1), 50)  # Clamp 1-50
+    records = []
+    for _ in range(count):
+        record = verification_history.log_verification(
+            request.status,
+            request.verificationId or ""
+        )
+        records.append(record)
+
+    return {"added": len(records), "records": records}
+
+
+@app.delete("/api/verify/history/{record_id}")
+async def delete_verification_history(record_id: str):
+    """Admin: Delete a specific verification history record"""
+    success = verification_history.delete_verification(record_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return {"deleted": True, "id": record_id}
+
+
+@app.delete("/api/verify/history")
+async def clear_verification_history():
+    """Admin: Clear all verification history"""
+    count = verification_history.clear_history()
+    return {"cleared": True, "count": count}
+
+
 # ========== Telegram Verification ==========
 
 @app.post("/api/verify/telegram")

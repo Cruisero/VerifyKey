@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import './Admin.css';
+import '../Verify/Verify.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -218,6 +219,11 @@ export default function Admin() {
     const [testing, setTesting] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    // Verification history state
+    const [historyData, setHistoryData] = useState([]);
+    const [historyStats, setHistoryStats] = useState({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+    const [hoveredStatusItem, setHoveredStatusItem] = useState(null);
+
     // CDK management state
     const [cdkList, setCdkList] = useState([]);
     const [cdkStats, setCdkStats] = useState({});
@@ -300,6 +306,24 @@ export default function Admin() {
     useEffect(() => {
         fetchConfig();
     }, []);
+
+    // Fetch verification history when tab is activated
+    useEffect(() => {
+        if (activeTab === 'verify-status') {
+            (async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/verify/history`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setHistoryData(data.history || []);
+                        setHistoryStats(data.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch verification history:', e);
+                }
+            })();
+        }
+    }, [activeTab]);
 
     const fetchConfig = async () => {
         try {
@@ -2014,67 +2038,115 @@ export default function Admin() {
                 {/* Verify Status Tab */}
                 {activeTab === 'verify-status' && (
                     <div className="tab-content">
+                        {/* Live Grid Preview */}
                         <div className="settings-section card">
-                            <h3>📋 实时验证状态管理</h3>
-                            <p className="settings-desc">
-                                手动添加或删除验证状态记录。这些记录会显示在首页的实时验证状态网格中。
-                            </p>
-
-                            {/* Quick Add */}
-                            <div style={{ marginTop: '16px' }}>
-                                <h4 style={{ fontSize: '14px', marginBottom: '12px', fontWeight: 600 }}>快速添加</h4>
-                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="50"
-                                        defaultValue="1"
-                                        id="add-count"
-                                        className="input"
-                                        style={{ width: '70px', textAlign: 'center' }}
-                                    />
-                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条</span>
-                                    {[
-                                        { status: 'pass', label: '✅ Pass', color: '#10b981' },
-                                        { status: 'failed', label: '❌ Failed', color: '#ef4444' },
-                                        { status: 'processing', label: '⏳ Processing', color: '#6366f1' },
-                                        { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
-                                    ].map(item => (
-                                        <button
-                                            key={item.status}
-                                            className="btn btn-sm"
-                                            style={{
-                                                background: item.color,
-                                                color: '#fff',
-                                                border: 'none',
-                                                padding: '6px 14px',
-                                                borderRadius: '6px',
-                                                fontSize: '12px',
-                                                fontWeight: 600,
-                                                cursor: 'pointer'
-                                            }}
-                                            onClick={async () => {
-                                                const count = parseInt(document.getElementById('add-count').value) || 1;
-                                                try {
-                                                    const res = await fetch(`${API_BASE}/api/verify/history`, {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ status: item.status, count })
-                                                    });
-                                                    if (res.ok) {
-                                                        const data = await res.json();
-                                                        alert(`已添加 ${data.added} 条 ${item.label} 记录`);
-                                                        fetchConfig();
-                                                    }
-                                                } catch (e) {
-                                                    alert('添加失败: ' + e.message);
-                                                }
-                                            }}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <h3 style={{ margin: 0 }}>📋 实时验证状态</h3>
+                                <div style={{ display: 'flex', gap: '14px', fontSize: '13px' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                                        {historyStats.pass} Pass
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}></span>
+                                        {historyStats.failed} Failed
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', display: 'inline-block' }}></span>
+                                        {historyStats.processing} Processing
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
+                                        {historyStats.cancel} Cancel
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="status-grid-container">
+                                <div className="status-grid three-rows">
+                                    {historyData.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className={`status-block ${item.status}`}
+                                            onMouseEnter={() => setHoveredStatusItem(item)}
+                                            onMouseLeave={() => setHoveredStatusItem(null)}
                                         >
-                                            {item.label}
-                                        </button>
+                                            {hoveredStatusItem?.id === item.id && (
+                                                <div className="status-tooltip">
+                                                    <span className="tooltip-status">
+                                                        {item.status === 'pass' ? '✓ Pass' :
+                                                            item.status === 'failed' ? '✕ Failed' :
+                                                                item.status === 'processing' ? '⏳ Processing' : '◷ Cancel'}
+                                                    </span>
+                                                    <span className="tooltip-time">{item.timestamp?.split('T')[1]?.slice(0, 8) || ''}</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     ))}
                                 </div>
+                            </div>
+                            {historyData.length === 0 && (
+                                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px', padding: '20px 0' }}>暂无验证记录</p>
+                            )}
+                        </div>
+
+                        {/* Controls */}
+                        <div className="settings-section card">
+                            <h3>➕ 添加记录</h3>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '12px' }}>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="50"
+                                    defaultValue="1"
+                                    id="add-count"
+                                    className="input"
+                                    style={{ width: '70px', textAlign: 'center' }}
+                                />
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条</span>
+                                {[
+                                    { status: 'pass', label: '✅ Pass', color: '#10b981' },
+                                    { status: 'failed', label: '❌ Failed', color: '#ef4444' },
+                                    { status: 'processing', label: '⏳ Processing', color: '#6366f1' },
+                                    { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
+                                ].map(item => (
+                                    <button
+                                        key={item.status}
+                                        className="btn btn-sm"
+                                        style={{
+                                            background: item.color,
+                                            color: '#fff',
+                                            border: 'none',
+                                            padding: '6px 14px',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                        onClick={async () => {
+                                            const count = parseInt(document.getElementById('add-count').value) || 1;
+                                            try {
+                                                const res = await fetch(`${API_BASE}/api/verify/history`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ status: item.status, count })
+                                                });
+                                                if (res.ok) {
+                                                    // Refresh grid
+                                                    const hRes = await fetch(`${API_BASE}/api/verify/history`);
+                                                    if (hRes.ok) {
+                                                        const hData = await hRes.json();
+                                                        setHistoryData(hData.history || []);
+                                                        setHistoryStats(hData.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                alert('添加失败: ' + e.message);
+                                            }
+                                        }}
+                                    >
+                                        {item.label}
+                                    </button>
+                                ))}
                             </div>
 
                             {/* Clear All */}
@@ -2094,14 +2166,9 @@ export default function Admin() {
                                     onClick={async () => {
                                         if (!confirm('确定要清空所有验证状态记录吗？此操作不可撤销。')) return;
                                         try {
-                                            const res = await fetch(`${API_BASE}/api/verify/history`, {
-                                                method: 'DELETE'
-                                            });
-                                            if (res.ok) {
-                                                const data = await res.json();
-                                                alert(`已清空 ${data.count} 条记录`);
-                                                fetchConfig();
-                                            }
+                                            await fetch(`${API_BASE}/api/verify/history`, { method: 'DELETE' });
+                                            setHistoryData([]);
+                                            setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
                                         } catch (e) {
                                             alert('清空失败: ' + e.message);
                                         }
@@ -2109,6 +2176,9 @@ export default function Admin() {
                                 >
                                     🗑️ 清空所有记录
                                 </button>
+                                <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    共 {historyStats.total || 0} 条记录
+                                </span>
                             </div>
                         </div>
                     </div>

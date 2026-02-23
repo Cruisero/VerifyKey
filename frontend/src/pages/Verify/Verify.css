@@ -543,6 +543,10 @@
         width: 100%;
     }
 
+    .quick-actions .api-entry-pill {
+        margin-left: auto;
+    }
+
     .stats-grid {
         grid-template-columns: 1fr;
     }

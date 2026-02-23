@@ -653,10 +653,6 @@ export default function Verify() {
                                 {liveStats.failed} Failed
                             </span>
                             <span className="legend-item">
-                                <span className="legend-dot processing"></span>
-                                {liveStats.processing} Processing
-                            </span>
-                            <span className="legend-item">
                                 <span className="legend-dot cancel"></span>
                                 {liveStats.cancel} Cancel
                             </span>

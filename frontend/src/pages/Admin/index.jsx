@@ -2054,10 +2054,6 @@ export default function Admin() {
                                         {historyStats.failed} Failed
                                     </span>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', display: 'inline-block' }}></span>
-                                        {historyStats.processing} Processing
-                                    </span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                         <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
                                         {historyStats.cancel} Cancel
                                     </span>
@@ -2108,7 +2104,6 @@ export default function Admin() {
                                 {[
                                     { status: 'pass', label: '✅ Pass', color: '#10b981' },
                                     { status: 'failed', label: '❌ Failed', color: '#ef4444' },
-                                    { status: 'processing', label: '⏳ Processing', color: '#6366f1' },
                                     { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
                                 ].map(item => (
                                     <button

@@ -664,7 +664,7 @@ export default function Verify() {
                     </div>
                     <div className="status-grid-container">
                         <div className="status-grid three-rows">
-                            {statusData.slice(-80).map((item) => (
+                            {statusData.slice(-50).map((item) => (
                                 <div
                                     key={item.id}
                                     className={`status-block ${item.status}`}

@@ -225,7 +225,6 @@ export default function Admin() {
     const [hoveredStatusItem, setHoveredStatusItem] = useState(null);
     const [addCount, setAddCount] = useState(1);
     const [addingStatus, setAddingStatus] = useState(null);
-    const [lastAction, setLastAction] = useState('');
 
     // CDK management state
     const [cdkList, setCdkList] = useState([]);
@@ -2066,7 +2065,7 @@ export default function Admin() {
                             </div>
                             <div className="status-grid-container">
                                 <div className="status-grid three-rows">
-                                    {historyData.slice(-80).map((item) => (
+                                    {historyData.slice(-50).map((item) => (
                                         <div
                                             key={item.id}
                                             className={`status-block ${item.status}`}
@@ -2138,7 +2137,6 @@ export default function Admin() {
                                                 });
                                                 if (res.ok) {
                                                     const data = await res.json();
-                                                    setLastAction(`已添加 ${data.added} 条 ${item.label}`);
                                                     // Re-fetch to get accurate grid
                                                     const hRes = await fetch(`${API_BASE}/api/verify/history`);
                                                     if (hRes.ok) {
@@ -2148,7 +2146,7 @@ export default function Admin() {
                                                     }
                                                 }
                                             } catch (e) {
-                                                setLastAction('❗添加失败: ' + e.message);
+                                                alert('添加失败: ' + e.message);
                                             } finally {
                                                 setAddingStatus(null);
                                             }
@@ -2182,10 +2180,9 @@ export default function Admin() {
                                                 const data = await res.json();
                                                 setHistoryData([]);
                                                 setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
-                                                setLastAction(`已清空 ${data.count} 条记录`);
                                             }
                                         } catch (e) {
-                                            setLastAction('❗清空失败: ' + e.message);
+                                            alert('清空失败: ' + e.message);
                                         }
                                     }}
                                 >
@@ -2195,11 +2192,6 @@ export default function Admin() {
                                     共 {historyStats.total || 0} 条记录
                                 </span>
                             </div>
-                            {lastAction && (
-                                <div style={{ marginTop: '12px', padding: '8px 12px', background: 'var(--bg-secondary, #f5f0eb)', borderRadius: '6px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                                    {lastAction}
-                                </div>
-                            )}
                         </div>
                     </div>
                 )}

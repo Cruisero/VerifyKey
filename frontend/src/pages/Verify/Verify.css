@@ -692,15 +692,6 @@
         padding: var(--spacing-md);
     }
 
-    .status-grid.three-rows {
-        max-height: 27px;
-        /* 2 rows: 12px + 3px gap + 12px */
-    }
-
-    .status-grid .status-block {
-        flex: 0 0 calc((100% - 29 * 3px) / 30);
-    }
-
     /* Tips Inline */
     .tips-inline {
         padding: var(--spacing-sm) var(--spacing-md);
@@ -792,6 +783,17 @@
 .status-grid.three-rows {
     max-height: 12px;
     overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    .status-grid.three-rows {
+        max-height: 27px;
+        /* 2 rows: 12px + 3px gap + 12px */
+    }
+
+    .status-grid .status-block {
+        flex: 0 0 calc((100% - 29 * 3px) / 30);
+    }
 }
 
 .status-block {

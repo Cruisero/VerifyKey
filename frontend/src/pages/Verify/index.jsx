@@ -462,6 +462,10 @@ export default function Verify() {
                                 {t('lastSuccess')}: {lastSuccess ? formatTime(lastSuccess) : t('none')}
                             </span>
                         </div>
+                        <Link to="/api-docs" className="api-entry-pill">
+                            <span className="api-entry-dot"></span>
+                            API
+                        </Link>
                     </div>
                 </div>
 
@@ -688,16 +692,6 @@ export default function Verify() {
                             <p>{t('tip2')}</p>
                             <p>{t('tip3')}</p>
                         </div>
-                    </div>
-                    <div className="api-docs-entry">
-                        <Link to="/api-docs" className="api-docs-link">
-                            <span className="api-docs-icon">📡</span>
-                            <span className="api-docs-text">
-                                <strong>API 接入</strong>
-                                <span>通过 API 集成验证功能到你的应用</span>
-                            </span>
-                            <span className="api-docs-arrow">→</span>
-                        </Link>
                     </div>
                 </div>
             </div>

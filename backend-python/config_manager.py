@@ -31,6 +31,13 @@ DEFAULT_CONFIG = {
             "apiKey": ""
         },
         
+        # GetGem.cc API settings
+        "getgem": {
+            "enabled": False,
+            "apiUrl": "https://getgem.cc",
+            "cdk": ""
+        },
+        
         # Puppeteer HTML Template settings (NEW)
         "puppeteer": {
             "enabled": False,

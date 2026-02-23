@@ -129,6 +129,7 @@ export default function Verify() {
     }, [cdkCode]);
 
     const isTelegramMode = provider === 'telegram';
+    const isGetgemMode = provider === 'getgem';
 
     // 提取输入内容（链接或ID）
     const extractItems = (text) => {
@@ -158,6 +159,8 @@ export default function Verify() {
 
         if (isTelegramMode) {
             await handleTelegramVerify(items);
+        } else if (isGetgemMode) {
+            await handleGetgemVerify(items);
         } else {
             await handleApiVerify(items);
         }
@@ -235,6 +238,76 @@ export default function Verify() {
             }
         } catch (error) {
             console.error('Telegram verify error:', error);
+            setResults(prev => prev.map(r =>
+                resultItems.find(ri => ri.id === r.id) && r.status === 'processing'
+                    ? { ...r, status: 'failed', message: '❌ ' + error.message }
+                    : r
+            ));
+        }
+    };
+
+    // GetGem API 验证
+    const handleGetgemVerify = async (items) => {
+        // Extract verificationIds from URLs or plain IDs
+        const verificationIds = items.map(item => {
+            const urlMatch = item.match(/verificationId=([a-zA-Z0-9-]+)/);
+            return urlMatch ? urlMatch[1] : item.trim();
+        }).filter(id => id.length > 0);
+
+        const resultItems = verificationIds.map((vid, i) => ({
+            id: Date.now() + i,
+            verificationId: vid,
+            status: 'processing',
+            timestamp: new Date().toISOString(),
+            message: `⏳ ${t('processing')} (GetGem)`
+        }));
+        setResults(prev => [...resultItems, ...prev]);
+
+        try {
+            const response = await fetch(`${API_BASE}/api/verify/getgem`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ verificationIds, cdk: cdkCode })
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(err.detail || `Request failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.results && Array.isArray(data.results)) {
+                for (const result of data.results) {
+                    const resultItem = resultItems.find(r => r.verificationId === result.verificationId);
+                    if (resultItem) {
+                        let status = 'processing';
+                        let message = result.message || t('processing');
+                        if (result.status === 'approved') {
+                            status = 'success';
+                            message = result.message || t('msgApproved');
+                            setLastSuccess(new Date().toISOString());
+                            fetchHistory();
+                        } else if (result.status === 'rejected') {
+                            status = 'failed';
+                            message = result.message || t('msgRejected');
+                        } else if (result.status === 'error' || result.status === 'timeout') {
+                            status = 'failed';
+                            message = result.message || t('msgError');
+                        }
+                        setResults(prev => prev.map(r =>
+                            r.id === resultItem.id
+                                ? { ...r, status, message, verificationId: result.verificationId, redirectUrl: result.redirectUrl }
+                                : r
+                        ));
+                    }
+                }
+            }
+            // Update CDK remaining from response
+            if (data.cdkRemaining !== undefined) {
+                setCdkRemaining(data.cdkRemaining);
+            }
+        } catch (error) {
+            console.error('GetGem verify error:', error);
             setResults(prev => prev.map(r =>
                 resultItems.find(ri => ri.id === r.id) && r.status === 'processing'
                     ? { ...r, status: 'failed', message: '❌ ' + error.message }

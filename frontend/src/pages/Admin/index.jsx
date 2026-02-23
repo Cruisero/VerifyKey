@@ -238,6 +238,12 @@ export default function Admin() {
         apiUrl: 'https://batch.1key.me/api/batch',
         apiKey: ''
     });
+    const [getgemSettings, setGetgemSettings] = useState({
+        apiUrl: 'https://getgem.cc',
+        cdk: ''
+    });
+    const [getgemStatus, setGetgemStatus] = useState(null);
+    const [getgemChecking, setGetgemChecking] = useState(false);
     const [geminiSettings, setGeminiSettings] = useState({
         apiKey: '',
         model: 'gemini-3-pro-image-preview',
@@ -312,6 +318,19 @@ export default function Admin() {
                     }));
                     if (data.aiGenerator.batchApi.apiKey?.includes('...')) {
                         setBatchApiSettings(prev => ({ ...prev, hasStoredKey: true }));
+                    }
+                }
+                // Load GetGem settings
+                if (data.aiGenerator?.getgem) {
+                    setGetgemSettings(prev => ({
+                        ...prev,
+                        apiUrl: data.aiGenerator.getgem.apiUrl || prev.apiUrl,
+                        cdk: data.aiGenerator.getgem.cdk?.includes('...')
+                            ? ''
+                            : (data.aiGenerator.getgem.cdk || '')
+                    }));
+                    if (data.aiGenerator.getgem.cdk?.includes('...')) {
+                        setGetgemSettings(prev => ({ ...prev, hasStoredCdk: true }));
                     }
                 }
                 if (data.aiGenerator?.gemini) {
@@ -462,6 +481,11 @@ export default function Admin() {
                         enabled: aiProvider === 'batch_api',
                         apiUrl: batchApiSettings.apiUrl,
                         apiKey: batchApiSettings.apiKey || undefined
+                    },
+                    getgem: {
+                        enabled: aiProvider === 'getgem',
+                        apiUrl: getgemSettings.apiUrl,
+                        cdk: getgemSettings.cdk || undefined
                     },
                     gemini: {
                         enabled: aiProvider === 'gemini' || aiProvider === 'puppeteer',
@@ -774,6 +798,20 @@ export default function Admin() {
                             {/* Provider Selection */}
                             <div className="provider-cards">
                                 <div
+                                    className={`provider-card ${aiProvider === 'getgem' ? 'active' : ''}`}
+                                    onClick={() => setAiProvider('getgem')}
+                                >
+                                    <div className="provider-icon">💎</div>
+                                    <div className="provider-info">
+                                        <h4>GetGem API</h4>
+                                        <p>使用 GetGem.cc 第三方验证 API</p>
+                                    </div>
+                                    <div className="provider-status">
+                                        <span className="badge badge-success">推荐</span>
+                                    </div>
+                                </div>
+
+                                <div
                                     className={`provider-card ${aiProvider === 'batch_api' ? 'active' : ''}`}
                                     onClick={() => setAiProvider('batch_api')}
                                 >
@@ -899,6 +937,98 @@ export default function Admin() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* GetGem.cc API Settings */}
+                            {aiProvider === 'getgem' && (
+                                <div className="provider-settings">
+                                    <h4>💎 GetGem API 配置</h4>
+                                    <div className="settings-form">
+                                        <div className="getgem-info" style={{
+                                            background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
+                                            color: 'white',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>GetGem.cc</strong> 是第三方学生身份验证 API 服务。
+                                                提交 verificationId 后自动完成验证流程，支持批量处理和状态轮询。
+                                            </p>
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">API URL</label>
+                                            <input
+                                                type="text"
+                                                className="input"
+                                                value={getgemSettings.apiUrl}
+                                                onChange={(e) => setGetgemSettings(s => ({ ...s, apiUrl: e.target.value }))}
+                                                placeholder="https://getgem.cc"
+                                            />
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label">GetGem CDK</label>
+                                            <input
+                                                type="password"
+                                                className="input"
+                                                value={getgemSettings.cdk}
+                                                onChange={(e) => setGetgemSettings(s => ({ ...s, cdk: e.target.value, hasStoredCdk: false }))}
+                                                placeholder={getgemSettings.hasStoredCdk ? "••••••••••（已保存，留空保持不变）" : "CDK-XXXXXXXXXXXXXXXX"}
+                                            />
+                                            {getgemSettings.hasStoredCdk && (
+                                                <p className="input-hint"><span className="key-stored">✓ CDK 已保存</span></p>
+                                            )}
+                                            <p className="input-hint">
+                                                从 <a href="https://getgem.cc" target="_blank" rel="noreferrer">getgem.cc</a> 获取 CDK 激活码
+                                            </p>
+                                        </div>
+                                        <div style={{ marginTop: '12px' }}>
+                                            <button
+                                                className="btn btn-sm btn-secondary"
+                                                disabled={getgemChecking}
+                                                onClick={async () => {
+                                                    setGetgemChecking(true);
+                                                    setGetgemStatus(null);
+                                                    try {
+                                                        const res = await fetch(`${API_BASE}/api/getgem/status`);
+                                                        const data = await res.json();
+                                                        setGetgemStatus(data);
+                                                    } catch (e) {
+                                                        setGetgemStatus({ error: e.message });
+                                                    }
+                                                    setGetgemChecking(false);
+                                                }}
+                                            >
+                                                {getgemChecking ? '⏳ 检查中...' : '🔍 检查 GetGem 状态'}
+                                            </button>
+                                            {getgemStatus && (
+                                                <div style={{
+                                                    marginTop: '12px',
+                                                    padding: '12px 16px',
+                                                    borderRadius: '8px',
+                                                    background: getgemStatus.connected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                                    border: `1px solid ${getgemStatus.connected ? '#10B981' : '#EF4444'}`,
+                                                    fontSize: '13px'
+                                                }}>
+                                                    <div>{getgemStatus.connected ? '✅ API 连接正常' : '❌ API 连接失败'}</div>
+                                                    {getgemStatus.cdkBalance && (
+                                                        <div style={{ marginTop: '6px' }}>
+                                                            💎 CDK 余额: <strong>{getgemStatus.cdkBalance.remaining_uses}</strong> / {getgemStatus.cdkBalance.total_uses}
+                                                        </div>
+                                                    )}
+                                                    {getgemStatus.health && (
+                                                        <div style={{ marginTop: '6px' }}>
+                                                            🏭 活跃任务: {getgemStatus.health.activeJobs || 0} · 可用槽位: {getgemStatus.health.availableSlots || 'N/A'}
+                                                        </div>
+                                                    )}
+                                                    {getgemStatus.error && (
+                                                        <div style={{ marginTop: '6px', color: '#EF4444' }}>错误: {getgemStatus.error}</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* batch.1key.me API Settings */}
                             {aiProvider === 'batch_api' && (

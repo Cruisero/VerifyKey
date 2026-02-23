@@ -766,6 +766,8 @@ async def get_config_endpoint():
         config["aiGenerator"]["gemini"]["apiKey"] = mask_key(config["aiGenerator"]["gemini"]["apiKey"])
     if config.get("aiGenerator", {}).get("batchApi", {}).get("apiKey"):
         config["aiGenerator"]["batchApi"]["apiKey"] = mask_key(config["aiGenerator"]["batchApi"]["apiKey"])
+    if config.get("aiGenerator", {}).get("getgem", {}).get("cdk"):
+        config["aiGenerator"]["getgem"]["cdk"] = mask_key(config["aiGenerator"]["getgem"]["cdk"])
     
     # Proxy credentials are NOT masked - shown in admin panel
     
@@ -1791,6 +1793,205 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
         },
         "cdkRemaining": cdk_remaining
     }
+
+
+# ========== GetGem.cc API Verification ==========
+
+class GetGemVerifyRequest(BaseModel):
+    verificationIds: List[str]
+    cdk: Optional[str] = None  # User's local CDK (for quota tracking)
+
+
+@app.post("/api/verify/getgem")
+async def verify_via_getgem(request: GetGemVerifyRequest):
+    """
+    Verify by forwarding verification IDs to GetGem.cc API.
+    Uses GetGem CDK from saved config for authentication.
+    Local CDK is used for quota tracking only.
+    """
+    import config_manager
+    import httpx
+
+    config = config_manager.get_config()
+    getgem_config = config.get("aiGenerator", {}).get("getgem", {})
+    getgem_cdk = getgem_config.get("cdk", "")
+    getgem_url = getgem_config.get("apiUrl", "https://getgem.cc")
+
+    if not getgem_cdk:
+        raise HTTPException(status_code=400, detail="GetGem CDK 未配置，请在管理面板中设置")
+
+    if not request.verificationIds:
+        raise HTTPException(status_code=400, detail="No verification IDs provided")
+    
+    if len(request.verificationIds) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 IDs per request")
+
+    # Validate local CDK (for quota tracking)
+    cdk_remaining = None
+    if request.cdk:
+        cdk_check = cdk_manager.validate_cdk(request.cdk)
+        if not cdk_check["valid"]:
+            raise HTTPException(status_code=403, detail=cdk_check["message"])
+        if cdk_check["remaining"] < len(request.verificationIds):
+            raise HTTPException(
+                status_code=403,
+                detail=f"CDK 额度不足，需要 {len(request.verificationIds)} 次，剩余 {cdk_check['remaining']} 次"
+            )
+        cdk_remaining = cdk_check["remaining"]
+
+    async def process_single(vid: str):
+        """Submit one verification to GetGem and poll until completion."""
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                # Step 1: Submit verification
+                submit_resp = await client.post(
+                    f"{getgem_url}/api/verify",
+                    json={"verificationId": vid, "cdk": getgem_cdk}
+                )
+                
+                if submit_resp.status_code != 200:
+                    error_detail = ""
+                    try:
+                        err = submit_resp.json()
+                        error_detail = err.get("detail") or err.get("message") or err.get("error") or str(err)
+                    except:
+                        error_detail = submit_resp.text[:200]
+                    return {
+                        "verificationId": vid,
+                        "status": "error",
+                        "success": False,
+                        "message": f"提交失败 ({submit_resp.status_code}): {error_detail}"
+                    }
+
+                submit_data = submit_resp.json()
+                task_id = submit_data.get("taskId")
+                
+                if not task_id:
+                    return {
+                        "verificationId": vid,
+                        "status": "error",
+                        "success": False,
+                        "message": f"提交失败: 未返回 taskId — {submit_data}"
+                    }
+
+                # Step 2: Poll for result
+                interval = 5
+                max_attempts = 60  # 5 minutes max
+                for attempt in range(max_attempts):
+                    await asyncio.sleep(interval)
+                    
+                    status_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
+                    
+                    if status_resp.status_code == 429:
+                        # Rate limited — exponential backoff
+                        interval = min(interval * 2, 30)
+                        continue
+                    
+                    if status_resp.status_code != 200:
+                        continue
+                    
+                    status_data = status_resp.json()
+                    interval = 5  # Reset on success
+                    
+                    if status_data.get("completed"):
+                        if status_data.get("success"):
+                            return {
+                                "verificationId": vid,
+                                "status": "approved",
+                                "success": True,
+                                "message": f"✅ 验证成功",
+                                "redirectUrl": status_data.get("redirectUrl"),
+                                "taskId": task_id
+                            }
+                        else:
+                            return {
+                                "verificationId": vid,
+                                "status": "rejected",
+                                "success": False,
+                                "message": f"❌ 验证失败: {status_data.get('error', 'Unknown error')}",
+                                "taskId": task_id
+                            }
+                
+                # Timeout
+                return {
+                    "verificationId": vid,
+                    "status": "timeout",
+                    "success": False,
+                    "message": "⏰ 轮询超时（5分钟）",
+                    "taskId": task_id
+                }
+        
+        except Exception as e:
+            return {
+                "verificationId": vid,
+                "status": "error",
+                "success": False,
+                "message": f"❌ 错误: {str(e)}"
+            }
+
+    # Process all IDs concurrently
+    results = await asyncio.gather(*[process_single(vid) for vid in request.verificationIds])
+    results = list(results)
+
+    # Log verification results to history
+    for r in results:
+        vid = r.get("verificationId", "")
+        if r["status"] == "approved":
+            verification_history.log_verification("pass", vid)
+        elif r["status"] == "rejected":
+            verification_history.log_verification("failed", vid)
+        elif r["status"] in ("error", "timeout"):
+            verification_history.log_verification("cancel", vid)
+        else:
+            verification_history.log_verification("processing", vid)
+
+    # Deduct local CDK quota for successful verifications
+    successful = sum(1 for r in results if r["status"] == "approved")
+    if request.cdk and successful > 0:
+        deduct = cdk_manager.use_cdk(request.cdk, successful)
+        cdk_remaining = deduct.get("remaining", cdk_remaining)
+
+    return {
+        "results": results,
+        "stats": {
+            "total": len(results),
+            "approved": successful,
+            "rejected": sum(1 for r in results if r["status"] == "rejected")
+        },
+        "cdkRemaining": cdk_remaining
+    }
+
+
+@app.get("/api/getgem/status")
+async def getgem_status():
+    """Check GetGem.cc API health and CDK balance"""
+    import config_manager
+    import httpx
+
+    config = config_manager.get_config()
+    getgem_config = config.get("aiGenerator", {}).get("getgem", {})
+    getgem_cdk = getgem_config.get("cdk", "")
+    getgem_url = getgem_config.get("apiUrl", "https://getgem.cc")
+
+    result = {"connected": False, "cdkBalance": None, "health": None}
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            # Check health
+            health_resp = await client.get(f"{getgem_url}/api/health")
+            if health_resp.status_code == 200:
+                result["connected"] = True
+                result["health"] = health_resp.json()
+
+            # Check CDK balance if configured
+            if getgem_cdk:
+                cdk_resp = await client.get(f"{getgem_url}/api/cdk/status/{getgem_cdk}")
+                if cdk_resp.status_code == 200:
+                    result["cdkBalance"] = cdk_resp.json()
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
 
 
 if __name__ == "__main__":

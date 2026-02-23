@@ -223,6 +223,8 @@ export default function Admin() {
     const [historyData, setHistoryData] = useState([]);
     const [historyStats, setHistoryStats] = useState({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
     const [hoveredStatusItem, setHoveredStatusItem] = useState(null);
+    const [addCount, setAddCount] = useState(1);
+    const [addingStatus, setAddingStatus] = useState(null); // which status is currently being added
 
     // CDK management state
     const [cdkList, setCdkList] = useState([]);
@@ -2097,8 +2099,8 @@ export default function Admin() {
                                     type="number"
                                     min="1"
                                     max="50"
-                                    defaultValue="1"
-                                    id="add-count"
+                                    value={addCount}
+                                    onChange={(e) => setAddCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
                                     className="input"
                                     style={{ width: '70px', textAlign: 'center' }}
                                 />
@@ -2111,40 +2113,46 @@ export default function Admin() {
                                 ].map(item => (
                                     <button
                                         key={item.status}
+                                        disabled={addingStatus !== null}
                                         className="btn btn-sm"
                                         style={{
-                                            background: item.color,
+                                            background: addingStatus === item.status ? '#999' : item.color,
                                             color: '#fff',
                                             border: 'none',
                                             padding: '6px 14px',
                                             borderRadius: '6px',
                                             fontSize: '12px',
                                             fontWeight: 600,
-                                            cursor: 'pointer'
+                                            cursor: addingStatus !== null ? 'not-allowed' : 'pointer',
+                                            opacity: addingStatus !== null && addingStatus !== item.status ? 0.5 : 1
                                         }}
                                         onClick={async () => {
-                                            const count = parseInt(document.getElementById('add-count').value) || 1;
+                                            if (addingStatus !== null) return;
+                                            setAddingStatus(item.status);
                                             try {
                                                 const res = await fetch(`${API_BASE}/api/verify/history`, {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ status: item.status, count })
+                                                    body: JSON.stringify({ status: item.status, count: addCount })
                                                 });
                                                 if (res.ok) {
-                                                    // Refresh grid
-                                                    const hRes = await fetch(`${API_BASE}/api/verify/history`);
-                                                    if (hRes.ok) {
-                                                        const hData = await hRes.json();
-                                                        setHistoryData(hData.history || []);
-                                                        setHistoryStats(hData.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
-                                                    }
+                                                    const data = await res.json();
+                                                    // Optimistic update: append new records directly
+                                                    setHistoryData(prev => [...prev, ...(data.records || [])]);
+                                                    setHistoryStats(prev => ({
+                                                        ...prev,
+                                                        [item.status]: prev[item.status] + (data.added || 0),
+                                                        total: prev.total + (data.added || 0)
+                                                    }));
                                                 }
                                             } catch (e) {
                                                 alert('添加失败: ' + e.message);
+                                            } finally {
+                                                setAddingStatus(null);
                                             }
                                         }}
                                     >
-                                        {item.label}
+                                        {addingStatus === item.status ? '...' : item.label}
                                     </button>
                                 ))}
                             </div>
@@ -2153,6 +2161,7 @@ export default function Admin() {
                             <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border, #e2ddd8)' }}>
                                 <button
                                     className="btn btn-sm"
+                                    disabled={addingStatus !== null}
                                     style={{
                                         background: 'transparent',
                                         color: '#ef4444',

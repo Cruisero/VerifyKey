@@ -1994,6 +1994,291 @@ async def getgem_status():
     return result
 
 
+# ========== PUBLIC API v1 ==========
+# CDK-authenticated API for external users
+
+import uuid
+from datetime import datetime as dt
+
+# In-memory task store (in production, use Redis or DB)
+_api_tasks = {}  # task_id -> task info dict
+
+class PublicVerifyRequest(BaseModel):
+    verificationId: str
+    cdk: str
+
+class PublicBatchVerifyRequest(BaseModel):
+    verificationIds: List[str]
+    cdk: str
+
+
+def _validate_cdk_header(cdk: str) -> dict:
+    """Validate CDK and return info or raise HTTPException."""
+    if not cdk:
+        raise HTTPException(status_code=401, detail="Missing CDK. Provide CDK via 'cdk' field or 'X-CDK-Key' header.")
+    result = cdk_manager.validate_cdk(cdk)
+    if not result["valid"]:
+        raise HTTPException(status_code=403, detail=result["message"])
+    return result
+
+
+async def _dispatch_verification(vid: str, cdk_code: str) -> dict:
+    """
+    Dispatch a single verification to the configured provider.
+    Returns a result dict with status, success, message, etc.
+    """
+    import config_manager
+    config = config_manager.get_config()
+    provider = config.get("aiGenerator", {}).get("provider", "gemini")
+
+    # GetGem provider
+    if provider == "getgem":
+        import httpx
+        getgem_config = config.get("aiGenerator", {}).get("getgem", {})
+        getgem_cdk = getgem_config.get("cdk", "")
+        getgem_url = getgem_config.get("apiUrl", "https://getgem.cc")
+        if not getgem_cdk:
+            return {"status": "error", "success": False, "message": "GetGem CDK not configured on server"}
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                resp = await client.post(f"{getgem_url}/api/verify", json={"verificationId": vid, "cdk": getgem_cdk})
+                if resp.status_code != 200:
+                    return {"status": "error", "success": False, "message": f"GetGem submit failed ({resp.status_code})"}
+                data = resp.json()
+                task_id = data.get("taskId")
+                if not task_id:
+                    return {"status": "error", "success": False, "message": "GetGem returned no taskId"}
+                # Poll
+                interval = 5
+                for _ in range(60):
+                    await asyncio.sleep(interval)
+                    sr = await client.get(f"{getgem_url}/api/status/{task_id}")
+                    if sr.status_code == 429:
+                        interval = min(interval * 2, 30)
+                        continue
+                    if sr.status_code != 200:
+                        continue
+                    sd = sr.json()
+                    interval = 5
+                    if sd.get("completed"):
+                        if sd.get("success"):
+                            return {"status": "approved", "success": True, "message": "Verification approved", "redirectUrl": sd.get("redirectUrl")}
+                        else:
+                            return {"status": "rejected", "success": False, "message": sd.get("error", "Verification rejected")}
+                return {"status": "timeout", "success": False, "message": "Polling timeout (5min)"}
+        except Exception as e:
+            return {"status": "error", "success": False, "message": str(e)}
+
+    # Telegram provider
+    elif provider == "telegram":
+        if not telegram_bot or not telegram_bot.is_connected:
+            return {"status": "error", "success": False, "message": "Telegram Userbot not connected"}
+        try:
+            # Build verification link
+            link = f"https://services.sheerid.com/verify/{vid}/"
+            result = await telegram_bot.verify(link)
+            return {
+                "status": result.get("status", "unknown"),
+                "success": result.get("success", False),
+                "message": result.get("message", ""),
+                "redirectUrl": result.get("claimLink")
+            }
+        except Exception as e:
+            return {"status": "error", "success": False, "message": str(e)}
+
+    # Direct API provider (curl_cffi)
+    else:
+        try:
+            proxy = get_proxy_url()
+            result = verify_single(vid, proxy=proxy)
+            return {
+                "status": "approved" if result.get("success") else "rejected",
+                "success": result.get("success", False),
+                "message": result.get("message", "")
+            }
+        except Exception as e:
+            return {"status": "error", "success": False, "message": str(e)}
+
+
+@app.get("/api/v1/health")
+async def public_health():
+    """Public health check — no authentication required."""
+    import config_manager
+    config = config_manager.get_config()
+    provider = config.get("aiGenerator", {}).get("provider", "gemini")
+    return {
+        "status": "ok",
+        "provider": provider,
+        "version": "1.0.0",
+        "timestamp": dt.now().isoformat()
+    }
+
+
+@app.post("/api/v1/verify")
+async def public_verify(request: PublicVerifyRequest):
+    """
+    Submit a single verification request.
+    Requires a valid CDK with remaining quota.
+    Returns a taskId for polling status.
+    """
+    cdk_info = _validate_cdk_header(request.cdk)
+
+    if cdk_info["remaining"] < 1:
+        raise HTTPException(status_code=403, detail="CDK has no remaining quota")
+
+    task_id = str(uuid.uuid4())
+    _api_tasks[task_id] = {
+        "taskId": task_id,
+        "verificationId": request.verificationId,
+        "cdk": request.cdk,
+        "status": "pending",
+        "completed": False,
+        "success": False,
+        "error": None,
+        "redirectUrl": None,
+        "createdAt": dt.now().isoformat()
+    }
+
+    # Run verification in background
+    async def run_task():
+        _api_tasks[task_id]["status"] = "processing"
+        result = await _dispatch_verification(request.verificationId, request.cdk)
+        _api_tasks[task_id]["status"] = result["status"]
+        _api_tasks[task_id]["completed"] = True
+        _api_tasks[task_id]["success"] = result.get("success", False)
+        _api_tasks[task_id]["redirectUrl"] = result.get("redirectUrl")
+        _api_tasks[task_id]["error"] = result.get("message") if not result.get("success") else None
+        _api_tasks[task_id]["completedAt"] = dt.now().isoformat()
+
+        # Log to history
+        vid = request.verificationId
+        if result["status"] == "approved":
+            verification_history.log_verification("pass", vid)
+            cdk_manager.use_cdk(request.cdk, 1)
+        elif result["status"] == "rejected":
+            verification_history.log_verification("failed", vid)
+        else:
+            verification_history.log_verification("cancel", vid)
+
+    asyncio.create_task(run_task())
+
+    return {
+        "taskId": task_id,
+        "verificationId": request.verificationId,
+        "status": "pending",
+        "message": "Verification task created"
+    }
+
+
+@app.post("/api/v1/verify/batch")
+async def public_verify_batch(request: PublicBatchVerifyRequest):
+    """
+    Submit multiple verification requests at once.
+    Each ID creates a separate task. Max 10 per request.
+    """
+    cdk_info = _validate_cdk_header(request.cdk)
+
+    if not request.verificationIds:
+        raise HTTPException(status_code=400, detail="No verification IDs provided")
+
+    if len(request.verificationIds) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 IDs per batch request")
+
+    if cdk_info["remaining"] < len(request.verificationIds):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Insufficient CDK quota: need {len(request.verificationIds)}, remaining {cdk_info['remaining']}"
+        )
+
+    tasks = []
+    for vid in request.verificationIds:
+        task_id = str(uuid.uuid4())
+        _api_tasks[task_id] = {
+            "taskId": task_id,
+            "verificationId": vid,
+            "cdk": request.cdk,
+            "status": "pending",
+            "completed": False,
+            "success": False,
+            "error": None,
+            "redirectUrl": None,
+            "createdAt": dt.now().isoformat()
+        }
+
+        async def run_task(tid=task_id, v=vid):
+            _api_tasks[tid]["status"] = "processing"
+            result = await _dispatch_verification(v, request.cdk)
+            _api_tasks[tid]["status"] = result["status"]
+            _api_tasks[tid]["completed"] = True
+            _api_tasks[tid]["success"] = result.get("success", False)
+            _api_tasks[tid]["redirectUrl"] = result.get("redirectUrl")
+            _api_tasks[tid]["error"] = result.get("message") if not result.get("success") else None
+            _api_tasks[tid]["completedAt"] = dt.now().isoformat()
+
+            if result["status"] == "approved":
+                verification_history.log_verification("pass", v)
+                cdk_manager.use_cdk(request.cdk, 1)
+            elif result["status"] == "rejected":
+                verification_history.log_verification("failed", v)
+            else:
+                verification_history.log_verification("cancel", v)
+
+        asyncio.create_task(run_task())
+        tasks.append({"taskId": task_id, "verificationId": vid, "status": "pending"})
+
+    return {
+        "tasks": tasks,
+        "total": len(tasks),
+        "message": f"{len(tasks)} verification tasks created"
+    }
+
+
+@app.get("/api/v1/status/{task_id}")
+async def public_task_status(task_id: str):
+    """
+    Check the status of a verification task.
+    Poll this endpoint until 'completed' is true.
+    """
+    task = _api_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return {
+        "taskId": task["taskId"],
+        "verificationId": task["verificationId"],
+        "status": task["status"],
+        "completed": task["completed"],
+        "success": task["success"],
+        "error": task["error"],
+        "redirectUrl": task["redirectUrl"],
+        "createdAt": task["createdAt"],
+        "completedAt": task.get("completedAt")
+    }
+
+
+@app.get("/api/v1/cdk/status")
+async def public_cdk_status(x_cdk_key: Optional[str] = Header(None), cdk: Optional[str] = None):
+    """
+    Check CDK quota status.
+    Pass CDK via 'X-CDK-Key' header or 'cdk' query parameter.
+    """
+    code = x_cdk_key or cdk
+    if not code:
+        raise HTTPException(status_code=400, detail="Provide CDK via 'X-CDK-Key' header or 'cdk' query param")
+
+    result = cdk_manager.validate_cdk(code)
+    if not result["valid"]:
+        raise HTTPException(status_code=403, detail=result["message"])
+
+    return {
+        "code": code[:4] + "..." + code[-4:] if len(code) > 8 else "***",
+        "total_uses": result.get("quota", 0),
+        "remaining_uses": result.get("remaining", 0),
+        "used_uses": result.get("quota", 0) - result.get("remaining", 0),
+        "valid": True
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     

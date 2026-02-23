@@ -110,6 +110,7 @@ export default function Layout({ children }) {
                 <div className="footer-content">
                     <p>{t('footerRights')}</p>
                     <div className="footer-links">
+                        <Link to="/api-docs">API 文档</Link>
                         <a href="#">{t('terms')}</a>
                         <a href="#">{t('privacy')}</a>
                         <a href="#">{t('contact')}</a>

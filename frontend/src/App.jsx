@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Verify from './pages/Verify';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
+import ApiDocs from './pages/ApiDocs';
 
 import './assets/styles/index.css';
 
@@ -44,6 +45,14 @@ function App() {
                 element={
                   <Layout>
                     <Admin />
+                  </Layout>
+                }
+              />
+              <Route
+                path="/api-docs"
+                element={
+                  <Layout>
+                    <ApiDocs />
                   </Layout>
                 }
               />

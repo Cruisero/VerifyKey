@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useLanguage } from '../../stores/LanguageContext';
 import './ApiDocs.css';
 
 const API_BASE_URL = 'https://onepass.fun';
@@ -159,7 +158,6 @@ while True:
     time.sleep(interval)`;
 
 export default function ApiDocs() {
-    const { t } = useLanguage();
     const [expanded, setExpanded] = useState({});
 
     const toggle = (key) => {

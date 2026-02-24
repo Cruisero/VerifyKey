@@ -1716,11 +1716,10 @@ export default function Admin() {
                                                 </div>
 
                                                 <div className="input-group">
-                                                    <label className="input-label">Target Bot Username</label>
-                                                    <input
-                                                        type="text"
+                                                    <label className="input-label">Target Bot</label>
+                                                    <select
                                                         className="input"
-                                                        value={config?.verification?.telegram?.botUsername || ''}
+                                                        value={config?.verification?.telegram?.botUsername || '@SheerID_Bot'}
                                                         onChange={(e) => {
                                                             setConfig(prev => ({
                                                                 ...prev,
@@ -1733,9 +1732,18 @@ export default function Admin() {
                                                                 }
                                                             }));
                                                         }}
-                                                        placeholder="@SheerID_Bot"
-                                                    />
-                                                    <p className="input-hint">默认为 @SheerID_Bot，可自定义目标 Bot</p>
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        <option value="@SheerID_Bot">@SheerID_Bot</option>
+                                                        <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
+                                                    </select>
+                                                    <p className="input-hint">
+                                                        {(config?.verification?.telegram?.botUsername || '@SheerID_Bot') === '@SheerID_Bot'
+                                                            ? '当前: SheerID_Bot'
+                                                            : '当前: SheerID_Verification_bot'
+                                                        }
+                                                        {' · 切换后需点击保存并重启生效'}
+                                                    </p>
                                                 </div>
 
                                                 <div style={{

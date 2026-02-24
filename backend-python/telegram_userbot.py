@@ -258,13 +258,13 @@ class SheerIDUserbot:
             result["claimLink"] = link_match.group(1)
 
         # Determine status
-        if any(kw in text_upper for kw in ["CONGRATULATIONS", "VERIFICATION APPROVED", "STATUS: VERIFIED"]):
+        if any(kw in text_upper for kw in ["CONGRATULATIONS", "VERIFICATION APPROVED", "STATUS: VERIFIED", "SUCCESS"]):
             result["success"] = True
             result["status"] = "approved"
             result["message"] = "验证通过！"
             return result
 
-        if "VERIFICATION REJECTED" in text_upper or "❌" in text:
+        if "VERIFICATION REJECTED" in text_upper or "VERIFICATION UNSUCCESSFUL" in text_upper or "❌" in text:
             result["success"] = False
             result["status"] = "rejected"
 
@@ -272,13 +272,13 @@ class SheerIDUserbot:
             if "RATE LIMITED" in text_upper or "TOO MANY REQUESTS" in text_upper:
                 result["message"] = "被拒绝：请求过于频繁"
                 result["reason"] = "rate_limited"
-            elif "DO NOT OPEN" in text_upper:
+            elif "DO NOT OPEN" in text_upper or "DIFFERENT IP" in text_upper:
                 result["message"] = "被拒绝：链接已被打开,请刷新页面重新获取链接"
                 result["reason"] = "link_opened"
             elif "EXPIRED" in text_upper:
                 result["message"] = "被拒绝：链接已过期,请刷新页面重新获取链接"
                 result["reason"] = "expired"
-            elif "INVALID" in text_upper:
+            elif "INVALID" in text_upper or "COULD NOT BE VERIFIED" in text_upper:
                 result["message"] = "被拒绝：无效链接,请刷新页面重新获取链接"
                 result["reason"] = "invalid"
             else:

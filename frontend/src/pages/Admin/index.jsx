@@ -2284,6 +2284,19 @@ export default function Admin() {
                                     {savingAutoRecord ? '...' : '保存'}
                                 </button>
                             </div>
+                            {autoRecord.enabled && (
+                                <div style={{
+                                    marginTop: '12px',
+                                    padding: '8px 14px',
+                                    background: 'rgba(16, 185, 129, 0.1)',
+                                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                                    borderRadius: '6px',
+                                    fontSize: '13px',
+                                    color: '#10b981'
+                                }}>
+                                    ✅ 运行中：每 {autoRecord.intervalSeconds} 秒自动添加一条 {autoRecord.status === 'pass' ? 'Pass' : autoRecord.status === 'failed' ? 'Failed' : 'Cancel'} 记录
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

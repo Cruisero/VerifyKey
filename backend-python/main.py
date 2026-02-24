@@ -1781,7 +1781,7 @@ async def _auto_rule_loop(rule_id: str):
                 if elapsed_hours >= duration_hours:
                     rule["enabled"] = False
                     _save_auto_rules(rules)
-                    logger.info(f"[AutoRecord] Rule {rule_id} expired after {duration_hours}h")
+                    print(f"[AutoRecord] Rule {rule_id} expired after {duration_hours}h")
                     break
             
             status = rule.get("status", "pass")
@@ -1791,7 +1791,7 @@ async def _auto_rule_loop(rule_id: str):
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logger.error(f"[AutoRecord] Rule {rule_id} error: {e}")
+            print(f"[AutoRecord] Rule {rule_id} error: {e}")
             await asyncio.sleep(30)
 
 def _start_rule_task(rule):
@@ -1883,7 +1883,7 @@ async def startup_auto_records():
     for rule in rules:
         if rule.get("enabled"):
             _start_rule_task(rule)
-            logger.info(f"[AutoRecord] Auto-started rule {rule['id']}: {rule['status']} every {rule.get('intervalMinutes', 5)}min")
+            print(f"[AutoRecord] Auto-started rule {rule['id']}: {rule['status']} every {rule.get('intervalMinutes', 5)}min")
 
 # ========== Telegram Verification ==========
 

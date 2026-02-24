@@ -59,7 +59,7 @@ def log_verification(status: str, verification_id: str = "") -> Dict:
         "id": str(uuid.uuid4())[:8],
         "status": status,
         "verificationId": verification_id,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.utcnow().isoformat() + "Z"
     }
     
     with _lock:

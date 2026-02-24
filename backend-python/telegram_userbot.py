@@ -266,12 +266,8 @@ class SheerIDUserbot:
             result["claimLink"] = link_match.group(1)
 
         # Determine status
-        if any(kw in text_upper for kw in ["CONGRATULATIONS", "VERIFICATION APPROVED", "STATUS: VERIFIED", "SUCCESS"]):
-            result["success"] = True
-            result["status"] = "approved"
-            result["message"] = "验证通过！"
-            return result
-
+        # IMPORTANT: Check rejection FIRST — some rejection messages contain 
+        # "success" in educational text (e.g. "ensures success!")
         if "VERIFICATION REJECTED" in text_upper or "VERIFICATION UNSUCCESSFUL" in text_upper or "❌" in text:
             result["success"] = False
             result["status"] = "rejected"
@@ -292,6 +288,12 @@ class SheerIDUserbot:
             else:
                 result["message"] = "验证被拒绝"
                 result["reason"] = "unknown"
+            return result
+
+        if any(kw in text_upper for kw in ["CONGRATULATIONS", "VERIFICATION APPROVED", "STATUS: VERIFIED", "SUCCESS"]):
+            result["success"] = True
+            result["status"] = "approved"
+            result["message"] = "验证通过！"
             return result
 
         if "PROCESSING" in text_upper or "请求" in text:

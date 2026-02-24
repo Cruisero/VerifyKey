@@ -226,7 +226,7 @@ export default function Admin() {
     const [addCount, setAddCount] = useState(1);
     const [addingStatus, setAddingStatus] = useState(null);
     const [autoRules, setAutoRules] = useState([]);
-    const [newRule, setNewRule] = useState({ intervalSeconds: 300, status: 'pass' });
+    const [newRule, setNewRule] = useState({ intervalMinutes: 5, status: 'pass', durationMinutes: 0 });
     const [savingRule, setSavingRule] = useState(false);
 
     // CDK management state
@@ -2233,10 +2233,15 @@ export default function Admin() {
                                                     display: 'inline-block'
                                                 }}></span>
                                                 <span style={{ fontSize: '13px', fontWeight: 500 }}>
-                                                    每 {rule.intervalSeconds}s → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
+                                                    每 {rule.intervalMinutes || Math.round((rule.intervalSeconds || 60) / 60)} 分钟 → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
                                                 </span>
                                                 <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
                                                     {rule.running ? '运行中' : '已停止'}
+                                                    {rule.durationMinutes > 0 && (
+                                                        rule.running && rule.remainingMinutes != null
+                                                            ? ` · 剩余 ${rule.remainingMinutes >= 60 ? Math.round(rule.remainingMinutes / 60 * 10) / 10 + 'h' : Math.round(rule.remainingMinutes) + 'min'}`
+                                                            : ` · 时效 ${rule.durationMinutes >= 60 ? rule.durationMinutes / 60 + 'h' : rule.durationMinutes + 'min'}`
+                                                    )}
                                                 </span>
                                             </div>
                                             <div style={{ display: 'flex', gap: '6px' }}>
@@ -2302,14 +2307,14 @@ export default function Admin() {
                                 <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>新规则：每</span>
                                 <input
                                     type="number"
-                                    min="10"
-                                    max="3600"
-                                    value={newRule.intervalSeconds}
-                                    onChange={(e) => setNewRule(prev => ({ ...prev, intervalSeconds: Math.max(10, parseInt(e.target.value) || 60) }))}
+                                    min="1"
+                                    max="60"
+                                    value={newRule.intervalMinutes}
+                                    onChange={(e) => setNewRule(prev => ({ ...prev, intervalMinutes: Math.max(1, parseInt(e.target.value) || 5) }))}
                                     className="input"
-                                    style={{ width: '80px', textAlign: 'center' }}
+                                    style={{ width: '65px', textAlign: 'center' }}
                                 />
-                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>秒 添加</span>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟 添加</span>
                                 <select
                                     className="input"
                                     value={newRule.status}
@@ -2320,6 +2325,17 @@ export default function Admin() {
                                     <option value="failed">❌ Failed</option>
                                     <option value="cancel">◷ Cancel</option>
                                 </select>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>时效</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="1440"
+                                    value={newRule.durationMinutes}
+                                    onChange={(e) => setNewRule(prev => ({ ...prev, durationMinutes: Math.max(0, parseInt(e.target.value) || 0) }))}
+                                    className="input"
+                                    style={{ width: '65px', textAlign: 'center' }}
+                                />
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟</span>
                                 <button
                                     className="btn btn-sm"
                                     disabled={savingRule}

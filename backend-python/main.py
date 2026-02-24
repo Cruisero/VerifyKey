@@ -1746,6 +1746,7 @@ async def clear_verification_history():
 
 # ========== Auto-Record Rules (Persistent) ==========
 import json as _json
+from datetime import datetime, timezone
 _AUTO_RECORD_FILE = os.path.join(os.path.dirname(__file__), "data", "auto_record_rules.json")
 _auto_record_tasks: dict = {}  # rule_id -> asyncio.Task
 
@@ -1771,9 +1772,22 @@ async def _auto_rule_loop(rule_id: str):
             rule = next((r for r in rules if r["id"] == rule_id), None)
             if not rule or not rule.get("enabled"):
                 break
+            
+            # Check duration expiry
+            duration = rule.get("durationMinutes", 0)
+            started_at = rule.get("startedAt")
+            if duration > 0 and started_at:
+                elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(started_at)).total_seconds() / 60
+                if elapsed >= duration:
+                    rule["enabled"] = False
+                    _save_auto_rules(rules)
+                    logger.info(f"[AutoRecord] Rule {rule_id} expired after {duration}min")
+                    break
+            
             status = rule.get("status", "pass")
             verification_history.log_verification(status, f"auto-{rule_id[:6]}")
-            await asyncio.sleep(rule.get("intervalSeconds", 60))
+            interval_sec = rule.get("intervalMinutes", 5) * 60
+            await asyncio.sleep(interval_sec)
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -1794,9 +1808,16 @@ def _stop_rule_task(rule_id):
 @app.get("/api/verify/auto-record")
 async def get_auto_record_rules():
     rules = _load_auto_rules()
-    # Mark which ones are actually running
+    now = datetime.now(timezone.utc)
     for r in rules:
         r["running"] = r["id"] in _auto_record_tasks and not _auto_record_tasks[r["id"]].done()
+        duration = r.get("durationMinutes", 0)
+        started_at = r.get("startedAt")
+        if duration > 0 and started_at and r["running"]:
+            elapsed = (now - datetime.fromisoformat(started_at)).total_seconds() / 60
+            r["remainingMinutes"] = max(0, round(duration - elapsed, 1))
+        else:
+            r["remainingMinutes"] = None
     return {"rules": rules}
 
 @app.post("/api/verify/auto-record")
@@ -1807,8 +1828,10 @@ async def create_auto_record_rule(request: Request):
     rule = {
         "id": str(uuid.uuid4())[:8],
         "status": data.get("status", "pass"),
-        "intervalSeconds": max(10, int(data.get("intervalSeconds", 60))),
-        "enabled": data.get("enabled", True)
+        "intervalMinutes": max(1, int(data.get("intervalMinutes", 5))),
+        "durationMinutes": max(0, int(data.get("durationMinutes", 0))),
+        "enabled": data.get("enabled", True),
+        "startedAt": datetime.now(timezone.utc).isoformat() if data.get("enabled", True) else None
     }
     rules.append(rule)
     _save_auto_rules(rules)
@@ -1826,10 +1849,16 @@ async def toggle_auto_record_rule(rule_id: str, request: Request):
     
     if "enabled" in data:
         rule["enabled"] = data["enabled"]
-    if "intervalSeconds" in data:
-        rule["intervalSeconds"] = max(10, int(data["intervalSeconds"]))
+        if data["enabled"]:
+            rule["startedAt"] = datetime.now(timezone.utc).isoformat()
+        else:
+            rule["startedAt"] = None
+    if "intervalMinutes" in data:
+        rule["intervalMinutes"] = max(1, int(data["intervalMinutes"]))
     if "status" in data:
         rule["status"] = data["status"]
+    if "durationMinutes" in data:
+        rule["durationMinutes"] = max(0, int(data["durationMinutes"]))
     
     _save_auto_rules(rules)
     
@@ -1848,14 +1877,13 @@ async def delete_auto_record_rule(rule_id: str):
     _save_auto_rules(rules)
     return {"deleted": True}
 
-# Auto-start enabled rules on startup
 @app.on_event("startup")
 async def startup_auto_records():
     rules = _load_auto_rules()
     for rule in rules:
         if rule.get("enabled"):
             _start_rule_task(rule)
-            logger.info(f"[AutoRecord] Auto-started rule {rule['id']}: {rule['status']} every {rule['intervalSeconds']}s")
+            logger.info(f"[AutoRecord] Auto-started rule {rule['id']}: {rule['status']} every {rule.get('intervalMinutes', 5)}min")
 
 # ========== Telegram Verification ==========
 

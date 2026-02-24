@@ -181,8 +181,8 @@ class SheerIDUserbot:
 
         try:
             # Format message based on target bot
-            if "verification_bot" in self.bot_username.lower():
-                # @SheerID_Verification_bot requires /verify command
+            if "gemini_2026" in self.bot_username.lower():
+                # @SheerID_Gemini_2026_Bot requires /verify command
                 message = f"/verify {verification_link}"
             else:
                 # @SheerID_Bot accepts raw link

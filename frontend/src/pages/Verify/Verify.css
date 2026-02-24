@@ -578,40 +578,6 @@
         font-size: var(--text-xs);
     }
 
-    /* CDK Inline Row - mobile stacked layout */
-    .cdk-inline-row {
-        flex-wrap: wrap;
-        gap: 10px;
-        padding: 12px;
-    }
-
-    .cdk-inline-label {
-        font-size: var(--text-sm);
-        order: 0;
-    }
-
-    .cdk-input {
-        flex: 1 1 100%;
-        order: 3;
-        min-width: 0;
-        font-size: var(--text-sm);
-        letter-spacing: 1.5px;
-        padding: 10px 12px;
-    }
-
-    .cdk-checking,
-    .cdk-invalid {
-        order: 1;
-        font-size: 12px;
-    }
-
-    .cdk-buy-btn-inline {
-        order: 1;
-        margin-left: auto;
-        font-size: 13px;
-        padding: 6px 16px;
-    }
-
     .cdk-info {
         flex: 1 1 auto;
         min-width: 0;
@@ -1145,6 +1111,47 @@
     color: #fff;
     opacity: 0.85;
     transform: translateY(-1px);
+}
+
+/* CDK Mobile Layout - must be after desktop rules */
+@media (max-width: 768px) {
+    .cdk-inline-row {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .cdk-inline-label {
+        font-size: var(--text-sm);
+        order: 0;
+    }
+
+    .cdk-input {
+        flex: 1 1 100%;
+        order: 3;
+        min-width: 0;
+        font-size: var(--text-sm);
+        letter-spacing: 1.5px;
+        padding: 10px 12px;
+    }
+
+    .cdk-checking,
+    .cdk-invalid {
+        order: 1;
+        font-size: 12px;
+    }
+
+    .cdk-buy-btn-inline {
+        order: 1;
+        margin-left: auto;
+        font-size: 13px;
+        padding: 6px 16px;
+    }
+
+    .cdk-info {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
 }
 
 /* API Entry Pill */

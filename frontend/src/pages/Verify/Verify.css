@@ -1055,7 +1055,6 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    border-left: 1px solid var(--border-primary);
     padding-left: var(--spacing-md);
     margin-left: var(--spacing-xs);
 }

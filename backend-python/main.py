@@ -653,8 +653,16 @@ async def verify(request: VerifyRequest):
             verification_history.log_verification("pass", vid)
         elif result.get("status") == "pending":
             verification_history.log_verification("processing", vid)
-        else:
+        elif result.get("status") == "rejected":
+            reason = result.get("reason", "unknown")
+            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
+                verification_history.log_verification("cancel", vid)
+            else:
+                verification_history.log_verification("failed", vid)
+        elif result.get("status") == "error":
             verification_history.log_verification("failed", vid)
+        else:
+            verification_history.log_verification("cancel", vid)
     
     return {
         "results": results,
@@ -1810,11 +1818,15 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
         if r["status"] == "approved":
             verification_history.log_verification("pass", vid)
         elif r["status"] == "rejected":
+            reason = r.get("reason", "unknown")
+            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
+                verification_history.log_verification("cancel", vid)
+            else:
+                verification_history.log_verification("failed", vid)
+        elif r["status"] in ("error",):
             verification_history.log_verification("failed", vid)
-        elif r["status"] in ("error", "timeout"):
+        elif r["status"] in ("timeout", "no_credits"):
             verification_history.log_verification("cancel", vid)
-        elif r["status"] == "no_credits":
-            verification_history.log_verification("failed", vid)
         else:
             verification_history.log_verification("processing", vid)
     
@@ -1980,8 +1992,14 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
         if r["status"] == "approved":
             verification_history.log_verification("pass", vid)
         elif r["status"] == "rejected":
+            reason = r.get("reason", "unknown")
+            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
+                verification_history.log_verification("cancel", vid)
+            else:
+                verification_history.log_verification("failed", vid)
+        elif r["status"] in ("error",):
             verification_history.log_verification("failed", vid)
-        elif r["status"] in ("error", "timeout"):
+        elif r["status"] in ("timeout",):
             verification_history.log_verification("cancel", vid)
         else:
             verification_history.log_verification("processing", vid)
@@ -2197,6 +2215,12 @@ async def public_verify(request: PublicVerifyRequest):
             verification_history.log_verification("pass", vid)
             cdk_manager.use_cdk(request.cdk, 1)
         elif result["status"] == "rejected":
+            reason = result.get("reason", "unknown")
+            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
+                verification_history.log_verification("cancel", vid)
+            else:
+                verification_history.log_verification("failed", vid)
+        elif result["status"] == "error":
             verification_history.log_verification("failed", vid)
         else:
             verification_history.log_verification("cancel", vid)
@@ -2260,6 +2284,12 @@ async def public_verify_batch(request: PublicBatchVerifyRequest):
                 verification_history.log_verification("pass", v)
                 cdk_manager.use_cdk(request.cdk, 1)
             elif result["status"] == "rejected":
+                reason = result.get("reason", "unknown")
+                if reason in ("link_opened", "expired", "invalid", "rate_limited"):
+                    verification_history.log_verification("cancel", v)
+                else:
+                    verification_history.log_verification("failed", v)
+            elif result["status"] == "error":
                 verification_history.log_verification("failed", v)
             else:
                 verification_history.log_verification("cancel", v)

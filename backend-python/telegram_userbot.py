@@ -193,7 +193,7 @@ class SheerIDUserbot:
                 "success": False,
                 "status": "timeout",
                 "verificationId": verification_id,
-                "message": f"Bot 未在 {timeout}秒内返回结果"
+                "message": f"验证未在 {timeout}秒内返回结果,已自动取消！"
             }
         except Exception as e:
             logger.error(f"Verification error for {verification_id}: {e}")
@@ -261,7 +261,7 @@ class SheerIDUserbot:
         if any(kw in text_upper for kw in ["CONGRATULATIONS", "VERIFICATION APPROVED", "STATUS: VERIFIED"]):
             result["success"] = True
             result["status"] = "approved"
-            result["message"] = "✅ 验证通过！"
+            result["message"] = "验证通过！"
             return result
 
         if "VERIFICATION REJECTED" in text_upper or "❌" in text:
@@ -270,19 +270,19 @@ class SheerIDUserbot:
 
             # Extract rejection reason
             if "RATE LIMITED" in text_upper or "TOO MANY REQUESTS" in text_upper:
-                result["message"] = "❌ 被拒绝：请求过于频繁"
+                result["message"] = "被拒绝：请求过于频繁"
                 result["reason"] = "rate_limited"
             elif "DO NOT OPEN" in text_upper:
-                result["message"] = "❌ 被拒绝：链接已被打开"
+                result["message"] = "被拒绝：链接已被打开,请刷新页面重新获取链接"
                 result["reason"] = "link_opened"
             elif "EXPIRED" in text_upper:
-                result["message"] = "❌ 被拒绝：链接已过期"
+                result["message"] = "被拒绝：链接已过期,请刷新页面重新获取链接"
                 result["reason"] = "expired"
             elif "INVALID" in text_upper:
-                result["message"] = "❌ 被拒绝：无效链接"
+                result["message"] = "被拒绝：无效链接,请刷新页面重新获取链接"
                 result["reason"] = "invalid"
             else:
-                result["message"] = "❌ 验证被拒绝"
+                result["message"] = "验证被拒绝"
                 result["reason"] = "unknown"
             return result
 
@@ -294,13 +294,13 @@ class SheerIDUserbot:
         if any(kw in text_upper for kw in ["ERROR", "FAILED"]):
             result["success"] = False
             result["status"] = "error"
-            result["message"] = "❌ 验证出错"
+            result["message"] = "验证出错"
             return result
 
         if "INSUFFICIENT" in text_upper or "NOT ENOUGH" in text_upper:
             result["success"] = False
             result["status"] = "no_credits"
-            result["message"] = "❌ Bot 额度不足"
+            result["message"] = "文档不足"
             return result
 
         # Unknown - return raw

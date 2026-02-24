@@ -1774,14 +1774,14 @@ async def _auto_rule_loop(rule_id: str):
                 break
             
             # Check duration expiry
-            duration = rule.get("durationMinutes", 0)
+            duration_hours = rule.get("durationHours", 0)
             started_at = rule.get("startedAt")
-            if duration > 0 and started_at:
-                elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(started_at)).total_seconds() / 60
-                if elapsed >= duration:
+            if duration_hours > 0 and started_at:
+                elapsed_hours = (datetime.now(timezone.utc) - datetime.fromisoformat(started_at)).total_seconds() / 3600
+                if elapsed_hours >= duration_hours:
                     rule["enabled"] = False
                     _save_auto_rules(rules)
-                    logger.info(f"[AutoRecord] Rule {rule_id} expired after {duration}min")
+                    logger.info(f"[AutoRecord] Rule {rule_id} expired after {duration_hours}h")
                     break
             
             status = rule.get("status", "pass")
@@ -1811,13 +1811,13 @@ async def get_auto_record_rules():
     now = datetime.now(timezone.utc)
     for r in rules:
         r["running"] = r["id"] in _auto_record_tasks and not _auto_record_tasks[r["id"]].done()
-        duration = r.get("durationMinutes", 0)
+        duration_hours = r.get("durationHours", 0)
         started_at = r.get("startedAt")
-        if duration > 0 and started_at and r["running"]:
-            elapsed = (now - datetime.fromisoformat(started_at)).total_seconds() / 60
-            r["remainingMinutes"] = max(0, round(duration - elapsed, 1))
+        if duration_hours > 0 and started_at and r["running"]:
+            elapsed_hours = (now - datetime.fromisoformat(started_at)).total_seconds() / 3600
+            r["remainingHours"] = max(0, round(duration_hours - elapsed_hours, 2))
         else:
-            r["remainingMinutes"] = None
+            r["remainingHours"] = None
     return {"rules": rules}
 
 @app.post("/api/verify/auto-record")
@@ -1829,7 +1829,7 @@ async def create_auto_record_rule(request: Request):
         "id": str(uuid.uuid4())[:8],
         "status": data.get("status", "pass"),
         "intervalMinutes": max(1, int(data.get("intervalMinutes", 5))),
-        "durationMinutes": max(0, int(data.get("durationMinutes", 0))),
+        "durationHours": max(0, float(data.get("durationHours", 0))),
         "enabled": data.get("enabled", True),
         "startedAt": datetime.now(timezone.utc).isoformat() if data.get("enabled", True) else None
     }
@@ -1857,8 +1857,8 @@ async def toggle_auto_record_rule(rule_id: str, request: Request):
         rule["intervalMinutes"] = max(1, int(data["intervalMinutes"]))
     if "status" in data:
         rule["status"] = data["status"]
-    if "durationMinutes" in data:
-        rule["durationMinutes"] = max(0, int(data["durationMinutes"]))
+    if "durationHours" in data:
+        rule["durationHours"] = max(0, float(data["durationHours"]))
     
     _save_auto_rules(rules)
     

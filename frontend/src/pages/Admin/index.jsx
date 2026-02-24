@@ -1734,12 +1734,12 @@ export default function Admin() {
                                                         }}
                                                         style={{ cursor: 'pointer' }}
                                                     >
-                                                        <option value="@SheerID_Bot">@SheerID_Bot</option>
+                                                        <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
                                                         <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
                                                     </select>
                                                     <p className="input-hint">
-                                                        {(config?.verification?.telegram?.botUsername || '@SheerID_Bot') === '@SheerID_Bot'
-                                                            ? '当前: SheerID_Bot'
+                                                        {(config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot') === '@SheerID_Verification_bot'
+                                                            ? '当前: SheerID_Verification_bot'
                                                             : '当前: SheerID_Gemini_2026_Bot'
                                                         }
                                                         {' · 切换后需点击保存并重启生效'}

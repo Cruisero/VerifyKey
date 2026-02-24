@@ -1371,7 +1371,7 @@ async def update_config_endpoint(request: Request, authorization: Optional[str] 
                     try:
                         api_id = int(new_telegram.get("apiId"))
                         api_hash = new_telegram.get("apiHash")
-                        bot_username = new_telegram.get("botUsername") or "@SheerID_Bot"
+                        bot_username = new_telegram.get("botUsername") or "@SheerID_Verification_bot"
                         
                         telegram_bot = SheerIDUserbot(api_id, api_hash, bot_username=bot_username)
                         asyncio.create_task(telegram_bot.start())
@@ -1567,8 +1567,8 @@ async def startup_event():
         try:
             api_id = telegram_config.get("apiId")
             api_hash = telegram_config.get("apiHash")
-            # Default to SheerID_Bot if not specified
-            app_bot_username = telegram_config.get("botUsername") or "@SheerID_Bot"
+            # Default to SheerID_Verification_bot if not specified
+            app_bot_username = telegram_config.get("botUsername") or "@SheerID_Verification_bot"
             
             if api_id and api_hash:
                 print(f"[Telegram] Starting Userbot (ID: {api_id})...")

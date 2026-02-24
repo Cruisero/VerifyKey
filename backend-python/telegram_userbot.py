@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class SheerIDUserbot:
-    def __init__(self, api_id: int, api_hash: str, session_string: str = None, bot_username: str = "SheerID_Bot"):
+    def __init__(self, api_id: int, api_hash: str, session_string: str = None, bot_username: str = "SheerID_Verification_bot"):
         if session_string:
             session = StringSession(session_string)
         else:
@@ -27,7 +27,7 @@ class SheerIDUserbot:
             session = os.path.join(data_dir, "verifykey")
 
         self.client = TelegramClient(session, api_id, api_hash)
-        self.bot_username = bot_username.lstrip("@") if bot_username else "SheerID_Bot"
+        self.bot_username = bot_username.lstrip("@") if bot_username else "SheerID_Verification_bot"
         self.is_connected = False
         self._daily_task = None
         self._last_daily_claim = None

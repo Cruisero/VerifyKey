@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "apiId": "",
             "apiHash": "",
-            "botUsername": "@SheerID_Bot"
+            "botUsername": "@SheerID_Verification_bot"
         },
         "maxConcurrent": 2,
         "delayBetweenMs": 2000,

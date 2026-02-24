@@ -581,15 +581,34 @@
     /* CDK Inline Row - mobile wrap */
     .cdk-inline-row {
         flex-wrap: wrap;
-        gap: var(--spacing-sm);
-        padding: var(--spacing-sm);
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    .cdk-inline-label {
+        font-size: var(--text-xs);
     }
 
     .cdk-input {
+        flex: 1 1 100%;
+        order: 2;
         min-width: 0;
         font-size: var(--text-xs);
         letter-spacing: 1px;
-        padding: 6px 10px;
+        padding: 8px 10px;
+    }
+
+    .cdk-checking,
+    .cdk-invalid {
+        order: 1;
+        font-size: 11px;
+    }
+
+    .cdk-buy-btn-inline {
+        order: 1;
+        margin-left: auto;
+        font-size: 12px;
+        padding: 5px 14px;
     }
 
     .cdk-info {

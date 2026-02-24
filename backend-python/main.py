@@ -1744,56 +1744,118 @@ async def clear_verification_history():
     return {"cleared": True, "count": count}
 
 
-# ========== Auto-Record Background Task ==========
-_auto_record_task = None
-_auto_record_config = {
-    "enabled": False,
-    "intervalSeconds": 60,
-    "status": "pass"  # pass, failed, cancel
-}
+# ========== Auto-Record Rules (Persistent) ==========
+import json as _json
+_AUTO_RECORD_FILE = os.path.join(os.path.dirname(__file__), "data", "auto_record_rules.json")
+_auto_record_tasks: dict = {}  # rule_id -> asyncio.Task
 
-async def _auto_record_loop():
-    """Background task to auto-add status records at interval"""
+def _load_auto_rules():
+    try:
+        if os.path.exists(_AUTO_RECORD_FILE):
+            with open(_AUTO_RECORD_FILE, "r") as f:
+                return _json.load(f)
+    except Exception:
+        pass
+    return []
+
+def _save_auto_rules(rules):
+    os.makedirs(os.path.dirname(_AUTO_RECORD_FILE), exist_ok=True)
+    with open(_AUTO_RECORD_FILE, "w") as f:
+        _json.dump(rules, f, ensure_ascii=False)
+
+async def _auto_rule_loop(rule_id: str):
+    """Background loop for a single auto-record rule"""
     while True:
         try:
-            if _auto_record_config["enabled"]:
-                status = _auto_record_config.get("status", "pass")
-                verification_history.log_verification(status, f"auto-{status}")
-                logger.info(f"[AutoRecord] Added '{status}' record")
-            await asyncio.sleep(_auto_record_config.get("intervalSeconds", 60))
+            rules = _load_auto_rules()
+            rule = next((r for r in rules if r["id"] == rule_id), None)
+            if not rule or not rule.get("enabled"):
+                break
+            status = rule.get("status", "pass")
+            verification_history.log_verification(status, f"auto-{rule_id[:6]}")
+            await asyncio.sleep(rule.get("intervalSeconds", 60))
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logger.error(f"[AutoRecord] Error: {e}")
+            logger.error(f"[AutoRecord] Rule {rule_id} error: {e}")
             await asyncio.sleep(30)
 
+def _start_rule_task(rule):
+    rule_id = rule["id"]
+    if rule_id in _auto_record_tasks:
+        _auto_record_tasks[rule_id].cancel()
+    _auto_record_tasks[rule_id] = asyncio.create_task(_auto_rule_loop(rule_id))
+
+def _stop_rule_task(rule_id):
+    task = _auto_record_tasks.pop(rule_id, None)
+    if task:
+        task.cancel()
+
 @app.get("/api/verify/auto-record")
-async def get_auto_record_config():
-    """Get current auto-record config"""
-    return _auto_record_config
+async def get_auto_record_rules():
+    rules = _load_auto_rules()
+    # Mark which ones are actually running
+    for r in rules:
+        r["running"] = r["id"] in _auto_record_tasks and not _auto_record_tasks[r["id"]].done()
+    return {"rules": rules}
 
 @app.post("/api/verify/auto-record")
-async def set_auto_record_config(request: Request):
-    """Set auto-record config"""
-    global _auto_record_task
+async def create_auto_record_rule(request: Request):
     data = await request.json()
+    rules = _load_auto_rules()
+    import uuid
+    rule = {
+        "id": str(uuid.uuid4())[:8],
+        "status": data.get("status", "pass"),
+        "intervalSeconds": max(10, int(data.get("intervalSeconds", 60))),
+        "enabled": data.get("enabled", True)
+    }
+    rules.append(rule)
+    _save_auto_rules(rules)
+    if rule["enabled"]:
+        _start_rule_task(rule)
+    return {"rule": rule}
+
+@app.put("/api/verify/auto-record/{rule_id}")
+async def toggle_auto_record_rule(rule_id: str, request: Request):
+    data = await request.json()
+    rules = _load_auto_rules()
+    rule = next((r for r in rules if r["id"] == rule_id), None)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
     
-    _auto_record_config["enabled"] = data.get("enabled", False)
-    _auto_record_config["intervalSeconds"] = max(10, int(data.get("intervalSeconds", 60)))
-    _auto_record_config["status"] = data.get("status", "pass")
+    if "enabled" in data:
+        rule["enabled"] = data["enabled"]
+    if "intervalSeconds" in data:
+        rule["intervalSeconds"] = max(10, int(data["intervalSeconds"]))
+    if "status" in data:
+        rule["status"] = data["status"]
     
-    # Restart background task
-    if _auto_record_task:
-        _auto_record_task.cancel()
-        _auto_record_task = None
+    _save_auto_rules(rules)
     
-    if _auto_record_config["enabled"]:
-        _auto_record_task = asyncio.create_task(_auto_record_loop())
-        logger.info(f"[AutoRecord] Started: every {_auto_record_config['intervalSeconds']}s, status={_auto_record_config['status']}")
+    if rule["enabled"]:
+        _start_rule_task(rule)
     else:
-        logger.info("[AutoRecord] Stopped")
+        _stop_rule_task(rule_id)
     
-    return _auto_record_config
+    return {"rule": rule}
+
+@app.delete("/api/verify/auto-record/{rule_id}")
+async def delete_auto_record_rule(rule_id: str):
+    _stop_rule_task(rule_id)
+    rules = _load_auto_rules()
+    rules = [r for r in rules if r["id"] != rule_id]
+    _save_auto_rules(rules)
+    return {"deleted": True}
+
+# Auto-start enabled rules on startup
+@app.on_event("startup")
+async def startup_auto_records():
+    rules = _load_auto_rules()
+    for rule in rules:
+        if rule.get("enabled"):
+            _start_rule_task(rule)
+            logger.info(f"[AutoRecord] Auto-started rule {rule['id']}: {rule['status']} every {rule['intervalSeconds']}s")
 
 # ========== Telegram Verification ==========
 

@@ -225,8 +225,9 @@ export default function Admin() {
     const [hoveredStatusItem, setHoveredStatusItem] = useState(null);
     const [addCount, setAddCount] = useState(1);
     const [addingStatus, setAddingStatus] = useState(null);
-    const [autoRecord, setAutoRecord] = useState({ enabled: false, intervalSeconds: 60, status: 'pass' });
-    const [savingAutoRecord, setSavingAutoRecord] = useState(false);
+    const [autoRules, setAutoRules] = useState([]);
+    const [newRule, setNewRule] = useState({ intervalSeconds: 300, status: 'pass' });
+    const [savingRule, setSavingRule] = useState(false);
 
     // CDK management state
     const [cdkList, setCdkList] = useState([]);
@@ -322,11 +323,11 @@ export default function Admin() {
                         setHistoryData(data.history || []);
                         setHistoryStats(data.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
                     }
-                    // Load auto-record config
+                    // Load auto-record rules
                     const arRes = await fetch(`${API_BASE}/api/verify/auto-record`);
                     if (arRes.ok) {
                         const arData = await arRes.json();
-                        setAutoRecord(arData);
+                        setAutoRules(arData.rules || []);
                     }
                 } catch (e) {
                     console.warn('Failed to fetch verification history:', e);
@@ -2205,98 +2206,155 @@ export default function Admin() {
                             </div>
                         </div>
 
-                        {/* Auto Record Config */}
+                        {/* Auto Record Rules */}
                         <div className="settings-section card">
                             <h3>⏱️ 自动添加记录</h3>
                             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 16px' }}>
-                                每隔一段时间自动添加指定状态的记录，用于保持状态面板活跃
+                                配置自动添加规则，规则持久化保存，重启后自动恢复
                             </p>
-                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={autoRecord.enabled}
-                                        onChange={(e) => setAutoRecord(prev => ({ ...prev, enabled: e.target.checked }))}
-                                    />
-                                    <span style={{ fontSize: '13px', fontWeight: 600 }}>启用</span>
-                                </label>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>每</span>
-                                    <input
-                                        type="number"
-                                        min="10"
-                                        max="3600"
-                                        value={autoRecord.intervalSeconds}
-                                        onChange={(e) => setAutoRecord(prev => ({ ...prev, intervalSeconds: Math.max(10, parseInt(e.target.value) || 60) }))}
-                                        className="input"
-                                        style={{ width: '80px', textAlign: 'center' }}
-                                    />
-                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>秒</span>
+                            {/* Existing rules list */}
+                            {autoRules.length > 0 && (
+                                <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {autoRules.map(rule => (
+                                        <div key={rule.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '10px 14px',
+                                            background: rule.enabled ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-secondary)',
+                                            border: `1px solid ${rule.enabled ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-primary)'}`,
+                                            borderRadius: '8px'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span style={{
+                                                    width: 8, height: 8, borderRadius: '50%',
+                                                    background: rule.running ? '#10b981' : '#94a3b8',
+                                                    display: 'inline-block'
+                                                }}></span>
+                                                <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                                                    每 {rule.intervalSeconds}s → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
+                                                </span>
+                                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                                                    {rule.running ? '运行中' : '已停止'}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button
+                                                    className="btn btn-sm"
+                                                    style={{
+                                                        background: rule.enabled ? '#f59e0b' : '#10b981',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        padding: '4px 12px',
+                                                        borderRadius: '5px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ enabled: !rule.enabled })
+                                                            });
+                                                            if (res.ok) {
+                                                                const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                                if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
+                                                            }
+                                                        } catch (e) { alert(e.message); }
+                                                    }}
+                                                >
+                                                    {rule.enabled ? '⏸ 停止' : '▶ 启动'}
+                                                </button>
+                                                <button
+                                                    className="btn btn-sm"
+                                                    style={{
+                                                        background: 'transparent',
+                                                        color: '#ef4444',
+                                                        border: '1px solid #ef4444',
+                                                        padding: '4px 10px',
+                                                        borderRadius: '5px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    onClick={async () => {
+                                                        if (!confirm('删除此规则？')) return;
+                                                        try {
+                                                            await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, { method: 'DELETE' });
+                                                            const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                            if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
+                                                        } catch (e) { alert(e.message); }
+                                                    }}
+                                                >
+                                                    🗑
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
+                            )}
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>添加</span>
-                                    <select
-                                        className="input"
-                                        value={autoRecord.status}
-                                        onChange={(e) => setAutoRecord(prev => ({ ...prev, status: e.target.value }))}
-                                        style={{ width: '120px', cursor: 'pointer' }}
-                                    >
-                                        <option value="pass">✅ Pass</option>
-                                        <option value="failed">❌ Failed</option>
-                                        <option value="cancel">◷ Cancel</option>
-                                    </select>
-                                </div>
-
+                            {/* Add new rule */}
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', paddingTop: autoRules.length > 0 ? '12px' : 0, borderTop: autoRules.length > 0 ? '1px solid var(--border-primary)' : 'none' }}>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>新规则：每</span>
+                                <input
+                                    type="number"
+                                    min="10"
+                                    max="3600"
+                                    value={newRule.intervalSeconds}
+                                    onChange={(e) => setNewRule(prev => ({ ...prev, intervalSeconds: Math.max(10, parseInt(e.target.value) || 60) }))}
+                                    className="input"
+                                    style={{ width: '80px', textAlign: 'center' }}
+                                />
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>秒 添加</span>
+                                <select
+                                    className="input"
+                                    value={newRule.status}
+                                    onChange={(e) => setNewRule(prev => ({ ...prev, status: e.target.value }))}
+                                    style={{ width: '110px', cursor: 'pointer' }}
+                                >
+                                    <option value="pass">✅ Pass</option>
+                                    <option value="failed">❌ Failed</option>
+                                    <option value="cancel">◷ Cancel</option>
+                                </select>
                                 <button
                                     className="btn btn-sm"
-                                    disabled={savingAutoRecord}
+                                    disabled={savingRule}
                                     style={{
-                                        background: autoRecord.enabled ? '#10b981' : 'var(--bg-tertiary)',
-                                        color: autoRecord.enabled ? '#fff' : 'var(--text-secondary)',
+                                        background: '#10b981',
+                                        color: '#fff',
                                         border: 'none',
-                                        padding: '6px 18px',
+                                        padding: '6px 16px',
                                         borderRadius: '6px',
                                         fontSize: '12px',
                                         fontWeight: 600,
                                         cursor: 'pointer'
                                     }}
                                     onClick={async () => {
-                                        setSavingAutoRecord(true);
+                                        setSavingRule(true);
                                         try {
                                             const res = await fetch(`${API_BASE}/api/verify/auto-record`, {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify(autoRecord)
+                                                body: JSON.stringify(newRule)
                                             });
                                             if (res.ok) {
-                                                const data = await res.json();
-                                                setAutoRecord(data);
+                                                const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
                                             }
                                         } catch (e) {
-                                            alert('保存失败: ' + e.message);
+                                            alert('添加失败: ' + e.message);
                                         } finally {
-                                            setSavingAutoRecord(false);
+                                            setSavingRule(false);
                                         }
                                     }}
                                 >
-                                    {savingAutoRecord ? '...' : '保存'}
+                                    {savingRule ? '...' : '➕ 添加规则'}
                                 </button>
                             </div>
-                            {autoRecord.enabled && (
-                                <div style={{
-                                    marginTop: '12px',
-                                    padding: '8px 14px',
-                                    background: 'rgba(16, 185, 129, 0.1)',
-                                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                                    borderRadius: '6px',
-                                    fontSize: '13px',
-                                    color: '#10b981'
-                                }}>
-                                    ✅ 运行中：每 {autoRecord.intervalSeconds} 秒自动添加一条 {autoRecord.status === 'pass' ? 'Pass' : autoRecord.status === 'failed' ? 'Failed' : 'Cancel'} 记录
-                                </div>
-                            )}
                         </div>
                     </div>
                 )}

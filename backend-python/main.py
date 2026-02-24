@@ -648,21 +648,17 @@ async def verify(request: VerifyRequest):
         if result.get("success"):
             success_count += 1
         
-        # Log verification result to history
+        # Log verification result to history (skip user-side link issues)
         if result.get("success"):
             verification_history.log_verification("pass", vid)
         elif result.get("status") == "pending":
             verification_history.log_verification("processing", vid)
         elif result.get("status") == "rejected":
             reason = result.get("reason", "unknown")
-            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
-                verification_history.log_verification("cancel", vid)
-            else:
+            if reason not in ("link_opened", "expired", "invalid", "rate_limited"):
                 verification_history.log_verification("failed", vid)
         elif result.get("status") == "error":
             verification_history.log_verification("failed", vid)
-        else:
-            verification_history.log_verification("cancel", vid)
     
     return {
         "results": results,
@@ -1812,23 +1808,16 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     results = await asyncio.gather(*[process_link(link) for link in clean_links])
     results = list(results)
     
-    # Log verification results to history
+    # Log verification results to history (skip user-side link issues)
     for r in results:
         vid = r.get("verificationId", "")
+        reason = r.get("reason", "")
         if r["status"] == "approved":
             verification_history.log_verification("pass", vid)
-        elif r["status"] == "rejected":
-            reason = r.get("reason", "unknown")
-            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
-                verification_history.log_verification("cancel", vid)
-            else:
-                verification_history.log_verification("failed", vid)
+        elif r["status"] == "rejected" and reason not in ("link_opened", "expired", "invalid", "rate_limited"):
+            verification_history.log_verification("failed", vid)
         elif r["status"] in ("error",):
             verification_history.log_verification("failed", vid)
-        elif r["status"] in ("timeout", "no_credits"):
-            verification_history.log_verification("cancel", vid)
-        else:
-            verification_history.log_verification("processing", vid)
     
     # Deduct CDK quota for successful verifications
     successful = sum(1 for r in results if r["status"] == "approved")
@@ -1986,23 +1975,16 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
     results = await asyncio.gather(*[process_single(vid) for vid in request.verificationIds])
     results = list(results)
 
-    # Log verification results to history
+    # Log verification results to history (skip user-side link issues)
     for r in results:
         vid = r.get("verificationId", "")
+        reason = r.get("reason", "")
         if r["status"] == "approved":
             verification_history.log_verification("pass", vid)
-        elif r["status"] == "rejected":
-            reason = r.get("reason", "unknown")
-            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
-                verification_history.log_verification("cancel", vid)
-            else:
-                verification_history.log_verification("failed", vid)
+        elif r["status"] == "rejected" and reason not in ("link_opened", "expired", "invalid", "rate_limited"):
+            verification_history.log_verification("failed", vid)
         elif r["status"] in ("error",):
             verification_history.log_verification("failed", vid)
-        elif r["status"] in ("timeout",):
-            verification_history.log_verification("cancel", vid)
-        else:
-            verification_history.log_verification("processing", vid)
 
     # Deduct local CDK quota for successful verifications
     successful = sum(1 for r in results if r["status"] == "approved")
@@ -2209,21 +2191,17 @@ async def public_verify(request: PublicVerifyRequest):
         _api_tasks[task_id]["error"] = result.get("message") if not result.get("success") else None
         _api_tasks[task_id]["completedAt"] = dt.now().isoformat()
 
-        # Log to history
+        # Log to history (skip user-side link issues)
         vid = request.verificationId
         if result["status"] == "approved":
             verification_history.log_verification("pass", vid)
             cdk_manager.use_cdk(request.cdk, 1)
         elif result["status"] == "rejected":
             reason = result.get("reason", "unknown")
-            if reason in ("link_opened", "expired", "invalid", "rate_limited"):
-                verification_history.log_verification("cancel", vid)
-            else:
+            if reason not in ("link_opened", "expired", "invalid", "rate_limited"):
                 verification_history.log_verification("failed", vid)
         elif result["status"] == "error":
             verification_history.log_verification("failed", vid)
-        else:
-            verification_history.log_verification("cancel", vid)
 
     asyncio.create_task(run_task())
 
@@ -2285,14 +2263,10 @@ async def public_verify_batch(request: PublicBatchVerifyRequest):
                 cdk_manager.use_cdk(request.cdk, 1)
             elif result["status"] == "rejected":
                 reason = result.get("reason", "unknown")
-                if reason in ("link_opened", "expired", "invalid", "rate_limited"):
-                    verification_history.log_verification("cancel", v)
-                else:
+                if reason not in ("link_opened", "expired", "invalid", "rate_limited"):
                     verification_history.log_verification("failed", v)
             elif result["status"] == "error":
                 verification_history.log_verification("failed", v)
-            else:
-                verification_history.log_verification("cancel", v)
 
         asyncio.create_task(run_task())
         tasks.append({"taskId": task_id, "verificationId": vid, "status": "pending"})

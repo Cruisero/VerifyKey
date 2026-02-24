@@ -578,37 +578,38 @@
         font-size: var(--text-xs);
     }
 
-    /* CDK Inline Row - mobile wrap */
+    /* CDK Inline Row - mobile stacked layout */
     .cdk-inline-row {
         flex-wrap: wrap;
-        gap: 8px;
-        padding: 10px 12px;
+        gap: 10px;
+        padding: 12px;
     }
 
     .cdk-inline-label {
-        font-size: var(--text-xs);
+        font-size: var(--text-sm);
+        order: 0;
     }
 
     .cdk-input {
         flex: 1 1 100%;
-        order: 2;
+        order: 3;
         min-width: 0;
-        font-size: var(--text-xs);
-        letter-spacing: 1px;
-        padding: 8px 10px;
+        font-size: var(--text-sm);
+        letter-spacing: 1.5px;
+        padding: 10px 12px;
     }
 
     .cdk-checking,
     .cdk-invalid {
         order: 1;
-        font-size: 11px;
+        font-size: 12px;
     }
 
     .cdk-buy-btn-inline {
         order: 1;
         margin-left: auto;
-        font-size: 12px;
-        padding: 5px 14px;
+        font-size: 13px;
+        padding: 6px 16px;
     }
 
     .cdk-info {

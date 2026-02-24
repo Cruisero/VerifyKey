@@ -180,8 +180,16 @@ class SheerIDUserbot:
         self._pending_verifications[verification_id] = future
 
         try:
-            # Send the link to the bot
-            await self.client.send_message(self.bot_username, verification_link)
+            # Format message based on target bot
+            if "verification_bot" in self.bot_username.lower():
+                # @SheerID_Verification_bot requires /verify command
+                message = f"/verify {verification_link}"
+            else:
+                # @SheerID_Bot accepts raw link
+                message = verification_link
+
+            # Send to the bot
+            await self.client.send_message(self.bot_username, message)
 
             # Wait for the matching result (bot will reply with ID in the response)
             result = await asyncio.wait_for(future, timeout=timeout)

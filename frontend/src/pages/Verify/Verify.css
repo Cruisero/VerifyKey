@@ -574,7 +574,7 @@
     }
 
     .verify-input {
-        min-height: 180px;
+        min-height: 200px;
         font-size: var(--text-xs);
     }
 
@@ -1128,7 +1128,7 @@
 
     .cdk-input {
         flex: 1 1 100%;
-        order: 3;
+        order: -1;
         min-width: 0;
         font-size: var(--text-sm);
         letter-spacing: 1.5px;

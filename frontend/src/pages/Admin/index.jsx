@@ -225,6 +225,8 @@ export default function Admin() {
     const [hoveredStatusItem, setHoveredStatusItem] = useState(null);
     const [addCount, setAddCount] = useState(1);
     const [addingStatus, setAddingStatus] = useState(null);
+    const [autoRecord, setAutoRecord] = useState({ enabled: false, intervalSeconds: 60, status: 'pass' });
+    const [savingAutoRecord, setSavingAutoRecord] = useState(false);
 
     // CDK management state
     const [cdkList, setCdkList] = useState([]);
@@ -319,6 +321,12 @@ export default function Admin() {
                         const data = await res.json();
                         setHistoryData(data.history || []);
                         setHistoryStats(data.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                    }
+                    // Load auto-record config
+                    const arRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                    if (arRes.ok) {
+                        const arData = await arRes.json();
+                        setAutoRecord(arData);
                     }
                 } catch (e) {
                     console.warn('Failed to fetch verification history:', e);
@@ -2194,6 +2202,87 @@ export default function Admin() {
                                 <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                                     共 {historyStats.total || 0} 条记录
                                 </span>
+                            </div>
+                        </div>
+
+                        {/* Auto Record Config */}
+                        <div className="settings-section card">
+                            <h3>⏱️ 自动添加记录</h3>
+                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 16px' }}>
+                                每隔一段时间自动添加指定状态的记录，用于保持状态面板活跃
+                            </p>
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={autoRecord.enabled}
+                                        onChange={(e) => setAutoRecord(prev => ({ ...prev, enabled: e.target.checked }))}
+                                    />
+                                    <span style={{ fontSize: '13px', fontWeight: 600 }}>启用</span>
+                                </label>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>每</span>
+                                    <input
+                                        type="number"
+                                        min="10"
+                                        max="3600"
+                                        value={autoRecord.intervalSeconds}
+                                        onChange={(e) => setAutoRecord(prev => ({ ...prev, intervalSeconds: Math.max(10, parseInt(e.target.value) || 60) }))}
+                                        className="input"
+                                        style={{ width: '80px', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>秒</span>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>添加</span>
+                                    <select
+                                        className="input"
+                                        value={autoRecord.status}
+                                        onChange={(e) => setAutoRecord(prev => ({ ...prev, status: e.target.value }))}
+                                        style={{ width: '120px', cursor: 'pointer' }}
+                                    >
+                                        <option value="pass">✅ Pass</option>
+                                        <option value="failed">❌ Failed</option>
+                                        <option value="cancel">◷ Cancel</option>
+                                    </select>
+                                </div>
+
+                                <button
+                                    className="btn btn-sm"
+                                    disabled={savingAutoRecord}
+                                    style={{
+                                        background: autoRecord.enabled ? '#10b981' : 'var(--bg-tertiary)',
+                                        color: autoRecord.enabled ? '#fff' : 'var(--text-secondary)',
+                                        border: 'none',
+                                        padding: '6px 18px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={async () => {
+                                        setSavingAutoRecord(true);
+                                        try {
+                                            const res = await fetch(`${API_BASE}/api/verify/auto-record`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify(autoRecord)
+                                            });
+                                            if (res.ok) {
+                                                const data = await res.json();
+                                                setAutoRecord(data);
+                                            }
+                                        } catch (e) {
+                                            alert('保存失败: ' + e.message);
+                                        } finally {
+                                            setSavingAutoRecord(false);
+                                        }
+                                    }}
+                                >
+                                    {savingAutoRecord ? '...' : '保存'}
+                                </button>
                             </div>
                         </div>
                     </div>

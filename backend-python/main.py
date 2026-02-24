@@ -1744,6 +1744,57 @@ async def clear_verification_history():
     return {"cleared": True, "count": count}
 
 
+# ========== Auto-Record Background Task ==========
+_auto_record_task = None
+_auto_record_config = {
+    "enabled": False,
+    "intervalSeconds": 60,
+    "status": "pass"  # pass, failed, cancel
+}
+
+async def _auto_record_loop():
+    """Background task to auto-add status records at interval"""
+    while True:
+        try:
+            if _auto_record_config["enabled"]:
+                status = _auto_record_config.get("status", "pass")
+                verification_history.log_verification(status, f"auto-{status}")
+                logger.info(f"[AutoRecord] Added '{status}' record")
+            await asyncio.sleep(_auto_record_config.get("intervalSeconds", 60))
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"[AutoRecord] Error: {e}")
+            await asyncio.sleep(30)
+
+@app.get("/api/verify/auto-record")
+async def get_auto_record_config():
+    """Get current auto-record config"""
+    return _auto_record_config
+
+@app.post("/api/verify/auto-record")
+async def set_auto_record_config(request: Request):
+    """Set auto-record config"""
+    global _auto_record_task
+    data = await request.json()
+    
+    _auto_record_config["enabled"] = data.get("enabled", False)
+    _auto_record_config["intervalSeconds"] = max(10, int(data.get("intervalSeconds", 60)))
+    _auto_record_config["status"] = data.get("status", "pass")
+    
+    # Restart background task
+    if _auto_record_task:
+        _auto_record_task.cancel()
+        _auto_record_task = None
+    
+    if _auto_record_config["enabled"]:
+        _auto_record_task = asyncio.create_task(_auto_record_loop())
+        logger.info(f"[AutoRecord] Started: every {_auto_record_config['intervalSeconds']}s, status={_auto_record_config['status']}")
+    else:
+        logger.info("[AutoRecord] Stopped")
+    
+    return _auto_record_config
+
 # ========== Telegram Verification ==========
 
 @app.post("/api/verify/telegram")

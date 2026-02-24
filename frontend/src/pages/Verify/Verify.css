@@ -1115,6 +1115,10 @@
 
 /* CDK Mobile Layout - must be after desktop rules */
 @media (max-width: 768px) {
+    .textarea {
+        min-height: 200px;
+    }
+
     .cdk-inline-row {
         flex-wrap: wrap;
         gap: 10px;

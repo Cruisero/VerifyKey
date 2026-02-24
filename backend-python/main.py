@@ -1352,10 +1352,11 @@ async def update_config_endpoint(request: Request, authorization: Optional[str] 
             # Handle Telegram Bot restart if config changed
             new_telegram = updated_config.get("verification", {}).get("telegram", {})
             
-            # If enabled changed, or apiId/Hash changed
+            # If enabled, apiId/Hash, or botUsername changed
             if (old_telegram.get("enabled") != new_telegram.get("enabled") or
                 old_telegram.get("apiId") != new_telegram.get("apiId") or
-                old_telegram.get("apiHash") != new_telegram.get("apiHash")):
+                old_telegram.get("apiHash") != new_telegram.get("apiHash") or
+                old_telegram.get("botUsername") != new_telegram.get("botUsername")):
                 
                 print("[Config] Telegram config changed, restarting bot...")
                 global telegram_bot

@@ -458,9 +458,7 @@ export default function Verify() {
                                     {browserMode ? t('browserModeLabel') : t('apiModeLabel')}
                                 </span>
                             )}
-                            <span className="last-success">
-                                {t('lastSuccess')}: {lastSuccess ? formatTime(lastSuccess) : t('none')}
-                            </span>
+
                         </div>
                         <Link to="/api-docs" className="api-entry-pill">
                             <span className="api-entry-dot"></span>
@@ -657,6 +655,11 @@ export default function Verify() {
                                 {liveStats.cancel} Cancel
                             </span>
                         </div>
+                        {statusData.length > 0 && (
+                            <span className="status-updated-time">
+                                updated: {formatTime(statusData[statusData.length - 1]?.timestamp)}
+                            </span>
+                        )}
                     </div>
                     <div className="status-grid-container">
                         <div className="status-grid three-rows">

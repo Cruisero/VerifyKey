@@ -713,6 +713,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px;
     padding: var(--spacing-lg);
     border-bottom: 1px solid var(--border-primary);
 }
@@ -723,6 +725,12 @@
 }
 
 /* Status Grid */
+.status-updated-time {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-family: 'SF Mono', 'Menlo', monospace;
+}
+
 .status-legend {
     display: flex;
     gap: var(--spacing-lg);

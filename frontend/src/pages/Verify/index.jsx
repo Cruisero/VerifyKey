@@ -455,7 +455,7 @@ export default function Verify() {
                             )}
                             {!isTelegramMode && (
                                 <span className="bot-status connected">
-                                    {browserMode ? t('browserModeLabel') : t('apiModeLabel')}
+                                    {t('programOnline')}
                                 </span>
                             )}
 

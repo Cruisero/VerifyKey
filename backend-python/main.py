@@ -2088,13 +2088,33 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                                 "taskId": task_id
                             }
                         else:
-                            return {
-                                "verificationId": vid,
-                                "status": "rejected",
-                                "success": False,
-                                "message": f"❌ 验证失败: {status_data.get('error', 'Unknown error')}",
-                                "taskId": task_id
-                            }
+                            # GetGem may retry internally — don't give up on first failure.
+                            # Wait and re-poll a few more times before declaring failure.
+                            last_error = status_data.get('error', 'Unknown error')
+                            retry_ok = False
+                            for _retry in range(6):  # up to 30s more
+                                await asyncio.sleep(5)
+                                retry_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
+                                if retry_resp.status_code == 200:
+                                    rd = retry_resp.json()
+                                    if rd.get("completed") and rd.get("success"):
+                                        retry_ok = True
+                                        return {
+                                            "verificationId": vid,
+                                            "status": "approved",
+                                            "success": True,
+                                            "message": f"✅ 验证成功",
+                                            "redirectUrl": rd.get("redirectUrl"),
+                                            "taskId": task_id
+                                        }
+                            if not retry_ok:
+                                return {
+                                    "verificationId": vid,
+                                    "status": "rejected",
+                                    "success": False,
+                                    "message": f"❌ 验证失败: {last_error}",
+                                    "taskId": task_id
+                                }
                 
                 # Timeout
                 return {
@@ -2247,7 +2267,16 @@ async def _dispatch_verification(vid: str, cdk_code: str) -> dict:
                         if sd.get("success"):
                             return {"status": "approved", "success": True, "message": "Verification approved", "redirectUrl": sd.get("redirectUrl")}
                         else:
-                            return {"status": "rejected", "success": False, "message": sd.get("error", "Verification rejected")}
+                            # GetGem may retry internally — re-poll before declaring failure
+                            last_err = sd.get("error", "Verification rejected")
+                            for _retry in range(6):
+                                await asyncio.sleep(5)
+                                rr = await client.get(f"{getgem_url}/api/status/{task_id}")
+                                if rr.status_code == 200:
+                                    rd = rr.json()
+                                    if rd.get("completed") and rd.get("success"):
+                                        return {"status": "approved", "success": True, "message": "Verification approved", "redirectUrl": rd.get("redirectUrl")}
+                            return {"status": "rejected", "success": False, "message": last_err}
                 return {"status": "timeout", "success": False, "message": "Polling timeout (5min)"}
         except Exception as e:
             return {"status": "error", "success": False, "message": str(e)}

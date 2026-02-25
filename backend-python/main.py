@@ -2083,7 +2083,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                                 "verificationId": vid,
                                 "status": "approved",
                                 "success": True,
-                                "message": f"✅ 验证成功",
+                                "message": f"验证成功",
                                 "redirectUrl": status_data.get("redirectUrl"),
                                 "taskId": task_id
                             }
@@ -2103,7 +2103,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                                             "verificationId": vid,
                                             "status": "approved",
                                             "success": True,
-                                            "message": f"✅ 验证成功",
+                                            "message": f"验证成功",
                                             "redirectUrl": rd.get("redirectUrl"),
                                             "taskId": task_id
                                         }
@@ -2112,7 +2112,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                                     "verificationId": vid,
                                     "status": "rejected",
                                     "success": False,
-                                    "message": f"❌ 验证失败: {last_error}",
+                                    "message": f"验证失败: {last_error}",
                                     "taskId": task_id
                                 }
                 

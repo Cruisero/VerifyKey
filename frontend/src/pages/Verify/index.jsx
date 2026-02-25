@@ -260,7 +260,7 @@ export default function Verify() {
             verificationId: vid,
             status: 'processing',
             timestamp: new Date().toISOString(),
-            message: `⏳ ${t('processing')} (GetGem)`
+            message: `⏳ ${t('processing')}`
         }));
         setResults(prev => [...resultItems, ...prev]);
 

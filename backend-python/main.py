@@ -2002,7 +2002,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
     getgem_url = getgem_config.get("apiUrl", "https://getgem.cc")
 
     if not getgem_cdk:
-        raise HTTPException(status_code=400, detail="GetGem CDK 未配置，请在管理面板中设置")
+        raise HTTPException(status_code=400, detail="API CDK 未配置，请在管理面板中设置")
 
     if not request.verificationIds:
         raise HTTPException(status_code=400, detail="No verification IDs provided")
@@ -2055,7 +2055,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                         "verificationId": vid,
                         "status": "error",
                         "success": False,
-                        "message": f"提交失败: 未返回 taskId — {submit_data}"
+                        "message": f"提交失败: 未返回任务ID — {submit_data}"
                     }
 
                 # Step 2: Poll for result
@@ -2241,16 +2241,16 @@ async def _dispatch_verification(vid: str, cdk_code: str) -> dict:
         getgem_cdk = getgem_config.get("cdk", "")
         getgem_url = getgem_config.get("apiUrl", "https://getgem.cc")
         if not getgem_cdk:
-            return {"status": "error", "success": False, "message": "GetGem CDK not configured on server"}
+            return {"status": "error", "success": False, "message": "API CDK not configured on server"}
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
                 resp = await client.post(f"{getgem_url}/api/verify", json={"verificationId": vid, "cdk": getgem_cdk})
                 if resp.status_code != 200:
-                    return {"status": "error", "success": False, "message": f"GetGem submit failed ({resp.status_code})"}
+                    return {"status": "error", "success": False, "message": f"Submit failed ({resp.status_code})"}
                 data = resp.json()
                 task_id = data.get("taskId")
                 if not task_id:
-                    return {"status": "error", "success": False, "message": "GetGem returned no taskId"}
+                    return {"status": "error", "success": False, "message": "No taskId returned"}
                 # Poll
                 interval = 5
                 for _ in range(60):

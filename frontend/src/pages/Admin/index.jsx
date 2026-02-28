@@ -2489,25 +2489,6 @@ export default function Admin() {
                             </div>
                         )}
 
-                        <div className="settings-section card">
-                            <h3>💰 定价设置</h3>
-                            <p className="settings-desc">
-                                设置每次验证消耗的积分数量。
-                            </p>
-                            <div className="settings-form">
-                                <div className="input-group">
-                                    <label className="input-label">每次验证消耗积分</label>
-                                    <input
-                                        type="number"
-                                        className="input"
-                                        defaultValue={1}
-                                        min={1}
-                                    />
-                                </div>
-                                <button className="btn btn-primary">保存</button>
-                            </div>
-                        </div>
-
                         {/* Maintenance Mode Card */}
                         <div className="settings-section card" style={{
                             border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent',

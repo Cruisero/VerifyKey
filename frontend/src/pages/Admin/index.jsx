@@ -295,6 +295,13 @@ export default function Admin() {
     // Region mode state: 'global' (default) or 'us_only'
     const [regionMode, setRegionMode] = useState('global');
 
+    // Maintenance mode state
+    const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
+    const [maintenanceMessage, setMaintenanceMessage] = useState('系统维护中，请稍后再试');
+    const [maintenanceEstEnd, setMaintenanceEstEnd] = useState('');
+    const [maintenanceSaving, setMaintenanceSaving] = useState(false);
+    const [maintenanceSaved, setMaintenanceSaved] = useState(false);
+
     // Verification mode: 'api' (default) or 'browser' (Puppeteer) — only for non-telegram providers
     const [browserMode, setBrowserMode] = useState(false);
 
@@ -335,6 +342,56 @@ export default function Admin() {
             })();
         }
     }, [activeTab]);
+
+    // Fetch maintenance status when settings tab is activated
+    useEffect(() => {
+        if (activeTab === 'settings') {
+            (async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/api/maintenance`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setMaintenanceEnabled(data.enabled);
+                        setMaintenanceMessage(data.message || '系统维护中，请稍后再试');
+                        setMaintenanceEstEnd(data.estimatedEnd || '');
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch maintenance status:', e);
+                }
+            })();
+        }
+    }, [activeTab]);
+
+    const handleSaveMaintenance = async () => {
+        setMaintenanceSaving(true);
+        setMaintenanceSaved(false);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/maintenance`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    enabled: maintenanceEnabled,
+                    message: maintenanceMessage,
+                    estimatedEnd: maintenanceEstEnd || null
+                })
+            });
+            if (res.ok) {
+                setMaintenanceSaved(true);
+                setTimeout(() => setMaintenanceSaved(false), 2000);
+            } else {
+                const err = await res.json();
+                alert(err.error || '保存失败');
+            }
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        } finally {
+            setMaintenanceSaving(false);
+        }
+    };
 
     const fetchConfig = async () => {
         try {
@@ -2451,21 +2508,63 @@ export default function Admin() {
                             </div>
                         </div>
 
-                        <div className="settings-section card">
-                            <h3>📢 公告设置</h3>
-                            <p className="settings-desc">
-                                设置在验证工具页面显示的公告内容。
+                        <div className="settings-section card" style={{ border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent', transition: 'border-color 0.3s ease' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <h3 style={{ margin: 0 }}>🚧 维护模式</h3>
+                                <div
+                                    onClick={() => setMaintenanceEnabled(!maintenanceEnabled)}
+                                    style={{
+                                        width: '56px', height: '28px', borderRadius: '14px', cursor: 'pointer',
+                                        background: maintenanceEnabled ? 'linear-gradient(135deg, #ef4444, #dc2626)' : '#374151',
+                                        position: 'relative', transition: 'background 0.3s ease',
+                                        boxShadow: maintenanceEnabled ? '0 0 12px rgba(239,68,68,0.4)' : 'none'
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '22px', height: '22px', borderRadius: '50%',
+                                        background: '#fff', position: 'absolute', top: '3px',
+                                        left: maintenanceEnabled ? '31px' : '3px',
+                                        transition: 'left 0.3s ease',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                    }} />
+                                </div>
+                            </div>
+                            <p className="settings-desc" style={{ color: maintenanceEnabled ? '#ef4444' : undefined }}>
+                                {maintenanceEnabled ? '⚠️ 维护模式已开启 — 用户将看到维护页面' : '开启后，所有用户访问网站时将显示维护页面。管理后台仍可正常访问。'}
                             </p>
                             <div className="settings-form">
                                 <div className="input-group">
-                                    <label className="input-label">公告内容</label>
+                                    <label className="input-label">维护公告内容</label>
                                     <textarea
                                         className="input textarea"
-                                        placeholder="输入公告内容..."
-                                        rows={3}
+                                        placeholder="输入维护公告内容..."
+                                        rows={2}
+                                        value={maintenanceMessage}
+                                        onChange={(e) => setMaintenanceMessage(e.target.value)}
                                     />
                                 </div>
-                                <button className="btn btn-primary">保存</button>
+                                <div className="input-group">
+                                    <label className="input-label">预计恢复时间（可选）</label>
+                                    <input
+                                        type="datetime-local"
+                                        className="input"
+                                        value={maintenanceEstEnd ? maintenanceEstEnd.slice(0, 16) : ''}
+                                        onChange={(e) => setMaintenanceEstEnd(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <button
+                                        className={`btn ${maintenanceEnabled ? 'btn-primary' : 'btn-primary'}`}
+                                        onClick={handleSaveMaintenance}
+                                        disabled={maintenanceSaving}
+                                        style={maintenanceEnabled ? { background: 'linear-gradient(135deg, #ef4444, #dc2626)' } : {}}
+                                    >
+                                        {maintenanceSaving ? '保存中...' : maintenanceEnabled ? '🚧 保存并开启维护' : '💾 保存'}
+                                    </button>
+                                    {maintenanceSaved && (
+                                        <span style={{ color: '#10b981', fontSize: '14px', fontWeight: 500 }}>✅ 已保存</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

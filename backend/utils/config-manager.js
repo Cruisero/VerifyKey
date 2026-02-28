@@ -41,6 +41,13 @@ const DEFAULT_CONFIG = {
         delayBetweenMs: 2000
     },
 
+    // Maintenance mode
+    maintenance: {
+        enabled: false,
+        message: '系统维护中，请稍后再试',
+        estimatedEnd: null
+    },
+
     // Last updated
     updatedAt: null
 };

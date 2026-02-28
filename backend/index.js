@@ -495,6 +495,58 @@ app.post('/api/config/test-document', async (req, res) => {
     }
 });
 
+// =====================
+// Maintenance Mode
+// =====================
+
+// Get maintenance status (public — no auth needed)
+app.get('/api/maintenance', (req, res) => {
+    const { getConfig } = require('./utils/config-manager');
+    const config = getConfig();
+    const maintenance = config.maintenance || { enabled: false, message: '', estimatedEnd: null };
+    res.json({
+        enabled: maintenance.enabled,
+        message: maintenance.message || '系统维护中，请稍后再试',
+        estimatedEnd: maintenance.estimatedEnd || null
+    });
+});
+
+// Toggle maintenance mode (admin only)
+app.post('/api/maintenance', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: '未登录' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const user = await auth.verifyToken(token);
+
+    if (!user || user.role !== 'admin') {
+        return res.status(403).json({ error: '无权限' });
+    }
+
+    const { enabled, message, estimatedEnd } = req.body;
+    const { updateConfig } = require('./utils/config-manager');
+
+    const result = updateConfig({
+        maintenance: {
+            enabled: !!enabled,
+            message: message || '系统维护中，请稍后再试',
+            estimatedEnd: estimatedEnd || null
+        }
+    });
+
+    if (result) {
+        console.log(`[Maintenance] Mode ${enabled ? 'ENABLED' : 'DISABLED'} by ${user.email}`);
+        res.json({
+            success: true,
+            maintenance: result.maintenance
+        });
+    } else {
+        res.status(500).json({ error: '保存失败' });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });

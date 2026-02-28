@@ -2495,6 +2495,55 @@ async def public_cdk_status(x_cdk_key: Optional[str] = Header(None), cdk: Option
     }
 
 
+# ========== Maintenance Mode ==========
+
+@app.get("/api/maintenance")
+async def get_maintenance_status():
+    """Get maintenance mode status (public, no auth needed)"""
+    import config_manager
+    config = config_manager.get_config()
+    maintenance = config.get("maintenance", {"enabled": False, "message": "", "estimatedEnd": None})
+    return {
+        "enabled": maintenance.get("enabled", False),
+        "message": maintenance.get("message", "系统维护中，请稍后再试"),
+        "estimatedEnd": maintenance.get("estimatedEnd")
+    }
+
+
+@app.post("/api/maintenance")
+async def toggle_maintenance(request: Request, authorization: Optional[str] = Header(None)):
+    """Toggle maintenance mode (admin only)"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未登录")
+    
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="无权限")
+    
+    data = await request.json()
+    import config_manager
+    
+    result = config_manager.update_config({
+        "maintenance": {
+            "enabled": bool(data.get("enabled", False)),
+            "message": data.get("message", "系统维护中，请稍后再试"),
+            "estimatedEnd": data.get("estimatedEnd")
+        }
+    })
+    
+    if result:
+        status = "ENABLED" if data.get("enabled") else "DISABLED"
+        print(f"[Maintenance] Mode {status} by {user.get('email', 'unknown')}")
+        return {
+            "success": True,
+            "maintenance": result.get("maintenance", {})
+        }
+    else:
+        raise HTTPException(status_code=500, detail="保存失败")
+
+
 if __name__ == "__main__":
     import uvicorn
     

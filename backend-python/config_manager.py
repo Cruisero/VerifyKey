@@ -87,6 +87,13 @@ DEFAULT_CONFIG = {
         "newrelicHeaders": True
     },
     
+    # Maintenance mode
+    "maintenance": {
+        "enabled": False,
+        "message": "系统维护中，请稍后再试",
+        "estimatedEnd": None
+    },
+    
     # Last updated
     "updatedAt": None
 }

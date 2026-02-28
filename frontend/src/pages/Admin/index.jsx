@@ -2169,10 +2169,36 @@ export default function Admin() {
                                             }}>新方法</span>
                                         </div>
                                         <div style={{ padding: '16px 18px' }}>
-                                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                                                新方法：预热 Bot → 验证 Bot → 失败自动刷新链接
-                                            </p>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                                                    新方法：预热 Bot → 验证 Bot → 失败自动刷新链接
+                                                </p>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, color: '#4caf50' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={config?.verification?.dualBot?.enabled || false}
+                                                        onChange={e => {
+                                                            const val = e.target.checked;
+                                                            setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    dualBot: { ...prev.verification?.dualBot || {}, enabled: val },
+                                                                    telegram: { ...prev.verification?.telegram || {}, enabled: val ? false : prev.verification?.telegram?.enabled }
+                                                                }
+                                                            }));
+                                                        }}
+                                                        style={{ width: '18px', height: '18px' }}
+                                                    />
+                                                    启用
+                                                </label>
+                                            </div>
+                                            <div style={{
+                                                display: 'flex', flexDirection: 'column', gap: '12px',
+                                                opacity: config?.verification?.dualBot?.enabled ? 1 : 0.6,
+                                                pointerEvents: config?.verification?.dualBot?.enabled ? 'auto' : 'none',
+                                                transition: 'all 0.3s'
+                                            }}>
                                                 <div>
                                                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>预热 Bot</label>
                                                     <input type="text" className="input"
@@ -2246,46 +2272,52 @@ export default function Admin() {
                                                 </p>
                                                 <label style={{
                                                     display: 'flex', alignItems: 'center', gap: '10px',
-                                                    fontSize: '14px', cursor: 'pointer', marginBottom: '14px'
+                                                    fontSize: '14px', cursor: 'pointer', marginBottom: '14px',
+                                                    fontWeight: 600, color: '#f57c00'
                                                 }}>
                                                     <input
                                                         type="checkbox"
                                                         checked={config?.verification?.telegram?.enabled || false}
                                                         onChange={(e) => {
+                                                            const val = e.target.checked;
                                                             setConfig(prev => ({
                                                                 ...prev,
                                                                 verification: {
                                                                     ...prev.verification || {},
-                                                                    telegram: {
-                                                                        ...prev.verification?.telegram || {},
-                                                                        enabled: e.target.checked
-                                                                    }
+                                                                    telegram: { ...prev.verification?.telegram || {}, enabled: val },
+                                                                    dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled }
                                                                 }
                                                             }));
                                                         }}
-                                                        style={{ width: '16px', height: '16px' }}
+                                                        style={{ width: '18px', height: '18px' }}
                                                     />
-                                                    启用旧版 SheerID Bot
+                                                    启用
                                                 </label>
-                                                {config?.verification?.telegram?.enabled && (
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
-                                                        <select className="input"
-                                                            value={config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot'}
-                                                            onChange={e => setConfig(prev => ({
-                                                                ...prev,
-                                                                verification: {
-                                                                    ...prev.verification || {},
-                                                                    telegram: { ...prev.verification?.telegram || {}, botUsername: e.target.value }
-                                                                }
-                                                            }))}
-                                                            style={{ cursor: 'pointer', width: '100%', boxSizing: 'border-box' }}
-                                                        >
-                                                            <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
-                                                            <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
-                                                        </select>
-                                                    </div>
-                                                )}
+                                                <div style={{
+                                                    opacity: config?.verification?.telegram?.enabled ? 1 : 0.6,
+                                                    pointerEvents: config?.verification?.telegram?.enabled ? 'auto' : 'none',
+                                                    transition: 'all 0.3s'
+                                                }}>
+                                                    {config?.verification?.telegram?.enabled && (
+                                                        <div>
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
+                                                            <select className="input"
+                                                                value={config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot'}
+                                                                onChange={e => setConfig(prev => ({
+                                                                    ...prev,
+                                                                    verification: {
+                                                                        ...prev.verification || {},
+                                                                        telegram: { ...prev.verification?.telegram || {}, botUsername: e.target.value }
+                                                                    }
+                                                                }))}
+                                                                style={{ cursor: 'pointer', width: '100%', boxSizing: 'border-box' }}
+                                                            >
+                                                                <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
+                                                                <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

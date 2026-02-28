@@ -308,6 +308,21 @@ export default function Admin() {
     // University source: 'sheerid_api' (dynamic) or 'custom_list' (local list)
     const [universitySource, setUniversitySource] = useState('sheerid_api');
 
+    // Telegram multi-account management
+    const [tgAccounts, setTgAccounts] = useState([]);
+    const [tgShowAdd, setTgShowAdd] = useState(false);
+    const [tgNewApiId, setTgNewApiId] = useState('');
+    const [tgNewApiHash, setTgNewApiHash] = useState('');
+    const [tgNewLabel, setTgNewLabel] = useState('');
+    const [tgLoginAccountId, setTgLoginAccountId] = useState(null);
+    const [tgLoginPhone, setTgLoginPhone] = useState('');
+    const [tgLoginCode, setTgLoginCode] = useState('');
+    const [tgLoginHash, setTgLoginHash] = useState('');
+    const [tgLoginPassword, setTgLoginPassword] = useState('');
+    const [tgLoginStep, setTgLoginStep] = useState('idle'); // idle | phone | code | password | done
+    const [tgLoginMsg, setTgLoginMsg] = useState('');
+    const [tgLoading, setTgLoading] = useState(false);
+
     useEffect(() => {
         if (!loading && !user) {
             navigate('/');
@@ -317,6 +332,7 @@ export default function Admin() {
     // Load configuration on mount
     useEffect(() => {
         fetchConfig();
+        fetchTgAccounts();
     }, []);
 
     // Fetch verification history when tab is activated
@@ -391,6 +407,110 @@ export default function Admin() {
         } finally {
             setMaintenanceSaving(false);
         }
+    };
+
+    // ========== Telegram Multi-Account Management ==========
+    const fetchTgAccounts = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts`);
+            if (res.ok) {
+                const data = await res.json();
+                setTgAccounts(data.accounts || []);
+            }
+        } catch (e) { console.error('Failed to fetch TG accounts:', e); }
+    };
+
+    const handleTgAdd = async () => {
+        if (!tgNewApiId || !tgNewApiHash) return;
+        setTgLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiId: tgNewApiId, apiHash: tgNewApiHash, label: tgNewLabel || undefined })
+            });
+            if (res.ok) {
+                setTgShowAdd(false);
+                setTgNewApiId(''); setTgNewApiHash(''); setTgNewLabel('');
+                fetchTgAccounts();
+            }
+        } catch (e) { alert('添加失败: ' + e.message); }
+        setTgLoading(false);
+    };
+
+    const handleTgLoginRequest = async (accountId) => {
+        if (!tgLoginPhone) return;
+        setTgLoading(true); setTgLoginMsg('');
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: tgLoginPhone })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setTgLoginHash(data.phone_code_hash);
+                setTgLoginStep('code');
+                setTgLoginMsg(data.message);
+            } else {
+                setTgLoginMsg(data.detail || data.error || '发送验证码失败');
+            }
+        } catch (e) { setTgLoginMsg('网络错误: ' + e.message); }
+        setTgLoading(false);
+    };
+
+    const handleTgVerifyCode = async (accountId) => {
+        if (!tgLoginCode) return;
+        setTgLoading(true); setTgLoginMsg('');
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone: tgLoginPhone,
+                    code: tgLoginCode,
+                    phone_code_hash: tgLoginHash,
+                    password: tgLoginPassword || undefined
+                })
+            });
+            const data = await res.json();
+            if (data.needs_password) {
+                setTgLoginStep('password');
+                setTgLoginMsg('此账号启用了两步验证，请输入密码');
+            } else if (res.ok && data.success) {
+                setTgLoginStep('done');
+                setTgLoginMsg(`✅ ${data.message}`);
+                setTgLoginAccountId(null);
+                fetchTgAccounts();
+            } else {
+                setTgLoginMsg(data.detail || data.error || '验证码错误');
+            }
+        } catch (e) { setTgLoginMsg('网络错误: ' + e.message); }
+        setTgLoading(false);
+    };
+
+    const handleTgActivate = async (accountId) => {
+        setTgLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}/activate`, {
+                method: 'POST'
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                fetchTgAccounts();
+            } else {
+                alert(data.detail || data.error || '切换失败');
+            }
+        } catch (e) { alert('切换失败: ' + e.message); }
+        setTgLoading(false);
+    };
+
+    const handleTgRemove = async (accountId) => {
+        if (!window.confirm('确定要删除这个账号吗？')) return;
+        try {
+            await fetch(`${API_BASE}/api/telegram/accounts/${accountId}`, { method: 'DELETE' });
+            fetchTgAccounts();
+        } catch (e) { alert('删除失败'); }
     };
 
     const fetchConfig = async () => {
@@ -627,6 +747,11 @@ export default function Admin() {
                         apiId: config?.verification?.telegram?.apiId,
                         apiHash: config?.verification?.telegram?.apiHash,
                         botUsername: config?.verification?.telegram?.botUsername
+                    },
+                    dualBot: {
+                        warmupBot: config?.verification?.dualBot?.warmupBot || '@SatsetHelperbot',
+                        verifyBot: config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot',
+                        autoBypass: config?.verification?.dualBot?.autoBypass !== false
                     }
                 }
             };
@@ -1694,55 +1819,335 @@ export default function Admin() {
                                 </div>
                             )}
 
-                            {/* Telegram Userbot Settings */}
+                            {/* Telegram Multi-Account Management */}
                             {aiProvider === 'telegram' && (
                                 <div className="provider-settings">
-                                    <h4>📨 Telegram Userbot 配置</h4>
+                                    <h4>📱 Telegram 账号管理</h4>
                                     <div className="settings-form">
-                                        <div className="telegram-info" style={{
+                                        <div style={{
                                             background: 'linear-gradient(135deg, #0088cc 0%, #005fa3 100%)',
                                             color: 'white',
                                             padding: '16px 20px',
-                                            borderRadius: '8px',
-                                            marginBottom: '16px'
+                                            borderRadius: '10px',
+                                            marginBottom: '20px'
                                         }}>
                                             <p style={{ margin: 0, fontSize: '14px' }}>
-                                                <strong>Telegram Userbot</strong> 通过 Telegram 用户账号自动调用外部 SheerID Bot，
-                                                将验证链接发送给 Bot 并获取验证结果。
+                                                管理多个 Telegram 账号，所有 Bot 验证共用当前激活的账号。支持一键切换。
                                             </p>
                                         </div>
 
-                                        <div className="input-group">
-                                            <label className="input-label">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={config?.verification?.telegram?.enabled || false}
-                                                    onChange={(e) => {
-                                                        setConfig(prev => ({
+                                        {/* Account List */}
+                                        <div style={{ marginBottom: '20px' }}>
+                                            {tgAccounts.length === 0 ? (
+                                                <div style={{
+                                                    padding: '32px',
+                                                    textAlign: 'center',
+                                                    background: 'var(--bg-secondary)',
+                                                    borderRadius: '10px',
+                                                    color: 'var(--text-secondary)'
+                                                }}>
+                                                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>📱</div>
+                                                    <p>暂无 Telegram 账号</p>
+                                                    <p style={{ fontSize: '13px' }}>点击下方按钮添加第一个账号</p>
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    {tgAccounts.map(acc => (
+                                                        <div key={acc.id} style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            padding: '14px 18px',
+                                                            background: acc.active
+                                                                ? 'linear-gradient(135deg, rgba(0,136,204,0.15), rgba(0,136,204,0.05))'
+                                                                : 'var(--bg-secondary)',
+                                                            borderRadius: '10px',
+                                                            border: acc.active ? '1px solid rgba(0,136,204,0.4)' : '1px solid transparent',
+                                                            transition: 'all 0.2s'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                <div style={{
+                                                                    width: '10px', height: '10px', borderRadius: '50%',
+                                                                    background: acc.active ? '#00c853' : acc.hasSession ? '#ff9800' : '#f44336',
+                                                                    boxShadow: acc.active ? '0 0 8px rgba(0,200,83,0.5)' : 'none'
+                                                                }} />
+                                                                <div>
+                                                                    <div style={{ fontWeight: 600, fontSize: '14px' }}>{acc.label || '未命名'}</div>
+                                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                                                        {acc.phone || '未登录'}
+                                                                        {acc.active && <span style={{ color: '#0088cc', marginLeft: '8px', fontWeight: 600 }}>● 使用中</span>}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                                {!acc.hasSession && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setTgLoginAccountId(acc.id);
+                                                                            setTgLoginStep('phone');
+                                                                            setTgLoginPhone(''); setTgLoginCode(''); setTgLoginMsg('');
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '6px 14px', fontSize: '13px',
+                                                                            background: '#0088cc', color: 'white',
+                                                                            border: 'none', borderRadius: '6px', cursor: 'pointer'
+                                                                        }}
+                                                                        disabled={tgLoading}
+                                                                    >登录</button>
+                                                                )}
+                                                                {acc.hasSession && !acc.active && (
+                                                                    <button
+                                                                        onClick={() => handleTgActivate(acc.id)}
+                                                                        style={{
+                                                                            padding: '6px 14px', fontSize: '13px',
+                                                                            background: 'linear-gradient(135deg, #00c853, #00a844)',
+                                                                            color: 'white', border: 'none', borderRadius: '6px',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                        disabled={tgLoading}
+                                                                    >切换使用</button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => handleTgRemove(acc.id)}
+                                                                    style={{
+                                                                        padding: '6px 10px', fontSize: '13px',
+                                                                        background: 'transparent', color: '#f44336',
+                                                                        border: '1px solid #f44336', borderRadius: '6px',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >🗑️</button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Login Dialog */}
+                                        {tgLoginAccountId && (
+                                            <div style={{
+                                                padding: '20px',
+                                                background: 'var(--bg-secondary)',
+                                                borderRadius: '10px',
+                                                marginBottom: '20px',
+                                                border: '1px solid rgba(0,136,204,0.3)'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                                    <h5 style={{ margin: 0 }}>🔐 登录 Telegram</h5>
+                                                    <button onClick={() => { setTgLoginAccountId(null); setTgLoginStep('idle'); }}
+                                                        style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+                                                </div>
+
+                                                {tgLoginStep === 'phone' && (
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>手机号（含国际区号）</label>
+                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <input
+                                                                type="text" className="input"
+                                                                value={tgLoginPhone}
+                                                                onChange={e => setTgLoginPhone(e.target.value)}
+                                                                placeholder="+86 13812345678"
+                                                                style={{ flex: 1 }}
+                                                            />
+                                                            <button
+                                                                onClick={() => handleTgLoginRequest(tgLoginAccountId)}
+                                                                disabled={tgLoading || !tgLoginPhone}
+                                                                style={{
+                                                                    padding: '8px 18px', background: '#0088cc', color: 'white',
+                                                                    border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                                    opacity: (tgLoading || !tgLoginPhone) ? 0.5 : 1
+                                                                }}
+                                                            >{tgLoading ? '发送中...' : '发送验证码'}</button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {tgLoginStep === 'code' && (
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>输入 Telegram 验证码</label>
+                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <input
+                                                                type="text" className="input"
+                                                                value={tgLoginCode}
+                                                                onChange={e => setTgLoginCode(e.target.value)}
+                                                                placeholder="12345"
+                                                                style={{ flex: 1, letterSpacing: '4px', textAlign: 'center', fontSize: '18px' }}
+                                                                autoFocus
+                                                            />
+                                                            <button
+                                                                onClick={() => handleTgVerifyCode(tgLoginAccountId)}
+                                                                disabled={tgLoading || !tgLoginCode}
+                                                                style={{
+                                                                    padding: '8px 18px', background: '#00c853', color: 'white',
+                                                                    border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                                    opacity: (tgLoading || !tgLoginCode) ? 0.5 : 1
+                                                                }}
+                                                            >{tgLoading ? '验证中...' : '确认'}</button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {tgLoginStep === 'password' && (
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>两步验证密码</label>
+                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <input
+                                                                type="password" className="input"
+                                                                value={tgLoginPassword}
+                                                                onChange={e => setTgLoginPassword(e.target.value)}
+                                                                placeholder="输入两步验证密码"
+                                                                style={{ flex: 1 }}
+                                                                autoFocus
+                                                            />
+                                                            <button
+                                                                onClick={() => handleTgVerifyCode(tgLoginAccountId)}
+                                                                disabled={tgLoading || !tgLoginPassword}
+                                                                style={{
+                                                                    padding: '8px 18px', background: '#00c853', color: 'white',
+                                                                    border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                                    opacity: (tgLoading || !tgLoginPassword) ? 0.5 : 1
+                                                                }}
+                                                            >{tgLoading ? '验证中...' : '确认'}</button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {tgLoginMsg && (
+                                                    <p style={{
+                                                        marginTop: '12px', fontSize: '13px',
+                                                        color: tgLoginMsg.includes('✅') ? '#00c853' : '#0088cc'
+                                                    }}>{tgLoginMsg}</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Add Account */}
+                                        {tgShowAdd ? (
+                                            <div style={{
+                                                padding: '20px',
+                                                background: 'var(--bg-secondary)',
+                                                borderRadius: '10px',
+                                                marginBottom: '16px'
+                                            }}>
+                                                <h5 style={{ margin: '0 0 16px' }}>➕ 添加 Telegram 账号</h5>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>标签（可选）</label>
+                                                        <input type="text" className="input" value={tgNewLabel}
+                                                            onChange={e => setTgNewLabel(e.target.value)}
+                                                            placeholder="例: 主号 / 备用号" style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>
+                                                            API ID <span style={{ color: 'var(--text-secondary)' }}>(from <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a>)</span>
+                                                        </label>
+                                                        <input type="text" className="input" value={tgNewApiId}
+                                                            onChange={e => setTgNewApiId(e.target.value)}
+                                                            placeholder="12345678" style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>API Hash</label>
+                                                        <input type="password" className="input" value={tgNewApiHash}
+                                                            onChange={e => setTgNewApiHash(e.target.value)}
+                                                            placeholder="abcdef123456..." style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                                        <button onClick={() => setTgShowAdd(false)}
+                                                            style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>取消</button>
+                                                        <button onClick={handleTgAdd} disabled={tgLoading || !tgNewApiId || !tgNewApiHash}
+                                                            style={{
+                                                                padding: '8px 18px', background: '#0088cc', color: 'white',
+                                                                border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                                opacity: (tgLoading || !tgNewApiId || !tgNewApiHash) ? 0.5 : 1
+                                                            }}>{tgLoading ? '添加中...' : '添加'}</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => setTgShowAdd(true)}
+                                                style={{
+                                                    width: '100%', padding: '12px',
+                                                    background: 'transparent',
+                                                    border: '2px dashed var(--border)',
+                                                    borderRadius: '10px', cursor: 'pointer',
+                                                    fontSize: '14px', color: 'var(--text-secondary)',
+                                                    transition: 'all 0.2s'
+                                                }}>
+                                                ➕ 添加 Telegram 账号
+                                            </button>
+                                        )}
+
+                                        {/* Dual Bot Config */}
+                                        <div style={{
+                                            marginTop: '24px',
+                                            paddingTop: '20px',
+                                            borderTop: '1px solid var(--border)'
+                                        }}>
+                                            <h5 style={{ margin: '0 0 12px' }}>🤖 Dual Bot 验证配置</h5>
+                                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                                                新方法：预热 Bot → 验证 Bot → 失败自动刷新链接
+                                            </p>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                <div>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>预热 Bot</label>
+                                                    <input type="text" className="input"
+                                                        value={config?.verification?.dualBot?.warmupBot || '@SatsetHelperbot'}
+                                                        onChange={e => setConfig(prev => ({
                                                             ...prev,
                                                             verification: {
                                                                 ...prev.verification || {},
-                                                                telegram: {
-                                                                    ...prev.verification?.telegram || {},
-                                                                    enabled: e.target.checked
-                                                                }
+                                                                dualBot: { ...prev.verification?.dualBot || {}, warmupBot: e.target.value }
                                                             }
-                                                        }));
-                                                    }}
-                                                    style={{ marginRight: '8px' }}
-                                                />
-                                                启用 Telegram Userbot
-                                            </label>
+                                                        }))}
+                                                        placeholder="@SatsetHelperbot"
+                                                        style={{ width: '100%', boxSizing: 'border-box' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>验证 Bot</label>
+                                                    <input type="text" className="input"
+                                                        value={config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot'}
+                                                        onChange={e => setConfig(prev => ({
+                                                            ...prev,
+                                                            verification: {
+                                                                ...prev.verification || {},
+                                                                dualBot: { ...prev.verification?.dualBot || {}, verifyBot: e.target.value }
+                                                            }
+                                                        }))}
+                                                        placeholder="@AutoGeminiProbot"
+                                                        style={{ width: '100%', boxSizing: 'border-box' }}
+                                                    />
+                                                </div>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={config?.verification?.dualBot?.autoBypass !== false}
+                                                        onChange={e => setConfig(prev => ({
+                                                            ...prev,
+                                                            verification: {
+                                                                ...prev.verification || {},
+                                                                dualBot: { ...prev.verification?.dualBot || {}, autoBypass: e.target.checked }
+                                                            }
+                                                        }))}
+                                                        style={{ width: '16px', height: '16px' }}
+                                                    />
+                                                    验证失败时自动 Bypass（刷新链接）
+                                                </label>
+                                            </div>
                                         </div>
 
-                                        {config?.verification?.telegram?.enabled && (
-                                            <>
-                                                <div className="input-group">
-                                                    <label className="input-label">API ID (from my.telegram.org)</label>
+                                        {/* Legacy Bot Config (backward compat) */}
+                                        <div style={{
+                                            marginTop: '24px',
+                                            paddingTop: '20px',
+                                            borderTop: '1px solid var(--border)'
+                                        }}>
+                                            <h5 style={{ margin: '0 0 12px' }}>📨 旧版 SheerID Bot（向下兼容）</h5>
+                                            <div className="input-group">
+                                                <label className="input-label">
                                                     <input
-                                                        type="text"
-                                                        className="input"
-                                                        value={config?.verification?.telegram?.apiId || ''}
+                                                        type="checkbox"
+                                                        checked={config?.verification?.telegram?.enabled || false}
                                                         onChange={(e) => {
                                                             setConfig(prev => ({
                                                                 ...prev,
@@ -1750,84 +2155,66 @@ export default function Admin() {
                                                                     ...prev.verification || {},
                                                                     telegram: {
                                                                         ...prev.verification?.telegram || {},
-                                                                        apiId: e.target.value
+                                                                        enabled: e.target.checked
                                                                     }
                                                                 }
                                                             }));
                                                         }}
-                                                        placeholder="12345678"
+                                                        style={{ marginRight: '8px' }}
                                                     />
-                                                </div>
-
-                                                <div className="input-group">
-                                                    <label className="input-label">API Hash</label>
-                                                    <input
-                                                        type="password"
-                                                        className="input"
-                                                        value={config?.verification?.telegram?.apiHash || ''}
-                                                        onChange={(e) => {
-                                                            setConfig(prev => ({
+                                                    启用旧版 Telegram Userbot（单独 session 文件）
+                                                </label>
+                                            </div>
+                                            {config?.verification?.telegram?.enabled && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>API ID</label>
+                                                        <input type="text" className="input"
+                                                            value={config?.verification?.telegram?.apiId || ''}
+                                                            onChange={e => setConfig(prev => ({
                                                                 ...prev,
                                                                 verification: {
                                                                     ...prev.verification || {},
-                                                                    telegram: {
-                                                                        ...prev.verification?.telegram || {},
-                                                                        apiHash: e.target.value
-                                                                    }
+                                                                    telegram: { ...prev.verification?.telegram || {}, apiId: e.target.value }
                                                                 }
-                                                            }));
-                                                        }}
-                                                        placeholder="abcdef123456..."
-                                                    />
-                                                </div>
-
-                                                <div className="input-group">
-                                                    <label className="input-label">Target Bot</label>
-                                                    <select
-                                                        className="input"
-                                                        value={config?.verification?.telegram?.botUsername || '@SheerID_Bot'}
-                                                        onChange={(e) => {
-                                                            setConfig(prev => ({
+                                                            }))}
+                                                            placeholder="12345678" style={{ width: '100%', boxSizing: 'border-box' }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>API Hash</label>
+                                                        <input type="password" className="input"
+                                                            value={config?.verification?.telegram?.apiHash || ''}
+                                                            onChange={e => setConfig(prev => ({
                                                                 ...prev,
                                                                 verification: {
                                                                     ...prev.verification || {},
-                                                                    telegram: {
-                                                                        ...prev.verification?.telegram || {},
-                                                                        botUsername: e.target.value
-                                                                    }
+                                                                    telegram: { ...prev.verification?.telegram || {}, apiHash: e.target.value }
                                                                 }
-                                                            }));
-                                                        }}
-                                                        style={{ cursor: 'pointer' }}
-                                                    >
-                                                        <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
-                                                        <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
-                                                    </select>
-                                                    <p className="input-hint">
-                                                        {(config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot') === '@SheerID_Verification_bot'
-                                                            ? '当前: SheerID_Verification_bot'
-                                                            : '当前: SheerID_Gemini_2026_Bot'
-                                                        }
-                                                        {' · 切换后需点击保存并重启生效'}
-                                                    </p>
+                                                            }))}
+                                                            placeholder="abcdef123456..." style={{ width: '100%', boxSizing: 'border-box' }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Target Bot</label>
+                                                        <select className="input"
+                                                            value={config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot'}
+                                                            onChange={e => setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    telegram: { ...prev.verification?.telegram || {}, botUsername: e.target.value }
+                                                                }
+                                                            }))}
+                                                            style={{ cursor: 'pointer', width: '100%', boxSizing: 'border-box' }}
+                                                        >
+                                                            <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
+                                                            <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
+                                                        </select>
+                                                    </div>
                                                 </div>
-
-                                                <div style={{
-                                                    marginTop: '16px',
-                                                    padding: '12px 16px',
-                                                    background: 'var(--bg-secondary)',
-                                                    borderRadius: '8px',
-                                                    fontSize: '13px'
-                                                }}>
-                                                    <strong>ℹ️ 使用说明:</strong>
-                                                    <ul style={{ margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
-                                                        <li>需要在 <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a> 获取 API ID 和 API Hash</li>
-                                                        <li>首次启用后，需在服务器日志中输入 Telegram 登录验证码</li>
-                                                        <li>Userbot 会自动将验证链接发送给目标 Bot 并解析结果</li>
-                                                    </ul>
-                                                </div>
-                                            </>
-                                        )}
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             )}

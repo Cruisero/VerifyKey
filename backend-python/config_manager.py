@@ -66,10 +66,19 @@ DEFAULT_CONFIG = {
             "apiHash": "",
             "botUsername": "@SheerID_Verification_bot"
         },
+        "dualBot": {
+            "enabled": False,
+            "warmupBot": "@SatsetHelperbot",
+            "verifyBot": "@AutoGeminiProbot",
+            "autoBypass": True
+        },
         "maxConcurrent": 2,
         "delayBetweenMs": 2000,
         "useCurlCffi": True  # Use curl_cffi for TLS spoofing
     },
+    
+    # Telegram accounts (multi-account support)
+    "telegramAccounts": [],
     
     # Proxy settings
     "proxy": {

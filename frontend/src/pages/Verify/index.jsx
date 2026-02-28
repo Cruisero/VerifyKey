@@ -20,6 +20,8 @@ export default function Verify() {
     const [provider, setProvider] = useState('telegram');
     const [browserMode, setBrowserMode] = useState(false);
     const [program, setProgram] = useState('google-student');
+    const [verifyMethod, setVerifyMethod] = useState('standard'); // 'standard' | 'dualbot'
+    const [dualBotEnabled, setDualBotEnabled] = useState(false);
 
     // CDK state
     const [cdkCode, setCdkCode] = useState(() => localStorage.getItem('verifykey-cdk') || '');
@@ -69,6 +71,9 @@ export default function Verify() {
                     const data = await res.json();
                     setProvider(data.aiGenerator?.provider || 'telegram');
                     setBrowserMode(data.verification?.browserMode === true);
+                    // Check if dual bot is available (has accounts connected)
+                    const hasDualBot = data.verification?.dualBot?.warmupBot && data.verification?.dualBot?.verifyBot;
+                    setDualBotEnabled(!!hasDualBot);
                 }
             } catch (e) {
                 console.warn('Failed to fetch config:', e);
@@ -187,7 +192,8 @@ export default function Verify() {
         setResults(prev => [...resultItems, ...prev]);
 
         try {
-            const response = await fetch(`${API_BASE}/api/verify/telegram`, {
+            const apiEndpoint = verifyMethod === 'dualbot' ? '/api/verify/dualbot' : '/api/verify/telegram';
+            const response = await fetch(`${API_BASE}${apiEndpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ links, cdk: cdkCode })
@@ -500,6 +506,40 @@ export default function Verify() {
                                 onChange={(e) => setInput(e.target.value)}
                                 disabled={verifyStatus === 'processing'}
                             />
+
+                            {/* Verify Method Selector (Telegram mode) */}
+                            {provider === 'telegram' && dualBotEnabled && (
+                                <div style={{
+                                    display: 'flex', gap: '8px', marginBottom: '8px'
+                                }}>
+                                    <button
+                                        onClick={() => setVerifyMethod('standard')}
+                                        style={{
+                                            flex: 1, padding: '8px 12px',
+                                            background: verifyMethod === 'standard'
+                                                ? 'linear-gradient(135deg, #0088cc, #005fa3)'
+                                                : 'var(--bg-secondary)',
+                                            color: verifyMethod === 'standard' ? 'white' : 'var(--text-secondary)',
+                                            border: 'none', borderRadius: '8px',
+                                            fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >📨 Standard Bot</button>
+                                    <button
+                                        onClick={() => setVerifyMethod('dualbot')}
+                                        style={{
+                                            flex: 1, padding: '8px 12px',
+                                            background: verifyMethod === 'dualbot'
+                                                ? 'linear-gradient(135deg, #00c853, #00a844)'
+                                                : 'var(--bg-secondary)',
+                                            color: verifyMethod === 'dualbot' ? 'white' : 'var(--text-secondary)',
+                                            border: 'none', borderRadius: '8px',
+                                            fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >🤖 Dual Bot</button>
+                                </div>
+                            )}
 
                             {/* CDK Input Row */}
                             <div className="cdk-inline-row">

@@ -47,7 +47,11 @@ PROXY_PASS = os.getenv("PROXY_PASS", "")
 
 # Telegram Userbot instance
 from telegram_userbot import SheerIDUserbot
+from telegram_manager import TelegramAccountManager
+from dual_bot_verifier import DualBotVerifier
 telegram_bot: Optional[SheerIDUserbot] = None
+tg_manager = TelegramAccountManager()
+dual_bot = DualBotVerifier()
 
 app = FastAPI(
     title="OnePass Python Backend",
@@ -1561,21 +1565,28 @@ async def startup_event():
     global telegram_bot
     import config_manager
     config = config_manager.get_config()
-    telegram_config = config.get("verification", {}).get("telegram", {})
     
+    # Multi-account auto-connect (new system)
+    asyncio.create_task(tg_manager.auto_connect())
+    
+    # Update dual bot config
+    dual_config = config.get("verification", {}).get("dualBot", {})
+    if dual_config.get("warmupBot"):
+        dual_bot.warmup_bot = dual_config["warmupBot"].lstrip("@")
+    if dual_config.get("verifyBot"):
+        dual_bot.verify_bot = dual_config["verifyBot"].lstrip("@")
+    
+    # Legacy single-account startup (backward compat)
+    telegram_config = config.get("verification", {}).get("telegram", {})
     if telegram_config.get("enabled"):
         try:
             api_id = telegram_config.get("apiId")
             api_hash = telegram_config.get("apiHash")
-            # Default to SheerID_Verification_bot if not specified
             app_bot_username = telegram_config.get("botUsername") or "@SheerID_Verification_bot"
             
             if api_id and api_hash:
-                print(f"[Telegram] Starting Userbot (ID: {api_id})...")
-                # Ensure api_id is int
+                print(f"[Telegram] Starting legacy Userbot (ID: {api_id})...")
                 telegram_bot = SheerIDUserbot(int(api_id), api_hash, bot_username=app_bot_username)
-                
-                # Start in background task to not block server startup
                 asyncio.create_task(telegram_bot.start())
             else:
                 print("[Telegram] Missing API ID/Hash, skipping startup")
@@ -1588,6 +1599,7 @@ async def shutdown_event():
     global telegram_bot
     if telegram_bot:
         await telegram_bot.stop()
+    await tg_manager.disconnect()
 
 
 @app.post("/api/telegram/daily")
@@ -1619,7 +1631,157 @@ async def telegram_status():
     return {
         "connected": connected,
         "bot_username": telegram_bot.bot_username if telegram_bot else None,
-        "last_daily_claim": last_daily
+        "last_daily_claim": last_daily,
+        # Multi-account status
+        "multiAccount": {
+            "activeAccountId": tg_manager.active_account_id,
+            "managerConnected": tg_manager.is_connected,
+        }
+    }
+
+
+# ========== Telegram Account Management ==========
+
+class TelegramAccountAddRequest(BaseModel):
+    apiId: str
+    apiHash: str
+    label: Optional[str] = ""
+
+class TelegramLoginRequest(BaseModel):
+    phone: str
+
+class TelegramVerifyCodeRequest(BaseModel):
+    phone: str
+    code: str
+    phone_code_hash: str
+    password: Optional[str] = None
+
+
+@app.get("/api/telegram/accounts")
+async def list_telegram_accounts():
+    """List all configured Telegram accounts"""
+    return {"accounts": tg_manager.get_accounts()}
+
+
+@app.post("/api/telegram/accounts")
+async def add_telegram_account(request: TelegramAccountAddRequest):
+    """Add a new Telegram account"""
+    result = tg_manager.add_account(request.apiId, request.apiHash, request.label)
+    return result
+
+
+@app.delete("/api/telegram/accounts/{account_id}")
+async def remove_telegram_account(account_id: str):
+    """Remove a Telegram account"""
+    if tg_manager.active_account_id == account_id:
+        await tg_manager.disconnect()
+    tg_manager.remove_account(account_id)
+    return {"success": True}
+
+
+@app.post("/api/telegram/accounts/{account_id}/login")
+async def telegram_login_request(account_id: str, request: TelegramLoginRequest):
+    """Step 1: Send verification code to phone"""
+    result = await tg_manager.login_request(account_id, request.phone)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Login failed"))
+    return result
+
+
+@app.post("/api/telegram/accounts/{account_id}/verify")
+async def telegram_login_verify(account_id: str, request: TelegramVerifyCodeRequest):
+    """Step 2: Submit verification code to complete login"""
+    result = await tg_manager.login_verify(
+        account_id, request.phone, request.code, request.phone_code_hash, request.password
+    )
+    if not result.get("success") and not result.get("needs_password"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Verification failed"))
+    return result
+
+
+@app.post("/api/telegram/accounts/{account_id}/activate")
+async def activate_telegram_account(account_id: str):
+    """Switch the active Telegram account"""
+    result = await tg_manager.activate(account_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Activation failed"))
+    return result
+
+
+# ========== Dual Bot Verification ==========
+
+class DualBotVerifyRequest(BaseModel):
+    links: List[str]
+    cdk: Optional[str] = None
+
+
+@app.post("/api/verify/dualbot")
+async def verify_via_dualbot(request: DualBotVerifyRequest):
+    """
+    Verify using Dual Bot pipeline:
+    @SatsetHelperbot (warmup) → @AutoGeminiProbot (verify) → auto bypass on failure
+    """
+    if not tg_manager.is_connected:
+        raise HTTPException(status_code=503, detail="Telegram 未连接，请先在后台激活一个账号")
+
+    if not request.links:
+        raise HTTPException(status_code=400, detail="No verification links provided")
+
+    if len(request.links) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 links per request")
+
+    # Validate CDK
+    if not request.cdk:
+        raise HTTPException(status_code=400, detail="请提供 CDK 激活码")
+
+    cdk_check = cdk_manager.validate_cdk(request.cdk)
+    if not cdk_check["valid"]:
+        raise HTTPException(status_code=403, detail=cdk_check["message"])
+
+    clean_links = [link.strip() for link in request.links if link.strip()]
+    if not clean_links:
+        raise HTTPException(status_code=400, detail="No valid links provided")
+
+    if cdk_check["remaining"] < len(clean_links):
+        raise HTTPException(
+            status_code=403,
+            detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
+        )
+
+    # Get dual bot config
+    import config_manager
+    config = config_manager.get_config()
+    dual_config = config.get("verification", {}).get("dualBot", {})
+    auto_bypass = dual_config.get("autoBypass", True)
+
+    # Process each link sequentially (dual bot flow is sequential by nature)
+    results = []
+    for link in clean_links:
+        result = await dual_bot.verify(tg_manager.client, link, auto_bypass=auto_bypass)
+        results.append(result)
+
+    # Log and deduct
+    successful = sum(1 for r in results if r.get("success"))
+    cdk_remaining = cdk_check["remaining"]
+    if successful > 0:
+        deduct = cdk_manager.use_cdk(request.cdk, successful)
+        cdk_remaining = deduct.get("remaining", cdk_remaining)
+
+    for r in results:
+        vid = r.get("verificationId", "")
+        if r.get("status") == "approved":
+            verification_history.log_verification("pass", vid)
+        elif r.get("status") in ("failed", "rejected", "error"):
+            verification_history.log_verification("failed", vid)
+
+    return {
+        "results": results,
+        "stats": {
+            "total": len(results),
+            "approved": successful,
+            "failed": sum(1 for r in results if not r.get("success"))
+        },
+        "cdkRemaining": cdk_remaining
     }
 
 

@@ -2221,15 +2221,33 @@ export default function Admin() {
                                             </div>
                                         </div>
 
-                                        {/* Legacy Bot Config (backward compat) */}
+                                        {/* ── Legacy SheerID Bot ── */}
                                         <div style={{
-                                            marginTop: '24px',
-                                            paddingTop: '20px',
-                                            borderTop: '1px solid var(--border)'
+                                            borderRadius: '12px', overflow: 'hidden',
+                                            border: '1px solid var(--border)', marginTop: '12px'
                                         }}>
-                                            <h5 style={{ margin: '0 0 12px' }}>📨 旧版 SheerID Bot（向下兼容）</h5>
-                                            <div className="input-group">
-                                                <label className="input-label">
+                                            <div style={{
+                                                padding: '14px 18px',
+                                                background: 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))',
+                                                borderBottom: '1px solid var(--border)',
+                                                display: 'flex', alignItems: 'center', gap: '8px'
+                                            }}>
+                                                <span style={{ fontSize: '16px' }}>📨</span>
+                                                <span style={{ fontWeight: 700, fontSize: '14px' }}>SheerID Bot 验证</span>
+                                                <span style={{
+                                                    fontSize: '10px', padding: '2px 8px',
+                                                    background: 'rgba(255,152,0,0.15)', color: '#f57c00',
+                                                    borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
+                                                }}>旧版</span>
+                                            </div>
+                                            <div style={{ padding: '16px 18px' }}>
+                                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', margin: '0 0 14px' }}>
+                                                    使用当前激活的 Telegram 账号向 Bot 发送验证请求
+                                                </p>
+                                                <label style={{
+                                                    display: 'flex', alignItems: 'center', gap: '10px',
+                                                    fontSize: '14px', cursor: 'pointer', marginBottom: '14px'
+                                                }}>
                                                     <input
                                                         type="checkbox"
                                                         checked={config?.verification?.telegram?.enabled || false}
@@ -2245,43 +2263,13 @@ export default function Admin() {
                                                                 }
                                                             }));
                                                         }}
-                                                        style={{ marginRight: '8px' }}
+                                                        style={{ width: '16px', height: '16px' }}
                                                     />
-                                                    启用旧版 Telegram Userbot（单独 session 文件）
+                                                    启用旧版 SheerID Bot
                                                 </label>
-                                            </div>
-                                            {config?.verification?.telegram?.enabled && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                                                {config?.verification?.telegram?.enabled && (
                                                     <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>API ID</label>
-                                                        <input type="text" className="input"
-                                                            value={config?.verification?.telegram?.apiId || ''}
-                                                            onChange={e => setConfig(prev => ({
-                                                                ...prev,
-                                                                verification: {
-                                                                    ...prev.verification || {},
-                                                                    telegram: { ...prev.verification?.telegram || {}, apiId: e.target.value }
-                                                                }
-                                                            }))}
-                                                            placeholder="12345678" style={{ width: '100%', boxSizing: 'border-box' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>API Hash</label>
-                                                        <input type="password" className="input"
-                                                            value={config?.verification?.telegram?.apiHash || ''}
-                                                            onChange={e => setConfig(prev => ({
-                                                                ...prev,
-                                                                verification: {
-                                                                    ...prev.verification || {},
-                                                                    telegram: { ...prev.verification?.telegram || {}, apiHash: e.target.value }
-                                                                }
-                                                            }))}
-                                                            placeholder="abcdef123456..." style={{ width: '100%', boxSizing: 'border-box' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Target Bot</label>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
                                                         <select className="input"
                                                             value={config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot'}
                                                             onChange={e => setConfig(prev => ({
@@ -2297,8 +2285,8 @@ export default function Admin() {
                                                             <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
                                                         </select>
                                                     </div>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

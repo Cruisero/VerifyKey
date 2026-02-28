@@ -1013,146 +1013,183 @@ export default function Admin() {
                                 选择用于生成验证文档（学生证、成绩单）的 AI 提供商。
                             </p>
 
-                            {/* Provider Selection */}
-                            <div className="provider-cards">
-                                <div
-                                    className={`provider-card ${aiProvider === 'getgem' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('getgem')}
-                                >
-                                    <div className="provider-icon">💎</div>
-                                    <div className="provider-info">
-                                        <h4>GetGem API</h4>
-                                        <p>使用 GetGem.cc 第三方验证 API</p>
+                            {/* Provider Selection — Categorized */}
+
+                            {/* ── API 类 ── */}
+                            <div style={{ marginBottom: '20px' }}>
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    marginBottom: '10px', paddingBottom: '8px',
+                                    borderBottom: '2px solid rgba(0,136,204,0.15)'
+                                }}>
+                                    <span style={{
+                                        fontSize: '11px', fontWeight: 700,
+                                        background: 'linear-gradient(135deg, #0088cc, #005fa3)',
+                                        color: 'white', padding: '3px 10px', borderRadius: '10px',
+                                        letterSpacing: '0.5px'
+                                    }}>🔌 API 类</span>
+                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>调用外部服务</span>
+                                </div>
+                                <div className="provider-cards">
+                                    <div
+                                        className={`provider-card ${aiProvider === 'getgem' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('getgem')}
+                                    >
+                                        <div className="provider-icon">💎</div>
+                                        <div className="provider-info">
+                                            <h4>GetGem API</h4>
+                                            <p>使用 GetGem.cc 第三方验证 API</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-success">推荐</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-success">推荐</span>
+
+                                    <div
+                                        className={`provider-card ${aiProvider === 'batch_api' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('batch_api')}
+                                    >
+                                        <div className="provider-icon">🔗</div>
+                                        <div className="provider-info">
+                                            <h4>batch.1key.me API</h4>
+                                            <p>使用第三方批量验证 API</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-warning">需配置</span>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        className={`provider-card ${aiProvider === 'telegram' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('telegram')}
+                                    >
+                                        <div className="provider-icon">📨</div>
+                                        <div className="provider-info">
+                                            <h4>Telegram Userbot</h4>
+                                            <p>调用外部 SheerID Bot 自动验证</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-warning">需配置</span>
+                                        </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'batch_api' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('batch_api')}
-                                >
-                                    <div className="provider-icon">🔗</div>
-                                    <div className="provider-info">
-                                        <h4>batch.1key.me API</h4>
-                                        <p>使用第三方批量验证 API</p>
-                                    </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-warning">需配置</span>
-                                    </div>
+                            {/* ── 模板类 ── */}
+                            <div style={{ marginBottom: '12px' }}>
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    marginBottom: '10px', paddingBottom: '8px',
+                                    borderBottom: '2px solid rgba(76,175,80,0.15)'
+                                }}>
+                                    <span style={{
+                                        fontSize: '11px', fontWeight: 700,
+                                        background: 'linear-gradient(135deg, #4caf50, #388e3c)',
+                                        color: 'white', padding: '3px 10px', borderRadius: '10px',
+                                        letterSpacing: '0.5px'
+                                    }}>📄 模板类</span>
+                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>本地生成</span>
                                 </div>
+                                <div className="provider-cards">
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'gemini' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('gemini')}
-                                >
-                                    <div className="provider-icon">✨</div>
-                                    <div className="provider-info">
-                                        <h4>Gemini API</h4>
-                                        <p>直接调用 Google Gemini API</p>
+                                    <div
+                                        className={`provider-card ${aiProvider === 'gemini' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('gemini')}
+                                    >
+                                        <div className="provider-icon">✨</div>
+                                        <div className="provider-info">
+                                            <h4>Gemini API</h4>
+                                            <p>直接调用 Google Gemini API</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-warning">需配置</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-warning">需配置</span>
-                                    </div>
-                                </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'puppeteer' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('puppeteer')}
-                                >
-                                    <div className="provider-icon">🎨</div>
-                                    <div className="provider-info">
-                                        <h4>Puppeteer HTML 模板</h4>
-                                        <p>使用 Puppeteer 渲染 HTML 模板生成高质量证件</p>
+                                    <div
+                                        className={`provider-card ${aiProvider === 'puppeteer' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('puppeteer')}
+                                    >
+                                        <div className="provider-icon">🎨</div>
+                                        <div className="provider-info">
+                                            <h4>Puppeteer HTML 模板</h4>
+                                            <p>使用 Puppeteer 渲染 HTML 模板生成高质量证件</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-success">推荐</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-success">推荐</span>
-                                    </div>
-                                </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'lionpath' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('lionpath')}
-                                >
-                                    <div className="provider-icon">🦁</div>
-                                    <div className="provider-info">
-                                        <h4>LionPATH 课程表</h4>
-                                        <p>Penn State 学生门户截图，备选验证方式</p>
+                                    <div
+                                        className={`provider-card ${aiProvider === 'lionpath' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('lionpath')}
+                                    >
+                                        <div className="provider-icon">🦁</div>
+                                        <div className="provider-info">
+                                            <h4>LionPATH 课程表</h4>
+                                            <p>Penn State 学生门户截图，备选验证方式</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-info">备选</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-info">备选</span>
-                                    </div>
-                                </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'sheerid' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('sheerid')}
-                                >
-                                    <div className="provider-icon">📚</div>
-                                    <div className="provider-info">
-                                        <h4>SheerID Generator</h4>
-                                        <p>通用文档生成：课程表/成绩单/学生证</p>
+                                    <div
+                                        className={`provider-card ${aiProvider === 'sheerid' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('sheerid')}
+                                    >
+                                        <div className="provider-icon">📚</div>
+                                        <div className="provider-info">
+                                            <h4>SheerID Generator</h4>
+                                            <p>通用文档生成：课程表/成绩单/学生证</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-warning">通用</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-warning">通用</span>
-                                    </div>
-                                </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'vsid' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('vsid')}
-                                >
-                                    <div className="provider-icon">🎓</div>
-                                    <div className="provider-info">
-                                        <h4>VSID Generator</h4>
-                                        <p>国际学生证生成：支持5种文档类型</p>
+                                    <div
+                                        className={`provider-card ${aiProvider === 'vsid' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('vsid')}
+                                    >
+                                        <div className="provider-icon">🎓</div>
+                                        <div className="provider-info">
+                                            <h4>VSID Generator</h4>
+                                            <p>国际学生证生成：支持5种文档类型</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-success">新</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-success">新</span>
-                                    </div>
-                                </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'uiuc' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('uiuc')}
-                                >
-                                    <div className="provider-icon">🏛️</div>
-                                    <div className="provider-info">
-                                        <h4>UIUC i-card</h4>
-                                        <p>伊利诺伊大学厄巴纳-香槟分校学生证</p>
+                                    <div
+                                        className={`provider-card ${aiProvider === 'uiuc' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('uiuc')}
+                                    >
+                                        <div className="provider-icon">🏛️</div>
+                                        <div className="provider-info">
+                                            <h4>UIUC i-card</h4>
+                                            <p>伊利诺伊大学厄巴纳-香槟分校学生证</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-info">专属</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-info">专属</span>
-                                    </div>
-                                </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'onepasshtml' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('onepasshtml')}
-                                >
-                                    <div className="provider-icon">📝</div>
-                                    <div className="provider-info">
-                                        <h4>OnepassHTML 固定模板</h4>
-                                        <p>固定学校 HTML 模板，仅修改学生信息</p>
+                                    <div
+                                        className={`provider-card ${aiProvider === 'onepasshtml' ? 'active' : ''}`}
+                                        onClick={() => setAiProvider('onepasshtml')}
+                                    >
+                                        <div className="provider-icon">📝</div>
+                                        <div className="provider-info">
+                                            <h4>OnepassHTML 固定模板</h4>
+                                            <p>固定学校 HTML 模板，仅修改学生信息</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-success">新</span>
+                                        </div>
                                     </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-success">新</span>
-                                    </div>
-                                </div>
 
-                                <div
-                                    className={`provider-card ${aiProvider === 'telegram' ? 'active' : ''}`}
-                                    onClick={() => setAiProvider('telegram')}
-                                >
-                                    <div className="provider-icon">📨</div>
-                                    <div className="provider-info">
-                                        <h4>Telegram Userbot</h4>
-                                        <p>调用外部 SheerID Bot 自动验证</p>
-                                    </div>
-                                    <div className="provider-status">
-                                        <span className="badge badge-warning">需配置</span>
-                                    </div>
                                 </div>
                             </div>
 
@@ -1819,271 +1856,319 @@ export default function Admin() {
                                 </div>
                             )}
 
-                            {/* Telegram Multi-Account Management */}
+                            {/* Telegram Account Management — Premium Redesign */}
                             {aiProvider === 'telegram' && (
-                                <div className="provider-settings">
-                                    <h4>📱 Telegram 账号管理</h4>
-                                    <div className="settings-form">
-                                        <div style={{
-                                            background: 'linear-gradient(135deg, #0088cc 0%, #005fa3 100%)',
-                                            color: 'white',
-                                            padding: '16px 20px',
-                                            borderRadius: '10px',
-                                            marginBottom: '20px'
-                                        }}>
-                                            <p style={{ margin: 0, fontSize: '14px' }}>
-                                                管理多个 Telegram 账号，所有 Bot 验证共用当前激活的账号。支持一键切换。
+                                <div className="provider-settings" style={{ padding: 0, overflow: 'hidden', borderRadius: '14px', border: '1px solid var(--border)' }}>
+                                    {/* Header */}
+                                    <div style={{
+                                        background: 'linear-gradient(135deg, #0088cc 0%, #004d73 100%)',
+                                        padding: '20px 24px', color: 'white',
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                    }}>
+                                        <div>
+                                            <h4 style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 700, color: 'white' }}>
+                                                📱 Telegram 账号管理
+                                            </h4>
+                                            <p style={{ margin: 0, fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>
+                                                多账号管理 · 所有 Bot 验证共用激活账号
                                             </p>
                                         </div>
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                            background: 'rgba(255,255,255,0.15)',
+                                            padding: '6px 14px', borderRadius: '20px',
+                                            fontSize: '12px', fontWeight: 600, backdropFilter: 'blur(8px)', color: 'white'
+                                        }}>
+                                            <div style={{
+                                                width: '8px', height: '8px', borderRadius: '50%',
+                                                background: tgAccounts.some(a => a.active) ? '#69f0ae' : '#ff5252',
+                                                boxShadow: tgAccounts.some(a => a.active) ? '0 0 8px #69f0ae' : 'none'
+                                            }} />
+                                            {tgAccounts.some(a => a.active) ? '已连接' : '未激活'}
+                                        </div>
+                                    </div>
+                                    <div style={{ padding: '20px 24px' }}>
+
 
                                         {/* Account List */}
-                                        <div style={{ marginBottom: '20px' }}>
-                                            {tgAccounts.length === 0 ? (
-                                                <div style={{
-                                                    padding: '32px',
-                                                    textAlign: 'center',
-                                                    background: 'var(--bg-secondary)',
-                                                    borderRadius: '10px',
-                                                    color: 'var(--text-secondary)'
-                                                }}>
-                                                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>📱</div>
-                                                    <p>暂无 Telegram 账号</p>
-                                                    <p style={{ fontSize: '13px' }}>点击下方按钮添加第一个账号</p>
-                                                </div>
-                                            ) : (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                    {tgAccounts.map(acc => (
-                                                        <div key={acc.id} style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'space-between',
-                                                            padding: '14px 18px',
-                                                            background: acc.active
-                                                                ? 'linear-gradient(135deg, rgba(0,136,204,0.15), rgba(0,136,204,0.05))'
-                                                                : 'var(--bg-secondary)',
-                                                            borderRadius: '10px',
-                                                            border: acc.active ? '1px solid rgba(0,136,204,0.4)' : '1px solid transparent',
-                                                            transition: 'all 0.2s'
-                                                        }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                <div style={{
-                                                                    width: '10px', height: '10px', borderRadius: '50%',
-                                                                    background: acc.active ? '#00c853' : acc.hasSession ? '#ff9800' : '#f44336',
-                                                                    boxShadow: acc.active ? '0 0 8px rgba(0,200,83,0.5)' : 'none'
-                                                                }} />
-                                                                <div>
-                                                                    <div style={{ fontWeight: 600, fontSize: '14px' }}>{acc.label || '未命名'}</div>
-                                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                                                        {acc.phone || '未登录'}
-                                                                        {acc.active && <span style={{ color: '#0088cc', marginLeft: '8px', fontWeight: 600 }}>● 使用中</span>}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                                {!acc.hasSession && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setTgLoginAccountId(acc.id);
-                                                                            setTgLoginStep('phone');
-                                                                            setTgLoginPhone(''); setTgLoginCode(''); setTgLoginMsg('');
-                                                                        }}
-                                                                        style={{
-                                                                            padding: '6px 14px', fontSize: '13px',
-                                                                            background: '#0088cc', color: 'white',
-                                                                            border: 'none', borderRadius: '6px', cursor: 'pointer'
-                                                                        }}
-                                                                        disabled={tgLoading}
-                                                                    >登录</button>
-                                                                )}
-                                                                {acc.hasSession && !acc.active && (
-                                                                    <button
-                                                                        onClick={() => handleTgActivate(acc.id)}
-                                                                        style={{
-                                                                            padding: '6px 14px', fontSize: '13px',
-                                                                            background: 'linear-gradient(135deg, #00c853, #00a844)',
-                                                                            color: 'white', border: 'none', borderRadius: '6px',
-                                                                            cursor: 'pointer'
-                                                                        }}
-                                                                        disabled={tgLoading}
-                                                                    >切换使用</button>
-                                                                )}
-                                                                <button
-                                                                    onClick={() => handleTgRemove(acc.id)}
-                                                                    style={{
-                                                                        padding: '6px 10px', fontSize: '13px',
-                                                                        background: 'transparent', color: '#f44336',
-                                                                        border: '1px solid #f44336', borderRadius: '6px',
-                                                                        cursor: 'pointer'
-                                                                    }}
-                                                                >🗑️</button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Login Dialog */}
-                                        {tgLoginAccountId && (
+                                        {tgAccounts.length === 0 ? (
                                             <div style={{
-                                                padding: '20px',
-                                                background: 'var(--bg-secondary)',
-                                                borderRadius: '10px',
-                                                marginBottom: '20px',
-                                                border: '1px solid rgba(0,136,204,0.3)'
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                                    <h5 style={{ margin: 0 }}>🔐 登录 Telegram</h5>
-                                                    <button onClick={() => { setTgLoginAccountId(null); setTgLoginStep('idle'); }}
-                                                        style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
-                                                </div>
-
-                                                {tgLoginStep === 'phone' && (
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>手机号（含国际区号）</label>
-                                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                                            <input
-                                                                type="text" className="input"
-                                                                value={tgLoginPhone}
-                                                                onChange={e => setTgLoginPhone(e.target.value)}
-                                                                placeholder="+86 13812345678"
-                                                                style={{ flex: 1 }}
-                                                            />
-                                                            <button
-                                                                onClick={() => handleTgLoginRequest(tgLoginAccountId)}
-                                                                disabled={tgLoading || !tgLoginPhone}
-                                                                style={{
-                                                                    padding: '8px 18px', background: '#0088cc', color: 'white',
-                                                                    border: 'none', borderRadius: '6px', cursor: 'pointer',
-                                                                    opacity: (tgLoading || !tgLoginPhone) ? 0.5 : 1
-                                                                }}
-                                                            >{tgLoading ? '发送中...' : '发送验证码'}</button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {tgLoginStep === 'code' && (
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>输入 Telegram 验证码</label>
-                                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                                            <input
-                                                                type="text" className="input"
-                                                                value={tgLoginCode}
-                                                                onChange={e => setTgLoginCode(e.target.value)}
-                                                                placeholder="12345"
-                                                                style={{ flex: 1, letterSpacing: '4px', textAlign: 'center', fontSize: '18px' }}
-                                                                autoFocus
-                                                            />
-                                                            <button
-                                                                onClick={() => handleTgVerifyCode(tgLoginAccountId)}
-                                                                disabled={tgLoading || !tgLoginCode}
-                                                                style={{
-                                                                    padding: '8px 18px', background: '#00c853', color: 'white',
-                                                                    border: 'none', borderRadius: '6px', cursor: 'pointer',
-                                                                    opacity: (tgLoading || !tgLoginCode) ? 0.5 : 1
-                                                                }}
-                                                            >{tgLoading ? '验证中...' : '确认'}</button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {tgLoginStep === 'password' && (
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>两步验证密码</label>
-                                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                                            <input
-                                                                type="password" className="input"
-                                                                value={tgLoginPassword}
-                                                                onChange={e => setTgLoginPassword(e.target.value)}
-                                                                placeholder="输入两步验证密码"
-                                                                style={{ flex: 1 }}
-                                                                autoFocus
-                                                            />
-                                                            <button
-                                                                onClick={() => handleTgVerifyCode(tgLoginAccountId)}
-                                                                disabled={tgLoading || !tgLoginPassword}
-                                                                style={{
-                                                                    padding: '8px 18px', background: '#00c853', color: 'white',
-                                                                    border: 'none', borderRadius: '6px', cursor: 'pointer',
-                                                                    opacity: (tgLoading || !tgLoginPassword) ? 0.5 : 1
-                                                                }}
-                                                            >{tgLoading ? '验证中...' : '确认'}</button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {tgLoginMsg && (
-                                                    <p style={{
-                                                        marginTop: '12px', fontSize: '13px',
-                                                        color: tgLoginMsg.includes('✅') ? '#00c853' : '#0088cc'
-                                                    }}>{tgLoginMsg}</p>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Add Account */}
-                                        {tgShowAdd ? (
-                                            <div style={{
-                                                padding: '20px',
-                                                background: 'var(--bg-secondary)',
-                                                borderRadius: '10px',
+                                                padding: '40px 24px', textAlign: 'center',
+                                                background: 'var(--bg-secondary)', borderRadius: '12px',
                                                 marginBottom: '16px'
                                             }}>
-                                                <h5 style={{ margin: '0 0 16px' }}>➕ 添加 Telegram 账号</h5>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>标签（可选）</label>
-                                                        <input type="text" className="input" value={tgNewLabel}
-                                                            onChange={e => setTgNewLabel(e.target.value)}
-                                                            placeholder="例: 主号 / 备用号" style={{ width: '100%', boxSizing: 'border-box' }} />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>
-                                                            API ID <span style={{ color: 'var(--text-secondary)' }}>(from <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a>)</span>
-                                                        </label>
-                                                        <input type="text" className="input" value={tgNewApiId}
-                                                            onChange={e => setTgNewApiId(e.target.value)}
-                                                            placeholder="12345678" style={{ width: '100%', boxSizing: 'border-box' }} />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>API Hash</label>
-                                                        <input type="password" className="input" value={tgNewApiHash}
-                                                            onChange={e => setTgNewApiHash(e.target.value)}
-                                                            placeholder="abcdef123456..." style={{ width: '100%', boxSizing: 'border-box' }} />
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                                        <button onClick={() => setTgShowAdd(false)}
-                                                            style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>取消</button>
-                                                        <button onClick={handleTgAdd} disabled={tgLoading || !tgNewApiId || !tgNewApiHash}
-                                                            style={{
-                                                                padding: '8px 18px', background: '#0088cc', color: 'white',
-                                                                border: 'none', borderRadius: '6px', cursor: 'pointer',
-                                                                opacity: (tgLoading || !tgNewApiId || !tgNewApiHash) ? 0.5 : 1
-                                                            }}>{tgLoading ? '添加中...' : '添加'}</button>
-                                                    </div>
-                                                </div>
+                                                <div style={{ fontSize: '40px', marginBottom: '12px', filter: 'grayscale(0.3)' }}>📱</div>
+                                                <p style={{ fontWeight: 600, marginBottom: '4px' }}>暂无 Telegram 账号</p>
+                                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>点击下方「添加账号」开始配置</p>
                                             </div>
                                         ) : (
-                                            <button onClick={() => setTgShowAdd(true)}
-                                                style={{
-                                                    width: '100%', padding: '12px',
-                                                    background: 'transparent',
-                                                    border: '2px dashed var(--border)',
-                                                    borderRadius: '10px', cursor: 'pointer',
-                                                    fontSize: '14px', color: 'var(--text-secondary)',
-                                                    transition: 'all 0.2s'
-                                                }}>
-                                                ➕ 添加 Telegram 账号
-                                            </button>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                                {tgAccounts.map(acc => (
+                                                    <div key={acc.id} style={{
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                        padding: '12px 16px',
+                                                        background: acc.active
+                                                            ? 'linear-gradient(135deg, rgba(105,240,174,0.08), rgba(0,136,204,0.05))'
+                                                            : 'var(--bg-secondary)',
+                                                        borderRadius: '10px',
+                                                        border: acc.active ? '1.5px solid rgba(105,240,174,0.35)' : '1.5px solid transparent',
+                                                        transition: 'all 0.25s ease'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                                                            <div style={{
+                                                                width: '36px', height: '36px', borderRadius: '10px',
+                                                                background: acc.active
+                                                                    ? 'linear-gradient(135deg, #0088cc, #00bcd4)'
+                                                                    : acc.hasSession ? 'linear-gradient(135deg, #ff9800, #f57c00)' : 'linear-gradient(135deg, #9e9e9e, #757575)',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                fontSize: '16px', color: 'white', fontWeight: 700, flexShrink: 0
+                                                            }}>
+                                                                {(acc.label || '?')[0].toUpperCase()}
+                                                            </div>
+                                                            <div style={{ minWidth: 0 }}>
+                                                                <div style={{ fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {acc.label || '未命名'}
+                                                                    </span>
+                                                                    {acc.active && (
+                                                                        <span style={{
+                                                                            fontSize: '10px', padding: '2px 8px',
+                                                                            background: 'linear-gradient(135deg, #00c853, #00a844)',
+                                                                            color: 'white', borderRadius: '10px', fontWeight: 700, flexShrink: 0
+                                                                        }}>使用中</span>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                                                    {acc.phone || (acc.hasSession ? '已登录' : '未登录')}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                            {!acc.hasSession && (
+                                                                <button onClick={() => {
+                                                                    setTgLoginAccountId(acc.id);
+                                                                    setTgLoginStep('phone');
+                                                                    setTgLoginPhone(''); setTgLoginCode(''); setTgLoginMsg(''); setTgLoginPassword('');
+                                                                }}
+                                                                    disabled={tgLoading}
+                                                                    style={{
+                                                                        padding: '6px 16px', fontSize: '12px', fontWeight: 600,
+                                                                        background: 'linear-gradient(135deg, #0088cc, #005fa3)',
+                                                                        color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                                                        transition: 'all 0.2s'
+                                                                    }}
+                                                                >登录</button>
+                                                            )}
+                                                            {acc.hasSession && !acc.active && (
+                                                                <button onClick={() => handleTgActivate(acc.id)}
+                                                                    disabled={tgLoading}
+                                                                    style={{
+                                                                        padding: '6px 16px', fontSize: '12px', fontWeight: 600,
+                                                                        background: 'linear-gradient(135deg, #00c853, #00a844)',
+                                                                        color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                                                        transition: 'all 0.2s'
+                                                                    }}
+                                                                >切换使用</button>
+                                                            )}
+                                                            <button onClick={() => handleTgRemove(acc.id)}
+                                                                style={{
+                                                                    padding: '6px 8px', fontSize: '12px',
+                                                                    background: 'transparent', color: 'var(--text-secondary)',
+                                                                    border: '1px solid var(--border)', borderRadius: '8px',
+                                                                    cursor: 'pointer', transition: 'all 0.2s'
+                                                                }}
+                                                            >✕</button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         )}
+                                    </div>
 
-                                        {/* Dual Bot Config */}
+                                    {/* Login Flow */}
+                                    {tgLoginAccountId && (
                                         <div style={{
-                                            marginTop: '24px',
-                                            paddingTop: '20px',
-                                            borderTop: '1px solid var(--border)'
+                                            padding: '20px', borderRadius: '12px', marginBottom: '16px',
+                                            background: 'linear-gradient(135deg, rgba(0,136,204,0.06), rgba(0,136,204,0.02))',
+                                            border: '1.5px solid rgba(0,136,204,0.2)'
                                         }}>
-                                            <h5 style={{ margin: '0 0 12px' }}>🤖 Dual Bot 验证配置</h5>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <span style={{ fontSize: '20px' }}>🔐</span>
+                                                    <div>
+                                                        <div style={{ fontWeight: 700, fontSize: '14px' }}>登录 Telegram</div>
+                                                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                            {tgLoginStep === 'phone' ? '步骤 1/2 · 输入手机号' :
+                                                                tgLoginStep === 'code' ? '步骤 2/2 · 输入验证码' :
+                                                                    tgLoginStep === 'password' ? '额外步骤 · 两步验证' : '完成'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => { setTgLoginAccountId(null); setTgLoginStep('idle'); }}
+                                                    style={{ background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px 8px' }}>✕</button>
+                                            </div>
+
+                                            {/* Step progress bar */}
+                                            <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+                                                {['phone', 'code'].map((s, i) => (
+                                                    <div key={s} style={{
+                                                        flex: 1, height: '3px', borderRadius: '2px',
+                                                        background: ['phone', 'code', 'password', 'done'].indexOf(tgLoginStep) >= i
+                                                            ? '#0088cc' : 'var(--border)',
+                                                        transition: 'background 0.3s'
+                                                    }} />
+                                                ))}
+                                            </div>
+
+                                            {tgLoginStep === 'phone' && (
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input type="text" className="input" value={tgLoginPhone}
+                                                        onChange={e => setTgLoginPhone(e.target.value)}
+                                                        placeholder="+86 138xxxx5678"
+                                                        style={{ flex: 1 }}
+                                                    />
+                                                    <button onClick={() => handleTgLoginRequest(tgLoginAccountId)}
+                                                        disabled={tgLoading || !tgLoginPhone}
+                                                        style={{
+                                                            padding: '8px 20px', background: '#0088cc', color: 'white',
+                                                            border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
+                                                            opacity: (tgLoading || !tgLoginPhone) ? 0.5 : 1, whiteSpace: 'nowrap'
+                                                        }}>{tgLoading ? '⏳' : '发送验证码'}</button>
+                                                </div>
+                                            )}
+
+                                            {tgLoginStep === 'code' && (
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input type="text" className="input" value={tgLoginCode}
+                                                        onChange={e => setTgLoginCode(e.target.value)}
+                                                        placeholder="12345"
+                                                        style={{ flex: 1, letterSpacing: '6px', textAlign: 'center', fontSize: '20px', fontWeight: 700 }}
+                                                        autoFocus maxLength={6}
+                                                    />
+                                                    <button onClick={() => handleTgVerifyCode(tgLoginAccountId)}
+                                                        disabled={tgLoading || !tgLoginCode}
+                                                        style={{
+                                                            padding: '8px 20px', background: '#00c853', color: 'white',
+                                                            border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
+                                                            opacity: (tgLoading || !tgLoginCode) ? 0.5 : 1, whiteSpace: 'nowrap'
+                                                        }}>{tgLoading ? '⏳' : '确认'}</button>
+                                                </div>
+                                            )}
+
+                                            {tgLoginStep === 'password' && (
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input type="password" className="input" value={tgLoginPassword}
+                                                        onChange={e => setTgLoginPassword(e.target.value)}
+                                                        placeholder="两步验证密码"
+                                                        style={{ flex: 1 }} autoFocus
+                                                    />
+                                                    <button onClick={() => handleTgVerifyCode(tgLoginAccountId)}
+                                                        disabled={tgLoading || !tgLoginPassword}
+                                                        style={{
+                                                            padding: '8px 20px', background: '#00c853', color: 'white',
+                                                            border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
+                                                            opacity: (tgLoading || !tgLoginPassword) ? 0.5 : 1, whiteSpace: 'nowrap'
+                                                        }}>{tgLoading ? '⏳' : '确认'}</button>
+                                                </div>
+                                            )}
+
+                                            {tgLoginMsg && (
+                                                <div style={{
+                                                    marginTop: '10px', padding: '8px 12px', borderRadius: '8px',
+                                                    background: tgLoginMsg.includes('✅') ? 'rgba(0,200,83,0.1)' : 'rgba(0,136,204,0.08)',
+                                                    fontSize: '13px',
+                                                    color: tgLoginMsg.includes('✅') ? '#00c853' : 'var(--text-primary)'
+                                                }}>{tgLoginMsg}</div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Add Account Button / Form */}
+                                    {tgShowAdd ? (
+                                        <div style={{
+                                            padding: '20px', borderRadius: '12px', marginBottom: '20px',
+                                            background: 'var(--bg-secondary)', border: '1.5px dashed var(--border)'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                                <span style={{ fontSize: '16px' }}>➕</span>
+                                                <span style={{ fontWeight: 700, fontSize: '14px' }}>添加 Telegram 账号</span>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                                <div style={{ gridColumn: '1 / -1' }}>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>标签名称</label>
+                                                    <input type="text" className="input" value={tgNewLabel}
+                                                        onChange={e => setTgNewLabel(e.target.value)}
+                                                        placeholder="例: 主号 / 备用号"
+                                                        style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API ID</label>
+                                                    <input type="text" className="input" value={tgNewApiId}
+                                                        onChange={e => setTgNewApiId(e.target.value)}
+                                                        placeholder="12345678"
+                                                        style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API Hash</label>
+                                                    <input type="password" className="input" value={tgNewApiHash}
+                                                        onChange={e => setTgNewApiHash(e.target.value)}
+                                                        placeholder="abcdef123456..."
+                                                        style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                </div>
+                                            </div>
+                                            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '10px 0 14px' }}>
+                                                从 <a href="https://my.telegram.org" target="_blank" rel="noreferrer" style={{ color: '#0088cc' }}>my.telegram.org</a> 获取 API ID 和 API Hash
+                                            </p>
+                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                                <button onClick={() => setTgShowAdd(false)}
+                                                    style={{
+                                                        padding: '8px 18px', fontSize: '13px',
+                                                        background: 'transparent', border: '1px solid var(--border)',
+                                                        borderRadius: '8px', cursor: 'pointer'
+                                                    }}>取消</button>
+                                                <button onClick={handleTgAdd}
+                                                    disabled={tgLoading || !tgNewApiId || !tgNewApiHash}
+                                                    style={{
+                                                        padding: '8px 20px', fontSize: '13px', fontWeight: 600,
+                                                        background: '#0088cc', color: 'white',
+                                                        border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                                        opacity: (tgLoading || !tgNewApiId || !tgNewApiHash) ? 0.5 : 1
+                                                    }}>{tgLoading ? '添加中...' : '添加'}</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => setTgShowAdd(true)}
+                                            style={{
+                                                width: '100%', padding: '12px', marginBottom: '20px',
+                                                background: 'transparent', border: '2px dashed var(--border)',
+                                                borderRadius: '10px', cursor: 'pointer',
+                                                fontSize: '13px', fontWeight: 600,
+                                                color: 'var(--text-secondary)', transition: 'all 0.2s'
+                                            }}>
+                                            + 添加 Telegram 账号
+                                        </button>
+                                    )}
+
+                                    {/* ── Dual Bot Config ── */}
+                                    <div style={{
+                                        borderRadius: '12px', overflow: 'hidden',
+                                        border: '1px solid var(--border)', marginBottom: '12px'
+                                    }}>
+                                        <div style={{
+                                            padding: '14px 18px',
+                                            background: 'linear-gradient(135deg, rgba(76,175,80,0.08), rgba(76,175,80,0.02))',
+                                            borderBottom: '1px solid var(--border)',
+                                            display: 'flex', alignItems: 'center', gap: '8px'
+                                        }}>
+                                            <span style={{ fontSize: '16px' }}>🤖</span>
+                                            <span style={{ fontWeight: 700, fontSize: '14px' }}>Dual Bot 验证</span>
+                                            <span style={{
+                                                fontSize: '10px', padding: '2px 8px',
+                                                background: 'rgba(76,175,80,0.15)', color: '#4caf50',
+                                                borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
+                                            }}>新方法</span>
+                                        </div>
+                                        <div style={{ padding: '16px 18px' }}>
                                             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                                                 新方法：预热 Bot → 验证 Bot → 失败自动刷新链接
                                             </p>
@@ -2219,122 +2304,126 @@ export default function Admin() {
                                 </div>
                             )}
 
-                            {/* Region Mode Settings - Always visible */}
-                            <div className="provider-settings region-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                                <h4>🌍 验证地区配置</h4>
-                                <p className="settings-desc" style={{ marginBottom: '16px' }}>
-                                    选择生成验证文档时使用的学校地区范围
-                                </p>
-                                <div className="settings-form">
-                                    <div className="input-group">
-                                        <label className="input-label">地区模式</label>
-                                        <select
-                                            className="input"
-                                            value={regionMode}
-                                            onChange={(e) => setRegionMode(e.target.value)}
-                                        >
-                                            <option value="us_only">🇺🇸 仅美国学校 (US Only)</option>
-                                            <option value="global">🌏 全球学校 (Global)</option>
-                                        </select>
-                                        <p className="input-hint">
-                                            {regionMode === 'us_only'
-                                                ? '仅使用美国学校生成验证文档，更稳定的验证通过率'
-                                                : '随机选择全球学校生成验证文档，包括美国、欧洲、亚洲等地区'}
-                                        </p>
-                                    </div>
-                                    <div className="input-group" style={{ marginTop: '16px' }}>
-                                        <label className="input-label">学校来源</label>
-                                        <select
-                                            className="input"
-                                            value={universitySource}
-                                            onChange={(e) => setUniversitySource(e.target.value)}
-                                        >
-                                            <option value="sheerid_api">🔗 SheerID API 动态获取</option>
-                                            <option value="custom_list">📋 自定义名单 (本地列表)</option>
-                                        </select>
-                                        <p className="input-hint">
-                                            {universitySource === 'sheerid_api'
-                                                ? '从 SheerID API 实时获取学校列表，确保 ID 准确匹配'
-                                                : '使用预设的高成功率学校名单 (来自 ThanhNguyxn)，不依赖 API'}
-                                        </p>
+                            {/* Region Mode Settings - Template providers only */}
+                            {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
+                                <div className="provider-settings region-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                                    <h4>🌍 验证地区配置</h4>
+                                    <p className="settings-desc" style={{ marginBottom: '16px' }}>
+                                        选择生成验证文档时使用的学校地区范围
+                                    </p>
+                                    <div className="settings-form">
+                                        <div className="input-group">
+                                            <label className="input-label">地区模式</label>
+                                            <select
+                                                className="input"
+                                                value={regionMode}
+                                                onChange={(e) => setRegionMode(e.target.value)}
+                                            >
+                                                <option value="us_only">🇺🇸 仅美国学校 (US Only)</option>
+                                                <option value="global">🌏 全球学校 (Global)</option>
+                                            </select>
+                                            <p className="input-hint">
+                                                {regionMode === 'us_only'
+                                                    ? '仅使用美国学校生成验证文档，更稳定的验证通过率'
+                                                    : '随机选择全球学校生成验证文档，包括美国、欧洲、亚洲等地区'}
+                                            </p>
+                                        </div>
+                                        <div className="input-group" style={{ marginTop: '16px' }}>
+                                            <label className="input-label">学校来源</label>
+                                            <select
+                                                className="input"
+                                                value={universitySource}
+                                                onChange={(e) => setUniversitySource(e.target.value)}
+                                            >
+                                                <option value="sheerid_api">🔗 SheerID API 动态获取</option>
+                                                <option value="custom_list">📋 自定义名单 (本地列表)</option>
+                                            </select>
+                                            <p className="input-hint">
+                                                {universitySource === 'sheerid_api'
+                                                    ? '从 SheerID API 实时获取学校列表，确保 ID 准确匹配'
+                                                    : '使用预设的高成功率学校名单 (来自 ThanhNguyxn)，不依赖 API'}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
-                            {/* Proxy Settings - Always visible */}
-                            <div className="provider-settings proxy-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                                <h4>🌐 住宅代理配置 (Residential Proxy)</h4>
-                                <p className="settings-desc" style={{ marginBottom: '16px' }}>
-                                    配置住宅代理可有效防止 SheerID 的 IP 风控检测 (fraudRulesReject)
-                                </p>
-                                <div className="settings-form">
-                                    <div className="input-group">
-                                        <label className="input-label">
-                                            <input
-                                                type="checkbox"
-                                                checked={proxySettings.enabled}
-                                                onChange={(e) => setProxySettings(s => ({ ...s, enabled: e.target.checked }))}
-                                                style={{ marginRight: '8px' }}
-                                            />
-                                            启用代理
-                                        </label>
-                                    </div>
-                                    {proxySettings.enabled && (
-                                        <>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
+                            {/* Proxy Settings - Template providers only */}
+                            {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
+                                <div className="provider-settings proxy-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                                    <h4>🌐 住宅代理配置 (Residential Proxy)</h4>
+                                    <p className="settings-desc" style={{ marginBottom: '16px' }}>
+                                        配置住宅代理可有效防止 SheerID 的 IP 风控检测 (fraudRulesReject)
+                                    </p>
+                                    <div className="settings-form">
+                                        <div className="input-group">
+                                            <label className="input-label">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={proxySettings.enabled}
+                                                    onChange={(e) => setProxySettings(s => ({ ...s, enabled: e.target.checked }))}
+                                                    style={{ marginRight: '8px' }}
+                                                />
+                                                启用代理
+                                            </label>
+                                        </div>
+                                        {proxySettings.enabled && (
+                                            <>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
+                                                    <div className="input-group">
+                                                        <label className="input-label">代理主机 (Host)</label>
+                                                        <input
+                                                            type="text"
+                                                            className="input"
+                                                            value={proxySettings.host}
+                                                            onChange={(e) => setProxySettings(s => ({ ...s, host: e.target.value }))}
+                                                            placeholder="proxy.global.ip2up.com"
+                                                        />
+                                                    </div>
+                                                    <div className="input-group">
+                                                        <label className="input-label">端口 (Port)</label>
+                                                        <input
+                                                            type="text"
+                                                            className="input"
+                                                            value={proxySettings.port}
+                                                            onChange={(e) => setProxySettings(s => ({ ...s, port: e.target.value }))}
+                                                            placeholder="12348"
+                                                        />
+                                                    </div>
+                                                </div>
                                                 <div className="input-group">
-                                                    <label className="input-label">代理主机 (Host)</label>
+                                                    <label className="input-label">用户名 (Username)</label>
                                                     <input
                                                         type="text"
                                                         className="input"
-                                                        value={proxySettings.host}
-                                                        onChange={(e) => setProxySettings(s => ({ ...s, host: e.target.value }))}
-                                                        placeholder="proxy.global.ip2up.com"
+                                                        value={proxySettings.user}
+                                                        onChange={(e) => setProxySettings(s => ({ ...s, user: e.target.value, hasStoredCredentials: false }))}
+                                                        placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : "hW32EF_200_0_0_..."}
                                                     />
-                                                </div>
-                                                <div className="input-group">
-                                                    <label className="input-label">端口 (Port)</label>
-                                                    <input
-                                                        type="text"
-                                                        className="input"
-                                                        value={proxySettings.port}
-                                                        onChange={(e) => setProxySettings(s => ({ ...s, port: e.target.value }))}
-                                                        placeholder="12348"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="input-group">
-                                                <label className="input-label">用户名 (Username)</label>
-                                                <input
-                                                    type="text"
-                                                    className="input"
-                                                    value={proxySettings.user}
-                                                    onChange={(e) => setProxySettings(s => ({ ...s, user: e.target.value, hasStoredCredentials: false }))}
-                                                    placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : "hW32EF_200_0_0_..."}
-                                                />
-                                                <p className="input-hint">
-                                                    ip2up 格式: <code>[account]_[country]_[province]_[city]_[session]_[sessionTime]_[flag]</code>
-                                                </p>
-                                            </div>
-                                            <div className="input-group">
-                                                <label className="input-label">密码 (Password)</label>
-                                                <input
-                                                    type="password"
-                                                    className="input"
-                                                    value={proxySettings.password}
-                                                    onChange={(e) => setProxySettings(s => ({ ...s, password: e.target.value, hasStoredCredentials: false }))}
-                                                    placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : ""}
-                                                />
-                                                {proxySettings.hasStoredCredentials && (
                                                     <p className="input-hint">
-                                                        <span className="key-stored">✓ 代理凭据已保存</span>
+                                                        ip2up 格式: <code>[account]_[country]_[province]_[city]_[session]_[sessionTime]_[flag]</code>
                                                     </p>
-                                                )}
-                                            </div>
-                                        </>
-                                    )}
+                                                </div>
+                                                <div className="input-group">
+                                                    <label className="input-label">密码 (Password)</label>
+                                                    <input
+                                                        type="password"
+                                                        className="input"
+                                                        value={proxySettings.password}
+                                                        onChange={(e) => setProxySettings(s => ({ ...s, password: e.target.value, hasStoredCredentials: false }))}
+                                                        placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : ""}
+                                                    />
+                                                    {proxySettings.hasStoredCredentials && (
+                                                        <p className="input-hint">
+                                                            <span className="key-stored">✓ 代理凭据已保存</span>
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* Test & Save Buttons */}
                             <div className="settings-actions">

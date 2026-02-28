@@ -2567,7 +2567,8 @@ export default function Admin() {
                                             onChange={(e) => setMaintenanceMessage(e.target.value)}
                                             style={{
                                                 resize: 'vertical', minHeight: '72px',
-                                                fontSize: '14px', lineHeight: '1.5'
+                                                fontSize: '14px', lineHeight: '1.5',
+                                                width: '100%', boxSizing: 'border-box'
                                             }}
                                         />
                                     </div>

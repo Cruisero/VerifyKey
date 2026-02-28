@@ -2508,63 +2508,168 @@ export default function Admin() {
                             </div>
                         </div>
 
-                        <div className="settings-section card" style={{ border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent', transition: 'border-color 0.3s ease' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                <h3 style={{ margin: 0 }}>🚧 维护模式</h3>
+                        {/* Maintenance Mode Card */}
+                        <div className="settings-section card" style={{
+                            border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent',
+                            transition: 'all 0.3s ease',
+                            overflow: 'hidden',
+                            padding: 0
+                        }}>
+                            {/* Status Banner */}
+                            <div style={{
+                                padding: '14px 20px',
+                                background: maintenanceEnabled
+                                    ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
+                                    : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                                borderBottom: '1px solid',
+                                borderColor: maintenanceEnabled ? '#fecaca' : '#bbf7d0',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                transition: 'all 0.3s ease'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{
+                                        width: '10px', height: '10px', borderRadius: '50%',
+                                        background: maintenanceEnabled ? '#ef4444' : '#22c55e',
+                                        boxShadow: maintenanceEnabled ? '0 0 8px rgba(239,68,68,0.5)' : '0 0 8px rgba(34,197,94,0.5)',
+                                        animation: maintenanceEnabled ? 'pulse 2s infinite' : 'none'
+                                    }} />
+                                    <span style={{
+                                        fontSize: '14px', fontWeight: 600,
+                                        color: maintenanceEnabled ? '#dc2626' : '#16a34a'
+                                    }}>
+                                        {maintenanceEnabled ? '维护模式已开启' : '网站运行正常'}
+                                    </span>
+                                </div>
+                                {/* Toggle Switch */}
                                 <div
                                     onClick={() => setMaintenanceEnabled(!maintenanceEnabled)}
                                     style={{
-                                        width: '56px', height: '28px', borderRadius: '14px', cursor: 'pointer',
-                                        background: maintenanceEnabled ? 'linear-gradient(135deg, #ef4444, #dc2626)' : '#374151',
-                                        position: 'relative', transition: 'background 0.3s ease',
-                                        boxShadow: maintenanceEnabled ? '0 0 12px rgba(239,68,68,0.4)' : 'none'
+                                        width: '52px', height: '28px', borderRadius: '14px', cursor: 'pointer',
+                                        background: maintenanceEnabled ? 'linear-gradient(135deg, #ef4444, #dc2626)' : '#d1d5db',
+                                        position: 'relative', transition: 'all 0.3s ease',
+                                        boxShadow: maintenanceEnabled ? '0 0 12px rgba(239,68,68,0.3)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                                        flexShrink: 0
                                     }}
                                 >
                                     <div style={{
                                         width: '22px', height: '22px', borderRadius: '50%',
                                         background: '#fff', position: 'absolute', top: '3px',
-                                        left: maintenanceEnabled ? '31px' : '3px',
-                                        transition: 'left 0.3s ease',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                        left: maintenanceEnabled ? '27px' : '3px',
+                                        transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
                                     }} />
                                 </div>
                             </div>
-                            <p className="settings-desc" style={{ color: maintenanceEnabled ? '#ef4444' : undefined }}>
-                                {maintenanceEnabled ? '⚠️ 维护模式已开启 — 用户将看到维护页面' : '开启后，所有用户访问网站时将显示维护页面。管理后台仍可正常访问。'}
-                            </p>
-                            <div className="settings-form">
-                                <div className="input-group">
-                                    <label className="input-label">维护公告内容</label>
-                                    <textarea
-                                        className="input textarea"
-                                        placeholder="输入维护公告内容..."
-                                        rows={2}
-                                        value={maintenanceMessage}
-                                        onChange={(e) => setMaintenanceMessage(e.target.value)}
-                                    />
+
+                            {/* Card Body */}
+                            <div style={{ padding: '20px 20px 0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                    <span style={{ fontSize: '20px' }}>🚧</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px' }}>维护模式设置</h3>
                                 </div>
-                                <div className="input-group">
-                                    <label className="input-label">预计恢复时间（可选）</label>
-                                    <input
-                                        type="datetime-local"
-                                        className="input"
-                                        value={maintenanceEstEnd ? maintenanceEstEnd.slice(0, 16) : ''}
-                                        onChange={(e) => setMaintenanceEstEnd(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                                    />
+
+                                {/* Form Fields */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {/* Message Field */}
+                                    <div>
+                                        <label style={{
+                                            display: 'block', fontSize: '13px', fontWeight: 500,
+                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                        }}>
+                                            📝 维护公告内容
+                                        </label>
+                                        <textarea
+                                            className="input textarea"
+                                            placeholder="输入将向用户显示的维护公告..."
+                                            rows={3}
+                                            value={maintenanceMessage}
+                                            onChange={(e) => setMaintenanceMessage(e.target.value)}
+                                            style={{
+                                                resize: 'vertical', minHeight: '72px',
+                                                fontSize: '14px', lineHeight: '1.5'
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Estimated End Time */}
+                                    <div>
+                                        <label style={{
+                                            display: 'block', fontSize: '13px', fontWeight: 500,
+                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                        }}>
+                                            🕐 预计恢复时间 <span style={{ fontWeight: 400, color: '#94a3b8' }}>（可选）</span>
+                                        </label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <input
+                                                type="datetime-local"
+                                                className="input"
+                                                value={maintenanceEstEnd ? maintenanceEstEnd.slice(0, 16) : ''}
+                                                onChange={(e) => setMaintenanceEstEnd(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                                                style={{ flex: 1, fontSize: '14px' }}
+                                            />
+                                            {maintenanceEstEnd && (
+                                                <button
+                                                    onClick={() => setMaintenanceEstEnd('')}
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                        color: '#94a3b8', fontSize: '18px', padding: '4px',
+                                                        lineHeight: 1
+                                                    }}
+                                                    title="清除时间"
+                                                >✕</button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                    <button
-                                        className={`btn ${maintenanceEnabled ? 'btn-primary' : 'btn-primary'}`}
-                                        onClick={handleSaveMaintenance}
-                                        disabled={maintenanceSaving}
-                                        style={maintenanceEnabled ? { background: 'linear-gradient(135deg, #ef4444, #dc2626)' } : {}}
-                                    >
-                                        {maintenanceSaving ? '保存中...' : maintenanceEnabled ? '🚧 保存并开启维护' : '💾 保存'}
-                                    </button>
-                                    {maintenanceSaved && (
-                                        <span style={{ color: '#10b981', fontSize: '14px', fontWeight: 500 }}>✅ 已保存</span>
+                            </div>
+
+                            {/* Action Bar */}
+                            <div style={{
+                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                padding: '16px 20px',
+                                marginTop: '20px',
+                                borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                background: 'var(--bg-secondary, #f8fafc)'
+                            }}>
+                                {maintenanceSaved && (
+                                    <span style={{
+                                        color: '#10b981', fontSize: '13px', fontWeight: 500,
+                                        display: 'flex', alignItems: 'center', gap: '4px',
+                                        animation: 'fadeIn 0.3s ease'
+                                    }}>
+                                        <span>✓</span> 已保存
+                                    </span>
+                                )}
+                                <button
+                                    onClick={handleSaveMaintenance}
+                                    disabled={maintenanceSaving}
+                                    style={{
+                                        padding: '8px 24px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        cursor: maintenanceSaving ? 'not-allowed' : 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 600,
+                                        color: '#fff',
+                                        background: maintenanceEnabled
+                                            ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+                                            : 'linear-gradient(135deg, #7c5cfc, #6d4fe8)',
+                                        boxShadow: maintenanceEnabled
+                                            ? '0 2px 8px rgba(239,68,68,0.3)'
+                                            : '0 2px 8px rgba(124,92,252,0.3)',
+                                        transition: 'all 0.2s ease',
+                                        opacity: maintenanceSaving ? 0.7 : 1,
+                                        display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}
+                                >
+                                    {maintenanceSaving ? (
+                                        <><span className="loading-spinner small" /> 保存中...</>
+                                    ) : maintenanceEnabled ? (
+                                        '保存并启用维护'
+                                    ) : (
+                                        '保存设置'
                                     )}
-                                </div>
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -103,12 +103,14 @@ class DualBotVerifier:
     # ---- Send message and wait for reply ----
 
     async def _send_and_wait(self, client: TelegramClient, bot_username: str, message: str, timeout: int = 60) -> Optional[str]:
-        """Send a message to a bot and wait for the next reply."""
+        """Send a message to a bot and wait for the next reply (text or caption)."""
         future = asyncio.get_event_loop().create_future()
 
         async def handler(event):
             if not future.done():
-                future.set_result(event.message.text)
+                # Capture either text or photo caption
+                reply_text = event.message.text or event.message.message or ""
+                future.set_result(reply_text)
 
         # Register temporary handler
         client.add_event_handler(handler, events.NewMessage(from_users=bot_username))
@@ -129,7 +131,16 @@ class DualBotVerifier:
     # ---- Parse bot response ----
 
     def _parse_response(self, text: str, vid: str) -> dict:
-        """Parse @AutoGeminiProbot response."""
+        """Parse bot response with a safe fallback to 'failed' if unknown."""
+        if not text:
+            return {
+                "success": False,
+                "status": "failed",
+                "verificationId": vid,
+                "message": "机器人返回了空内容",
+                "raw_response": ""
+            }
+
         result = {
             "success": None,
             "status": "unknown",
@@ -146,20 +157,47 @@ class DualBotVerifier:
         if link_match:
             result["claimLink"] = link_match.group(1)
 
-        # Check for failure first (includes Indonesian keywords like QUOTA, HABIS, TIDAK BISA)
+        # 1. Check for success (Priority)
+        success_keywords = ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", "SETUJU", "BERHASIL"]
+        if any(kw in text_upper for kw in success_keywords):
+            result["success"] = True
+            result["status"] = "approved"
+            result["message"] = "验证通过！"
+            return result
+
+        # 2. Check for processing status
+        proc_keywords = ["PROCESSING", "WAIT", "⏳", "SEDANG", "PROSES"]
+        if any(kw in text_upper for kw in proc_keywords):
+            result["success"] = None
+            result["status"] = "processing"
+            result["message"] = "正在处理..."
+            return result
+
+        # 3. If it's not success or processing, it's LIKELY a failure or error message.
+        # Check for explicit failure keywords first for better messaging
         fail_keywords = [
             "VERIFICATION FAILED", "FAILED", "❌", "REJECTED", "UNSUCCESSFUL", 
-            "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "LIMBAH", "EXPIRED", "SUSAH"
+            "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "LIMBAH", "EXPIRED", "SUSAH",
+            "MOHON", "MAAF", "GANTILAH"
         ]
+        
+        # Safe Fallback: Treat ANY other message that isn't success/processing as a failure.
+        # This prevents the frontend from hanging indefinitely.
+        result["success"] = False
+        result["status"] = "failed"
+        
         if any(kw in text_upper for kw in fail_keywords):
-            result["success"] = False
-            result["status"] = "failed"
-            # Try to extract a useful error message from the text
             if "QUOTA" in text_upper or "HABIS" in text_upper:
                 result["message"] = "Bot 额度不足 (Quota Exhausted)"
+            elif "EXPIRED" in text_upper:
+                result["message"] = "验证链接已过期 (Link Expired)"
             else:
-                result["message"] = "验证失败 (Verification Failed)"
-            return result
+                result["message"] = f"验证失败: {text[:50]}..."
+        else:
+            # Unrecognized but treated as failure
+            result["message"] = f"请求未成功: {text[:50]}..."
+            
+        return result
 
         # Check for success
         if any(kw in text_upper for kw in ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉"]):

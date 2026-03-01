@@ -337,5 +337,5 @@ class DualBotVerifier:
 
     @staticmethod
     def _extract_vid(link: str) -> Optional[str]:
-        match = re.search(r'verificationId=([a-zA-Z0-9]+)', link)
+        match = re.search(r'verificationId=([a-zA-Z0-9-]+)', link)
         return match.group(1) if match else None

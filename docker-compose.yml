@@ -29,6 +29,22 @@ services:
       - ./output:/output
     networks:
       - onepass-network
+  # API Telegram Bot
+  api-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: python onepass_bot.py
+    restart: always
+    env_file:
+      - ./backend-python/.env
+    volumes:
+      - backend-data:/app/data
+    depends_on:
+      - backend
+    networks:
+      - onepass-network
+
   # Legacy Node.js backend (commented out, can be re-enabled)
   # backend-node:
   #   build:

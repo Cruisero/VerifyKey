@@ -15,3 +15,5 @@ bcrypt==4.0.1
 PyJWT==2.8.0
 playwright==1.57.0
 numpy>=1.24.0
+aiogram==3.4.1
+httpx-sse==0.4.0

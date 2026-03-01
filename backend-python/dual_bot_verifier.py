@@ -102,11 +102,39 @@ class DualBotVerifier:
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected"):
                 logger.info(f"[DualBot] [{account_id}] Step 3: Auto-bypass sequence triggered for {vid[:8]}...")
                 
+                # First, wait for SheerID to finish processing (pending -> docUpload)
+                # SheerID document review can take 1-2 minutes
+                import httpx
+                base_url = "https://services.sheerid.com/rest/v2"
+                step = "pending"
+                
+                try:
+                    async with httpx.AsyncClient(timeout=30) as http_client:
+                        # Poll until pending clears (up to 2 minutes)
+                        for poll in range(40):  # 40 × 3s = 120s max
+                            check_resp = await http_client.get(f"{base_url}/verification/{vid}")
+                            if check_resp.status_code == 200:
+                                step = check_resp.json().get("currentStep", "")
+                            else:
+                                step = f"error_{check_resp.status_code}"
+                            
+                            if step != "pending":
+                                logger.info(f"[DualBot] [{account_id}] Pending cleared after {(poll+1)*3}s -> step: {step}")
+                                break
+                            
+                            if poll % 5 == 0:
+                                logger.info(f"[DualBot] [{account_id}] Waiting for pending to clear... ({(poll+1)*3}s)")
+                            await asyncio.sleep(3)
+                        else:
+                            logger.warning(f"[DualBot] [{account_id}] Pending still active after 120s, attempting bypass anyway...")
+                except Exception as e:
+                    logger.warning(f"[DualBot] [{account_id}] Error polling pending state: {e}")
+                
+                # Now run the bypass loop
                 bypass_count = 0
                 max_bypass = 10
                 bypass_success_any = False
                 
-                # Loop the bypass until it fails (SheerID returns 4xx indicating limit reached)
                 while bypass_count < max_bypass:
                     bypass_count += 1
                     logger.info(f"[DualBot] [{account_id}] Bypass attempt {bypass_count}/{max_bypass}...")
@@ -114,17 +142,16 @@ class DualBotVerifier:
                     ok = await self._bypass_link(vid)
                     if ok:
                         bypass_success_any = True
-                        # Small delay to prevent instant ban, but fast enough to overwhelm the block
                         await asyncio.sleep(1.5)
                     else:
                         logger.info(f"[DualBot] [{account_id}] Bypass sequence completed after {bypass_count-1} successful uploads.")
                         break
 
                 if bypass_success_any:
-                    parsed["message"] = "验证失败，系统已连续执行刷新动作清除锁定，请准备重新获取链接"
+                    parsed["message"] = "验证失败，链接已自动刷新清除锁定"
                     parsed["bypassed"] = True
                 else:
-                    parsed["message"] = "验证失败，且无法进行自动刷新"
+                    parsed["message"] = "验证失败，链接已过期或无法刷新"
                     parsed["bypassed"] = False
 
             return parsed
@@ -307,24 +334,19 @@ class DualBotVerifier:
                 step = check_resp.json().get("currentStep", "")
                 logger.info(f"[Bypass] Current step for {vid[:8]}: {step}")
 
-                # If SheerID is still processing the previous document, wait for it to finish
-                # SheerID pending can last 30-60s after bot verification
-                retry_count = 0
-                max_pending_polls = 15
-                while step == "pending" and retry_count < max_pending_polls:
-                    logger.info(f"[Bypass] Link is pending, waiting 3s... ({retry_count+1}/{max_pending_polls})")
-                    await asyncio.sleep(3)
+                # Short grace period if still pending (outer loop should have waited already)
+                if step == "pending":
+                    logger.info(f"[Bypass] Still pending, short 5s grace wait...")
+                    await asyncio.sleep(5)
                     check_resp = await client.get(f"{base_url}/verification/{vid}")
                     step = check_resp.json().get("currentStep", "")
-                    retry_count += 1
+                    if step == "pending":
+                        logger.warning(f"[Bypass] Still pending after grace wait.")
+                        return False
                 
-                if step == "pending":
-                    logger.warning(f"[Bypass] Link is STILL pending after {max_pending_polls*3}s. Cannot bypass.")
-                    return False
-                
-                # If step moved to "success", no need to bypass
+                # If already succeeded, no bypass needed
                 if step == "success":
-                    logger.info(f"[Bypass] Link moved to success during pending wait. No bypass needed.")
+                    logger.info(f"[Bypass] Link is already successful, no bypass needed.")
                     return False
 
                 # Skip SSO if needed

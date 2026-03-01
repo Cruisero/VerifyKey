@@ -176,6 +176,8 @@ class DualBotVerifier:
         }
 
         text_upper = text.upper()
+        # Cleaned text for easier matching
+        text_clean = " ".join(text_upper.split())
 
         # Extract claim link
         link_match = re.search(r'(https://one\.google\.com/[^\s\n]+)', text)
@@ -184,61 +186,43 @@ class DualBotVerifier:
 
         # 1. Check for success (Priority)
         success_keywords = ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", "SETUJU", "BERHASIL"]
-        if any(kw in text_upper for kw in success_keywords):
+        if any(kw in text_clean for kw in success_keywords):
             result["success"] = True
             result["status"] = "approved"
             result["message"] = "验证通过！"
             return result
 
-        # 2. Check for processing status
-        proc_keywords = ["PROCESSING", "WAIT", "⏳", "SEDANG", "PROSES"]
-        if any(kw in text_upper for kw in proc_keywords):
+        # 2. Check for processing status (Be very specific to avoid false positives)
+        proc_keywords = ["SEDANG MEMPROSES", "PROCESSING YOUR", "PROCESSING...", "WAIT...", "⏳"]
+        if any(kw in text_clean for kw in proc_keywords):
             result["success"] = None
             result["status"] = "processing"
             result["message"] = "正在处理..."
             return result
 
-        # 3. If it's not success or processing, it's LIKELY a failure or error message.
-        # Check for explicit failure keywords first for better messaging
+        # 3. Explicit Failure Keywords
         fail_keywords = [
             "VERIFICATION FAILED", "FAILED", "❌", "REJECTED", "UNSUCCESSFUL", 
             "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "LIMBAH", "EXPIRED", "SUSAH",
-            "MOHON", "MAAF", "GANTILAH"
+            "MOHON", "MAAF", "GANTILAH", "KURANG"
         ]
         
-        # Safe Fallback: Treat ANY other message that isn't success/processing as a failure.
-        # This prevents the frontend from hanging indefinitely.
-        result["success"] = False
-        result["status"] = "failed"
-        
-        if any(kw in text_upper for kw in fail_keywords):
-            if "QUOTA" in text_upper or "HABIS" in text_upper:
+        # Determine failure reason if possible
+        if any(kw in text_clean for kw in fail_keywords):
+            result["success"] = False
+            result["status"] = "failed"
+            if "QUOTA" in text_clean or "HABIS" in text_clean or "KURANG" in text_clean:
                 result["message"] = "Bot 额度不足 (Quota Exhausted)"
-            elif "EXPIRED" in text_upper:
+            elif "EXPIRED" in text_clean:
                 result["message"] = "验证链接已过期 (Link Expired)"
             else:
                 result["message"] = f"验证失败: {text[:50]}..."
-        else:
-            # Unrecognized but treated as failure
-            result["message"] = f"请求未成功: {text[:50]}..."
-            
-        return result
-
-        # Check for success
-        if any(kw in text_upper for kw in ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉"]):
-            result["success"] = True
-            result["status"] = "approved"
-            result["message"] = "验证通过！"
             return result
-
-        # Check for processing
-        if any(kw in text_upper for kw in ["PROCESSING", "WAIT", "⏳"]):
-            result["status"] = "processing"
-            result["message"] = "正在处理..."
-            return result
-
-        # Unknown
-        result["message"] = text[:200]
+        
+        # 4. Safe Fallback: Unrecognized but not success/processing -> treated as failure.
+        result["success"] = False
+        result["status"] = "failed"
+        result["message"] = f"请求未成功: {text[:50]}..."
         return result
 
     # ---- Bypass (submit empty doc to invalidate link) ----

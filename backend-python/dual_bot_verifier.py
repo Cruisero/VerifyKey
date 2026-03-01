@@ -66,12 +66,18 @@ class DualBotVerifier:
 
         logger.info(f"[DualBot] Warmup response: {warmup_result[:100]}...")
         
-        # Check if warmup failed
+        # Step 1 Check: Strict Success Required
+        # Parse the result first
         warmup_parsed = self._parse_response(warmup_result, vid)
-        if not warmup_parsed["success"] and warmup_parsed["status"] != "processing":
-            logger.warning(f"[DualBot] Warmup failed with @{w_bot}: {warmup_parsed['message']}")
-            warmup_parsed["message"] = f"预热阶段失败 (@{w_bot}): {warmup_parsed['message']}"
+        
+        # Only proceed to Step 2 if Stage 1 (Warmup) explicitly succeeded.
+        if not warmup_parsed.get("success"):
+            logger.warning(f"[DualBot] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
+            # Ensure the message is clear about which stage failed
+            warmup_parsed["message"] = f"预热阶段未成功 (@{w_bot}): {warmup_parsed['message']}"
             return warmup_parsed
+
+        logger.info(f"[DualBot] Warmup stage SUCCEEDED. Proceeding to Step 2...")
 
         # ---- Step 2: Verify via @AutoGeminiProbot ----
         logger.info(f"[DualBot] Step 2: Verify {vid[:8]}... via @{v_bot}")
@@ -185,11 +191,15 @@ class DualBotVerifier:
             result["claimLink"] = link_match.group(1)
 
         # 1. Check for success (Priority)
-        success_keywords = ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", "SETUJU", "BERHASIL"]
+        # Added Indonesian: PROSES SELESAI (Process Finished)
+        success_keywords = [
+            "CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", 
+            "SETUJU", "BERHASIL", "PROSES SELESAI", "PROCESS FINISHED"
+        ]
         if any(kw in text_clean for kw in success_keywords):
             result["success"] = True
             result["status"] = "approved"
-            result["message"] = "验证通过！"
+            result["message"] = "通过" # Simple success message
             return result
 
         # 2. Check for processing status (Be very specific to avoid false positives)

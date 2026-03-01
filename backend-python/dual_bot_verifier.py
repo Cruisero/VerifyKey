@@ -249,6 +249,34 @@ class DualBotVerifier:
                 result["message"] = "正在处理..."
                 return result
 
+        # 1.5 Check for Cooldown
+        if "COOLDOWN" in text_clean:
+            logger.info(f"[DualBot] Cooldown detected")
+            # Extract time: "1m 22s" or "45s" or "2m 0s"
+            minutes = 0
+            seconds = 0
+            m_match = re.search(r'(\d+)\s*M', text_clean)
+            s_match = re.search(r'(\d+)\s*S\b', text_clean)
+            if m_match:
+                minutes = int(m_match.group(1))
+            if s_match:
+                seconds = int(s_match.group(1))
+            total_seconds = minutes * 60 + seconds
+            if total_seconds == 0:
+                total_seconds = 90  # Default 90s if can't parse
+            
+            # Also extract remaining quota if present
+            quota_match = re.search(r'REMAINING\s+VERIFICATIONS[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
+            if quota_match:
+                result["remaining_quota"] = int(quota_match.group(1))
+            
+            result["success"] = False
+            result["status"] = "cooldown"
+            result["message"] = f"程序崩溃，请重试"
+            result["cooldown_seconds"] = total_seconds
+            logger.info(f"[DualBot] Cooldown: {total_seconds}s")
+            return result
+
         # 2. Check for DEFINITIVE success first (before failure keywords)
         # This prevents false failures when success messages contain words like "QUOTA" in their details
         definitive_success = ["🎉", "VERIFICATION SUCCESSFUL", "SUCCESSFULLY VERIFIED"]

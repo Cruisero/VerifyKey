@@ -31,6 +31,8 @@ class TelegramAccountManager:
         self._pool_index = 0
         # New: Per-account bot quota tracking {account_id: int or None}
         self._quotas: Dict[str, Optional[int]] = {}
+        # New: Per-account cooldown tracking {account_id: expiry_timestamp}
+        self._cooldowns: Dict[str, float] = {}
         
         # Pending login sessions: {account_id: TelegramClient}
         self._login_sessions: Dict[str, TelegramClient] = {}
@@ -60,15 +62,19 @@ class TelegramAccountManager:
     def get_next_client(self) -> Optional[tuple[str, TelegramClient]]:
         """
         Returns the next available client from the pool (Round-Robin).
+        Skips accounts that are in cooldown.
         Returns: (account_id, client) or None
         """
+        import time
+        now = time.time()
         config = config_manager.get_config()
         accounts = config.get("telegramAccounts", [])
         
-        # Filter accounts that are enabled AND have an active client
+        # Filter accounts that are enabled AND have an active client AND not in cooldown
         enabled_ids = [acc["id"] for acc in accounts if acc.get("enabled", True)]
         available_pool = [(aid, self._clients[aid]) for aid in enabled_ids 
-                         if aid in self._clients and self._clients[aid].is_connected()]
+                         if aid in self._clients and self._clients[aid].is_connected()
+                         and self._cooldowns.get(aid, 0) <= now]
         
         if not available_pool:
             # Fallback to single primary client if pool is empty
@@ -98,7 +104,8 @@ class TelegramAccountManager:
                 "enabled": acc.get("enabled", True),
                 "hasSession": bool(acc.get("sessionString")),
                 "connected": acc_id in self._clients and self._clients[acc_id].is_connected(),
-                "quota": self._quotas.get(acc_id)
+                "quota": self._quotas.get(acc_id),
+                "cooldownUntil": self._cooldowns.get(acc_id, 0) if self._cooldowns.get(acc_id, 0) > __import__('time').time() else None
             })
         return safe
 
@@ -106,6 +113,12 @@ class TelegramAccountManager:
         """Update the bot quota for an account (extracted from @AutoGeminiProbot responses)."""
         self._quotas[account_id] = quota
         logger.info(f"[TGManager] Updated quota for {account_id}: {quota}")
+
+    def set_cooldown(self, account_id: str, seconds: int):
+        """Set a cooldown for an account. It will be skipped in get_next_client() until it expires."""
+        import time
+        self._cooldowns[account_id] = time.time() + seconds
+        logger.info(f"[TGManager] Account {account_id} in cooldown for {seconds}s (until +{seconds}s)")
 
     def add_account(self, api_id: str, api_hash: str, label: str = "") -> dict:
         """Add a new account entry (not yet logged in)."""

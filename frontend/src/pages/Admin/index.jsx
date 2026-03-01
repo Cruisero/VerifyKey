@@ -1951,6 +1951,19 @@ export default function Admin() {
                                                                             额度: {acc.quota}
                                                                         </span>
                                                                     )}
+                                                                    {acc.cooldownUntil && (
+                                                                        <span style={{
+                                                                            fontSize: '10px',
+                                                                            padding: '1px 6px',
+                                                                            borderRadius: '4px',
+                                                                            background: 'rgba(244, 67, 54, 0.1)',
+                                                                            color: '#f44336',
+                                                                            border: '1px solid rgba(244, 67, 54, 0.2)',
+                                                                            animation: 'pulse 2s infinite'
+                                                                        }}>
+                                                                            ⏳ 冷却中
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>

@@ -1828,6 +1828,9 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         # Update bot quota if available
         if acc_id and r.get("remaining_quota") is not None:
             tg_manager.update_quota(acc_id, r["remaining_quota"])
+        # Set cooldown if detected
+        if acc_id and r.get("cooldown_seconds"):
+            tg_manager.set_cooldown(acc_id, r["cooldown_seconds"])
 
     # Log and deduct
     successful = sum(1 for r in results if r.get("success"))
@@ -1840,7 +1843,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         vid = r.get("verificationId", "")
         if r.get("status") == "approved":
             verification_history.log_verification("pass", vid)
-        elif r.get("status") in ("failed", "rejected", "error"):
+        elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
             verification_history.log_verification("failed", vid)
 
     return {

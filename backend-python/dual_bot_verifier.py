@@ -211,33 +211,14 @@ class DualBotVerifier:
                 result["message"] = "正在处理..."
                 return result
 
-        # 2. Check for success
-        # For Step 1 (Warmup), we only care about 'Finished/Selesai'
-        if is_warmup:
-            warmup_success = ["PROSES SELESAI", "PROCESS FINISHED", "SELESAI!"]
-            for kw in warmup_success:
-                if kw in text_clean:
-                    logger.info(f"[DualBot] Stage 1 Success: {kw}")
-                    result["success"] = True
-                    result["status"] = "approved"
-                    result["message"] = "预热完成"
-                    return result
-
-        # General successes (Priority 2)
-        success_keywords = ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", "SETUJU", "BERHASIL"]
-        for kw in success_keywords:
-            if kw in text_clean:
-                logger.info(f"[DualBot] Matched success keyword: {kw}")
-                result["success"] = True
-                result["status"] = "approved"
-                result["message"] = "通过"
-                return result
-
-        # 3. Explicit Failure Keywords
+        # 2. Check for Explicit Failure Keywords (Priority over success to avoid false positives from bypass instructions)
         # ❌ is often used by robots to indicate definitive failure.
         fail_keywords = ["FAILED", "❌", "REJECTED", "UNSUCCESSFUL", "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "EXPIRED", "SUSAH", "KURANG"]
         for kw in fail_keywords:
             if kw in text_clean:
+                # SPECIAL CASE: Sometimes failure messages contain "wait until SUCCESSFUL" as a bypass advice.
+                # We need to ensure we don't accidentally treat this as success. 
+                # Since we check Failure FIRST now, we are safer.
                 logger.info(f"[DualBot] Matched failure keyword: {kw}")
                 result["success"] = False
                 result["status"] = "failed"
@@ -251,6 +232,32 @@ class DualBotVerifier:
                     result["message"] = "机器人无法验证 (Bot cannot verify)"
                 else:
                     result["message"] = f"验证失败: {text[:50]}..."
+                return result
+
+        # 3. Check for success (Priority 3)
+        # For Step 1 (Warmup), we only care about 'Finished/Selesai'
+        if is_warmup:
+            warmup_success = ["PROSES SELESAI", "PROCESS FINISHED", "SELESAI!"]
+            for kw in warmup_success:
+                if kw in text_clean:
+                    logger.info(f"[DualBot] Stage 1 Success: {kw}")
+                    result["success"] = True
+                    result["status"] = "approved"
+                    result["message"] = "预热完成"
+                    return result
+
+        # General successes
+        success_keywords = ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", "SETUJU", "BERHASIL"]
+        for kw in success_keywords:
+            if kw in text_clean:
+                # Double check to avoid "wait UNTIL success" bypass advice being treated as success
+                if "UNTIL SUCCESS" in text_clean or "UNTIL BERHASIL" in text_clean:
+                    continue
+                    
+                logger.info(f"[DualBot] Matched success keyword: {kw}")
+                result["success"] = True
+                result["status"] = "approved"
+                result["message"] = "通过"
                 return result
         
         # 4. Safe Fallback: Unrecognized -> treated as failure.

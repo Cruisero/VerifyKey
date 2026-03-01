@@ -280,12 +280,8 @@ class DualBotVerifier:
                 result["status"] = "failed"
                 
                 # Indonesian/English combined failure reason mapping
-                if any(k in text_clean for k in ["HABIS", "KURANG"]):
-                    result["message"] = "Bot 额度不足 (Quota Exhausted)"
-                elif "EXPIRED" in text_clean:
-                    result["message"] = "验证链接已过期 (Link Expired)"
-                elif "TIDAK BISA" in text_clean:
-                    result["message"] = "机器人无法验证 (Bot cannot verify)"
+                if any(k in text_clean for k in ["HABIS", "KURANG", "TIDAK BISA"]):
+                    result["message"] = "程序崩溃，请重试"
                 else:
                     result["message"] = f"验证失败: {text[:50]}..."
                 return result

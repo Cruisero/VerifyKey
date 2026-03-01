@@ -256,9 +256,20 @@ class DualBotVerifier:
                 result["message"] = "正在处理..."
                 return result
 
-        # 2. Check for Explicit Failure Keywords (Priority over success to avoid false positives from bypass instructions)
+        # 2. Check for DEFINITIVE success first (before failure keywords)
+        # This prevents false failures when success messages contain words like "QUOTA" in their details
+        definitive_success = ["🎉", "VERIFICATION SUCCESSFUL", "SUCCESSFULLY VERIFIED"]
+        for kw in definitive_success:
+            if kw in text_clean:
+                logger.info(f"[DualBot] Definitive success matched: {kw}")
+                result["success"] = True
+                result["status"] = "approved"
+                result["message"] = "验证通过"
+                return result
+
+        # 3. Check for Explicit Failure Keywords (Priority over generic success to avoid false positives from bypass instructions)
         # ❌ is often used by robots to indicate definitive failure.
-        fail_keywords = ["FAILED", "❌", "REJECTED", "UNSUCCESSFUL", "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "EXPIRED", "SUSAH", "KURANG"]
+        fail_keywords = ["FAILED", "❌", "REJECTED", "UNSUCCESSFUL", "HABIS", "TIDAK BISA", "ERROR", "EXPIRED", "SUSAH", "KURANG"]
         for kw in fail_keywords:
             if kw in text_clean:
                 # SPECIAL CASE: Sometimes failure messages contain "wait until SUCCESSFUL" as a bypass advice.
@@ -269,7 +280,7 @@ class DualBotVerifier:
                 result["status"] = "failed"
                 
                 # Indonesian/English combined failure reason mapping
-                if any(k in text_clean for k in ["QUOTA", "HABIS", "KURANG"]):
+                if any(k in text_clean for k in ["HABIS", "KURANG"]):
                     result["message"] = "Bot 额度不足 (Quota Exhausted)"
                 elif "EXPIRED" in text_clean:
                     result["message"] = "验证链接已过期 (Link Expired)"

@@ -135,9 +135,8 @@ class DualBotVerifier:
 
             if wait_for_final:
                 # Check if this IS a final result or just a "Processing" status
-                # Use is_warmup=True for the 'wait' check to correctly identify finished state
                 parsed = self._parse_response(reply_text, "temp", is_warmup=True)
-                logger.debug(f"[DualBot] Parsed status for @{bot_username}: {parsed['status']}")
+                logger.info(f"[DualBot] Parsed status for @{bot_username}: {parsed['status']}")
                 if parsed["status"] == "processing":
                     logger.info(f"[DualBot] Skipping intermediate status from @{bot_username}, continuing to wait...")
                     return
@@ -185,6 +184,7 @@ class DualBotVerifier:
         text_upper = text.upper()
         # Cleaned text for easier matching
         text_clean = " ".join(text_upper.split())
+        logger.info(f"[DualBot] Parsing @{vid[:8]} (warmup={is_warmup}) - Cleaned: {text_clean[:60]}...")
 
         # Extract claim link
         link_match = re.search(r'(https://one\.google\.com/[^\s\n]+)', text)

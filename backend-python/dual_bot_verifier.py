@@ -24,88 +24,91 @@ class DualBotVerifier:
     def __init__(self, warmup_bot: str = "SatsetHelperbot", verify_bot: str = "AutoGeminiProbot"):
         self.warmup_bot = warmup_bot.lstrip("@")
         self.verify_bot = verify_bot.lstrip("@")
+        # New: Per-account locks to prevent concurrent requests on the same account
+        self._locks: Dict[str, asyncio.Lock] = {}
 
-    async def verify(self, client: TelegramClient, link: str, warmup_bot: str = None, verify_bot: str = None, auto_bypass: bool = True, timeout: int = 120) -> dict:
+    def _get_lock(self, account_id: str) -> asyncio.Lock:
+        if account_id not in self._locks:
+            self._locks[account_id] = asyncio.Lock()
+        return self._locks[account_id]
+
+    async def verify(self, client: TelegramClient, link: str, account_id: str = "default", warmup_bot: str = None, verify_bot: str = None, auto_bypass: bool = True, timeout: int = 120) -> dict:
         """
-        Run full dual-bot verification pipeline.
+        Run full dual-bot verification pipeline with per-account locking.
 
         Args:
             client: The Telegram client to use
             link: The verification link
-            warmup_bot: Username of the warmup bot (optional, uses instance default)
-            verify_bot: Username of the verification bot (optional, uses instance default)
+            account_id: ID of the Telegram account (for locking)
+            warmup_bot: Username of the warmup bot
+            verify_bot: Username of the verification bot
             auto_bypass: Whether to automatically refresh the link on failure
             timeout: Maximum time to wait for responses
-
-        Returns:
-            dict with: success, status, message, verificationId, claimLink, raw_response
         """
-        if not client or not client.is_connected():
-            return {"success": False, "status": "error", "message": "Telegram 未连接"}
+        async with self._get_lock(account_id):
+            if not client or not client.is_connected():
+                return {"success": False, "status": "error", "message": "Telegram 未连接"}
 
-        # Use provided bots or instance defaults
-        w_bot = (warmup_bot or self.warmup_bot).lstrip("@")
-        v_bot = (verify_bot or self.verify_bot).lstrip("@")
+            # Use provided bots or instance defaults
+            w_bot = (warmup_bot or self.warmup_bot).lstrip("@")
+            v_bot = (verify_bot or self.verify_bot).lstrip("@")
 
-        vid = self._extract_vid(link)
-        if not vid:
-            return {"success": False, "status": "error", "message": "无法从链接中提取 verificationId"}
+            vid = self._extract_vid(link)
+            if not vid:
+                return {"success": False, "status": "error", "message": "无法从链接中提取 verificationId"}
 
-        # ---- Step 1: Warmup via @SatsetHelperbot ----
-        logger.info(f"[DualBot] Step 1: Warmup {vid[:8]}... via @{w_bot}")
-        # We wait for the FINAL result (not just 'Processing...')
-        warmup_result = await self._send_and_wait(client, w_bot, link, wait_for_final=True, timeout=90)
+            # ---- Step 1: Warmup via @SatsetHelperbot ----
+            logger.info(f"[DualBot] [{account_id}] Step 1: Warmup {vid[:8]}... via @{w_bot}")
+            # We wait for the FINAL result (not just 'Processing...')
+            warmup_result = await self._send_and_wait(client, w_bot, link, wait_for_final=True, timeout=90)
 
-        if warmup_result is None:
-            return {
-                "success": False,
-                "status": "warmup_timeout",
-                "verificationId": vid,
-                "message": f"预热阶段超时 (@{w_bot} 没有最终回应)"
-            }
+            if warmup_result is None:
+                return {
+                    "success": False,
+                    "status": "warmup_timeout",
+                    "verificationId": vid,
+                    "message": f"预热阶段超时 (@{w_bot} 没有最终回应)"
+                }
 
-        logger.info(f"[DualBot] Warmup response: {warmup_result[:100]}...")
-        
-        # Step 1 Check: Strict Success Required for WARMUP logic
-        # For Step 1, we pass is_warmup=True because SatsetHelperbot just needs to finish.
-        warmup_parsed = self._parse_response(warmup_result, vid, is_warmup=True)
-        
-        # Only proceed to Step 2 if Stage 1 (Warmup) explicitly succeeded (Finished).
-        if not warmup_parsed.get("success"):
-            logger.warning(f"[DualBot] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
-            # Ensure the message is clear about which stage failed
-            warmup_parsed["message"] = f"预热阶段未成功 (@{w_bot}): {warmup_parsed['message']}"
-            return warmup_parsed
+            logger.info(f"[DualBot] [{account_id}] Warmup response: {warmup_result[:100]}...")
+            
+            # Step 1 Check: Strict Success Required for WARMUP logic
+            warmup_parsed = self._parse_response(warmup_result, vid, is_warmup=True)
+            
+            if not warmup_parsed.get("success"):
+                logger.warning(f"[DualBot] [{account_id}] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
+                warmup_parsed["message"] = f"预热阶段未成功 (@{w_bot}): {warmup_parsed['message']}"
+                return warmup_parsed
 
-        logger.info(f"[DualBot] Warmup stage SUCCEEDED (Bot finished warmup). Proceeding to Step 2...")
+            logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
 
-        # ---- Step 2: Verify via @AutoGeminiProbot ----
-        logger.info(f"[DualBot] Step 2: Verify {vid[:8]}... via @{v_bot}")
-        verify_result = await self._send_and_wait(client, v_bot, link, timeout=timeout)
+            # ---- Step 2: Verify via @AutoGeminiProbot ----
+            logger.info(f"[DualBot] [{account_id}] Step 2: Verify {vid[:8]}... via @{v_bot}")
+            verify_result = await self._send_and_wait(client, v_bot, link, timeout=timeout)
 
-        if verify_result is None:
-            return {
-                "success": False,
-                "status": "timeout",
-                "verificationId": vid,
-                "message": f"验证超时（@{v_bot} 没有回应，请重试）"
-            }
+            if verify_result is None:
+                return {
+                    "success": False,
+                    "status": "timeout",
+                    "verificationId": vid,
+                    "message": f"验证超时（@{v_bot} 没有回应，请重试）"
+                }
 
-        # Parse result (Regular verification parsing)
-        parsed = self._parse_response(verify_result, vid, is_warmup=False)
+            # Parse result
+            parsed = self._parse_response(verify_result, vid, is_warmup=False)
 
-        # ---- Step 3: Auto bypass on failure ----
-        if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected"):
-            logger.info(f"[DualBot] Step 3: Auto-bypass for {vid[:8]}...")
-            bypass_ok = await self._bypass_link(vid)
-            if bypass_ok:
-                parsed["message"] = "验证失败，链接已自动刷新，请重新获取验证链接"
-                parsed["bypassed"] = True
-            else:
-                parsed["message"] = "验证失败，自动刷新链接时出错"
-                parsed["bypassed"] = False
+            # ---- Step 3: Auto bypass on failure ----
+            if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected"):
+                logger.info(f"[DualBot] [{account_id}] Step 3: Auto-bypass for {vid[:8]}...")
+                bypass_ok = await self._bypass_link(vid)
+                if bypass_ok:
+                    parsed["message"] = "验证失败，链接已自动刷新，请重新获取验证链接"
+                    parsed["bypassed"] = True
+                else:
+                    parsed["message"] = "验证失败，自动刷新链接时出错"
+                    parsed["bypassed"] = False
 
-        return parsed
+            return parsed
 
     # ---- Send message and wait for reply ----
 

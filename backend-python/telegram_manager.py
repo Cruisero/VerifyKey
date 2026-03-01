@@ -19,11 +19,17 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramAccountManager:
-    """Manage multiple Telegram accounts, login flow, and active client."""
+    """Manage multiple Telegram accounts, login flow, and active client pool."""
 
     def __init__(self):
         self._client: Optional[TelegramClient] = None
         self._active_account_id: Optional[str] = None
+        
+        # New: Pool of active clients {account_id: TelegramClient}
+        self._clients: Dict[str, TelegramClient] = {}
+        # New: Round-robin index for client rotation
+        self._pool_index = 0
+        
         # Pending login sessions: {account_id: TelegramClient}
         self._login_sessions: Dict[str, TelegramClient] = {}
 
@@ -31,15 +37,46 @@ class TelegramAccountManager:
 
     @property
     def client(self) -> Optional[TelegramClient]:
+        """Returns the primary active client (for legacy support)."""
         return self._client
 
     @property
     def is_connected(self) -> bool:
-        return self._client is not None and self._client.is_connected
+        """Returns True if at least one client in the pool is connected."""
+        if self._client and self._client.is_connected():
+            return True
+        return any(c.is_connected() for c in self._clients.values())
 
     @property
     def active_account_id(self) -> Optional[str]:
         return self._active_account_id
+
+    def get_all_clients(self) -> Dict[str, TelegramClient]:
+        """Returns all currently connected clients."""
+        return {aid: c for aid, c in self._clients.items() if c.is_connected()}
+
+    def get_next_client(self) -> Optional[tuple[str, TelegramClient]]:
+        """
+        Returns the next available client from the pool (Round-Robin).
+        Returns: (account_id, client) or None
+        """
+        config = config_manager.get_config()
+        accounts = config.get("telegramAccounts", [])
+        
+        # Filter accounts that are enabled AND have an active client
+        enabled_ids = [acc["id"] for acc in accounts if acc.get("enabled", True)]
+        available_pool = [(aid, self._clients[aid]) for aid in enabled_ids 
+                         if aid in self._clients and self._clients[aid].is_connected()]
+        
+        if not available_pool:
+            # Fallback to single primary client if pool is empty
+            if self._client and self._client.is_connected():
+                return (self._active_account_id, self._client)
+            return None
+            
+        # Round-robin selection
+        self._pool_index = (self._pool_index + 1) % len(available_pool)
+        return available_pool[self._pool_index]
 
     # ------ Account CRUD ------
 
@@ -55,7 +92,9 @@ class TelegramAccountManager:
                 "label": acc.get("label", ""),
                 "phone": self._mask_phone(acc.get("phone", "")),
                 "active": acc.get("id") == self._active_account_id,
+                "enabled": acc.get("enabled", True), # New: enabled flag
                 "hasSession": bool(acc.get("sessionString")),
+                "connected": acc.get("id") in self._clients and self._clients[acc["id"]].is_connected()
             })
         return safe
 
@@ -71,6 +110,7 @@ class TelegramAccountManager:
             "apiHash": api_hash,
             "phone": "",
             "sessionString": "",
+            "enabled": True # Default to enabled
         }
         accounts.append(account)
         config["telegramAccounts"] = accounts
@@ -85,23 +125,45 @@ class TelegramAccountManager:
         config["telegramAccounts"] = [a for a in accounts if a.get("id") != account_id]
         config_manager.save_config(config)
 
+        # Remove from pool
+        if account_id in self._clients:
+            asyncio.create_task(self._clients[account_id].disconnect())
+            del self._clients[account_id]
+
         if self._active_account_id == account_id:
             self._active_account_id = None
-            # Client will be disconnected by caller
+            self._client = None
+            
         logger.info(f"[TGManager] Removed account {account_id}")
         return True
 
     def update_account(self, account_id: str, updates: dict) -> bool:
-        """Update label or other editable fields."""
+        """Update label, enabled status or other editable fields."""
         config = config_manager.get_config()
         accounts = config.get("telegramAccounts", [])
+        changed = False
+        
         for acc in accounts:
             if acc.get("id") == account_id:
                 if "label" in updates:
                     acc["label"] = updates["label"]
-                config["telegramAccounts"] = accounts
-                config_manager.save_config(config)
-                return True
+                    changed = True
+                if "enabled" in updates:
+                    acc["enabled"] = bool(updates["enabled"])
+                    changed = True
+                    logger.info(f"[TGManager] Account {account_id} enabled={acc['enabled']}")
+                
+                if changed:
+                    config["telegramAccounts"] = accounts
+                    config_manager.save_config(config)
+                    
+                    # If disabling, we don't necessarily disconnect, 
+                    # get_next_client will just skip it.
+                    # If enabling and has session but no client, we could try to connect.
+                    if acc.get("enabled") and acc.get("sessionString") and account_id not in self._clients:
+                        asyncio.create_task(self.activate(account_id, set_as_primary=False))
+                    
+                    return True
         return False
 
     # ------ Login Flow ------
@@ -175,8 +237,9 @@ class TelegramAccountManager:
             # Clean up pending session
             del self._login_sessions[account_id]
 
-            # Disconnect temporary client (will reconnect when activated)
+            # Re-activate in the pool immediately after login
             await client.disconnect()
+            await self.activate(account_id, set_as_primary=True)
 
             logger.info(f"[TGManager] Login successful for {account_id}: @{username}")
             return {
@@ -190,8 +253,11 @@ class TelegramAccountManager:
 
     # ------ Activate / Switch ------
 
-    async def activate(self, account_id: str) -> dict:
-        """Switch the active Telegram account. Disconnects old, connects new."""
+    async def activate(self, account_id: str, set_as_primary: bool = True) -> dict:
+        """
+        Connect/Activate an account. 
+        If set_as_primary=True, also sets it as self._client for legacy single-bot support.
+        """
         acc = self._find_account(account_id)
         if not acc:
             return {"success": False, "error": "账号不存在"}
@@ -199,22 +265,18 @@ class TelegramAccountManager:
         if not acc.get("sessionString"):
             return {"success": False, "error": "该账号尚未登录，请先完成登录"}
 
-        # Disconnect current client
-        if self._client:
-            try:
-                await self._client.disconnect()
-            except:
-                pass
-            self._client = None
-
         # Connect new client
         try:
             api_id = int(acc["apiId"])
             api_hash = acc["apiHash"]
             session = StringSession(acc["sessionString"])
 
-            client = TelegramClient(session, api_id, api_hash)
-            await client.connect()
+            # Check if already in pool and connected
+            if account_id in self._clients and self._clients[account_id].is_connected():
+                client = self._clients[account_id]
+            else:
+                client = TelegramClient(session, api_id, api_hash)
+                await client.connect()
 
             if not await client.is_user_authorized():
                 return {"success": False, "error": "会话已过期，请重新登录"}
@@ -222,57 +284,80 @@ class TelegramAccountManager:
             me = await client.get_me()
             username = me.username or me.first_name or "Unknown"
 
-            self._client = client
-            self._active_account_id = account_id
+            # Add to pool
+            self._clients[account_id] = client
+            
+            if set_as_primary:
+                self._client = client
+                self._active_account_id = account_id
 
-            logger.info(f"[TGManager] Activated account {account_id}: @{username}")
+            logger.info(f"[TGManager] Pooled account {account_id}: @{username} (Primary={set_as_primary})")
             return {
                 "success": True,
                 "username": username,
-                "message": f"已切换到: @{username}"
+                "message": f"账号已就绪: @{username}"
             }
         except Exception as e:
-            logger.error(f"[TGManager] Activate failed: {e}")
+            logger.error(f"[TGManager] Activate failed for {account_id}: {e}")
             return {"success": False, "error": str(e)}
 
     async def disconnect(self):
-        """Disconnect the current client."""
-        if self._client:
+        """Disconnect ALL clients in the pool."""
+        for aid, client in self._clients.items():
             try:
-                await self._client.disconnect()
+                await client.disconnect()
             except:
                 pass
-            self._client = None
-            self._active_account_id = None
+        self._clients = {}
+        self._client = None
+        self._active_account_id = None
 
     async def auto_connect(self):
-        """On startup, try to connect the first account that has a session."""
+        """On startup, try to connect ALL ENABLED accounts in the pool."""
         config = config_manager.get_config()
         accounts = config.get("telegramAccounts", [])
 
+        connected_count = 0
         for acc in accounts:
-            if acc.get("sessionString"):
-                logger.info(f"[TGManager] Auto-connecting account: {acc.get('label', acc['id'])}")
-                result = await self.activate(acc["id"])
+            if acc.get("sessionString") and acc.get("enabled", True):
+                # Always set the first successful one as primary
+                is_first = (connected_count == 0)
+                logger.info(f"[TGManager] Startup: connecting account {acc.get('label', acc['id'])}...")
+                result = await self.activate(acc["id"], set_as_primary=is_first)
                 if result.get("success"):
-                    return result
+                    connected_count += 1
                 else:
-                    logger.warning(f"[TGManager] Auto-connect failed for {acc['id']}: {result.get('error')}")
+                    logger.warning(f"[TGManager] Startup connect failed for {acc['id']}: {result.get('error')}")
 
-        # Fallback: try legacy single-account config
-        tg_config = config.get("verification", {}).get("telegram", {})
-        if tg_config.get("enabled") and tg_config.get("apiId") and tg_config.get("apiHash"):
-            logger.info("[TGManager] No multi-accounts found, trying legacy config...")
-            # Migrate legacy config → accounts array
-            legacy_id = self.add_account(
-                api_id=tg_config["apiId"],
-                api_hash=tg_config["apiHash"],
-                label="旧配置(已迁移)"
-            )
-            return {"success": False, "message": "旧配置已迁移到账号列表，请在后台重新登录"}
+        # Fallback: try legacy single-account config (migrate if exists)
+        if connected_count == 0:
+            tg_config = config.get("verification", {}).get("telegram", {})
+            if tg_config.get("enabled") and tg_config.get("apiId") and tg_config.get("apiHash"):
+                logger.info("[TGManager] No pooled accounts, migrating legacy config...")
+                self.add_account(
+                    api_id=tg_config["apiId"],
+                    api_hash=tg_config["apiHash"],
+                    label="旧配置(已迁移)"
+                )
+                return {"success": False, "message": "旧配置已迁移，请重新登录"}
 
-        logger.info("[TGManager] No accounts to auto-connect")
-        return {"success": False, "message": "No accounts configured"}
+        logger.info(f"[TGManager] Auto-connect finished. Pool size: {connected_count}")
+        return {"success": connected_count > 0}
+
+    # ------ Helpers ------
+
+    def _find_account(self, account_id: str) -> Optional[dict]:
+        config = config_manager.get_config()
+        for acc in config.get("telegramAccounts", []):
+            if acc.get("id") == account_id:
+                return acc
+        return None
+
+    @staticmethod
+    def _mask_phone(phone: str) -> str:
+        if not phone or len(phone) < 5:
+            return phone or ""
+        return phone[:3] + "****" + phone[-2:]
 
     # ------ Helpers ------
 

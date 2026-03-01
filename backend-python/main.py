@@ -1707,6 +1707,17 @@ async def remove_telegram_account(account_id: str):
     return {"success": True}
 
 
+@app.put("/api/telegram/accounts/{account_id}/toggle")
+async def toggle_telegram_account(account_id: str, request: Request):
+    """Enable or disable a Telegram account in the pool."""
+    data = await request.json()
+    enabled = data.get("enabled", True)
+    success = tg_manager.update_account(account_id, {"enabled": enabled})
+    if not success:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"success": True, "enabled": enabled}
+
+
 @app.post("/api/telegram/accounts/{account_id}/login")
 async def telegram_login_request(account_id: str, request: TelegramLoginRequest):
     """Step 1: Send verification code to phone"""
@@ -1786,17 +1797,28 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     warmup_bot = dual_config.get("warmupBot")
     verify_bot = dual_config.get("verifyBot")
 
-    # Process each link sequentially (dual bot flow is sequential by nature)
-    results = []
-    for link in clean_links:
-        result = await dual_bot.verify(
-            tg_manager.client, 
-            link, 
-            warmup_bot=warmup_bot, 
-            verify_bot=verify_bot, 
+    # Process each link (potentially in parallel across DIFFERENT accounts)
+    # We want to process links as they come, using any available client from the pool
+    async def process_single_link(link_to_verify):
+        # Get an available client and its ID from the pool
+        pool_item = tg_manager.get_next_client()
+        if not pool_item:
+            return {"success": False, "status": "error", "message": "当前没有可用的已启用 Telegram 账号"}
+        
+        acc_id, client = pool_item
+        return await dual_bot.verify(
+            client=client,
+            link=link_to_verify,
+            account_id=acc_id,
+            warmup_bot=warmup_bot,
+            verify_bot=verify_bot,
             auto_bypass=auto_bypass
         )
-        results.append(result)
+
+    # Use asyncio.gather to allow cross-account concurrency
+    # But note: inside verify(), each account is still locked to be sequential
+    tasks = [process_single_link(link) for link in clean_links]
+    results = await asyncio.gather(*tasks)
 
     # Log and deduct
     successful = sum(1 for r in results if r.get("success"))

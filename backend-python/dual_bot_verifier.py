@@ -227,16 +227,21 @@ class DualBotVerifier:
                 return result
 
         # 3. Explicit Failure Keywords
+        # ❌ is often used by robots to indicate definitive failure.
         fail_keywords = ["FAILED", "❌", "REJECTED", "UNSUCCESSFUL", "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "EXPIRED", "SUSAH", "KURANG"]
         for kw in fail_keywords:
             if kw in text_clean:
                 logger.info(f"[DualBot] Matched failure keyword: {kw}")
                 result["success"] = False
                 result["status"] = "failed"
-                if "QUOTA" in text_clean or "HABIS" in text_clean or "KURANG" in text_clean:
+                
+                # Indonesian/English combined failure reason mapping
+                if any(k in text_clean for k in ["QUOTA", "HABIS", "KURANG"]):
                     result["message"] = "Bot 额度不足 (Quota Exhausted)"
                 elif "EXPIRED" in text_clean:
                     result["message"] = "验证链接已过期 (Link Expired)"
+                elif "TIDAK BISA" in text_clean:
+                    result["message"] = "机器人无法验证 (Bot cannot verify)"
                 else:
                     result["message"] = f"验证失败: {text[:50]}..."
                 return result

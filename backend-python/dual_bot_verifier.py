@@ -66,18 +66,18 @@ class DualBotVerifier:
 
         logger.info(f"[DualBot] Warmup response: {warmup_result[:100]}...")
         
-        # Step 1 Check: Strict Success Required
-        # Parse the result first
-        warmup_parsed = self._parse_response(warmup_result, vid)
+        # Step 1 Check: Strict Success Required for WARMUP logic
+        # For Step 1, we pass is_warmup=True because SatsetHelperbot just needs to finish.
+        warmup_parsed = self._parse_response(warmup_result, vid, is_warmup=True)
         
-        # Only proceed to Step 2 if Stage 1 (Warmup) explicitly succeeded.
+        # Only proceed to Step 2 if Stage 1 (Warmup) explicitly succeeded (Finished).
         if not warmup_parsed.get("success"):
             logger.warning(f"[DualBot] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
             # Ensure the message is clear about which stage failed
             warmup_parsed["message"] = f"预热阶段未成功 (@{w_bot}): {warmup_parsed['message']}"
             return warmup_parsed
 
-        logger.info(f"[DualBot] Warmup stage SUCCEEDED. Proceeding to Step 2...")
+        logger.info(f"[DualBot] Warmup stage SUCCEEDED (Bot finished warmup). Proceeding to Step 2...")
 
         # ---- Step 2: Verify via @AutoGeminiProbot ----
         logger.info(f"[DualBot] Step 2: Verify {vid[:8]}... via @{v_bot}")
@@ -91,8 +91,8 @@ class DualBotVerifier:
                 "message": f"验证超时（@{v_bot} 没有回应，请重试）"
             }
 
-        # Parse result
-        parsed = self._parse_response(verify_result, vid)
+        # Parse result (Regular verification parsing)
+        parsed = self._parse_response(verify_result, vid, is_warmup=False)
 
         # ---- Step 3: Auto bypass on failure ----
         if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected"):
@@ -135,8 +135,9 @@ class DualBotVerifier:
 
             if wait_for_final:
                 # Check if this IS a final result or just a "Processing" status
-                parsed = self._parse_response(reply_text, "temp")
-                logger.info(f"[DualBot] Parsed status for @{bot_username}: {parsed['status']}")
+                # Use is_warmup=True for the 'wait' check to correctly identify finished state
+                parsed = self._parse_response(reply_text, "temp", is_warmup=True)
+                logger.debug(f"[DualBot] Parsed status for @{bot_username}: {parsed['status']}")
                 if parsed["status"] == "processing":
                     logger.info(f"[DualBot] Skipping intermediate status from @{bot_username}, continuing to wait...")
                     return
@@ -161,7 +162,7 @@ class DualBotVerifier:
 
     # ---- Parse bot response ----
 
-    def _parse_response(self, text: str, vid: str) -> dict:
+    def _parse_response(self, text: str, vid: str, is_warmup: bool = False) -> dict:
         """Parse bot response with a safe fallback to 'failed' if unknown."""
         if not text:
             return {
@@ -194,8 +195,18 @@ class DualBotVerifier:
         # Added Indonesian: PROSES SELESAI (Process Finished)
         success_keywords = [
             "CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", 
-            "SETUJU", "BERHASIL", "PROSES SELESAI", "PROCESS FINISHED"
+            "SETUJU", "BERHASIL"
         ]
+        
+        # If it's just a warmup bot, we treat 'Proses Selesai' as a success.
+        if is_warmup:
+            warmup_success = ["PROSES SELESAI", "PROCESS FINISHED"]
+            if any(kw in text_clean for kw in warmup_success):
+                result["success"] = True
+                result["status"] = "approved"
+                result["message"] = "预热完成"
+                return result
+
         if any(kw in text_clean for kw in success_keywords):
             result["success"] = True
             result["status"] = "approved"

@@ -84,7 +84,8 @@ class DualBotVerifier:
 
             # ---- Step 2: Verify via @AutoGeminiProbot ----
             logger.info(f"[DualBot] [{account_id}] Step 2: Verify {vid[:8]}... via @{v_bot}")
-            verify_result = await self._send_and_wait(client, v_bot, link, timeout=timeout)
+            # ENABLING wait_for_final=True because @AutoGeminiProbot edits "Processing" -> "Success/Fail"
+            verify_result = await self._send_and_wait(client, v_bot, link, wait_for_final=True, timeout=timeout)
 
             if verify_result is None:
                 return {
@@ -198,7 +199,10 @@ class DualBotVerifier:
             result["claimLink"] = link_match.group(1)
 
         # 1. Check for processing status FIRST (Priority to avoid false positives)
-        proc_keywords = ["SEDANG MEMPROSES", "PROCESSING YOUR", "PROCESSING...", "WAIT...", "⏳", "LOADING"]
+        proc_keywords = [
+            "SEDANG MEMPROSES", "SEDANG DI PROSES", "PROCESSING YOUR", "PROCESSING...", 
+            "WAIT...", "⏳", "LOADING", "MOHON TUNGGU", "TUNGGU SEBENTAR"
+        ]
         for kw in proc_keywords:
             if kw in text_clean:
                 logger.info(f"[DualBot] Matched processing keyword: {kw}")

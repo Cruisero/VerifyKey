@@ -71,6 +71,14 @@ export default function Verify() {
                     const data = await res.json();
                     setProvider(data.aiGenerator?.provider || 'telegram');
                     setBrowserMode(data.verification?.browserMode === true);
+
+                    // Auto-select verify method based on admin config
+                    if (data.verification?.dualBot?.enabled) {
+                        setVerifyMethod('dualbot');
+                    } else {
+                        setVerifyMethod('standard');
+                    }
+
                     // Check if dual bot is available (has accounts connected)
                     const hasDualBot = data.verification?.dualBot?.warmupBot && data.verification?.dualBot?.verifyBot;
                     setDualBotEnabled(!!hasDualBot);
@@ -507,39 +515,7 @@ export default function Verify() {
                                 disabled={verifyStatus === 'processing'}
                             />
 
-                            {/* Verify Method Selector (Telegram mode) */}
-                            {provider === 'telegram' && dualBotEnabled && (
-                                <div style={{
-                                    display: 'flex', gap: '8px', marginBottom: '8px'
-                                }}>
-                                    <button
-                                        onClick={() => setVerifyMethod('standard')}
-                                        style={{
-                                            flex: 1, padding: '8px 12px',
-                                            background: verifyMethod === 'standard'
-                                                ? 'linear-gradient(135deg, #0088cc, #005fa3)'
-                                                : 'var(--bg-secondary)',
-                                            color: verifyMethod === 'standard' ? 'white' : 'var(--text-secondary)',
-                                            border: 'none', borderRadius: '8px',
-                                            fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >📨 Standard Bot</button>
-                                    <button
-                                        onClick={() => setVerifyMethod('dualbot')}
-                                        style={{
-                                            flex: 1, padding: '8px 12px',
-                                            background: verifyMethod === 'dualbot'
-                                                ? 'linear-gradient(135deg, #00c853, #00a844)'
-                                                : 'var(--bg-secondary)',
-                                            color: verifyMethod === 'dualbot' ? 'white' : 'var(--text-secondary)',
-                                            border: 'none', borderRadius: '8px',
-                                            fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >🤖 Dual Bot</button>
-                                </div>
-                            )}
+                            {/* Verify Method Selector removed - controlled by Admin */}
 
                             {/* CDK Input Row */}
                             <div className="cdk-inline-row">

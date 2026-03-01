@@ -308,16 +308,23 @@ class DualBotVerifier:
                 logger.info(f"[Bypass] Current step for {vid[:8]}: {step}")
 
                 # If SheerID is still processing the previous document, wait for it to finish
+                # SheerID pending can last 30-60s after bot verification
                 retry_count = 0
-                while step == "pending" and retry_count < 5:
-                    logger.info(f"[Bypass] Link is pending, waiting 2s... ({retry_count+1}/5)")
-                    await asyncio.sleep(2)
+                max_pending_polls = 15
+                while step == "pending" and retry_count < max_pending_polls:
+                    logger.info(f"[Bypass] Link is pending, waiting 3s... ({retry_count+1}/{max_pending_polls})")
+                    await asyncio.sleep(3)
                     check_resp = await client.get(f"{base_url}/verification/{vid}")
                     step = check_resp.json().get("currentStep", "")
                     retry_count += 1
                 
                 if step == "pending":
-                    logger.warning(f"[Bypass] Link is STILL pending after 10s. Cannot bypass.")
+                    logger.warning(f"[Bypass] Link is STILL pending after {max_pending_polls*3}s. Cannot bypass.")
+                    return False
+                
+                # If step moved to "success", no need to bypass
+                if step == "success":
+                    logger.info(f"[Bypass] Link moved to success during pending wait. No bypass needed.")
                     return False
 
                 # Skip SSO if needed

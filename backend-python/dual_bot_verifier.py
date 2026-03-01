@@ -113,6 +113,7 @@ class DualBotVerifier:
         """
         Send a message to a bot and wait for the reply.
         If wait_for_final is True, skips 'Processing' messages and waits for a definitive response.
+        Supports both NewMessage and MessageEdited events.
         """
         loop = asyncio.get_event_loop()
         future = loop.create_future()
@@ -124,14 +125,14 @@ class DualBotVerifier:
             # Capture either text or photo caption
             reply_text = event.message.text or event.message.message or ""
             # Also check photo caption specifically if text/message is empty
-            if not reply_text and event.message.photo:
+            if not reply_text and hasattr(event.message, 'photo') and event.message.photo:
                 reply_text = event.message.caption or ""
                 
             if not reply_text:
-                logger.debug(f"[DualBot] Received empty message from @{bot_username}")
                 return
 
-            logger.info(f"[DualBot] Message from @{bot_username}: {reply_text[:100]}...")
+            event_type = "New" if isinstance(event, events.NewMessage.Event) else "Edit"
+            logger.info(f"[DualBot] {event_type} message from @{bot_username}: {reply_text[:100]}...")
 
             if wait_for_final:
                 # Check if this IS a final result or just a "Processing" status
@@ -143,8 +144,9 @@ class DualBotVerifier:
             
             future.set_result(reply_text)
 
-        # Register temporary handler
+        # Register temporary handlers for both new messages and edits
         client.add_event_handler(handler, events.NewMessage(from_users=bot_username))
+        client.add_event_handler(handler, events.MessageEdited(from_users=bot_username))
 
         try:
             await client.send_message(bot_username, message)
@@ -157,7 +159,8 @@ class DualBotVerifier:
             logger.error(f"[DualBot] Error with @{bot_username}: {e}")
             return None
         finally:
-            client.remove_event_handler(handler)
+            client.remove_event_handler(handler, events.NewMessage)
+            client.remove_event_handler(handler, events.MessageEdited)
 
     # ---- Parse bot response ----
 

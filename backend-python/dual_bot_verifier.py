@@ -259,8 +259,8 @@ class DualBotVerifier:
                 result["status"] = "approved"
                 result["message"] = "验证通过"
                 
-                # Extract remaining quota from "Total tersedia: X verifikasi"
-                quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*(\d+)', text_clean)
+                # Extract remaining quota from "Total tersedia: X verifikasi" (handles **bold** markdown)
+                quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
                 if quota_match:
                     result["remaining_quota"] = int(quota_match.group(1))
                     logger.info(f"[DualBot] Extracted remaining quota: {result['remaining_quota']}")
@@ -282,8 +282,16 @@ class DualBotVerifier:
                 # Indonesian/English combined failure reason mapping
                 if any(k in text_clean for k in ["HABIS", "KURANG", "TIDAK BISA"]):
                     result["message"] = "程序崩溃，请重试"
+                    # Extract quota from "Quota: X/Y" format (handles **bold**)
+                    quota_match = re.search(r'QUOTA[:\s]*\*{0,2}(\d+)\*{0,2}/\*{0,2}\d+\*{0,2}', text_clean)
+                    if quota_match:
+                        result["remaining_quota"] = int(quota_match.group(1))
                 else:
                     result["message"] = f"验证失败: {text[:50]}..."
+                    # Also try to extract quota from failure messages
+                    quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
+                    if quota_match:
+                        result["remaining_quota"] = int(quota_match.group(1))
                 return result
 
         # 3. Check for success (Priority 3)

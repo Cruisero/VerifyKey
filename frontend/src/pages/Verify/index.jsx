@@ -200,54 +200,147 @@ export default function Verify() {
 
         try {
             const apiEndpoint = verifyMethod === 'dualbot' ? '/api/verify/dualbot' : '/api/verify/telegram';
-            const response = await fetch(`${API_BASE}${apiEndpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ links, cdk: cdkCode })
-            });
 
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({ detail: response.statusText }));
-                throw new Error(err.detail || `Request failed: ${response.status}`);
-            }
+            if (verifyMethod === 'dualbot') {
+                // SSE streaming mode for dualbot
+                const response = await fetch(`${API_BASE}${apiEndpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ links, cdk: cdkCode })
+                });
 
-            const data = await response.json();
-            if (data.results && Array.isArray(data.results)) {
-                for (const result of data.results) {
-                    const resultItem = resultItems.find(r =>
-                        r.fullLink === result.link || r.verificationId === result.verificationId
-                    );
-                    if (resultItem) {
-                        let status = 'failed';
-                        let message = result.message || t('msgError');
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(err.detail || `Request failed: ${response.status}`);
+                }
 
-                        if (result.status === 'approved') {
-                            status = 'success';
-                            message = result.message || t('msgApproved');
-                            setLastSuccess(new Date().toISOString());
-                            fetchHistory();
-                        } else if (result.status === 'processing') {
-                            status = 'processing';
-                            message = result.message || t('processing');
-                        } else if (result.status === 'rejected') {
-                            message = result.message || t('msgRejected');
-                        } else if (result.status === 'no_credits') {
-                            message = t('msgNoCredits');
-                        }
-                        setResults(prev => prev.map(r =>
-                            r.id === resultItem.id
-                                ? {
-                                    ...r, status, message, verificationId: result.verificationId || r.verificationId,
-                                    credits: result.credits, claimLink: result.claimLink, reason: result.reason
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const event = JSON.parse(line.slice(6));
+
+                            if (event.type === 'progress') {
+                                // Update the specific link's progress message
+                                const stepMessages = {
+                                    warmup: '📄 文档生成中...',
+                                    verify: '📤 提交文档中...',
+                                    waiting: '⏳ 等待验证...',
+                                    cooldown_wait: `⏳ ${event.message}`
+                                };
+                                const progressMsg = stepMessages[event.step] || event.message;
+
+                                setResults(prev => prev.map(r => {
+                                    const matchVid = r.verificationId === event.vid || r.fullLink === event.link;
+                                    return matchVid && r.status === 'processing'
+                                        ? { ...r, message: progressMsg }
+                                        : r;
+                                }));
+                            } else if (event.type === 'done') {
+                                // Process final results
+                                if (event.results && Array.isArray(event.results)) {
+                                    for (const result of event.results) {
+                                        const resultItem = resultItems.find(r =>
+                                            r.fullLink === result.link || r.verificationId === result.verificationId
+                                        );
+                                        if (resultItem) {
+                                            let status = 'failed';
+                                            let message = result.message || t('msgError');
+
+                                            if (result.status === 'approved') {
+                                                status = 'success';
+                                                message = result.message || t('msgApproved');
+                                                setLastSuccess(new Date().toISOString());
+                                                fetchHistory();
+                                            } else if (result.status === 'processing') {
+                                                status = 'processing';
+                                                message = result.message || t('processing');
+                                            } else if (result.status === 'rejected') {
+                                                message = result.message || t('msgRejected');
+                                            } else if (result.status === 'no_credits') {
+                                                message = t('msgNoCredits');
+                                            }
+                                            setResults(prev => prev.map(r =>
+                                                r.id === resultItem.id
+                                                    ? {
+                                                        ...r, status, message, verificationId: result.verificationId || r.verificationId,
+                                                        credits: result.credits, claimLink: result.claimLink, reason: result.reason
+                                                    }
+                                                    : r
+                                            ));
+                                        }
+                                    }
                                 }
-                                : r
-                        ));
+                                if (event.cdkRemaining !== undefined) {
+                                    setCdkRemaining(event.cdkRemaining);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('SSE parse error:', e);
+                        }
                     }
                 }
-            }
-            // Update CDK remaining from response
-            if (data.cdkRemaining !== undefined) {
-                setCdkRemaining(data.cdkRemaining);
+            } else {
+                // Standard JSON mode for non-dualbot
+                const response = await fetch(`${API_BASE}${apiEndpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ links, cdk: cdkCode })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(err.detail || `Request failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (data.results && Array.isArray(data.results)) {
+                    for (const result of data.results) {
+                        const resultItem = resultItems.find(r =>
+                            r.fullLink === result.link || r.verificationId === result.verificationId
+                        );
+                        if (resultItem) {
+                            let status = 'failed';
+                            let message = result.message || t('msgError');
+
+                            if (result.status === 'approved') {
+                                status = 'success';
+                                message = result.message || t('msgApproved');
+                                setLastSuccess(new Date().toISOString());
+                                fetchHistory();
+                            } else if (result.status === 'processing') {
+                                status = 'processing';
+                                message = result.message || t('processing');
+                            } else if (result.status === 'rejected') {
+                                message = result.message || t('msgRejected');
+                            } else if (result.status === 'no_credits') {
+                                message = t('msgNoCredits');
+                            }
+                            setResults(prev => prev.map(r =>
+                                r.id === resultItem.id
+                                    ? {
+                                        ...r, status, message, verificationId: result.verificationId || r.verificationId,
+                                        credits: result.credits, claimLink: result.claimLink, reason: result.reason
+                                    }
+                                    : r
+                            ));
+                        }
+                    }
+                }
+                if (data.cdkRemaining !== undefined) {
+                    setCdkRemaining(data.cdkRemaining);
+                }
             }
         } catch (error) {
             console.error('Telegram verify error:', error);

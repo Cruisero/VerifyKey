@@ -32,7 +32,7 @@ class DualBotVerifier:
             self._locks[account_id] = asyncio.Lock()
         return self._locks[account_id]
 
-    async def verify(self, client: TelegramClient, link: str, account_id: str = "default", warmup_bot: str = None, verify_bot: str = None, auto_bypass: bool = True, timeout: int = 120) -> dict:
+    async def verify(self, client: TelegramClient, link: str, account_id: str = "default", warmup_bot: str = None, verify_bot: str = None, auto_bypass: bool = True, timeout: int = 120, on_progress=None) -> dict:
         """
         Run full dual-bot verification pipeline with per-account locking.
 
@@ -44,7 +44,15 @@ class DualBotVerifier:
             verify_bot: Username of the verification bot
             auto_bypass: Whether to automatically refresh the link on failure
             timeout: Maximum time to wait for responses
+            on_progress: Optional async callback(dict) for progress updates
         """
+        async def emit(step, message):
+            if on_progress:
+                try:
+                    await on_progress({"step": step, "message": message})
+                except Exception:
+                    pass
+
         async with self._get_lock(account_id):
             if not client or not client.is_connected():
                 return {"success": False, "status": "error", "message": "Telegram 未连接"}
@@ -58,6 +66,7 @@ class DualBotVerifier:
                 return {"success": False, "status": "error", "message": "无法从链接中提取 verificationId"}
 
             # ---- Step 1: Warmup via @SatsetHelperbot ----
+            await emit("warmup", "文档生成中...")
             logger.info(f"[DualBot] [{account_id}] Step 1: Warmup {vid[:8]}... via @{w_bot}")
             # We wait for the FINAL result (not just 'Processing...')
             warmup_result = await self._send_and_wait(client, w_bot, link, wait_for_final=True, timeout=90)
@@ -83,9 +92,20 @@ class DualBotVerifier:
             logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
 
             # ---- Step 2: Verify via @AutoGeminiProbot ----
+            await emit("verify", "提交文档中...")
             logger.info(f"[DualBot] [{account_id}] Step 2: Verify {vid[:8]}... via @{v_bot}")
+            
+            # Schedule a delayed "waiting" progress update
+            async def delayed_waiting():
+                await asyncio.sleep(10)
+                await emit("waiting", "等待验证...")
+            waiting_task = asyncio.create_task(delayed_waiting())
+            
             # ENABLING wait_for_final=True because @AutoGeminiProbot edits "Processing" -> "Success/Fail"
             verify_result = await self._send_and_wait(client, v_bot, link, wait_for_final=True, timeout=timeout)
+            
+            # Cancel the delayed waiting task if verification completes before 10s
+            waiting_task.cancel()
 
             if verify_result is None:
                 return {
@@ -104,7 +124,7 @@ class DualBotVerifier:
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
                 logger.info(f"[DualBot] [{account_id}] Step 3: Launching background bypass for {vid[:8]}...")
                 asyncio.create_task(self._background_bypass(vid, account_id))
-                parsed["message"] = "验证失败，系统正在后台自动刷新链接"
+                parsed["message"] = "验证失败，请刷新页面获取新链接重试"
                 parsed["bypassed"] = "pending"
 
             return parsed

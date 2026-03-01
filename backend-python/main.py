@@ -17,7 +17,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -1759,7 +1759,7 @@ class DualBotVerifyRequest(BaseModel):
 @app.post("/api/verify/dualbot")
 async def verify_via_dualbot(request: DualBotVerifyRequest):
     """
-    Verify using Dual Bot pipeline:
+    Verify using Dual Bot pipeline with SSE streaming progress:
     @SatsetHelperbot (warmup) → @AutoGeminiProbot (verify) → auto bypass on failure
     """
     if not tg_manager.is_connected:
@@ -1790,102 +1790,133 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         )
 
     # Get dual bot config
-    import config_manager
-    config = config_manager.get_config()
-    dual_config = config.get("verification", {}).get("dualBot", {})
+    import config_manager as cm
+    cfg = cm.get_config()
+    dual_config = cfg.get("verification", {}).get("dualBot", {})
     auto_bypass = dual_config.get("autoBypass", True)
     warmup_bot = dual_config.get("warmupBot")
     verify_bot = dual_config.get("verifyBot")
 
-    # Lock to ensure FIFO ordering when all accounts are in cooldown
-    cooldown_wait_lock = asyncio.Lock()
+    # Extract VIDs for link-to-vid mapping
+    import re as re_mod
+    def extract_vid(link):
+        m = re_mod.search(r'verificationId=([A-Za-z0-9-]+)', link)
+        return m.group(1) if m else link[-12:]
 
-    # Process each link (potentially in parallel across DIFFERENT accounts)
-    # With cooldown auto-retry: if an account is in cooldown, try another one
-    async def process_single_link(link_to_verify):
-        max_retries = 5  # Prevent infinite retry loops
+    link_vid_map = {link: extract_vid(link) for link in clean_links}
+
+    async def event_stream():
+        import json
         
-        for attempt in range(max_retries):
-            # Get an available client from the pool
-            pool_item = tg_manager.get_next_client()
+        # Lock to ensure FIFO ordering when all accounts are in cooldown
+        cooldown_wait_lock = asyncio.Lock()
+        
+        async def process_single_link(link_to_verify):
+            vid = link_vid_map.get(link_to_verify, "")
+            max_retries = 5
             
-            if not pool_item:
-                # All accounts in cooldown — wait for the shortest one to expire
-                wait_time = tg_manager.get_shortest_cooldown_wait()
-                if wait_time > 0:
-                    logger.info(f"[Verify] All accounts in cooldown, waiting {wait_time:.0f}s for next available...")
-                    # Use lock to enforce FIFO ordering among waiting links
-                    async with cooldown_wait_lock:
-                        # Re-check after acquiring lock (another task may have already waited)
-                        pool_item = tg_manager.get_next_client()
-                        if not pool_item:
-                            wait_time = tg_manager.get_shortest_cooldown_wait()
-                            if wait_time > 0:
-                                await asyncio.sleep(wait_time + 2)  # +2s buffer
-                            pool_item = tg_manager.get_next_client()
+            async def on_progress(progress):
+                event = {"type": "progress", "link": link_to_verify, "vid": vid, **progress}
+                yield_data = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                progress_events.append(yield_data)
+
+            for attempt in range(max_retries):
+                pool_item = tg_manager.get_next_client()
                 
                 if not pool_item:
-                    return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+                    wait_time = tg_manager.get_shortest_cooldown_wait()
+                    if wait_time > 0:
+                        logger.info(f"[Verify] All accounts in cooldown, waiting {wait_time:.0f}s...")
+                        on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "step": "cooldown_wait", "message": f"等待可用账号 ({int(wait_time)}s)..."}
+                        progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
+                        async with cooldown_wait_lock:
+                            pool_item = tg_manager.get_next_client()
+                            if not pool_item:
+                                wait_time = tg_manager.get_shortest_cooldown_wait()
+                                if wait_time > 0:
+                                    await asyncio.sleep(wait_time + 2)
+                                pool_item = tg_manager.get_next_client()
+                    
+                    if not pool_item:
+                        return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+                
+                acc_id, client = pool_item
+                result = await dual_bot.verify(
+                    client=client,
+                    link=link_to_verify,
+                    account_id=acc_id,
+                    warmup_bot=warmup_bot,
+                    verify_bot=verify_bot,
+                    auto_bypass=auto_bypass,
+                    on_progress=on_progress
+                )
+                
+                if result.get("status") == "cooldown":
+                    logger.info(f"[Verify] Account {acc_id} in cooldown, retrying...")
+                    tg_manager.set_cooldown(acc_id, result.get("cooldown_seconds", 90))
+                    if result.get("remaining_quota") is not None:
+                        tg_manager.update_quota(acc_id, result["remaining_quota"])
+                    continue
+                
+                return acc_id, result
             
-            acc_id, client = pool_item
-            result = await dual_bot.verify(
-                client=client,
-                link=link_to_verify,
-                account_id=acc_id,
-                warmup_bot=warmup_bot,
-                verify_bot=verify_bot,
-                auto_bypass=auto_bypass
-            )
-            
-            # If cooldown detected, mark this account and retry with another
-            if result.get("status") == "cooldown":
-                logger.info(f"[Verify] Account {acc_id} in cooldown, retrying with another account (attempt {attempt+1})...")
-                tg_manager.set_cooldown(acc_id, result.get("cooldown_seconds", 90))
-                if result.get("remaining_quota") is not None:
-                    tg_manager.update_quota(acc_id, result["remaining_quota"])
-                continue  # Retry with next available account
-            
-            return acc_id, result
+            return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+
+        # Shared progress events list (appended by callbacks, consumed by stream)
+        progress_events = []
         
-        # All retries exhausted (all accounts repeatedly in cooldown)
-        return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+        # Start all verifications in parallel
+        tasks = [asyncio.create_task(process_single_link(link)) for link in clean_links]
+        
+        # Stream progress events while tasks are running
+        while not all(t.done() for t in tasks):
+            # Flush any accumulated progress events
+            while progress_events:
+                yield progress_events.pop(0)
+            await asyncio.sleep(0.3)
+        
+        # Flush remaining progress events
+        while progress_events:
+            yield progress_events.pop(0)
 
-    # Use asyncio.gather to allow cross-account concurrency
-    # But note: inside verify(), each account is still locked to be sequential
-    tasks = [process_single_link(link) for link in clean_links]
-    paired_results = await asyncio.gather(*tasks)
+        # Gather results
+        paired_results = [t.result() for t in tasks]
+        
+        # Extract results and update quotas
+        results = []
+        for acc_id, r in paired_results:
+            results.append(r)
+            if acc_id and r.get("remaining_quota") is not None:
+                tg_manager.update_quota(acc_id, r["remaining_quota"])
 
-    # Extract results and update quotas
-    results = []
-    for acc_id, r in paired_results:
-        results.append(r)
-        # Update bot quota if available
-        if acc_id and r.get("remaining_quota") is not None:
-            tg_manager.update_quota(acc_id, r["remaining_quota"])
+        # Log and deduct
+        successful = sum(1 for r in results if r.get("success"))
+        cdk_remaining = cdk_check["remaining"]
+        if successful > 0:
+            deduct = cdk_manager.use_cdk(request.cdk, successful)
+            cdk_remaining = deduct.get("remaining", cdk_remaining)
 
-    # Log and deduct
-    successful = sum(1 for r in results if r.get("success"))
-    cdk_remaining = cdk_check["remaining"]
-    if successful > 0:
-        deduct = cdk_manager.use_cdk(request.cdk, successful)
-        cdk_remaining = deduct.get("remaining", cdk_remaining)
+        for r in results:
+            vid = r.get("verificationId", "")
+            if r.get("status") == "approved":
+                verification_history.log_verification("pass", vid)
+            elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
+                verification_history.log_verification("failed", vid)
 
-    for r in results:
-        vid = r.get("verificationId", "")
-        if r.get("status") == "approved":
-            verification_history.log_verification("pass", vid)
-        elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
-            verification_history.log_verification("failed", vid)
+        # Send final done event with all results
+        done_event = {
+            "type": "done",
+            "results": results,
+            "stats": {
+                "total": len(results),
+                "approved": successful,
+                "failed": sum(1 for r in results if not r.get("success"))
+            },
+            "cdkRemaining": cdk_remaining
+        }
+        yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
 
-    return {
-        "results": results,
-        "stats": {
-            "total": len(results),
-            "approved": successful,
-            "failed": sum(1 for r in results if not r.get("success"))
-        },
-        "cdkRemaining": cdk_remaining
-    }
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 # ========== Bypass API Endpoints ==========

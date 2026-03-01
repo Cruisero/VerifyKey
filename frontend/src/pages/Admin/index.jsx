@@ -489,22 +489,6 @@ export default function Admin() {
         setTgLoading(false);
     };
 
-    const handleTgActivate = async (accountId) => {
-        setTgLoading(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}/activate`, {
-                method: 'POST'
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-                fetchTgAccounts();
-            } else {
-                alert(data.detail || data.error || '切换失败');
-            }
-        } catch (e) { alert('切换失败: ' + e.message); }
-        setTgLoading(false);
-    };
-
     const handleTgRemove = async (accountId) => {
         if (!window.confirm('确定要删除这个账号吗？')) return;
         try {
@@ -1921,19 +1905,15 @@ export default function Admin() {
                                                     <div key={acc.id} style={{
                                                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                                         padding: '12px 16px',
-                                                        background: acc.active
-                                                            ? 'linear-gradient(135deg, rgba(105,240,174,0.08), rgba(0,136,204,0.05))'
-                                                            : 'var(--bg-secondary)',
+                                                        background: 'var(--bg-secondary)',
                                                         borderRadius: '10px',
-                                                        border: acc.active ? '1.5px solid rgba(105,240,174,0.35)' : '1.5px solid transparent',
+                                                        border: '1.5px solid transparent',
                                                         transition: 'all 0.25s ease'
                                                     }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
                                                             <div style={{
                                                                 width: '36px', height: '36px', borderRadius: '10px',
-                                                                background: acc.active
-                                                                    ? 'linear-gradient(135deg, #0088cc, #00bcd4)'
-                                                                    : acc.hasSession ? 'linear-gradient(135deg, #ff9800, #f57c00)' : 'linear-gradient(135deg, #9e9e9e, #757575)',
+                                                                background: acc.hasSession ? 'linear-gradient(135deg, #0088cc, #00bcd4)' : 'linear-gradient(135deg, #9e9e9e, #757575)',
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                                 fontSize: '16px', color: 'white', fontWeight: 700, flexShrink: 0
                                                             }}>
@@ -1944,13 +1924,6 @@ export default function Admin() {
                                                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                         {acc.label || '未命名'}
                                                                     </span>
-                                                                    {acc.active && (
-                                                                        <span style={{
-                                                                            fontSize: '10px', padding: '2px 8px',
-                                                                            background: 'linear-gradient(135deg, #00c853, #00a844)',
-                                                                            color: 'white', borderRadius: '10px', fontWeight: 700, flexShrink: 0
-                                                                        }}>使用中</span>
-                                                                    )}
                                                                 </div>
                                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                     <span>{acc.phone || (acc.hasSession ? '已登录' : '未登录')}</span>
@@ -2016,17 +1989,6 @@ export default function Admin() {
                                                                         }}
                                                                     >登录</button>
                                                                 )}
-                                                                {acc.hasSession && !acc.active && (
-                                                                    <button onClick={() => handleTgActivate(acc.id)}
-                                                                        disabled={tgLoading}
-                                                                        style={{
-                                                                            padding: '6px 16px', fontSize: '12px', fontWeight: 600,
-                                                                            background: 'linear-gradient(135deg, #00c853, #00a844)',
-                                                                            color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer',
-                                                                            transition: 'all 0.2s'
-                                                                        }}
-                                                                    >切换使用</button>
-                                                                )}
                                                                 <button onClick={() => handleTgRemove(acc.id)}
                                                                     style={{
                                                                         padding: '6px 8px', fontSize: '12px',
@@ -2042,1176 +2004,1176 @@ export default function Admin() {
                                             </div>
                                         )}
 
-                                                {/* Login Flow */}
-                                                {tgLoginAccountId && (
-                                                    <div style={{
-                                                        padding: '20px', borderRadius: '12px', marginBottom: '16px',
-                                                        background: 'linear-gradient(135deg, rgba(0,136,204,0.06), rgba(0,136,204,0.02))',
-                                                        border: '1.5px solid rgba(0,136,204,0.2)'
-                                                    }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                <span style={{ fontSize: '20px' }}>🔐</span>
-                                                                <div>
-                                                                    <div style={{ fontWeight: 700, fontSize: '14px' }}>登录 Telegram</div>
-                                                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                                                        {tgLoginStep === 'phone' ? '步骤 1/2 · 输入手机号' :
-                                                                            tgLoginStep === 'code' ? '步骤 2/2 · 输入验证码' :
-                                                                                tgLoginStep === 'password' ? '额外步骤 · 两步验证' : '完成'}
-                                                                    </div>
-                                                                </div>
+                                        {/* Login Flow */}
+                                        {tgLoginAccountId && (
+                                            <div style={{
+                                                padding: '20px', borderRadius: '12px', marginBottom: '16px',
+                                                background: 'linear-gradient(135deg, rgba(0,136,204,0.06), rgba(0,136,204,0.02))',
+                                                border: '1.5px solid rgba(0,136,204,0.2)'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <span style={{ fontSize: '20px' }}>🔐</span>
+                                                        <div>
+                                                            <div style={{ fontWeight: 700, fontSize: '14px' }}>登录 Telegram</div>
+                                                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                                {tgLoginStep === 'phone' ? '步骤 1/2 · 输入手机号' :
+                                                                    tgLoginStep === 'code' ? '步骤 2/2 · 输入验证码' :
+                                                                        tgLoginStep === 'password' ? '额外步骤 · 两步验证' : '完成'}
                                                             </div>
-                                                            <button onClick={() => { setTgLoginAccountId(null); setTgLoginStep('idle'); }}
-                                                                style={{ background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px 8px' }}>✕</button>
                                                         </div>
+                                                    </div>
+                                                    <button onClick={() => { setTgLoginAccountId(null); setTgLoginStep('idle'); }}
+                                                        style={{ background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px 8px' }}>✕</button>
+                                                </div>
 
-                                                        {/* Step progress bar */}
-                                                        <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
-                                                            {['phone', 'code'].map((s, i) => (
-                                                                <div key={s} style={{
-                                                                    flex: 1, height: '3px', borderRadius: '2px',
-                                                                    background: ['phone', 'code', 'password', 'done'].indexOf(tgLoginStep) >= i
-                                                                        ? '#0088cc' : 'var(--border)',
-                                                                    transition: 'background 0.3s'
-                                                                }} />
-                                                            ))}
-                                                        </div>
+                                                {/* Step progress bar */}
+                                                <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+                                                    {['phone', 'code'].map((s, i) => (
+                                                        <div key={s} style={{
+                                                            flex: 1, height: '3px', borderRadius: '2px',
+                                                            background: ['phone', 'code', 'password', 'done'].indexOf(tgLoginStep) >= i
+                                                                ? '#0088cc' : 'var(--border)',
+                                                            transition: 'background 0.3s'
+                                                        }} />
+                                                    ))}
+                                                </div>
 
-                                                        {tgLoginStep === 'phone' && (
-                                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                                <input type="text" className="input" value={tgLoginPhone}
-                                                                    onChange={e => setTgLoginPhone(e.target.value)}
-                                                                    placeholder="+86 138xxxx5678"
-                                                                    style={{ flex: 1 }}
-                                                                />
-                                                                <button onClick={() => handleTgLoginRequest(tgLoginAccountId)}
-                                                                    disabled={tgLoading || !tgLoginPhone}
-                                                                    style={{
-                                                                        padding: '8px 20px', background: '#0088cc', color: 'white',
-                                                                        border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
-                                                                        opacity: (tgLoading || !tgLoginPhone) ? 0.5 : 1, whiteSpace: 'nowrap'
-                                                                    }}>{tgLoading ? '⏳' : '发送验证码'}</button>
-                                                            </div>
-                                                        )}
-
-                                                        {tgLoginStep === 'code' && (
-                                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                                <input type="text" className="input" value={tgLoginCode}
-                                                                    onChange={e => setTgLoginCode(e.target.value)}
-                                                                    placeholder="12345"
-                                                                    style={{ flex: 1, letterSpacing: '6px', textAlign: 'center', fontSize: '20px', fontWeight: 700 }}
-                                                                    autoFocus maxLength={6}
-                                                                />
-                                                                <button onClick={() => handleTgVerifyCode(tgLoginAccountId)}
-                                                                    disabled={tgLoading || !tgLoginCode}
-                                                                    style={{
-                                                                        padding: '8px 20px', background: '#00c853', color: 'white',
-                                                                        border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
-                                                                        opacity: (tgLoading || !tgLoginCode) ? 0.5 : 1, whiteSpace: 'nowrap'
-                                                                    }}>{tgLoading ? '⏳' : '确认'}</button>
-                                                            </div>
-                                                        )}
-
-                                                        {tgLoginStep === 'password' && (
-                                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                                <input type="password" className="input" value={tgLoginPassword}
-                                                                    onChange={e => setTgLoginPassword(e.target.value)}
-                                                                    placeholder="两步验证密码"
-                                                                    style={{ flex: 1 }} autoFocus
-                                                                />
-                                                                <button onClick={() => handleTgVerifyCode(tgLoginAccountId)}
-                                                                    disabled={tgLoading || !tgLoginPassword}
-                                                                    style={{
-                                                                        padding: '8px 20px', background: '#00c853', color: 'white',
-                                                                        border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
-                                                                        opacity: (tgLoading || !tgLoginPassword) ? 0.5 : 1, whiteSpace: 'nowrap'
-                                                                    }}>{tgLoading ? '⏳' : '确认'}</button>
-                                                            </div>
-                                                        )}
-
-                                                        {tgLoginMsg && (
-                                                            <div style={{
-                                                                marginTop: '10px', padding: '8px 12px', borderRadius: '8px',
-                                                                background: tgLoginMsg.includes('✅') ? 'rgba(0,200,83,0.1)' : 'rgba(0,136,204,0.08)',
-                                                                fontSize: '13px',
-                                                                color: tgLoginMsg.includes('✅') ? '#00c853' : 'var(--text-primary)'
-                                                            }}>{tgLoginMsg}</div>
-                                                        )}
+                                                {tgLoginStep === 'phone' && (
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <input type="text" className="input" value={tgLoginPhone}
+                                                            onChange={e => setTgLoginPhone(e.target.value)}
+                                                            placeholder="+86 138xxxx5678"
+                                                            style={{ flex: 1 }}
+                                                        />
+                                                        <button onClick={() => handleTgLoginRequest(tgLoginAccountId)}
+                                                            disabled={tgLoading || !tgLoginPhone}
+                                                            style={{
+                                                                padding: '8px 20px', background: '#0088cc', color: 'white',
+                                                                border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
+                                                                opacity: (tgLoading || !tgLoginPhone) ? 0.5 : 1, whiteSpace: 'nowrap'
+                                                            }}>{tgLoading ? '⏳' : '发送验证码'}</button>
                                                     </div>
                                                 )}
 
-                                                {/* Add Account Button / Form */}
-                                                {tgShowAdd ? (
-                                                    <div style={{
-                                                        padding: '20px', borderRadius: '12px', marginBottom: '20px',
-                                                        background: 'var(--bg-secondary)', border: '1.5px dashed var(--border)'
-                                                    }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                                                            <span style={{ fontSize: '16px' }}>➕</span>
-                                                            <span style={{ fontWeight: 700, fontSize: '14px' }}>添加 Telegram 账号</span>
-                                                        </div>
-                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                                            <div style={{ gridColumn: '1 / -1' }}>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>标签名称</label>
-                                                                <input type="text" className="input" value={tgNewLabel}
-                                                                    onChange={e => setTgNewLabel(e.target.value)}
-                                                                    placeholder="例: 主号 / 备用号"
-                                                                    style={{ width: '100%', boxSizing: 'border-box' }} />
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API ID</label>
-                                                                <input type="text" className="input" value={tgNewApiId}
-                                                                    onChange={e => setTgNewApiId(e.target.value)}
-                                                                    placeholder="12345678"
-                                                                    style={{ width: '100%', boxSizing: 'border-box' }} />
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API Hash</label>
-                                                                <input type="password" className="input" value={tgNewApiHash}
-                                                                    onChange={e => setTgNewApiHash(e.target.value)}
-                                                                    placeholder="abcdef123456..."
-                                                                    style={{ width: '100%', boxSizing: 'border-box' }} />
-                                                            </div>
-                                                        </div>
-                                                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '10px 0 14px' }}>
-                                                            从 <a href="https://my.telegram.org" target="_blank" rel="noreferrer" style={{ color: '#0088cc' }}>my.telegram.org</a> 获取 API ID 和 API Hash
-                                                        </p>
-                                                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                                            <button onClick={() => setTgShowAdd(false)}
-                                                                style={{
-                                                                    padding: '8px 18px', fontSize: '13px',
-                                                                    background: 'transparent', border: '1px solid var(--border)',
-                                                                    borderRadius: '8px', cursor: 'pointer'
-                                                                }}>取消</button>
-                                                            <button onClick={handleTgAdd}
-                                                                disabled={tgLoading || !tgNewApiId || !tgNewApiHash}
-                                                                style={{
-                                                                    padding: '8px 20px', fontSize: '13px', fontWeight: 600,
-                                                                    background: '#0088cc', color: 'white',
-                                                                    border: 'none', borderRadius: '8px', cursor: 'pointer',
-                                                                    opacity: (tgLoading || !tgNewApiId || !tgNewApiHash) ? 0.5 : 1
-                                                                }}>{tgLoading ? '添加中...' : '添加'}</button>
-                                                        </div>
+                                                {tgLoginStep === 'code' && (
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <input type="text" className="input" value={tgLoginCode}
+                                                            onChange={e => setTgLoginCode(e.target.value)}
+                                                            placeholder="12345"
+                                                            style={{ flex: 1, letterSpacing: '6px', textAlign: 'center', fontSize: '20px', fontWeight: 700 }}
+                                                            autoFocus maxLength={6}
+                                                        />
+                                                        <button onClick={() => handleTgVerifyCode(tgLoginAccountId)}
+                                                            disabled={tgLoading || !tgLoginCode}
+                                                            style={{
+                                                                padding: '8px 20px', background: '#00c853', color: 'white',
+                                                                border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
+                                                                opacity: (tgLoading || !tgLoginCode) ? 0.5 : 1, whiteSpace: 'nowrap'
+                                                            }}>{tgLoading ? '⏳' : '确认'}</button>
                                                     </div>
-                                                ) : (
-                                                    <button onClick={() => setTgShowAdd(true)}
+                                                )}
+
+                                                {tgLoginStep === 'password' && (
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <input type="password" className="input" value={tgLoginPassword}
+                                                            onChange={e => setTgLoginPassword(e.target.value)}
+                                                            placeholder="两步验证密码"
+                                                            style={{ flex: 1 }} autoFocus
+                                                        />
+                                                        <button onClick={() => handleTgVerifyCode(tgLoginAccountId)}
+                                                            disabled={tgLoading || !tgLoginPassword}
+                                                            style={{
+                                                                padding: '8px 20px', background: '#00c853', color: 'white',
+                                                                border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
+                                                                opacity: (tgLoading || !tgLoginPassword) ? 0.5 : 1, whiteSpace: 'nowrap'
+                                                            }}>{tgLoading ? '⏳' : '确认'}</button>
+                                                    </div>
+                                                )}
+
+                                                {tgLoginMsg && (
+                                                    <div style={{
+                                                        marginTop: '10px', padding: '8px 12px', borderRadius: '8px',
+                                                        background: tgLoginMsg.includes('✅') ? 'rgba(0,200,83,0.1)' : 'rgba(0,136,204,0.08)',
+                                                        fontSize: '13px',
+                                                        color: tgLoginMsg.includes('✅') ? '#00c853' : 'var(--text-primary)'
+                                                    }}>{tgLoginMsg}</div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Add Account Button / Form */}
+                                        {tgShowAdd ? (
+                                            <div style={{
+                                                padding: '20px', borderRadius: '12px', marginBottom: '20px',
+                                                background: 'var(--bg-secondary)', border: '1.5px dashed var(--border)'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                                    <span style={{ fontSize: '16px' }}>➕</span>
+                                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>添加 Telegram 账号</span>
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                                    <div style={{ gridColumn: '1 / -1' }}>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>标签名称</label>
+                                                        <input type="text" className="input" value={tgNewLabel}
+                                                            onChange={e => setTgNewLabel(e.target.value)}
+                                                            placeholder="例: 主号 / 备用号"
+                                                            style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API ID</label>
+                                                        <input type="text" className="input" value={tgNewApiId}
+                                                            onChange={e => setTgNewApiId(e.target.value)}
+                                                            placeholder="12345678"
+                                                            style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API Hash</label>
+                                                        <input type="password" className="input" value={tgNewApiHash}
+                                                            onChange={e => setTgNewApiHash(e.target.value)}
+                                                            placeholder="abcdef123456..."
+                                                            style={{ width: '100%', boxSizing: 'border-box' }} />
+                                                    </div>
+                                                </div>
+                                                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '10px 0 14px' }}>
+                                                    从 <a href="https://my.telegram.org" target="_blank" rel="noreferrer" style={{ color: '#0088cc' }}>my.telegram.org</a> 获取 API ID 和 API Hash
+                                                </p>
+                                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                                    <button onClick={() => setTgShowAdd(false)}
                                                         style={{
-                                                            width: '100%', padding: '12px', marginBottom: '20px',
-                                                            background: 'transparent', border: '2px dashed var(--border)',
-                                                            borderRadius: '10px', cursor: 'pointer',
-                                                            fontSize: '13px', fontWeight: 600,
-                                                            color: 'var(--text-secondary)', transition: 'all 0.2s'
-                                                        }}>
-                                                        + 添加 Telegram 账号
-                                                    </button>
-                                                )}
-
-                                                {/* ── Dual Bot Config ── */}
-                                                <div style={{
-                                                    borderRadius: '12px', overflow: 'hidden',
-                                                    border: '1px solid var(--border)', marginBottom: '12px'
+                                                            padding: '8px 18px', fontSize: '13px',
+                                                            background: 'transparent', border: '1px solid var(--border)',
+                                                            borderRadius: '8px', cursor: 'pointer'
+                                                        }}>取消</button>
+                                                    <button onClick={handleTgAdd}
+                                                        disabled={tgLoading || !tgNewApiId || !tgNewApiHash}
+                                                        style={{
+                                                            padding: '8px 20px', fontSize: '13px', fontWeight: 600,
+                                                            background: '#0088cc', color: 'white',
+                                                            border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                                            opacity: (tgLoading || !tgNewApiId || !tgNewApiHash) ? 0.5 : 1
+                                                        }}>{tgLoading ? '添加中...' : '添加'}</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => setTgShowAdd(true)}
+                                                style={{
+                                                    width: '100%', padding: '12px', marginBottom: '20px',
+                                                    background: 'transparent', border: '2px dashed var(--border)',
+                                                    borderRadius: '10px', cursor: 'pointer',
+                                                    fontSize: '13px', fontWeight: 600,
+                                                    color: 'var(--text-secondary)', transition: 'all 0.2s'
                                                 }}>
-                                                    <div style={{
-                                                        padding: '14px 18px',
-                                                        background: 'linear-gradient(135deg, rgba(76,175,80,0.08), rgba(76,175,80,0.02))',
-                                                        borderBottom: '1px solid var(--border)',
-                                                        display: 'flex', alignItems: 'center', gap: '8px'
+                                                + 添加 Telegram 账号
+                                            </button>
+                                        )}
+
+                                        {/* ── Dual Bot Config ── */}
+                                        <div style={{
+                                            borderRadius: '12px', overflow: 'hidden',
+                                            border: '1px solid var(--border)', marginBottom: '12px'
+                                        }}>
+                                            <div style={{
+                                                padding: '14px 18px',
+                                                background: 'linear-gradient(135deg, rgba(76,175,80,0.08), rgba(76,175,80,0.02))',
+                                                borderBottom: '1px solid var(--border)',
+                                                display: 'flex', alignItems: 'center', gap: '8px'
+                                            }}>
+                                                <span style={{ fontSize: '16px' }}>🤖</span>
+                                                <span style={{ fontWeight: 700, fontSize: '14px' }}>Dual Bot 验证</span>
+                                                <span style={{
+                                                    fontSize: '10px', padding: '2px 8px',
+                                                    background: 'rgba(76,175,80,0.15)', color: '#4caf50',
+                                                    borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
+                                                }}>新方法</span>
+                                            </div>
+                                            <div style={{ padding: '16px 18px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                                                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                                                        新方法：预热 Bot → 验证 Bot → 失败自动刷新链接
+                                                    </p>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, color: '#4caf50' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={config?.verification?.dualBot?.enabled || false}
+                                                            onChange={e => {
+                                                                const val = e.target.checked;
+                                                                setConfig(prev => ({
+                                                                    ...prev,
+                                                                    verification: {
+                                                                        ...prev.verification || {},
+                                                                        dualBot: { ...prev.verification?.dualBot || {}, enabled: val },
+                                                                        telegram: { ...prev.verification?.telegram || {}, enabled: val ? false : prev.verification?.telegram?.enabled }
+                                                                    }
+                                                                }));
+                                                            }}
+                                                            style={{ width: '18px', height: '18px' }}
+                                                        />
+                                                        启用
+                                                    </label>
+                                                </div>
+                                                <div style={{
+                                                    display: 'flex', flexDirection: 'column', gap: '12px',
+                                                    opacity: config?.verification?.dualBot?.enabled ? 1 : 0.6,
+                                                    pointerEvents: config?.verification?.dualBot?.enabled ? 'auto' : 'none',
+                                                    transition: 'all 0.3s'
+                                                }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>预热 Bot</label>
+                                                        <input type="text" className="input"
+                                                            value={config?.verification?.dualBot?.warmupBot || '@SatsetHelperbot'}
+                                                            onChange={e => setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    dualBot: { ...prev.verification?.dualBot || {}, warmupBot: e.target.value }
+                                                                }
+                                                            }))}
+                                                            placeholder="@SatsetHelperbot"
+                                                            style={{ width: '100%', boxSizing: 'border-box' }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>验证 Bot</label>
+                                                        <input type="text" className="input"
+                                                            value={config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot'}
+                                                            onChange={e => setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    dualBot: { ...prev.verification?.dualBot || {}, verifyBot: e.target.value }
+                                                                }
+                                                            }))}
+                                                            placeholder="@AutoGeminiProbot"
+                                                            style={{ width: '100%', boxSizing: 'border-box' }}
+                                                        />
+                                                    </div>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={config?.verification?.dualBot?.autoBypass !== false}
+                                                            onChange={e => setConfig(prev => ({
+                                                                ...prev,
+                                                                verification: {
+                                                                    ...prev.verification || {},
+                                                                    dualBot: { ...prev.verification?.dualBot || {}, autoBypass: e.target.checked }
+                                                                }
+                                                            }))}
+                                                            style={{ width: '16px', height: '16px' }}
+                                                        />
+                                                        验证失败时自动 Bypass（刷新链接）
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            {/* ── Legacy SheerID Bot ── */}
+                                            <div style={{
+                                                borderRadius: '12px', overflow: 'hidden',
+                                                border: '1px solid var(--border)', marginTop: '12px'
+                                            }}>
+                                                <div style={{
+                                                    padding: '14px 18px',
+                                                    background: 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))',
+                                                    borderBottom: '1px solid var(--border)',
+                                                    display: 'flex', alignItems: 'center', gap: '8px'
+                                                }}>
+                                                    <span style={{ fontSize: '16px' }}>📨</span>
+                                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>SheerID Bot 验证</span>
+                                                    <span style={{
+                                                        fontSize: '10px', padding: '2px 8px',
+                                                        background: 'rgba(255,152,0,0.15)', color: '#f57c00',
+                                                        borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
+                                                    }}>旧版</span>
+                                                </div>
+                                                <div style={{ padding: '16px 18px' }}>
+                                                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', margin: '0 0 14px' }}>
+                                                        使用当前激活的 Telegram 账号向 Bot 发送验证请求
+                                                    </p>
+                                                    <label style={{
+                                                        display: 'flex', alignItems: 'center', gap: '10px',
+                                                        fontSize: '14px', cursor: 'pointer', marginBottom: '14px',
+                                                        fontWeight: 600, color: '#f57c00'
                                                     }}>
-                                                        <span style={{ fontSize: '16px' }}>🤖</span>
-                                                        <span style={{ fontWeight: 700, fontSize: '14px' }}>Dual Bot 验证</span>
-                                                        <span style={{
-                                                            fontSize: '10px', padding: '2px 8px',
-                                                            background: 'rgba(76,175,80,0.15)', color: '#4caf50',
-                                                            borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
-                                                        }}>新方法</span>
-                                                    </div>
-                                                    <div style={{ padding: '16px 18px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-                                                                新方法：预热 Bot → 验证 Bot → 失败自动刷新链接
-                                                            </p>
-                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, color: '#4caf50' }}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={config?.verification?.dualBot?.enabled || false}
-                                                                    onChange={e => {
-                                                                        const val = e.target.checked;
-                                                                        setConfig(prev => ({
-                                                                            ...prev,
-                                                                            verification: {
-                                                                                ...prev.verification || {},
-                                                                                dualBot: { ...prev.verification?.dualBot || {}, enabled: val },
-                                                                                telegram: { ...prev.verification?.telegram || {}, enabled: val ? false : prev.verification?.telegram?.enabled }
-                                                                            }
-                                                                        }));
-                                                                    }}
-                                                                    style={{ width: '18px', height: '18px' }}
-                                                                />
-                                                                启用
-                                                            </label>
-                                                        </div>
-                                                        <div style={{
-                                                            display: 'flex', flexDirection: 'column', gap: '12px',
-                                                            opacity: config?.verification?.dualBot?.enabled ? 1 : 0.6,
-                                                            pointerEvents: config?.verification?.dualBot?.enabled ? 'auto' : 'none',
-                                                            transition: 'all 0.3s'
-                                                        }}>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>预热 Bot</label>
-                                                                <input type="text" className="input"
-                                                                    value={config?.verification?.dualBot?.warmupBot || '@SatsetHelperbot'}
-                                                                    onChange={e => setConfig(prev => ({
-                                                                        ...prev,
-                                                                        verification: {
-                                                                            ...prev.verification || {},
-                                                                            dualBot: { ...prev.verification?.dualBot || {}, warmupBot: e.target.value }
-                                                                        }
-                                                                    }))}
-                                                                    placeholder="@SatsetHelperbot"
-                                                                    style={{ width: '100%', boxSizing: 'border-box' }}
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>验证 Bot</label>
-                                                                <input type="text" className="input"
-                                                                    value={config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot'}
-                                                                    onChange={e => setConfig(prev => ({
-                                                                        ...prev,
-                                                                        verification: {
-                                                                            ...prev.verification || {},
-                                                                            dualBot: { ...prev.verification?.dualBot || {}, verifyBot: e.target.value }
-                                                                        }
-                                                                    }))}
-                                                                    placeholder="@AutoGeminiProbot"
-                                                                    style={{ width: '100%', boxSizing: 'border-box' }}
-                                                                />
-                                                            </div>
-                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={config?.verification?.dualBot?.autoBypass !== false}
-                                                                    onChange={e => setConfig(prev => ({
-                                                                        ...prev,
-                                                                        verification: {
-                                                                            ...prev.verification || {},
-                                                                            dualBot: { ...prev.verification?.dualBot || {}, autoBypass: e.target.checked }
-                                                                        }
-                                                                    }))}
-                                                                    style={{ width: '16px', height: '16px' }}
-                                                                />
-                                                                验证失败时自动 Bypass（刷新链接）
-                                                            </label>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* ── Legacy SheerID Bot ── */}
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={config?.verification?.telegram?.enabled || false}
+                                                            onChange={(e) => {
+                                                                const val = e.target.checked;
+                                                                setConfig(prev => ({
+                                                                    ...prev,
+                                                                    verification: {
+                                                                        ...prev.verification || {},
+                                                                        telegram: { ...prev.verification?.telegram || {}, enabled: val },
+                                                                        dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled }
+                                                                    }
+                                                                }));
+                                                            }}
+                                                            style={{ width: '18px', height: '18px' }}
+                                                        />
+                                                        启用
+                                                    </label>
                                                     <div style={{
-                                                        borderRadius: '12px', overflow: 'hidden',
-                                                        border: '1px solid var(--border)', marginTop: '12px'
+                                                        opacity: config?.verification?.telegram?.enabled ? 1 : 0.6,
+                                                        pointerEvents: config?.verification?.telegram?.enabled ? 'auto' : 'none',
+                                                        transition: 'all 0.3s'
                                                     }}>
-                                                        <div style={{
-                                                            padding: '14px 18px',
-                                                            background: 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))',
-                                                            borderBottom: '1px solid var(--border)',
-                                                            display: 'flex', alignItems: 'center', gap: '8px'
-                                                        }}>
-                                                            <span style={{ fontSize: '16px' }}>📨</span>
-                                                            <span style={{ fontWeight: 700, fontSize: '14px' }}>SheerID Bot 验证</span>
-                                                            <span style={{
-                                                                fontSize: '10px', padding: '2px 8px',
-                                                                background: 'rgba(255,152,0,0.15)', color: '#f57c00',
-                                                                borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
-                                                            }}>旧版</span>
-                                                        </div>
-                                                        <div style={{ padding: '16px 18px' }}>
-                                                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', margin: '0 0 14px' }}>
-                                                                使用当前激活的 Telegram 账号向 Bot 发送验证请求
-                                                            </p>
-                                                            <label style={{
-                                                                display: 'flex', alignItems: 'center', gap: '10px',
-                                                                fontSize: '14px', cursor: 'pointer', marginBottom: '14px',
-                                                                fontWeight: 600, color: '#f57c00'
-                                                            }}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={config?.verification?.telegram?.enabled || false}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.checked;
-                                                                        setConfig(prev => ({
-                                                                            ...prev,
-                                                                            verification: {
-                                                                                ...prev.verification || {},
-                                                                                telegram: { ...prev.verification?.telegram || {}, enabled: val },
-                                                                                dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled }
-                                                                            }
-                                                                        }));
-                                                                    }}
-                                                                    style={{ width: '18px', height: '18px' }}
-                                                                />
-                                                                启用
-                                                            </label>
-                                                            <div style={{
-                                                                opacity: config?.verification?.telegram?.enabled ? 1 : 0.6,
-                                                                pointerEvents: config?.verification?.telegram?.enabled ? 'auto' : 'none',
-                                                                transition: 'all 0.3s'
-                                                            }}>
-                                                                {config?.verification?.telegram?.enabled && (
-                                                                    <div>
-                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
-                                                                        <select className="input"
-                                                                            value={config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot'}
-                                                                            onChange={e => setConfig(prev => ({
-                                                                                ...prev,
-                                                                                verification: {
-                                                                                    ...prev.verification || {},
-                                                                                    telegram: { ...prev.verification?.telegram || {}, botUsername: e.target.value }
-                                                                                }
-                                                                            }))}
-                                                                            style={{ cursor: 'pointer', width: '100%', boxSizing: 'border-box' }}
-                                                                        >
-                                                                            <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
-                                                                            <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
-                                                                        </select>
-                                                                    </div>
-                                                                )}
+                                                        {config?.verification?.telegram?.enabled && (
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
+                                                                <select className="input"
+                                                                    value={config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot'}
+                                                                    onChange={e => setConfig(prev => ({
+                                                                        ...prev,
+                                                                        verification: {
+                                                                            ...prev.verification || {},
+                                                                            telegram: { ...prev.verification?.telegram || {}, botUsername: e.target.value }
+                                                                        }
+                                                                    }))}
+                                                                    style={{ cursor: 'pointer', width: '100%', boxSizing: 'border-box' }}
+                                                                >
+                                                                    <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
+                                                                    <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
+                                                                </select>
                                                             </div>
-                                                        </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
-
-                                        {/* Region Mode Settings - Template providers only */}
-                                        {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
-                                            <div className="provider-settings region-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                                                <h4>🌍 验证地区配置</h4>
-                                                <p className="settings-desc" style={{ marginBottom: '16px' }}>
-                                                    选择生成验证文档时使用的学校地区范围
-                                                </p>
-                                                <div className="settings-form">
-                                                    <div className="input-group">
-                                                        <label className="input-label">地区模式</label>
-                                                        <select
-                                                            className="input"
-                                                            value={regionMode}
-                                                            onChange={(e) => setRegionMode(e.target.value)}
-                                                        >
-                                                            <option value="us_only">🇺🇸 仅美国学校 (US Only)</option>
-                                                            <option value="global">🌏 全球学校 (Global)</option>
-                                                        </select>
-                                                        <p className="input-hint">
-                                                            {regionMode === 'us_only'
-                                                                ? '仅使用美国学校生成验证文档，更稳定的验证通过率'
-                                                                : '随机选择全球学校生成验证文档，包括美国、欧洲、亚洲等地区'}
-                                                        </p>
-                                                    </div>
-                                                    <div className="input-group" style={{ marginTop: '16px' }}>
-                                                        <label className="input-label">学校来源</label>
-                                                        <select
-                                                            className="input"
-                                                            value={universitySource}
-                                                            onChange={(e) => setUniversitySource(e.target.value)}
-                                                        >
-                                                            <option value="sheerid_api">🔗 SheerID API 动态获取</option>
-                                                            <option value="custom_list">📋 自定义名单 (本地列表)</option>
-                                                        </select>
-                                                        <p className="input-hint">
-                                                            {universitySource === 'sheerid_api'
-                                                                ? '从 SheerID API 实时获取学校列表，确保 ID 准确匹配'
-                                                                : '使用预设的高成功率学校名单 (来自 ThanhNguyxn)，不依赖 API'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Proxy Settings - Template providers only */}
-                                        {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
-                                            <div className="provider-settings proxy-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                                                <h4>🌐 住宅代理配置 (Residential Proxy)</h4>
-                                                <p className="settings-desc" style={{ marginBottom: '16px' }}>
-                                                    配置住宅代理可有效防止 SheerID 的 IP 风控检测 (fraudRulesReject)
-                                                </p>
-                                                <div className="settings-form">
-                                                    <div className="input-group">
-                                                        <label className="input-label">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={proxySettings.enabled}
-                                                                onChange={(e) => setProxySettings(s => ({ ...s, enabled: e.target.checked }))}
-                                                                style={{ marginRight: '8px' }}
-                                                            />
-                                                            启用代理
-                                                        </label>
-                                                    </div>
-                                                    {proxySettings.enabled && (
-                                                        <>
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
-                                                                <div className="input-group">
-                                                                    <label className="input-label">代理主机 (Host)</label>
-                                                                    <input
-                                                                        type="text"
-                                                                        className="input"
-                                                                        value={proxySettings.host}
-                                                                        onChange={(e) => setProxySettings(s => ({ ...s, host: e.target.value }))}
-                                                                        placeholder="proxy.global.ip2up.com"
-                                                                    />
-                                                                </div>
-                                                                <div className="input-group">
-                                                                    <label className="input-label">端口 (Port)</label>
-                                                                    <input
-                                                                        type="text"
-                                                                        className="input"
-                                                                        value={proxySettings.port}
-                                                                        onChange={(e) => setProxySettings(s => ({ ...s, port: e.target.value }))}
-                                                                        placeholder="12348"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div className="input-group">
-                                                                <label className="input-label">用户名 (Username)</label>
-                                                                <input
-                                                                    type="text"
-                                                                    className="input"
-                                                                    value={proxySettings.user}
-                                                                    onChange={(e) => setProxySettings(s => ({ ...s, user: e.target.value, hasStoredCredentials: false }))}
-                                                                    placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : "hW32EF_200_0_0_..."}
-                                                                />
-                                                                <p className="input-hint">
-                                                                    ip2up 格式: <code>[account]_[country]_[province]_[city]_[session]_[sessionTime]_[flag]</code>
-                                                                </p>
-                                                            </div>
-                                                            <div className="input-group">
-                                                                <label className="input-label">密码 (Password)</label>
-                                                                <input
-                                                                    type="password"
-                                                                    className="input"
-                                                                    value={proxySettings.password}
-                                                                    onChange={(e) => setProxySettings(s => ({ ...s, password: e.target.value, hasStoredCredentials: false }))}
-                                                                    placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : ""}
-                                                                />
-                                                                {proxySettings.hasStoredCredentials && (
-                                                                    <p className="input-hint">
-                                                                        <span className="key-stored">✓ 代理凭据已保存</span>
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Test & Save Buttons */}
-                                        <div className="settings-actions">
-                                            <button
-                                                className="btn btn-secondary"
-                                                onClick={handleTestConnection}
-                                                disabled={testing}
-                                            >
-                                                {testing ? '测试中...' : '🔌 测试连接'}
-                                            </button>
-                                            <button
-                                                className="btn btn-secondary"
-                                                onClick={handleTestDocument}
-                                                disabled={testingDocument}
-                                            >
-                                                {testingDocument ? '生成中...' : '🖼️ 测试文档生成'}
-                                            </button>
-                                            <button
-                                                className="btn btn-primary"
-                                                onClick={handleSaveAiConfig}
-                                                disabled={saving}
-                                            >
-                                                {saving ? '保存中...' : '💾 保存配置'}
-                                            </button>
-                                            {showSaveNotice && (
-                                                <span className="save-notice">✓ 已保存</span>
-                                            )}
-                                        </div>
-
-                                        {/* Test Result */}
-                                        {testResult && (
-                                            <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
-                                                <span className="test-icon">{testResult.success ? '✅' : '❌'}</span>
-                                                <span className="test-message">{testResult.message}</span>
-                                            </div>
-                                        )}
-
-                                        {/* Test Document Result */}
-                                        {testDocumentResult && (
-                                            <div className="test-document-result">
-                                                <h4>📄 文档生成测试结果</h4>
-                                                {testDocumentResult.success ? (
-                                                    <div className="test-document-content">
-                                                        {/* Display all generated documents */}
-                                                        <div className="test-document-images" style={{
-                                                            display: 'grid',
-                                                            gridTemplateColumns: testDocumentResult.images?.length > 1 ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr',
-                                                            gap: '16px',
-                                                            marginBottom: '20px'
-                                                        }}>
-                                                            {(testDocumentResult.images || [{ image: testDocumentResult.image, filename: testDocumentResult.filename, type: 'document' }]).map((doc, idx) => (
-                                                                <div key={idx} className="test-document-image" style={{
-                                                                    background: '#f8f9fa',
-                                                                    borderRadius: '12px',
-                                                                    padding: '12px',
-                                                                    textAlign: 'center'
-                                                                }}>
-                                                                    <div style={{
-                                                                        fontSize: '12px',
-                                                                        color: '#667eea',
-                                                                        fontWeight: 600,
-                                                                        marginBottom: '8px',
-                                                                        textTransform: 'uppercase'
-                                                                    }}>
-                                                                        {doc.type === 'id_card' ? '🪪 学生卡' :
-                                                                            doc.type === 'transcript' ? '📜 成绩单' :
-                                                                                doc.type === 'class_schedule' ? '📅 课程表' :
-                                                                                    doc.type === 'schedule' ? '📅 课程表' : '📄 文档'}
-                                                                    </div>
-                                                                    {(doc.filename?.endsWith('.pdf') || doc.image?.startsWith('data:application/pdf')) ? (
-                                                                        <div>
-                                                                            <embed
-                                                                                src={doc.image}
-                                                                                type="application/pdf"
-                                                                                style={{
-                                                                                    width: '100%',
-                                                                                    height: '400px',
-                                                                                    borderRadius: '8px',
-                                                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                                                                                }}
-                                                                            />
-                                                                            <a
-                                                                                href={doc.image}
-                                                                                download={doc.filename || 'document.pdf'}
-                                                                                style={{
-                                                                                    display: 'inline-block',
-                                                                                    marginTop: '8px',
-                                                                                    padding: '6px 16px',
-                                                                                    background: '#667eea',
-                                                                                    color: '#fff',
-                                                                                    borderRadius: '6px',
-                                                                                    fontSize: '12px',
-                                                                                    textDecoration: 'none',
-                                                                                    fontWeight: 600
-                                                                                }}
-                                                                            >📥 下载 PDF</a>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <img
-                                                                            src={doc.image}
-                                                                            alt={doc.type || 'Generated Document'}
-                                                                            style={{
-                                                                                maxWidth: '100%',
-                                                                                maxHeight: '300px',
-                                                                                borderRadius: '8px',
-                                                                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                                                                            }}
-                                                                        />
-                                                                    )}
-                                                                    <p className="filename" style={{
-                                                                        marginTop: '8px',
-                                                                        fontSize: '12px',
-                                                                        color: '#666'
-                                                                    }}>{doc.filename}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                        {/* Form data */}
-                                                        <div className="test-document-form-data" style={{
-                                                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                                                            borderRadius: '8px',
-                                                            padding: '12px 16px'
-                                                        }}>
-                                                            <h5 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#667eea' }}>
-                                                                📝 表单数据 (将提交到 SheerID)
-                                                            </h5>
-                                                            <table className="form-data-table" style={{ width: '100%', fontSize: '13px' }}>
-                                                                <tbody>
-                                                                    {Object.entries(testDocumentResult.formData || {})
-                                                                        .filter(([key]) => ['firstName', 'lastName', 'university', 'birthDate', 'dob', 'email', 'studentId'].includes(key))
-                                                                        .map(([key, value]) => (
-                                                                            <tr key={key}>
-                                                                                <td style={{ padding: '4px 8px', color: '#666', fontWeight: 500, width: '120px' }}>{key}</td>
-                                                                                <td style={{ padding: '4px 8px', fontFamily: 'monospace' }}>{value}</td>
-                                                                            </tr>
-                                                                        ))}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="test-result error">
-                                                        <span className="test-icon">❌</span>
-                                                        <span className="test-message">{testDocumentResult.message}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Info Card */}
-                                    <div className="settings-section card">
-                                        <h3>💡 说明</h3>
-                                        <div className="info-content">
-                                            <p><strong>🎨 Puppeteer HTML 模板（推荐）：</strong>使用 Puppeteer 渲染自定义 HTML 模板生成高质量学生证图片，支持 Gemini AI 生成逼真的学生证件照，效果最佳。</p>
-                                            <p><strong>Gemini 官方 API：</strong>直接调用 Google Gemini API 生成学生证图像，需要有效的 API Key。</p>
-                                            <p><strong>batch.1key.me API：</strong>使用第三方批量验证 API，需要配置 API Key。</p>
-                                            <p className="info-warning">⚠️ 如果 AI 生成失败，系统会自动回退到备用生成方式。</p>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Verify Status Tab */}
-                            {activeTab === 'verify-status' && (
-                                <div className="tab-content">
-                                    {/* Live Grid Preview */}
-                                    <div className="settings-section card">
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                            <h3 style={{ margin: 0 }}>📋 实时验证状态</h3>
-                                            <div style={{ display: 'flex', gap: '14px', fontSize: '13px' }}>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
-                                                    {historyStats.pass} Pass
-                                                </span>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}></span>
-                                                    {historyStats.failed} Failed
-                                                </span>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
-                                                    {historyStats.cancel} Cancel
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="status-grid-container">
-                                            <div className="status-grid three-rows">
-                                                {historyData.slice(-60).map((item) => (
-                                                    <div
-                                                        key={item.id}
-                                                        className={`status-block ${item.status}`}
-                                                        onMouseEnter={() => setHoveredStatusItem(item)}
-                                                        onMouseLeave={() => setHoveredStatusItem(null)}
-                                                    >
-                                                        {hoveredStatusItem?.id === item.id && (
-                                                            <div className="status-tooltip">
-                                                                <span className="tooltip-status">
-                                                                    {item.status === 'pass' ? '✓ Pass' :
-                                                                        item.status === 'failed' ? '✕ Failed' :
-                                                                            item.status === 'processing' ? '⏳ Processing' : '◷ Cancel'}
-                                                                </span>
-                                                                <span className="tooltip-time">{item.timestamp?.split('T')[1]?.slice(0, 8) || ''}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        {historyData.length === 0 && (
-                                            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px', padding: '20px 0' }}>暂无验证记录</p>
-                                        )}
-                                    </div>
-
-                                    {/* Controls */}
-                                    <div className="settings-section card">
-                                        <h3>➕ 添加记录</h3>
-                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '12px' }}>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="50"
-                                                value={addCount}
-                                                onChange={(e) => setAddCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
-                                                className="input"
-                                                style={{ width: '70px', textAlign: 'center' }}
-                                            />
-                                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条</span>
-                                            {[
-                                                { status: 'pass', label: '✅ Pass', color: '#10b981' },
-                                                { status: 'failed', label: '❌ Failed', color: '#ef4444' },
-                                                { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
-                                            ].map(item => (
-                                                <button
-                                                    key={item.status}
-                                                    disabled={addingStatus !== null}
-                                                    className="btn btn-sm"
-                                                    style={{
-                                                        background: addingStatus === item.status ? '#999' : item.color,
-                                                        color: '#fff',
-                                                        border: 'none',
-                                                        padding: '6px 14px',
-                                                        borderRadius: '6px',
-                                                        fontSize: '12px',
-                                                        fontWeight: 600,
-                                                        cursor: addingStatus !== null ? 'not-allowed' : 'pointer',
-                                                        opacity: addingStatus !== null && addingStatus !== item.status ? 0.5 : 1
-                                                    }}
-                                                    onClick={async () => {
-                                                        if (addingStatus !== null) return;
-                                                        setAddingStatus(item.status);
-                                                        try {
-                                                            const res = await fetch(`${API_BASE}/api/verify/history`, {
-                                                                method: 'POST',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ status: item.status, count: addCount })
-                                                            });
-                                                            if (res.ok) {
-                                                                const data = await res.json();
-                                                                // Re-fetch to get accurate grid
-                                                                const hRes = await fetch(`${API_BASE}/api/verify/history`);
-                                                                if (hRes.ok) {
-                                                                    const hData = await hRes.json();
-                                                                    setHistoryData(hData.history || []);
-                                                                    setHistoryStats(hData.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
-                                                                }
-                                                            }
-                                                        } catch (e) {
-                                                            alert('添加失败: ' + e.message);
-                                                        } finally {
-                                                            setAddingStatus(null);
-                                                        }
-                                                    }}
-                                                >
-                                                    {addingStatus === item.status ? '...' : item.label}
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {/* Clear All */}
-                                        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border, #e2ddd8)' }}>
-                                            <button
-                                                className="btn btn-sm"
-                                                disabled={addingStatus !== null}
-                                                style={{
-                                                    background: 'transparent',
-                                                    color: '#ef4444',
-                                                    border: '1px solid #ef4444',
-                                                    padding: '6px 16px',
-                                                    borderRadius: '6px',
-                                                    fontSize: '12px',
-                                                    fontWeight: 600,
-                                                    cursor: 'pointer'
-                                                }}
-                                                onClick={async () => {
-                                                    if (!confirm('确定要清空所有验证状态记录吗？此操作不可撤销。')) return;
-                                                    try {
-                                                        const res = await fetch(`${API_BASE}/api/verify/history`, { method: 'DELETE' });
-                                                        if (res.ok) {
-                                                            const data = await res.json();
-                                                            setHistoryData([]);
-                                                            setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
-                                                        }
-                                                    } catch (e) {
-                                                        alert('清空失败: ' + e.message);
-                                                    }
-                                                }}
-                                            >
-                                                🗑️ 清空所有记录
-                                            </button>
-                                            <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                                共 {historyStats.total || 0} 条记录
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Auto Record Rules */}
-                                    <div className="settings-section card">
-                                        <h3>⏱️ 自动添加记录</h3>
-                                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 16px' }}>
-                                            配置自动添加规则，规则持久化保存，重启后自动恢复
-                                        </p>
-
-                                        {/* Existing rules list */}
-                                        {autoRules.length > 0 && (
-                                            <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                {autoRules.map(rule => (
-                                                    <div key={rule.id} style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        padding: '10px 14px',
-                                                        background: rule.enabled ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-secondary)',
-                                                        border: `1px solid ${rule.enabled ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-primary)'}`,
-                                                        borderRadius: '8px'
-                                                    }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                            <span style={{
-                                                                width: 8, height: 8, borderRadius: '50%',
-                                                                background: rule.running ? '#10b981' : '#94a3b8',
-                                                                display: 'inline-block'
-                                                            }}></span>
-                                                            <span style={{ fontSize: '13px', fontWeight: 500 }}>
-                                                                每 {rule.intervalMinutes || Math.round((rule.intervalSeconds || 60) / 60)} 分钟 → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
-                                                            </span>
-                                                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                                                                {rule.running ? '运行中' : '已停止'}
-                                                                {rule.durationHours > 0 && (
-                                                                    rule.running && rule.remainingHours != null
-                                                                        ? ` · 剩余 ${rule.remainingHours}h`
-                                                                        : ` · 时效 ${rule.durationHours}h`
-                                                                )}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: '6px' }}>
-                                                            <button
-                                                                className="btn btn-sm"
-                                                                style={{
-                                                                    background: rule.enabled ? '#f59e0b' : '#10b981',
-                                                                    color: '#fff',
-                                                                    border: 'none',
-                                                                    padding: '4px 12px',
-                                                                    borderRadius: '5px',
-                                                                    fontSize: '11px',
-                                                                    fontWeight: 600,
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        const res = await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, {
-                                                                            method: 'PUT',
-                                                                            headers: { 'Content-Type': 'application/json' },
-                                                                            body: JSON.stringify({ enabled: !rule.enabled })
-                                                                        });
-                                                                        if (res.ok) {
-                                                                            const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
-                                                                            if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
-                                                                        }
-                                                                    } catch (e) { alert(e.message); }
-                                                                }}
-                                                            >
-                                                                {rule.enabled ? '⏸ 停止' : '▶ 启动'}
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-sm"
-                                                                style={{
-                                                                    background: 'transparent',
-                                                                    color: '#ef4444',
-                                                                    border: '1px solid #ef4444',
-                                                                    padding: '4px 10px',
-                                                                    borderRadius: '5px',
-                                                                    fontSize: '11px',
-                                                                    fontWeight: 600,
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                                onClick={async () => {
-                                                                    if (!confirm('删除此规则？')) return;
-                                                                    try {
-                                                                        await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, { method: 'DELETE' });
-                                                                        const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
-                                                                        if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
-                                                                    } catch (e) { alert(e.message); }
-                                                                }}
-                                                            >
-                                                                🗑
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {/* Add new rule */}
-                                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', paddingTop: autoRules.length > 0 ? '12px' : 0, borderTop: autoRules.length > 0 ? '1px solid var(--border-primary)' : 'none' }}>
-                                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>新规则：每</span>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="60"
-                                                value={newRule.intervalMinutes}
-                                                onChange={(e) => setNewRule(prev => ({ ...prev, intervalMinutes: Math.max(1, parseInt(e.target.value) || 5) }))}
-                                                className="input"
-                                                style={{ width: '65px', textAlign: 'center' }}
-                                            />
-                                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟 添加</span>
+                            {/* Region Mode Settings - Template providers only */}
+                            {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
+                                <div className="provider-settings region-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                                    <h4>🌍 验证地区配置</h4>
+                                    <p className="settings-desc" style={{ marginBottom: '16px' }}>
+                                        选择生成验证文档时使用的学校地区范围
+                                    </p>
+                                    <div className="settings-form">
+                                        <div className="input-group">
+                                            <label className="input-label">地区模式</label>
                                             <select
                                                 className="input"
-                                                value={newRule.status}
-                                                onChange={(e) => setNewRule(prev => ({ ...prev, status: e.target.value }))}
-                                                style={{ width: '110px', cursor: 'pointer' }}
+                                                value={regionMode}
+                                                onChange={(e) => setRegionMode(e.target.value)}
                                             >
-                                                <option value="pass">✅ Pass</option>
-                                                <option value="failed">❌ Failed</option>
-                                                <option value="cancel">◷ Cancel</option>
+                                                <option value="us_only">🇺🇸 仅美国学校 (US Only)</option>
+                                                <option value="global">🌏 全球学校 (Global)</option>
                                             </select>
-                                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>时效</span>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="72"
-                                                step="1"
-                                                value={newRule.durationHours}
-                                                onChange={(e) => setNewRule(prev => ({ ...prev, durationHours: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                                            <p className="input-hint">
+                                                {regionMode === 'us_only'
+                                                    ? '仅使用美国学校生成验证文档，更稳定的验证通过率'
+                                                    : '随机选择全球学校生成验证文档，包括美国、欧洲、亚洲等地区'}
+                                            </p>
+                                        </div>
+                                        <div className="input-group" style={{ marginTop: '16px' }}>
+                                            <label className="input-label">学校来源</label>
+                                            <select
                                                 className="input"
-                                                style={{ width: '65px', textAlign: 'center' }}
-                                            />
-                                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>小时</span>
-                                            <button
-                                                className="btn btn-sm"
-                                                disabled={savingRule}
-                                                style={{
-                                                    background: '#10b981',
-                                                    color: '#fff',
-                                                    border: 'none',
-                                                    padding: '6px 16px',
-                                                    borderRadius: '6px',
-                                                    fontSize: '12px',
-                                                    fontWeight: 600,
-                                                    cursor: 'pointer'
-                                                }}
-                                                onClick={async () => {
-                                                    setSavingRule(true);
-                                                    try {
-                                                        const res = await fetch(`${API_BASE}/api/verify/auto-record`, {
-                                                            method: 'POST',
-                                                            headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify(newRule)
-                                                        });
-                                                        if (res.ok) {
-                                                            const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
-                                                            if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
-                                                        }
-                                                    } catch (e) {
-                                                        alert('添加失败: ' + e.message);
-                                                    } finally {
-                                                        setSavingRule(false);
-                                                    }
-                                                }}
+                                                value={universitySource}
+                                                onChange={(e) => setUniversitySource(e.target.value)}
                                             >
-                                                {savingRule ? '...' : '➕ 添加规则'}
-                                            </button>
+                                                <option value="sheerid_api">🔗 SheerID API 动态获取</option>
+                                                <option value="custom_list">📋 自定义名单 (本地列表)</option>
+                                            </select>
+                                            <p className="input-hint">
+                                                {universitySource === 'sheerid_api'
+                                                    ? '从 SheerID API 实时获取学校列表，确保 ID 准确匹配'
+                                                    : '使用预设的高成功率学校名单 (来自 ThanhNguyxn)，不依赖 API'}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Settings Tab */}
-                            {activeTab === 'settings' && (
-                                <div className="tab-content">
-
-                                    {/* Browser Mode - only shown when provider is not telegram */}
-                                    {aiProvider !== 'telegram' && (
-                                        <div className="settings-section card">
-                                            <h3>⚡ 验证模式</h3>
-                                            <p className="settings-desc">
-                                                选择验证请求的发送方式。API 模式速度快，浏览器模式使用 Chromium 模拟真实浏览器，更不容易被检测。
-                                            </p>
-                                            <div className="settings-form">
-                                                <div className="mode-selector" style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                                                    <div
-                                                        onClick={() => setBrowserMode(false)}
-                                                        style={{
-                                                            flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
-                                                            border: !browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
-                                                            background: !browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
-                                                            transition: 'all 0.2s ease'
-                                                        }}
-                                                    >
-                                                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚡</div>
-                                                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>API 模式</div>
-                                                        <div style={{ fontSize: '12px', color: '#64748b' }}>标准 HTTP 请求，速度快</div>
-                                                    </div>
-                                                    <div
-                                                        onClick={() => setBrowserMode(true)}
-                                                        style={{
-                                                            flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
-                                                            border: browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
-                                                            background: browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
-                                                            transition: 'all 0.2s ease'
-                                                        }}
-                                                    >
-                                                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>🌐</div>
-                                                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>浏览器模式</div>
-                                                        <div style={{ fontSize: '12px', color: '#64748b' }}>Chromium 模拟真实浏览器</div>
-                                                    </div>
-                                                </div>
-                                                <button className="btn btn-primary" onClick={handleSaveAiConfig} disabled={saving}>
-                                                    {saving ? '保存中...' : '保存'}
-                                                </button>
-                                            </div>
+                            {/* Proxy Settings - Template providers only */}
+                            {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
+                                <div className="provider-settings proxy-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                                    <h4>🌐 住宅代理配置 (Residential Proxy)</h4>
+                                    <p className="settings-desc" style={{ marginBottom: '16px' }}>
+                                        配置住宅代理可有效防止 SheerID 的 IP 风控检测 (fraudRulesReject)
+                                    </p>
+                                    <div className="settings-form">
+                                        <div className="input-group">
+                                            <label className="input-label">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={proxySettings.enabled}
+                                                    onChange={(e) => setProxySettings(s => ({ ...s, enabled: e.target.checked }))}
+                                                    style={{ marginRight: '8px' }}
+                                                />
+                                                启用代理
+                                            </label>
                                         </div>
-                                    )}
-
-                                    {aiProvider === 'telegram' && (
-                                        <div className="settings-section card">
-                                            <h3>🤖 Telegram Bot 验证</h3>
-                                            <p className="settings-desc">
-                                                当前使用 Telegram Bot 进行验证，无需选择验证模式。链接将直接发送给 @SheerID_Verification_bot 处理。
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* Maintenance Mode Card */}
-                                    <div className="settings-section card" style={{
-                                        border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent',
-                                        transition: 'all 0.3s ease',
-                                        overflow: 'hidden',
-                                        padding: 0
-                                    }}>
-                                        {/* Status Banner */}
-                                        <div style={{
-                                            padding: '14px 20px',
-                                            background: maintenanceEnabled
-                                                ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
-                                                : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                                            borderBottom: '1px solid',
-                                            borderColor: maintenanceEnabled ? '#fecaca' : '#bbf7d0',
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                            transition: 'all 0.3s ease'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                <span style={{
-                                                    width: '10px', height: '10px', borderRadius: '50%',
-                                                    background: maintenanceEnabled ? '#ef4444' : '#22c55e',
-                                                    boxShadow: maintenanceEnabled ? '0 0 8px rgba(239,68,68,0.5)' : '0 0 8px rgba(34,197,94,0.5)',
-                                                    animation: maintenanceEnabled ? 'pulse 2s infinite' : 'none'
-                                                }} />
-                                                <span style={{
-                                                    fontSize: '14px', fontWeight: 600,
-                                                    color: maintenanceEnabled ? '#dc2626' : '#16a34a'
-                                                }}>
-                                                    {maintenanceEnabled ? '维护模式已开启' : '网站运行正常'}
-                                                </span>
-                                            </div>
-                                            {/* Toggle Switch */}
-                                            <div
-                                                onClick={() => setMaintenanceEnabled(!maintenanceEnabled)}
-                                                style={{
-                                                    width: '52px', height: '28px', borderRadius: '14px', cursor: 'pointer',
-                                                    background: maintenanceEnabled ? 'linear-gradient(135deg, #ef4444, #dc2626)' : '#d1d5db',
-                                                    position: 'relative', transition: 'all 0.3s ease',
-                                                    boxShadow: maintenanceEnabled ? '0 0 12px rgba(239,68,68,0.3)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
-                                                    flexShrink: 0
-                                                }}
-                                            >
-                                                <div style={{
-                                                    width: '22px', height: '22px', borderRadius: '50%',
-                                                    background: '#fff', position: 'absolute', top: '3px',
-                                                    left: maintenanceEnabled ? '27px' : '3px',
-                                                    transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
-                                                }} />
-                                            </div>
-                                        </div>
-
-                                        {/* Card Body */}
-                                        <div style={{ padding: '20px 20px 0' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                                                <span style={{ fontSize: '20px' }}>🚧</span>
-                                                <h3 style={{ margin: 0, fontSize: '16px' }}>维护模式设置</h3>
-                                            </div>
-
-                                            {/* Form Fields */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                                {/* Message Field */}
-                                                <div>
-                                                    <label style={{
-                                                        display: 'block', fontSize: '13px', fontWeight: 500,
-                                                        color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
-                                                    }}>
-                                                        📝 维护公告内容
-                                                    </label>
-                                                    <textarea
-                                                        className="input textarea"
-                                                        placeholder="输入将向用户显示的维护公告..."
-                                                        rows={3}
-                                                        value={maintenanceMessage}
-                                                        onChange={(e) => setMaintenanceMessage(e.target.value)}
-                                                        style={{
-                                                            resize: 'vertical', minHeight: '72px',
-                                                            fontSize: '14px', lineHeight: '1.5',
-                                                            width: '100%', boxSizing: 'border-box'
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                {/* Estimated End Time */}
-                                                <div>
-                                                    <label style={{
-                                                        display: 'block', fontSize: '13px', fontWeight: 500,
-                                                        color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
-                                                    }}>
-                                                        🕐 预计恢复时间 <span style={{ fontWeight: 400, color: '#94a3b8' }}>（可选）</span>
-                                                    </label>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        {proxySettings.enabled && (
+                                            <>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
+                                                    <div className="input-group">
+                                                        <label className="input-label">代理主机 (Host)</label>
                                                         <input
-                                                            type="datetime-local"
+                                                            type="text"
                                                             className="input"
-                                                            value={maintenanceEstEnd ? maintenanceEstEnd.slice(0, 16) : ''}
-                                                            onChange={(e) => setMaintenanceEstEnd(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                                                            style={{ flex: 1, fontSize: '14px' }}
+                                                            value={proxySettings.host}
+                                                            onChange={(e) => setProxySettings(s => ({ ...s, host: e.target.value }))}
+                                                            placeholder="proxy.global.ip2up.com"
                                                         />
-                                                        {maintenanceEstEnd && (
-                                                            <button
-                                                                onClick={() => setMaintenanceEstEnd('')}
-                                                                style={{
-                                                                    background: 'none', border: 'none', cursor: 'pointer',
-                                                                    color: '#94a3b8', fontSize: '18px', padding: '4px',
-                                                                    lineHeight: 1
-                                                                }}
-                                                                title="清除时间"
-                                                            >✕</button>
-                                                        )}
+                                                    </div>
+                                                    <div className="input-group">
+                                                        <label className="input-label">端口 (Port)</label>
+                                                        <input
+                                                            type="text"
+                                                            className="input"
+                                                            value={proxySettings.port}
+                                                            onChange={(e) => setProxySettings(s => ({ ...s, port: e.target.value }))}
+                                                            placeholder="12348"
+                                                        />
                                                     </div>
                                                 </div>
+                                                <div className="input-group">
+                                                    <label className="input-label">用户名 (Username)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="input"
+                                                        value={proxySettings.user}
+                                                        onChange={(e) => setProxySettings(s => ({ ...s, user: e.target.value, hasStoredCredentials: false }))}
+                                                        placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : "hW32EF_200_0_0_..."}
+                                                    />
+                                                    <p className="input-hint">
+                                                        ip2up 格式: <code>[account]_[country]_[province]_[city]_[session]_[sessionTime]_[flag]</code>
+                                                    </p>
+                                                </div>
+                                                <div className="input-group">
+                                                    <label className="input-label">密码 (Password)</label>
+                                                    <input
+                                                        type="password"
+                                                        className="input"
+                                                        value={proxySettings.password}
+                                                        onChange={(e) => setProxySettings(s => ({ ...s, password: e.target.value, hasStoredCredentials: false }))}
+                                                        placeholder={proxySettings.hasStoredCredentials ? "••••••••••（已保存，留空保持不变）" : ""}
+                                                    />
+                                                    {proxySettings.hasStoredCredentials && (
+                                                        <p className="input-hint">
+                                                            <span className="key-stored">✓ 代理凭据已保存</span>
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Test & Save Buttons */}
+                            <div className="settings-actions">
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleTestConnection}
+                                    disabled={testing}
+                                >
+                                    {testing ? '测试中...' : '🔌 测试连接'}
+                                </button>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleTestDocument}
+                                    disabled={testingDocument}
+                                >
+                                    {testingDocument ? '生成中...' : '🖼️ 测试文档生成'}
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleSaveAiConfig}
+                                    disabled={saving}
+                                >
+                                    {saving ? '保存中...' : '💾 保存配置'}
+                                </button>
+                                {showSaveNotice && (
+                                    <span className="save-notice">✓ 已保存</span>
+                                )}
+                            </div>
+
+                            {/* Test Result */}
+                            {testResult && (
+                                <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
+                                    <span className="test-icon">{testResult.success ? '✅' : '❌'}</span>
+                                    <span className="test-message">{testResult.message}</span>
+                                </div>
+                            )}
+
+                            {/* Test Document Result */}
+                            {testDocumentResult && (
+                                <div className="test-document-result">
+                                    <h4>📄 文档生成测试结果</h4>
+                                    {testDocumentResult.success ? (
+                                        <div className="test-document-content">
+                                            {/* Display all generated documents */}
+                                            <div className="test-document-images" style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: testDocumentResult.images?.length > 1 ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr',
+                                                gap: '16px',
+                                                marginBottom: '20px'
+                                            }}>
+                                                {(testDocumentResult.images || [{ image: testDocumentResult.image, filename: testDocumentResult.filename, type: 'document' }]).map((doc, idx) => (
+                                                    <div key={idx} className="test-document-image" style={{
+                                                        background: '#f8f9fa',
+                                                        borderRadius: '12px',
+                                                        padding: '12px',
+                                                        textAlign: 'center'
+                                                    }}>
+                                                        <div style={{
+                                                            fontSize: '12px',
+                                                            color: '#667eea',
+                                                            fontWeight: 600,
+                                                            marginBottom: '8px',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            {doc.type === 'id_card' ? '🪪 学生卡' :
+                                                                doc.type === 'transcript' ? '📜 成绩单' :
+                                                                    doc.type === 'class_schedule' ? '📅 课程表' :
+                                                                        doc.type === 'schedule' ? '📅 课程表' : '📄 文档'}
+                                                        </div>
+                                                        {(doc.filename?.endsWith('.pdf') || doc.image?.startsWith('data:application/pdf')) ? (
+                                                            <div>
+                                                                <embed
+                                                                    src={doc.image}
+                                                                    type="application/pdf"
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        height: '400px',
+                                                                        borderRadius: '8px',
+                                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                                                    }}
+                                                                />
+                                                                <a
+                                                                    href={doc.image}
+                                                                    download={doc.filename || 'document.pdf'}
+                                                                    style={{
+                                                                        display: 'inline-block',
+                                                                        marginTop: '8px',
+                                                                        padding: '6px 16px',
+                                                                        background: '#667eea',
+                                                                        color: '#fff',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '12px',
+                                                                        textDecoration: 'none',
+                                                                        fontWeight: 600
+                                                                    }}
+                                                                >📥 下载 PDF</a>
+                                                            </div>
+                                                        ) : (
+                                                            <img
+                                                                src={doc.image}
+                                                                alt={doc.type || 'Generated Document'}
+                                                                style={{
+                                                                    maxWidth: '100%',
+                                                                    maxHeight: '300px',
+                                                                    borderRadius: '8px',
+                                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <p className="filename" style={{
+                                                            marginTop: '8px',
+                                                            fontSize: '12px',
+                                                            color: '#666'
+                                                        }}>{doc.filename}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {/* Form data */}
+                                            <div className="test-document-form-data" style={{
+                                                background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                                borderRadius: '8px',
+                                                padding: '12px 16px'
+                                            }}>
+                                                <h5 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#667eea' }}>
+                                                    📝 表单数据 (将提交到 SheerID)
+                                                </h5>
+                                                <table className="form-data-table" style={{ width: '100%', fontSize: '13px' }}>
+                                                    <tbody>
+                                                        {Object.entries(testDocumentResult.formData || {})
+                                                            .filter(([key]) => ['firstName', 'lastName', 'university', 'birthDate', 'dob', 'email', 'studentId'].includes(key))
+                                                            .map(([key, value]) => (
+                                                                <tr key={key}>
+                                                                    <td style={{ padding: '4px 8px', color: '#666', fontWeight: 500, width: '120px' }}>{key}</td>
+                                                                    <td style={{ padding: '4px 8px', fontFamily: 'monospace' }}>{value}</td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         </div>
-
-                                        {/* Action Bar */}
-                                        <div style={{
-                                            display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
-                                            padding: '16px 20px',
-                                            marginTop: '20px',
-                                            borderTop: '1px solid var(--border-color, #e2e8f0)',
-                                            background: 'var(--bg-secondary, #f8fafc)'
-                                        }}>
-                                            {maintenanceSaved && (
-                                                <span style={{
-                                                    color: '#10b981', fontSize: '13px', fontWeight: 500,
-                                                    display: 'flex', alignItems: 'center', gap: '4px',
-                                                    animation: 'fadeIn 0.3s ease'
-                                                }}>
-                                                    <span>✓</span> 已保存
-                                                </span>
-                                            )}
-                                            <button
-                                                onClick={handleSaveMaintenance}
-                                                disabled={maintenanceSaving}
-                                                style={{
-                                                    padding: '8px 24px',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    cursor: maintenanceSaving ? 'not-allowed' : 'pointer',
-                                                    fontSize: '14px',
-                                                    fontWeight: 600,
-                                                    color: '#fff',
-                                                    background: maintenanceEnabled
-                                                        ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-                                                        : 'linear-gradient(135deg, #7c5cfc, #6d4fe8)',
-                                                    boxShadow: maintenanceEnabled
-                                                        ? '0 2px 8px rgba(239,68,68,0.3)'
-                                                        : '0 2px 8px rgba(124,92,252,0.3)',
-                                                    transition: 'all 0.2s ease',
-                                                    opacity: maintenanceSaving ? 0.7 : 1,
-                                                    display: 'flex', alignItems: 'center', gap: '6px'
-                                                }}
-                                            >
-                                                {maintenanceSaving ? (
-                                                    <><span className="loading-spinner small" /> 保存中...</>
-                                                ) : maintenanceEnabled ? (
-                                                    '保存并启用维护'
-                                                ) : (
-                                                    '保存设置'
-                                                )}
-                                            </button>
+                                    ) : (
+                                        <div className="test-result error">
+                                            <span className="test-icon">❌</span>
+                                            <span className="test-message">{testDocumentResult.message}</span>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             )}
                         </div>
-                    </div >
-                );
+
+                        {/* Info Card */}
+                        <div className="settings-section card">
+                            <h3>💡 说明</h3>
+                            <div className="info-content">
+                                <p><strong>🎨 Puppeteer HTML 模板（推荐）：</strong>使用 Puppeteer 渲染自定义 HTML 模板生成高质量学生证图片，支持 Gemini AI 生成逼真的学生证件照，效果最佳。</p>
+                                <p><strong>Gemini 官方 API：</strong>直接调用 Google Gemini API 生成学生证图像，需要有效的 API Key。</p>
+                                <p><strong>batch.1key.me API：</strong>使用第三方批量验证 API，需要配置 API Key。</p>
+                                <p className="info-warning">⚠️ 如果 AI 生成失败，系统会自动回退到备用生成方式。</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Verify Status Tab */}
+                {activeTab === 'verify-status' && (
+                    <div className="tab-content">
+                        {/* Live Grid Preview */}
+                        <div className="settings-section card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <h3 style={{ margin: 0 }}>📋 实时验证状态</h3>
+                                <div style={{ display: 'flex', gap: '14px', fontSize: '13px' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                                        {historyStats.pass} Pass
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}></span>
+                                        {historyStats.failed} Failed
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
+                                        {historyStats.cancel} Cancel
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="status-grid-container">
+                                <div className="status-grid three-rows">
+                                    {historyData.slice(-60).map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className={`status-block ${item.status}`}
+                                            onMouseEnter={() => setHoveredStatusItem(item)}
+                                            onMouseLeave={() => setHoveredStatusItem(null)}
+                                        >
+                                            {hoveredStatusItem?.id === item.id && (
+                                                <div className="status-tooltip">
+                                                    <span className="tooltip-status">
+                                                        {item.status === 'pass' ? '✓ Pass' :
+                                                            item.status === 'failed' ? '✕ Failed' :
+                                                                item.status === 'processing' ? '⏳ Processing' : '◷ Cancel'}
+                                                    </span>
+                                                    <span className="tooltip-time">{item.timestamp?.split('T')[1]?.slice(0, 8) || ''}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            {historyData.length === 0 && (
+                                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px', padding: '20px 0' }}>暂无验证记录</p>
+                            )}
+                        </div>
+
+                        {/* Controls */}
+                        <div className="settings-section card">
+                            <h3>➕ 添加记录</h3>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '12px' }}>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="50"
+                                    value={addCount}
+                                    onChange={(e) => setAddCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                                    className="input"
+                                    style={{ width: '70px', textAlign: 'center' }}
+                                />
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条</span>
+                                {[
+                                    { status: 'pass', label: '✅ Pass', color: '#10b981' },
+                                    { status: 'failed', label: '❌ Failed', color: '#ef4444' },
+                                    { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
+                                ].map(item => (
+                                    <button
+                                        key={item.status}
+                                        disabled={addingStatus !== null}
+                                        className="btn btn-sm"
+                                        style={{
+                                            background: addingStatus === item.status ? '#999' : item.color,
+                                            color: '#fff',
+                                            border: 'none',
+                                            padding: '6px 14px',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            fontWeight: 600,
+                                            cursor: addingStatus !== null ? 'not-allowed' : 'pointer',
+                                            opacity: addingStatus !== null && addingStatus !== item.status ? 0.5 : 1
+                                        }}
+                                        onClick={async () => {
+                                            if (addingStatus !== null) return;
+                                            setAddingStatus(item.status);
+                                            try {
+                                                const res = await fetch(`${API_BASE}/api/verify/history`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ status: item.status, count: addCount })
+                                                });
+                                                if (res.ok) {
+                                                    const data = await res.json();
+                                                    // Re-fetch to get accurate grid
+                                                    const hRes = await fetch(`${API_BASE}/api/verify/history`);
+                                                    if (hRes.ok) {
+                                                        const hData = await hRes.json();
+                                                        setHistoryData(hData.history || []);
+                                                        setHistoryStats(hData.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                alert('添加失败: ' + e.message);
+                                            } finally {
+                                                setAddingStatus(null);
+                                            }
+                                        }}
+                                    >
+                                        {addingStatus === item.status ? '...' : item.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Clear All */}
+                            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border, #e2ddd8)' }}>
+                                <button
+                                    className="btn btn-sm"
+                                    disabled={addingStatus !== null}
+                                    style={{
+                                        background: 'transparent',
+                                        color: '#ef4444',
+                                        border: '1px solid #ef4444',
+                                        padding: '6px 16px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={async () => {
+                                        if (!confirm('确定要清空所有验证状态记录吗？此操作不可撤销。')) return;
+                                        try {
+                                            const res = await fetch(`${API_BASE}/api/verify/history`, { method: 'DELETE' });
+                                            if (res.ok) {
+                                                const data = await res.json();
+                                                setHistoryData([]);
+                                                setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                            }
+                                        } catch (e) {
+                                            alert('清空失败: ' + e.message);
+                                        }
+                                    }}
+                                >
+                                    🗑️ 清空所有记录
+                                </button>
+                                <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    共 {historyStats.total || 0} 条记录
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Auto Record Rules */}
+                        <div className="settings-section card">
+                            <h3>⏱️ 自动添加记录</h3>
+                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 16px' }}>
+                                配置自动添加规则，规则持久化保存，重启后自动恢复
+                            </p>
+
+                            {/* Existing rules list */}
+                            {autoRules.length > 0 && (
+                                <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {autoRules.map(rule => (
+                                        <div key={rule.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '10px 14px',
+                                            background: rule.enabled ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-secondary)',
+                                            border: `1px solid ${rule.enabled ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-primary)'}`,
+                                            borderRadius: '8px'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span style={{
+                                                    width: 8, height: 8, borderRadius: '50%',
+                                                    background: rule.running ? '#10b981' : '#94a3b8',
+                                                    display: 'inline-block'
+                                                }}></span>
+                                                <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                                                    每 {rule.intervalMinutes || Math.round((rule.intervalSeconds || 60) / 60)} 分钟 → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
+                                                </span>
+                                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                                                    {rule.running ? '运行中' : '已停止'}
+                                                    {rule.durationHours > 0 && (
+                                                        rule.running && rule.remainingHours != null
+                                                            ? ` · 剩余 ${rule.remainingHours}h`
+                                                            : ` · 时效 ${rule.durationHours}h`
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button
+                                                    className="btn btn-sm"
+                                                    style={{
+                                                        background: rule.enabled ? '#f59e0b' : '#10b981',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        padding: '4px 12px',
+                                                        borderRadius: '5px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ enabled: !rule.enabled })
+                                                            });
+                                                            if (res.ok) {
+                                                                const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                                if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
+                                                            }
+                                                        } catch (e) { alert(e.message); }
+                                                    }}
+                                                >
+                                                    {rule.enabled ? '⏸ 停止' : '▶ 启动'}
+                                                </button>
+                                                <button
+                                                    className="btn btn-sm"
+                                                    style={{
+                                                        background: 'transparent',
+                                                        color: '#ef4444',
+                                                        border: '1px solid #ef4444',
+                                                        padding: '4px 10px',
+                                                        borderRadius: '5px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    onClick={async () => {
+                                                        if (!confirm('删除此规则？')) return;
+                                                        try {
+                                                            await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, { method: 'DELETE' });
+                                                            const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                            if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
+                                                        } catch (e) { alert(e.message); }
+                                                    }}
+                                                >
+                                                    🗑
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Add new rule */}
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', paddingTop: autoRules.length > 0 ? '12px' : 0, borderTop: autoRules.length > 0 ? '1px solid var(--border-primary)' : 'none' }}>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>新规则：每</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="60"
+                                    value={newRule.intervalMinutes}
+                                    onChange={(e) => setNewRule(prev => ({ ...prev, intervalMinutes: Math.max(1, parseInt(e.target.value) || 5) }))}
+                                    className="input"
+                                    style={{ width: '65px', textAlign: 'center' }}
+                                />
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟 添加</span>
+                                <select
+                                    className="input"
+                                    value={newRule.status}
+                                    onChange={(e) => setNewRule(prev => ({ ...prev, status: e.target.value }))}
+                                    style={{ width: '110px', cursor: 'pointer' }}
+                                >
+                                    <option value="pass">✅ Pass</option>
+                                    <option value="failed">❌ Failed</option>
+                                    <option value="cancel">◷ Cancel</option>
+                                </select>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>时效</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="72"
+                                    step="1"
+                                    value={newRule.durationHours}
+                                    onChange={(e) => setNewRule(prev => ({ ...prev, durationHours: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                                    className="input"
+                                    style={{ width: '65px', textAlign: 'center' }}
+                                />
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>小时</span>
+                                <button
+                                    className="btn btn-sm"
+                                    disabled={savingRule}
+                                    style={{
+                                        background: '#10b981',
+                                        color: '#fff',
+                                        border: 'none',
+                                        padding: '6px 16px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={async () => {
+                                        setSavingRule(true);
+                                        try {
+                                            const res = await fetch(`${API_BASE}/api/verify/auto-record`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify(newRule)
+                                            });
+                                            if (res.ok) {
+                                                const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
+                                            }
+                                        } catch (e) {
+                                            alert('添加失败: ' + e.message);
+                                        } finally {
+                                            setSavingRule(false);
+                                        }
+                                    }}
+                                >
+                                    {savingRule ? '...' : '➕ 添加规则'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Settings Tab */}
+                {activeTab === 'settings' && (
+                    <div className="tab-content">
+
+                        {/* Browser Mode - only shown when provider is not telegram */}
+                        {aiProvider !== 'telegram' && (
+                            <div className="settings-section card">
+                                <h3>⚡ 验证模式</h3>
+                                <p className="settings-desc">
+                                    选择验证请求的发送方式。API 模式速度快，浏览器模式使用 Chromium 模拟真实浏览器，更不容易被检测。
+                                </p>
+                                <div className="settings-form">
+                                    <div className="mode-selector" style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                                        <div
+                                            onClick={() => setBrowserMode(false)}
+                                            style={{
+                                                flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
+                                                border: !browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
+                                                background: !browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚡</div>
+                                            <div style={{ fontWeight: 600, marginBottom: '4px' }}>API 模式</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>标准 HTTP 请求，速度快</div>
+                                        </div>
+                                        <div
+                                            onClick={() => setBrowserMode(true)}
+                                            style={{
+                                                flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
+                                                border: browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
+                                                background: browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            <div style={{ fontSize: '24px', marginBottom: '8px' }}>🌐</div>
+                                            <div style={{ fontWeight: 600, marginBottom: '4px' }}>浏览器模式</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Chromium 模拟真实浏览器</div>
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-primary" onClick={handleSaveAiConfig} disabled={saving}>
+                                        {saving ? '保存中...' : '保存'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {aiProvider === 'telegram' && (
+                            <div className="settings-section card">
+                                <h3>🤖 Telegram Bot 验证</h3>
+                                <p className="settings-desc">
+                                    当前使用 Telegram Bot 进行验证，无需选择验证模式。链接将直接发送给 @SheerID_Verification_bot 处理。
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Maintenance Mode Card */}
+                        <div className="settings-section card" style={{
+                            border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent',
+                            transition: 'all 0.3s ease',
+                            overflow: 'hidden',
+                            padding: 0
+                        }}>
+                            {/* Status Banner */}
+                            <div style={{
+                                padding: '14px 20px',
+                                background: maintenanceEnabled
+                                    ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
+                                    : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                                borderBottom: '1px solid',
+                                borderColor: maintenanceEnabled ? '#fecaca' : '#bbf7d0',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                transition: 'all 0.3s ease'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{
+                                        width: '10px', height: '10px', borderRadius: '50%',
+                                        background: maintenanceEnabled ? '#ef4444' : '#22c55e',
+                                        boxShadow: maintenanceEnabled ? '0 0 8px rgba(239,68,68,0.5)' : '0 0 8px rgba(34,197,94,0.5)',
+                                        animation: maintenanceEnabled ? 'pulse 2s infinite' : 'none'
+                                    }} />
+                                    <span style={{
+                                        fontSize: '14px', fontWeight: 600,
+                                        color: maintenanceEnabled ? '#dc2626' : '#16a34a'
+                                    }}>
+                                        {maintenanceEnabled ? '维护模式已开启' : '网站运行正常'}
+                                    </span>
+                                </div>
+                                {/* Toggle Switch */}
+                                <div
+                                    onClick={() => setMaintenanceEnabled(!maintenanceEnabled)}
+                                    style={{
+                                        width: '52px', height: '28px', borderRadius: '14px', cursor: 'pointer',
+                                        background: maintenanceEnabled ? 'linear-gradient(135deg, #ef4444, #dc2626)' : '#d1d5db',
+                                        position: 'relative', transition: 'all 0.3s ease',
+                                        boxShadow: maintenanceEnabled ? '0 0 12px rgba(239,68,68,0.3)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                                        flexShrink: 0
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '22px', height: '22px', borderRadius: '50%',
+                                        background: '#fff', position: 'absolute', top: '3px',
+                                        left: maintenanceEnabled ? '27px' : '3px',
+                                        transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                                    }} />
+                                </div>
+                            </div>
+
+                            {/* Card Body */}
+                            <div style={{ padding: '20px 20px 0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                    <span style={{ fontSize: '20px' }}>🚧</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px' }}>维护模式设置</h3>
+                                </div>
+
+                                {/* Form Fields */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {/* Message Field */}
+                                    <div>
+                                        <label style={{
+                                            display: 'block', fontSize: '13px', fontWeight: 500,
+                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                        }}>
+                                            📝 维护公告内容
+                                        </label>
+                                        <textarea
+                                            className="input textarea"
+                                            placeholder="输入将向用户显示的维护公告..."
+                                            rows={3}
+                                            value={maintenanceMessage}
+                                            onChange={(e) => setMaintenanceMessage(e.target.value)}
+                                            style={{
+                                                resize: 'vertical', minHeight: '72px',
+                                                fontSize: '14px', lineHeight: '1.5',
+                                                width: '100%', boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Estimated End Time */}
+                                    <div>
+                                        <label style={{
+                                            display: 'block', fontSize: '13px', fontWeight: 500,
+                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                        }}>
+                                            🕐 预计恢复时间 <span style={{ fontWeight: 400, color: '#94a3b8' }}>（可选）</span>
+                                        </label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <input
+                                                type="datetime-local"
+                                                className="input"
+                                                value={maintenanceEstEnd ? maintenanceEstEnd.slice(0, 16) : ''}
+                                                onChange={(e) => setMaintenanceEstEnd(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                                                style={{ flex: 1, fontSize: '14px' }}
+                                            />
+                                            {maintenanceEstEnd && (
+                                                <button
+                                                    onClick={() => setMaintenanceEstEnd('')}
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                        color: '#94a3b8', fontSize: '18px', padding: '4px',
+                                                        lineHeight: 1
+                                                    }}
+                                                    title="清除时间"
+                                                >✕</button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Bar */}
+                            <div style={{
+                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                padding: '16px 20px',
+                                marginTop: '20px',
+                                borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                background: 'var(--bg-secondary, #f8fafc)'
+                            }}>
+                                {maintenanceSaved && (
+                                    <span style={{
+                                        color: '#10b981', fontSize: '13px', fontWeight: 500,
+                                        display: 'flex', alignItems: 'center', gap: '4px',
+                                        animation: 'fadeIn 0.3s ease'
+                                    }}>
+                                        <span>✓</span> 已保存
+                                    </span>
+                                )}
+                                <button
+                                    onClick={handleSaveMaintenance}
+                                    disabled={maintenanceSaving}
+                                    style={{
+                                        padding: '8px 24px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        cursor: maintenanceSaving ? 'not-allowed' : 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 600,
+                                        color: '#fff',
+                                        background: maintenanceEnabled
+                                            ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+                                            : 'linear-gradient(135deg, #7c5cfc, #6d4fe8)',
+                                        boxShadow: maintenanceEnabled
+                                            ? '0 2px 8px rgba(239,68,68,0.3)'
+                                            : '0 2px 8px rgba(124,92,252,0.3)',
+                                        transition: 'all 0.2s ease',
+                                        opacity: maintenanceSaving ? 0.7 : 1,
+                                        display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}
+                                >
+                                    {maintenanceSaving ? (
+                                        <><span className="loading-spinner small" /> 保存中...</>
+                                    ) : maintenanceEnabled ? (
+                                        '保存并启用维护'
+                                    ) : (
+                                        '保存设置'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div >
+    );
 }
 

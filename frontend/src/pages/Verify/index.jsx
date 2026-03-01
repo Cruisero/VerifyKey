@@ -218,21 +218,20 @@ export default function Verify() {
                         r.fullLink === result.link || r.verificationId === result.verificationId
                     );
                     if (resultItem) {
-                        let status = 'processing';
-                        let message = result.message || t('processing');
+                        let status = 'failed';
+                        let message = result.message || t('msgError');
+
                         if (result.status === 'approved') {
                             status = 'success';
                             message = result.message || t('msgApproved');
                             setLastSuccess(new Date().toISOString());
                             fetchHistory();
+                        } else if (result.status === 'processing') {
+                            status = 'processing';
+                            message = result.message || t('processing');
                         } else if (result.status === 'rejected') {
-                            status = 'failed';
                             message = result.message || t('msgRejected');
-                        } else if (result.status === 'error' || result.status === 'timeout') {
-                            status = 'failed';
-                            message = result.message || t('msgError');
                         } else if (result.status === 'no_credits') {
-                            status = 'failed';
                             message = t('msgNoCredits');
                         }
                         setResults(prev => prev.map(r =>
@@ -294,19 +293,19 @@ export default function Verify() {
                 for (const result of data.results) {
                     const resultItem = resultItems.find(r => r.verificationId === result.verificationId);
                     if (resultItem) {
-                        let status = 'processing';
-                        let message = result.message || t('processing');
+                        let status = 'failed';
+                        let message = result.message || t('msgError');
+
                         if (result.status === 'approved') {
                             status = 'success';
                             message = result.message || t('msgApproved');
                             setLastSuccess(new Date().toISOString());
                             fetchHistory();
+                        } else if (result.status === 'processing') {
+                            status = 'processing';
+                            message = result.message || t('processing');
                         } else if (result.status === 'rejected') {
-                            status = 'failed';
                             message = result.message || t('msgRejected');
-                        } else if (result.status === 'error' || result.status === 'timeout') {
-                            status = 'failed';
-                            message = result.message || t('msgError');
                         }
                         setResults(prev => prev.map(r =>
                             r.id === resultItem.id

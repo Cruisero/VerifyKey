@@ -99,7 +99,9 @@ class DualBotVerifier:
             parsed = self._parse_response(verify_result, vid, is_warmup=False)
 
             # ---- Step 3: Auto bypass on failure (Looped) ----
-            if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected"):
+            # Skip bypass if bot quota exhausted (nothing to bypass on SheerID side)
+            skip_bypass = "程序崩溃" in parsed.get("message", "")
+            if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
                 logger.info(f"[DualBot] [{account_id}] Step 3: Auto-bypass sequence triggered for {vid[:8]}...")
                 
                 # First, wait for SheerID to finish processing (pending -> docUpload)

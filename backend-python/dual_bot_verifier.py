@@ -117,14 +117,22 @@ class DualBotVerifier:
             
             # Capture either text or photo caption
             reply_text = event.message.text or event.message.message or ""
+            # Also check photo caption specifically if text/message is empty
+            if not reply_text and event.message.photo:
+                reply_text = event.message.caption or ""
+                
             if not reply_text:
+                logger.debug(f"[DualBot] Received empty message from @{bot_username}")
                 return
+
+            logger.info(f"[DualBot] Message from @{bot_username}: {reply_text[:100]}...")
 
             if wait_for_final:
                 # Check if this IS a final result or just a "Processing" status
                 parsed = self._parse_response(reply_text, "temp")
+                logger.info(f"[DualBot] Parsed status for @{bot_username}: {parsed['status']}")
                 if parsed["status"] == "processing":
-                    logger.info(f"[DualBot] Received intermediate status from @{bot_username}, still waiting...")
+                    logger.info(f"[DualBot] Skipping intermediate status from @{bot_username}, continuing to wait...")
                     return
             
             future.set_result(reply_text)

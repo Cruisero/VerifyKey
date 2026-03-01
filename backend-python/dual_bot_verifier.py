@@ -53,14 +53,15 @@ class DualBotVerifier:
 
         # ---- Step 1: Warmup via @SatsetHelperbot ----
         logger.info(f"[DualBot] Step 1: Warmup {vid[:8]}... via @{w_bot}")
-        warmup_result = await self._send_and_wait(client, w_bot, link, timeout=60)
+        # We wait for the FINAL result (not just 'Processing...')
+        warmup_result = await self._send_and_wait(client, w_bot, link, wait_for_final=True, timeout=90)
 
         if warmup_result is None:
             return {
                 "success": False,
                 "status": "warmup_timeout",
                 "verificationId": vid,
-                "message": f"预热超时（@{w_bot} 没有回应）"
+                "message": f"预热阶段超时 (@{w_bot} 没有最终回应)"
             }
 
         logger.info(f"[DualBot] Warmup response: {warmup_result[:100]}...")
@@ -102,15 +103,31 @@ class DualBotVerifier:
 
     # ---- Send message and wait for reply ----
 
-    async def _send_and_wait(self, client: TelegramClient, bot_username: str, message: str, timeout: int = 60) -> Optional[str]:
-        """Send a message to a bot and wait for the next reply (text or caption)."""
-        future = asyncio.get_event_loop().create_future()
+    async def _send_and_wait(self, client: TelegramClient, bot_username: str, message: str, wait_for_final: bool = False, timeout: int = 60) -> Optional[str]:
+        """
+        Send a message to a bot and wait for the reply.
+        If wait_for_final is True, skips 'Processing' messages and waits for a definitive response.
+        """
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
 
         async def handler(event):
-            if not future.done():
-                # Capture either text or photo caption
-                reply_text = event.message.text or event.message.message or ""
-                future.set_result(reply_text)
+            if future.done():
+                return
+            
+            # Capture either text or photo caption
+            reply_text = event.message.text or event.message.message or ""
+            if not reply_text:
+                return
+
+            if wait_for_final:
+                # Check if this IS a final result or just a "Processing" status
+                parsed = self._parse_response(reply_text, "temp")
+                if parsed["status"] == "processing":
+                    logger.info(f"[DualBot] Received intermediate status from @{bot_username}, still waiting...")
+                    return
+            
+            future.set_result(reply_text)
 
         # Register temporary handler
         client.add_event_handler(handler, events.NewMessage(from_users=bot_username))

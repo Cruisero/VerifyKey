@@ -749,6 +749,7 @@ export default function Admin() {
                         botUsername: config?.verification?.telegram?.botUsername
                     },
                     dualBot: {
+                        enabled: config?.verification?.dualBot?.enabled || false,
                         warmupBot: config?.verification?.dualBot?.warmupBot || '@SatsetHelperbot',
                         verifyBot: config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot',
                         autoBypass: config?.verification?.dualBot?.autoBypass !== false

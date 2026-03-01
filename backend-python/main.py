@@ -1916,7 +1916,15 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         }
         yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable Nginx proxy buffering
+            "Connection": "keep-alive",
+        }
+    )
 
 
 # ========== Bypass API Endpoints ==========

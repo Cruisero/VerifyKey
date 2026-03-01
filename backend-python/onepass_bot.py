@@ -11,8 +11,9 @@ import httpx
 from httpx_sse import connect_sse
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables explicitly from the same directory
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=env_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

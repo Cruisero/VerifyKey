@@ -98,15 +98,33 @@ class DualBotVerifier:
             # Parse result
             parsed = self._parse_response(verify_result, vid, is_warmup=False)
 
-            # ---- Step 3: Auto bypass on failure ----
+            # ---- Step 3: Auto bypass on failure (Looped) ----
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected"):
-                logger.info(f"[DualBot] [{account_id}] Step 3: Auto-bypass for {vid[:8]}...")
-                bypass_ok = await self._bypass_link(vid)
-                if bypass_ok:
-                    parsed["message"] = "验证失败，链接已自动刷新，请重新获取验证链接"
+                logger.info(f"[DualBot] [{account_id}] Step 3: Auto-bypass sequence triggered for {vid[:8]}...")
+                
+                bypass_count = 0
+                max_bypass = 10
+                bypass_success_any = False
+                
+                # Loop the bypass until it fails (SheerID returns 4xx indicating limit reached)
+                while bypass_count < max_bypass:
+                    bypass_count += 1
+                    logger.info(f"[DualBot] [{account_id}] Bypass attempt {bypass_count}/{max_bypass}...")
+                    
+                    ok = await self._bypass_link(vid)
+                    if ok:
+                        bypass_success_any = True
+                        # Small delay to prevent instant ban, but fast enough to overwhelm the block
+                        await asyncio.sleep(1.5)
+                    else:
+                        logger.info(f"[DualBot] [{account_id}] Bypass sequence completed after {bypass_count-1} successful uploads.")
+                        break
+
+                if bypass_success_any:
+                    parsed["message"] = "验证失败，系统已连续执行刷新动作清除锁定，请准备重新获取链接"
                     parsed["bypassed"] = True
                 else:
-                    parsed["message"] = "验证失败，自动刷新链接时出错"
+                    parsed["message"] = "验证失败，且无法进行自动刷新"
                     parsed["bypassed"] = False
 
             return parsed

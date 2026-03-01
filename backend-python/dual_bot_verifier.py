@@ -184,63 +184,62 @@ class DualBotVerifier:
         text_upper = text.upper()
         # Cleaned text for easier matching
         text_clean = " ".join(text_upper.split())
-        logger.info(f"[DualBot] Parsing @{vid[:8]} (warmup={is_warmup}) - Cleaned: {text_clean[:60]}...")
+        logger.info(f"[DualBot] Parsing @{vid[:8]} (warmup={is_warmup}) - Cleaned: {text_clean[:80]}...")
 
         # Extract claim link
         link_match = re.search(r'(https://one\.google\.com/[^\s\n]+)', text)
         if link_match:
             result["claimLink"] = link_match.group(1)
 
-        # 1. Check for success (Priority)
-        # Added Indonesian: PROSES SELESAI (Process Finished)
-        success_keywords = [
-            "CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", 
-            "SETUJU", "BERHASIL"
-        ]
-        
-        # If it's just a warmup bot, we treat 'Proses Selesai' as a success.
-        if is_warmup:
-            warmup_success = ["PROSES SELESAI", "PROCESS FINISHED"]
-            if any(kw in text_clean for kw in warmup_success):
-                result["success"] = True
-                result["status"] = "approved"
-                result["message"] = "预热完成"
+        # 1. Check for processing status FIRST (Priority to avoid false positives)
+        proc_keywords = ["SEDANG MEMPROSES", "PROCESSING YOUR", "PROCESSING...", "WAIT...", "⏳", "LOADING"]
+        for kw in proc_keywords:
+            if kw in text_clean:
+                logger.info(f"[DualBot] Matched processing keyword: {kw}")
+                result["success"] = None
+                result["status"] = "processing"
+                result["message"] = "正在处理..."
                 return result
 
-        if any(kw in text_clean for kw in success_keywords):
-            result["success"] = True
-            result["status"] = "approved"
-            result["message"] = "通过" # Simple success message
-            return result
+        # 2. Check for success
+        # For Step 1 (Warmup), we only care about 'Finished/Selesai'
+        if is_warmup:
+            warmup_success = ["PROSES SELESAI", "PROCESS FINISHED", "SELESAI!"]
+            for kw in warmup_success:
+                if kw in text_clean:
+                    logger.info(f"[DualBot] Stage 1 Success: {kw}")
+                    result["success"] = True
+                    result["status"] = "approved"
+                    result["message"] = "预热完成"
+                    return result
 
-        # 2. Check for processing status (Be very specific to avoid false positives)
-        proc_keywords = ["SEDANG MEMPROSES", "PROCESSING YOUR", "PROCESSING...", "WAIT...", "⏳"]
-        if any(kw in text_clean for kw in proc_keywords):
-            result["success"] = None
-            result["status"] = "processing"
-            result["message"] = "正在处理..."
-            return result
+        # General successes (Priority 2)
+        success_keywords = ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", "SETUJU", "BERHASIL"]
+        for kw in success_keywords:
+            if kw in text_clean:
+                logger.info(f"[DualBot] Matched success keyword: {kw}")
+                result["success"] = True
+                result["status"] = "approved"
+                result["message"] = "通过"
+                return result
 
         # 3. Explicit Failure Keywords
-        fail_keywords = [
-            "VERIFICATION FAILED", "FAILED", "❌", "REJECTED", "UNSUCCESSFUL", 
-            "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "LIMBAH", "EXPIRED", "SUSAH",
-            "MOHON", "MAAF", "GANTILAH", "KURANG"
-        ]
+        fail_keywords = ["FAILED", "❌", "REJECTED", "UNSUCCESSFUL", "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "EXPIRED", "SUSAH", "KURANG"]
+        for kw in fail_keywords:
+            if kw in text_clean:
+                logger.info(f"[DualBot] Matched failure keyword: {kw}")
+                result["success"] = False
+                result["status"] = "failed"
+                if "QUOTA" in text_clean or "HABIS" in text_clean or "KURANG" in text_clean:
+                    result["message"] = "Bot 额度不足 (Quota Exhausted)"
+                elif "EXPIRED" in text_clean:
+                    result["message"] = "验证链接已过期 (Link Expired)"
+                else:
+                    result["message"] = f"验证失败: {text[:50]}..."
+                return result
         
-        # Determine failure reason if possible
-        if any(kw in text_clean for kw in fail_keywords):
-            result["success"] = False
-            result["status"] = "failed"
-            if "QUOTA" in text_clean or "HABIS" in text_clean or "KURANG" in text_clean:
-                result["message"] = "Bot 额度不足 (Quota Exhausted)"
-            elif "EXPIRED" in text_clean:
-                result["message"] = "验证链接已过期 (Link Expired)"
-            else:
-                result["message"] = f"验证失败: {text[:50]}..."
-            return result
-        
-        # 4. Safe Fallback: Unrecognized but not success/processing -> treated as failure.
+        # 4. Safe Fallback: Unrecognized -> treated as failure.
+        logger.info("[DualBot] No status matched, falling back to failed.")
         result["success"] = False
         result["status"] = "failed"
         result["message"] = f"请求未成功: {text[:50]}..."

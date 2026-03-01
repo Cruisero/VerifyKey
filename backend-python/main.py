@@ -1797,24 +1797,58 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     warmup_bot = dual_config.get("warmupBot")
     verify_bot = dual_config.get("verifyBot")
 
+    # Lock to ensure FIFO ordering when all accounts are in cooldown
+    cooldown_wait_lock = asyncio.Lock()
+
     # Process each link (potentially in parallel across DIFFERENT accounts)
-    # We want to process links as they come, using any available client from the pool
+    # With cooldown auto-retry: if an account is in cooldown, try another one
     async def process_single_link(link_to_verify):
-        # Get an available client and its ID from the pool
-        pool_item = tg_manager.get_next_client()
-        if not pool_item:
-            return None, {"success": False, "status": "error", "message": "当前没有可用的已启用 Telegram 账号"}
+        max_retries = 5  # Prevent infinite retry loops
         
-        acc_id, client = pool_item
-        result = await dual_bot.verify(
-            client=client,
-            link=link_to_verify,
-            account_id=acc_id,
-            warmup_bot=warmup_bot,
-            verify_bot=verify_bot,
-            auto_bypass=auto_bypass
-        )
-        return acc_id, result
+        for attempt in range(max_retries):
+            # Get an available client from the pool
+            pool_item = tg_manager.get_next_client()
+            
+            if not pool_item:
+                # All accounts in cooldown — wait for the shortest one to expire
+                wait_time = tg_manager.get_shortest_cooldown_wait()
+                if wait_time > 0:
+                    logger.info(f"[Verify] All accounts in cooldown, waiting {wait_time:.0f}s for next available...")
+                    # Use lock to enforce FIFO ordering among waiting links
+                    async with cooldown_wait_lock:
+                        # Re-check after acquiring lock (another task may have already waited)
+                        pool_item = tg_manager.get_next_client()
+                        if not pool_item:
+                            wait_time = tg_manager.get_shortest_cooldown_wait()
+                            if wait_time > 0:
+                                await asyncio.sleep(wait_time + 2)  # +2s buffer
+                            pool_item = tg_manager.get_next_client()
+                
+                if not pool_item:
+                    return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+            
+            acc_id, client = pool_item
+            result = await dual_bot.verify(
+                client=client,
+                link=link_to_verify,
+                account_id=acc_id,
+                warmup_bot=warmup_bot,
+                verify_bot=verify_bot,
+                auto_bypass=auto_bypass
+            )
+            
+            # If cooldown detected, mark this account and retry with another
+            if result.get("status") == "cooldown":
+                logger.info(f"[Verify] Account {acc_id} in cooldown, retrying with another account (attempt {attempt+1})...")
+                tg_manager.set_cooldown(acc_id, result.get("cooldown_seconds", 90))
+                if result.get("remaining_quota") is not None:
+                    tg_manager.update_quota(acc_id, result["remaining_quota"])
+                continue  # Retry with next available account
+            
+            return acc_id, result
+        
+        # All retries exhausted (all accounts repeatedly in cooldown)
+        return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
 
     # Use asyncio.gather to allow cross-account concurrency
     # But note: inside verify(), each account is still locked to be sequential
@@ -1828,9 +1862,6 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         # Update bot quota if available
         if acc_id and r.get("remaining_quota") is not None:
             tg_manager.update_quota(acc_id, r["remaining_quota"])
-        # Set cooldown if detected
-        if acc_id and r.get("cooldown_seconds"):
-            tg_manager.set_cooldown(acc_id, r["cooldown_seconds"])
 
     # Log and deduct
     successful = sum(1 for r in results if r.get("success"))

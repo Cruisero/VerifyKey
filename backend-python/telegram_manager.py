@@ -120,6 +120,26 @@ class TelegramAccountManager:
         self._cooldowns[account_id] = time.time() + seconds
         logger.info(f"[TGManager] Account {account_id} in cooldown for {seconds}s (until +{seconds}s)")
 
+    def get_shortest_cooldown_wait(self) -> float:
+        """Return seconds until the soonest cooldown-locked account becomes available. 0 if none in cooldown."""
+        import time
+        now = time.time()
+        config = config_manager.get_config()
+        accounts = config.get("telegramAccounts", [])
+        enabled_ids = [acc["id"] for acc in accounts if acc.get("enabled", True)]
+        
+        # Find the soonest expiry among enabled accounts that are actually in cooldown
+        soonest = None
+        for aid in enabled_ids:
+            if aid in self._clients and self._clients[aid].is_connected():
+                expiry = self._cooldowns.get(aid, 0)
+                if expiry > now:
+                    remaining = expiry - now
+                    if soonest is None or remaining < soonest:
+                        soonest = remaining
+        
+        return soonest if soonest is not None else 0
+
     def add_account(self, api_id: str, api_hash: str, label: str = "") -> dict:
         """Add a new account entry (not yet logged in)."""
         config = config_manager.get_config()

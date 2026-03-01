@@ -60,10 +60,17 @@ class DualBotVerifier:
                 "success": False,
                 "status": "warmup_timeout",
                 "verificationId": vid,
-                "message": "预热超时，请重试"
+                "message": f"预热超时（@{w_bot} 没有回应）"
             }
 
         logger.info(f"[DualBot] Warmup response: {warmup_result[:100]}...")
+        
+        # Check if warmup failed
+        warmup_parsed = self._parse_response(warmup_result, vid)
+        if not warmup_parsed["success"] and warmup_parsed["status"] != "processing":
+            logger.warning(f"[DualBot] Warmup failed with @{w_bot}: {warmup_parsed['message']}")
+            warmup_parsed["message"] = f"预热阶段失败 (@{w_bot}): {warmup_parsed['message']}"
+            return warmup_parsed
 
         # ---- Step 2: Verify via @AutoGeminiProbot ----
         logger.info(f"[DualBot] Step 2: Verify {vid[:8]}... via @{v_bot}")
@@ -74,7 +81,7 @@ class DualBotVerifier:
                 "success": False,
                 "status": "timeout",
                 "verificationId": vid,
-                "message": f"验证超时（{timeout}s），请重试"
+                "message": f"验证超时（@{v_bot} 没有回应，请重试）"
             }
 
         # Parse result
@@ -139,11 +146,19 @@ class DualBotVerifier:
         if link_match:
             result["claimLink"] = link_match.group(1)
 
-        # Check for failure first
-        if any(kw in text_upper for kw in ["VERIFICATION FAILED", "FAILED", "❌", "REJECTED", "UNSUCCESSFUL"]):
+        # Check for failure first (includes Indonesian keywords like QUOTA, HABIS, TIDAK BISA)
+        fail_keywords = [
+            "VERIFICATION FAILED", "FAILED", "❌", "REJECTED", "UNSUCCESSFUL", 
+            "QUOTA", "HABIS", "TIDAK BISA", "ERROR", "LIMBAH", "EXPIRED", "SUSAH"
+        ]
+        if any(kw in text_upper for kw in fail_keywords):
             result["success"] = False
             result["status"] = "failed"
-            result["message"] = "验证失败"
+            # Try to extract a useful error message from the text
+            if "QUOTA" in text_upper or "HABIS" in text_upper:
+                result["message"] = "Bot 额度不足 (Quota Exhausted)"
+            else:
+                result["message"] = "验证失败 (Verification Failed)"
             return result
 
         # Check for success

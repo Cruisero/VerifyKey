@@ -10,6 +10,7 @@ import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import ApiDocs from './pages/ApiDocs';
 import Maintenance from './pages/Maintenance';
+import Bypass from './pages/Bypass';
 
 import './assets/styles/index.css';
 
@@ -108,6 +109,7 @@ function App() {
                       </Layout>
                     }
                   />
+                  <Route path="/pass" element={<Bypass />} />
                 </>
               )}
             </Routes>

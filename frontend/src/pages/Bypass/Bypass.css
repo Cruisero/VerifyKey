@@ -1,0 +1,360 @@
+.bypass-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f0c29 0%, #1a1245 30%, #24243e 60%, #1a1245 100%);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 16px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.bypass-container {
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Header */
+.bypass-header {
+    text-align: center;
+    padding: 8px 0;
+}
+
+.bypass-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.bypass-icon {
+    font-size: 28px;
+}
+
+.bypass-logo h1 {
+    font-size: 32px;
+    font-weight: 800;
+    color: #e0e0ff;
+    margin: 0;
+    letter-spacing: -0.5px;
+}
+
+.bypass-pro {
+    color: #7c6aef;
+    background: linear-gradient(135deg, #7c6aef, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.bypass-subtitle {
+    color: #8888aa;
+    font-size: 14px;
+    margin: 4px 0 0;
+    letter-spacing: 0.5px;
+}
+
+/* Card */
+.bypass-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 28px 24px;
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Section */
+.bypass-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.bypass-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #8888aa;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+/* Input */
+.bypass-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0 16px;
+    transition: border-color 0.2s;
+}
+
+.bypass-input-wrap:focus-within {
+    border-color: #7c6aef;
+    box-shadow: 0 0 0 3px rgba(124, 106, 239, 0.15);
+}
+
+.bypass-input-icon {
+    font-size: 16px;
+    opacity: 0.6;
+}
+
+.bypass-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #e0e0ff;
+    font-size: 14px;
+    padding: 14px 0;
+    outline: none;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.bypass-input::placeholder {
+    color: #555577;
+    font-size: 13px;
+}
+
+.bypass-input:disabled {
+    opacity: 0.5;
+}
+
+/* Button */
+.bypass-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #7c6aef, #5b4cc4);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    letter-spacing: 0.3px;
+}
+
+.bypass-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 25px rgba(124, 106, 239, 0.4);
+}
+
+.bypass-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.bypass-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.bypass-btn-running {
+    background: linear-gradient(135deg, #3d3574, #2d2558);
+}
+
+/* Spinner */
+.bypass-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: bypass-spin 0.8s linear infinite;
+}
+
+@keyframes bypass-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Result */
+.bypass-result {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    animation: bypass-slide-in 0.3s ease;
+}
+
+@keyframes bypass-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.bypass-result-success {
+    background: rgba(81, 207, 102, 0.1);
+    border: 1px solid rgba(81, 207, 102, 0.25);
+    color: #51cf66;
+}
+
+.bypass-result-error {
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.25);
+    color: #ff6b6b;
+}
+
+.bypass-result-icon {
+    font-size: 18px;
+}
+
+/* Terminal */
+.bypass-terminal {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.bypass-terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: rgba(30, 30, 50, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bypass-terminal-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.bypass-terminal-dots .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.bypass-terminal-dots .dot.red {
+    background: #ff5f57;
+}
+
+.bypass-terminal-dots .dot.yellow {
+    background: #ffbd2e;
+}
+
+.bypass-terminal-dots .dot.green {
+    background: #28c840;
+}
+
+.bypass-terminal-title {
+    color: #888;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.bypass-terminal-body {
+    background: rgba(10, 10, 25, 0.95);
+    padding: 16px;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.bypass-terminal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.bypass-terminal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bypass-terminal-body::-webkit-scrollbar-thumb {
+    background: rgba(124, 106, 239, 0.3);
+    border-radius: 3px;
+}
+
+.bypass-terminal-empty {
+    color: #555577;
+    font-style: italic;
+}
+
+.bypass-log-line {
+    padding: 2px 0;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.bypass-log-time {
+    color: #888;
+    flex-shrink: 0;
+}
+
+.bypass-log-badge {
+    flex-shrink: 0;
+}
+
+.bypass-log-msg {
+    word-break: break-all;
+}
+
+/* Blinking cursor */
+.bypass-cursor {
+    color: #7c6aef;
+    animation: bypass-blink 1s step-start infinite;
+}
+
+@keyframes bypass-blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+/* Footer */
+.bypass-footer {
+    text-align: center;
+    color: #555577;
+    font-size: 13px;
+    padding: 8px 0;
+}
+
+.bypass-footer-link {
+    color: #7c6aef;
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .bypass-page {
+        padding: 20px 12px;
+    }
+
+    .bypass-card {
+        padding: 20px 16px;
+    }
+
+    .bypass-logo h1 {
+        font-size: 26px;
+    }
+
+    .bypass-terminal-body {
+        font-size: 12px;
+        min-height: 160px;
+        max-height: 300px;
+    }
+}

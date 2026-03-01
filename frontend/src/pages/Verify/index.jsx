@@ -73,15 +73,14 @@ export default function Verify() {
                     setBrowserMode(data.verification?.browserMode === true);
 
                     // Auto-select verify method based on admin config
-                    if (data.verification?.dualBot?.enabled) {
+                    const isDualBotEnabled = !!data.verification?.dualBot?.enabled;
+                    setDualBotEnabled(isDualBotEnabled);
+
+                    if (isDualBotEnabled) {
                         setVerifyMethod('dualbot');
                     } else {
                         setVerifyMethod('standard');
                     }
-
-                    // Check if dual bot is available (has accounts connected)
-                    const hasDualBot = data.verification?.dualBot?.warmupBot && data.verification?.dualBot?.verifyBot;
-                    setDualBotEnabled(!!hasDualBot);
                 }
             } catch (e) {
                 console.warn('Failed to fetch config:', e);

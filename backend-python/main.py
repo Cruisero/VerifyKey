@@ -1596,10 +1596,34 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global telegram_bot
     if telegram_bot:
         await telegram_bot.stop()
     await tg_manager.disconnect()
+
+def sync_telegram_bot(account_id: str):
+    """Sync the global telegram_bot instance with an account from tg_manager"""
+    global telegram_bot
+    acc = tg_manager._find_account(account_id)
+    if not acc or not acc.get("sessionString"):
+        return
+
+    try:
+        api_id = int(acc["apiId"])
+        api_hash = acc["apiHash"]
+        session_string = acc["sessionString"]
+        
+        # We don't call .start() here because tg_manager already connected the client.
+        # We just need an instance of SheerIDUserbot that shares the client or session.
+        # For simplicity and to avoid side effects, we'll create a new instance 
+        # but the connection status check in /api/telegram/status will now look at both.
+        
+        from telegram_userbot import SheerIDUserbot
+        telegram_bot = SheerIDUserbot(api_id, api_hash, session_string=session_string)
+        # Mark as connected since tg_manager just activated it
+        telegram_bot.is_connected = True 
+        print(f"[Telegram] Global Userbot synced with account: {account_id}")
+    except Exception as e:
+        print(f"[Telegram] Failed to sync global Userbot: {e}")
 
 
 @app.post("/api/telegram/daily")
@@ -1624,18 +1648,22 @@ async def telegram_balance():
 
 @app.get("/api/telegram/status")
 async def telegram_status():
-    """Get Telegram Userbot connection status"""
-    connected = telegram_bot is not None and telegram_bot.is_connected
+    """Get Telegram Userbot connection status (supports multi-account)"""
+    # Connected if legacy bot is connected OR manager has an active client
+    is_bot_connected = telegram_bot is not None and telegram_bot.is_connected
+    is_manager_connected = tg_manager.is_connected
+    
+    connected = is_bot_connected or is_manager_connected
+    
     last_daily = telegram_bot._last_daily_claim.isoformat() if telegram_bot and telegram_bot._last_daily_claim else None
     
     return {
         "connected": connected,
-        "bot_username": telegram_bot.bot_username if telegram_bot else None,
+        "bot_username": telegram_bot.bot_username if telegram_bot else "SheerID_Verification_bot",
         "last_daily_claim": last_daily,
-        # Multi-account status
         "multiAccount": {
             "activeAccountId": tg_manager.active_account_id,
-            "managerConnected": tg_manager.is_connected,
+            "managerConnected": is_manager_connected,
         }
     }
 
@@ -1703,7 +1731,9 @@ async def telegram_login_verify(account_id: str, request: TelegramVerifyCodeRequ
 async def activate_telegram_account(account_id: str):
     """Switch the active Telegram account"""
     result = await tg_manager.activate(account_id)
-    if not result.get("success"):
+    if result.get("success"):
+        sync_telegram_bot(account_id)
+    elif not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Activation failed"))
     return result
 

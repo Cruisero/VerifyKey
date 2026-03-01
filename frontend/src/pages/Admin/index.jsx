@@ -1939,6 +1939,18 @@ export default function Admin() {
                                                                             {acc.enabled ? '已启用并行' : '已下架'}
                                                                         </span>
                                                                     )}
+                                                                    {acc.quota !== undefined && acc.quota !== null && (
+                                                                        <span style={{
+                                                                            fontSize: '10px',
+                                                                            padding: '1px 6px',
+                                                                            borderRadius: '4px',
+                                                                            background: acc.quota > 5 ? 'rgba(33, 150, 243, 0.1)' : 'rgba(255, 152, 0, 0.1)',
+                                                                            color: acc.quota > 5 ? '#2196f3' : '#ff9800',
+                                                                            border: acc.quota > 5 ? '1px solid rgba(33, 150, 243, 0.2)' : '1px solid rgba(255, 152, 0, 0.2)'
+                                                                        }}>
+                                                                            额度: {acc.quota}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>

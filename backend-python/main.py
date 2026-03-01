@@ -1803,10 +1803,10 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         # Get an available client and its ID from the pool
         pool_item = tg_manager.get_next_client()
         if not pool_item:
-            return {"success": False, "status": "error", "message": "当前没有可用的已启用 Telegram 账号"}
+            return None, {"success": False, "status": "error", "message": "当前没有可用的已启用 Telegram 账号"}
         
         acc_id, client = pool_item
-        return await dual_bot.verify(
+        result = await dual_bot.verify(
             client=client,
             link=link_to_verify,
             account_id=acc_id,
@@ -1814,11 +1814,20 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             verify_bot=verify_bot,
             auto_bypass=auto_bypass
         )
+        return acc_id, result
 
     # Use asyncio.gather to allow cross-account concurrency
     # But note: inside verify(), each account is still locked to be sequential
     tasks = [process_single_link(link) for link in clean_links]
-    results = await asyncio.gather(*tasks)
+    paired_results = await asyncio.gather(*tasks)
+
+    # Extract results and update quotas
+    results = []
+    for acc_id, r in paired_results:
+        results.append(r)
+        # Update bot quota if available
+        if acc_id and r.get("remaining_quota") is not None:
+            tg_manager.update_quota(acc_id, r["remaining_quota"])
 
     # Log and deduct
     successful = sum(1 for r in results if r.get("success"))

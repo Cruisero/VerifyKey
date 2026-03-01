@@ -265,6 +265,13 @@ class DualBotVerifier:
                 result["success"] = True
                 result["status"] = "approved"
                 result["message"] = "验证通过"
+                
+                # Extract remaining quota from "Total tersedia: X verifikasi"
+                quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*(\d+)', text_clean)
+                if quota_match:
+                    result["remaining_quota"] = int(quota_match.group(1))
+                    logger.info(f"[DualBot] Extracted remaining quota: {result['remaining_quota']}")
+                
                 return result
 
         # 3. Check for Explicit Failure Keywords (Priority over generic success to avoid false positives from bypass instructions)

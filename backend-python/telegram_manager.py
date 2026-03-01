@@ -29,6 +29,8 @@ class TelegramAccountManager:
         self._clients: Dict[str, TelegramClient] = {}
         # New: Round-robin index for client rotation
         self._pool_index = 0
+        # New: Per-account bot quota tracking {account_id: int or None}
+        self._quotas: Dict[str, Optional[int]] = {}
         
         # Pending login sessions: {account_id: TelegramClient}
         self._login_sessions: Dict[str, TelegramClient] = {}
@@ -87,16 +89,23 @@ class TelegramAccountManager:
         # Strip sensitive data for frontend display
         safe = []
         for acc in accounts:
+            acc_id = acc.get("id")
             safe.append({
-                "id": acc.get("id"),
+                "id": acc_id,
                 "label": acc.get("label", ""),
                 "phone": self._mask_phone(acc.get("phone", "")),
-                "active": acc.get("id") == self._active_account_id,
-                "enabled": acc.get("enabled", True), # New: enabled flag
+                "active": acc_id == self._active_account_id,
+                "enabled": acc.get("enabled", True),
                 "hasSession": bool(acc.get("sessionString")),
-                "connected": acc.get("id") in self._clients and self._clients[acc["id"]].is_connected()
+                "connected": acc_id in self._clients and self._clients[acc_id].is_connected(),
+                "quota": self._quotas.get(acc_id)
             })
         return safe
+
+    def update_quota(self, account_id: str, quota: int):
+        """Update the bot quota for an account (extracted from @AutoGeminiProbot responses)."""
+        self._quotas[account_id] = quota
+        logger.info(f"[TGManager] Updated quota for {account_id}: {quota}")
 
     def add_account(self, api_id: str, api_hash: str, label: str = "") -> dict:
         """Add a new account entry (not yet logged in)."""

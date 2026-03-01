@@ -25,9 +25,17 @@ class DualBotVerifier:
         self.warmup_bot = warmup_bot.lstrip("@")
         self.verify_bot = verify_bot.lstrip("@")
 
-    async def verify(self, client: TelegramClient, link: str, auto_bypass: bool = True, timeout: int = 120) -> dict:
+    async def verify(self, client: TelegramClient, link: str, warmup_bot: str = None, verify_bot: str = None, auto_bypass: bool = True, timeout: int = 120) -> dict:
         """
         Run full dual-bot verification pipeline.
+
+        Args:
+            client: The Telegram client to use
+            link: The verification link
+            warmup_bot: Username of the warmup bot (optional, uses instance default)
+            verify_bot: Username of the verification bot (optional, uses instance default)
+            auto_bypass: Whether to automatically refresh the link on failure
+            timeout: Maximum time to wait for responses
 
         Returns:
             dict with: success, status, message, verificationId, claimLink, raw_response
@@ -35,13 +43,17 @@ class DualBotVerifier:
         if not client or not client.is_connected():
             return {"success": False, "status": "error", "message": "Telegram 未连接"}
 
+        # Use provided bots or instance defaults
+        w_bot = (warmup_bot or self.warmup_bot).lstrip("@")
+        v_bot = (verify_bot or self.verify_bot).lstrip("@")
+
         vid = self._extract_vid(link)
         if not vid:
             return {"success": False, "status": "error", "message": "无法从链接中提取 verificationId"}
 
         # ---- Step 1: Warmup via @SatsetHelperbot ----
-        logger.info(f"[DualBot] Step 1: Warmup {vid[:8]}... via @{self.warmup_bot}")
-        warmup_result = await self._send_and_wait(client, self.warmup_bot, link, timeout=60)
+        logger.info(f"[DualBot] Step 1: Warmup {vid[:8]}... via @{w_bot}")
+        warmup_result = await self._send_and_wait(client, w_bot, link, timeout=60)
 
         if warmup_result is None:
             return {
@@ -54,8 +66,8 @@ class DualBotVerifier:
         logger.info(f"[DualBot] Warmup response: {warmup_result[:100]}...")
 
         # ---- Step 2: Verify via @AutoGeminiProbot ----
-        logger.info(f"[DualBot] Step 2: Verify {vid[:8]}... via @{self.verify_bot}")
-        verify_result = await self._send_and_wait(client, self.verify_bot, link, timeout=timeout)
+        logger.info(f"[DualBot] Step 2: Verify {vid[:8]}... via @{v_bot}")
+        verify_result = await self._send_and_wait(client, v_bot, link, timeout=timeout)
 
         if verify_result is None:
             return {

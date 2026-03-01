@@ -1753,11 +1753,19 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     config = config_manager.get_config()
     dual_config = config.get("verification", {}).get("dualBot", {})
     auto_bypass = dual_config.get("autoBypass", True)
+    warmup_bot = dual_config.get("warmupBot")
+    verify_bot = dual_config.get("verifyBot")
 
     # Process each link sequentially (dual bot flow is sequential by nature)
     results = []
     for link in clean_links:
-        result = await dual_bot.verify(tg_manager.client, link, auto_bypass=auto_bypass)
+        result = await dual_bot.verify(
+            tg_manager.client, 
+            link, 
+            warmup_bot=warmup_bot, 
+            verify_bot=verify_bot, 
+            auto_bypass=auto_bypass
+        )
         results.append(result)
 
     # Log and deduct

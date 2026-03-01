@@ -307,6 +307,19 @@ class DualBotVerifier:
                 step = check_resp.json().get("currentStep", "")
                 logger.info(f"[Bypass] Current step for {vid[:8]}: {step}")
 
+                # If SheerID is still processing the previous document, wait for it to finish
+                retry_count = 0
+                while step == "pending" and retry_count < 5:
+                    logger.info(f"[Bypass] Link is pending, waiting 2s... ({retry_count+1}/5)")
+                    await asyncio.sleep(2)
+                    check_resp = await client.get(f"{base_url}/verification/{vid}")
+                    step = check_resp.json().get("currentStep", "")
+                    retry_count += 1
+                
+                if step == "pending":
+                    logger.warning(f"[Bypass] Link is STILL pending after 10s. Cannot bypass.")
+                    return False
+
                 # Skip SSO if needed
                 if step in ("sso", "collectStudentPersonalInfo"):
                     await client.delete(f"{base_url}/verification/{vid}/step/sso")

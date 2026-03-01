@@ -98,65 +98,56 @@ class DualBotVerifier:
             # Parse result
             parsed = self._parse_response(verify_result, vid, is_warmup=False)
 
-            # ---- Step 3: Auto bypass on failure (Looped) ----
+            # ---- Step 3: Auto bypass on failure (fire-and-forget background task) ----
             # Skip bypass if bot quota exhausted (nothing to bypass on SheerID side)
             skip_bypass = "程序崩溃" in parsed.get("message", "")
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
-                logger.info(f"[DualBot] [{account_id}] Step 3: Auto-bypass sequence triggered for {vid[:8]}...")
-                
-                # First, wait for SheerID to finish processing (pending -> docUpload)
-                # SheerID document review can take 1-2 minutes
-                import httpx
-                base_url = "https://services.sheerid.com/rest/v2"
-                step = "pending"
-                
-                try:
-                    async with httpx.AsyncClient(timeout=30) as http_client:
-                        # Poll until pending clears (up to 2 minutes)
-                        for poll in range(40):  # 40 × 3s = 120s max
-                            check_resp = await http_client.get(f"{base_url}/verification/{vid}")
-                            if check_resp.status_code == 200:
-                                step = check_resp.json().get("currentStep", "")
-                            else:
-                                step = f"error_{check_resp.status_code}"
-                            
-                            if step != "pending":
-                                logger.info(f"[DualBot] [{account_id}] Pending cleared after {(poll+1)*3}s -> step: {step}")
-                                break
-                            
-                            if poll % 5 == 0:
-                                logger.info(f"[DualBot] [{account_id}] Waiting for pending to clear... ({(poll+1)*3}s)")
-                            await asyncio.sleep(3)
-                        else:
-                            logger.warning(f"[DualBot] [{account_id}] Pending still active after 120s, attempting bypass anyway...")
-                except Exception as e:
-                    logger.warning(f"[DualBot] [{account_id}] Error polling pending state: {e}")
-                
-                # Now run the bypass loop
-                bypass_count = 0
-                max_bypass = 10
-                bypass_success_any = False
-                
-                while bypass_count < max_bypass:
-                    bypass_count += 1
-                    logger.info(f"[DualBot] [{account_id}] Bypass attempt {bypass_count}/{max_bypass}...")
-                    
-                    ok = await self._bypass_link(vid)
-                    if ok:
-                        bypass_success_any = True
-                        await asyncio.sleep(1.5)
-                    else:
-                        logger.info(f"[DualBot] [{account_id}] Bypass sequence completed after {bypass_count-1} successful uploads.")
-                        break
-
-                if bypass_success_any:
-                    parsed["message"] = "验证失败，链接已自动刷新清除锁定"
-                    parsed["bypassed"] = True
-                else:
-                    parsed["message"] = "验证失败，链接已过期或无法刷新"
-                    parsed["bypassed"] = False
+                logger.info(f"[DualBot] [{account_id}] Step 3: Launching background bypass for {vid[:8]}...")
+                asyncio.create_task(self._background_bypass(vid, account_id))
+                parsed["message"] = "验证失败，系统正在后台自动刷新链接"
+                parsed["bypassed"] = "pending"
 
             return parsed
+
+    async def _background_bypass(self, vid: str, account_id: str):
+        """Run the full bypass sequence in the background (fire-and-forget)."""
+        import httpx
+        base_url = "https://services.sheerid.com/rest/v2"
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as http_client:
+                # Wait for pending to clear (up to 2 minutes)
+                for poll in range(40):  # 40 × 3s = 120s max
+                    check_resp = await http_client.get(f"{base_url}/verification/{vid}")
+                    if check_resp.status_code == 200:
+                        step = check_resp.json().get("currentStep", "")
+                    else:
+                        step = f"error_{check_resp.status_code}"
+
+                    if step != "pending":
+                        logger.info(f"[DualBot] [{account_id}] BG Bypass: Pending cleared -> {step}")
+                        break
+
+                    if poll % 5 == 0:
+                        logger.info(f"[DualBot] [{account_id}] BG Bypass: Waiting for pending... ({(poll+1)*3}s)")
+                    await asyncio.sleep(3)
+                else:
+                    logger.warning(f"[DualBot] [{account_id}] BG Bypass: Pending timeout 120s, trying anyway...")
+
+            # Run bypass uploads
+            bypass_count = 0
+            for i in range(10):
+                ok = await self._bypass_link(vid)
+                if ok:
+                    bypass_count += 1
+                    await asyncio.sleep(1.5)
+                else:
+                    break
+
+            logger.info(f"[DualBot] [{account_id}] BG Bypass: Done. {bypass_count} uploads for {vid[:8]}")
+
+        except Exception as e:
+            logger.error(f"[DualBot] [{account_id}] BG Bypass error: {e}")
 
     # ---- Send message and wait for reply ----
 

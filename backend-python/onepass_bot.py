@@ -80,35 +80,26 @@ def get_config() -> dict:
     return crypto_service.load_bot_config()
 
 
-def build_welcome_text(config: dict) -> str:
+def build_welcome_text(config: dict, balance: int = 0, user_id: int = 0) -> str:
     """Build the premium welcome message."""
-    bot_name = config.get("botName", "SheerID Verifier")
+    bot_name = config.get("botName", "SheerID")
     welcome = config.get("welcomeMessage", "Your premium gateway to instant student verifications.")
-    contact = config.get("contactSupport", "@Terato1")
-    services = config.get("services", [])
 
+    services = config.get("services", [])
     services_text = ""
     if services:
-        services_text = "\n📋 Available Services:\n"
+        services_text = "\n📋 **Available Services:**\n"
         for s in services:
-            emoji = s.get("emoji", "🔹")
-            services_text += f"  • {emoji} {s['name']} — {s['credits']} credits\n"
+            emoji = s.get("emoji", "🌐")
+            services_text += f"  {emoji} {s['name']} — {s['credits']} credits\n"
 
     return (
-        f"🚀 Welcome to {bot_name}!\n\n"
+        f"🚀 **Welcome to @{bot_name} !**\n\n"
         f"{welcome} 🎓✨\n"
         f"{services_text}\n"
-        f"🛠 Commands:\n"
-        f"🔹 /services - View services & get links\n"
-        f"🔹 /verify - Start verification\n"
-        f"🔹 /balance - Check credits\n"
-        f"🔹 /crypto - Top up with crypto\n"
-        f"🔹 /daily - Free daily credits\n"
-        f"🔹 /referral - Earn credits by inviting\n"
-        f"🔹 /help - Show this message\n\n"
-        f"📝 How to use:\n"
-        f"Use /services to get your verification link, then send /verify with the link\n\n"
-        f"❓ Need help? Contact {contact}"
+        f"💰 **Balance:** {balance} Credits\n"
+        f"🆔 **Your ID:** `{user_id}`\n\n"
+        f"👇 **Select an option below:**"
     )
 
 
@@ -135,7 +126,25 @@ async def cmd_start(message: types.Message):
                 f"Complete your first verification to reward them."
             )
 
-    await message.answer(build_welcome_text(config))
+    buttons = [
+        [
+            InlineKeyboardButton(text="💎 Services", callback_data="cmd_services"),
+            InlineKeyboardButton(text="💰 Deposit", callback_data="cmd_crypto")
+        ],
+        [
+            InlineKeyboardButton(text="👤 Profile", callback_data="cmd_profile"),
+            InlineKeyboardButton(text="❓ Help", callback_data="cmd_help")
+        ],
+        [
+            InlineKeyboardButton(text="👥 Referrals", callback_data="cmd_referral")
+        ]
+    ]
+
+    await message.answer(
+        build_welcome_text(config, user.get("credits", 0), message.from_user.id),
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
 
 
 @dp.message(Command("help"))
@@ -763,6 +772,30 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
         logger.exception("Verification error")
         bot_data.add_credits(message.from_user.id, cost, "Refund - unexpected error")
         await status_msg.edit_text(f"❌ Unexpected error: {str(e)}\n\n💳 Credits refunded.")
+
+
+@dp.callback_query(F.data.startswith("cmd_"))
+async def handle_main_menu_buttons(callback: CallbackQuery):
+    """Handle buttons from the /start menu."""
+    cmd = callback.data.replace("cmd_", "")
+    await callback.answer()
+    
+    # Create a mock message that preserves the original chat but spoof the from_user
+    mock_msg = callback.message
+    
+    # aiogram 3 Message objects are immutable Pydantic models, so we model_copy
+    mock_msg = mock_msg.model_copy(update={"from_user": callback.from_user})
+    
+    if cmd == "services":
+        await cmd_services(mock_msg)
+    elif cmd == "crypto":
+        await cmd_crypto(mock_msg)
+    elif cmd == "profile":
+        await cmd_balance(mock_msg)
+    elif cmd == "help":
+        await cmd_help(mock_msg)
+    elif cmd == "referral":
+        await cmd_referral(mock_msg)
 
 
 async def main():

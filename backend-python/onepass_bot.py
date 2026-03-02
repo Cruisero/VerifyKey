@@ -381,6 +381,7 @@ async def handle_network_callback(callback: CallbackQuery):
         order = bot_data.create_order(callback.from_user.id, unique_amount, total_credits, network="trc20")
 
         buttons = [
+            [InlineKeyboardButton(text="✅ I Paid - Verify Now", callback_data=f"paid_{order['id']}")],
             [InlineKeyboardButton(text="❌ Cancel Order", callback_data=f"cancel_{order['id']}")],
             [InlineKeyboardButton(text="💬 Support", url=f"https://t.me/{contact.lstrip('@')}")],
         ]
@@ -418,6 +419,7 @@ async def handle_network_callback(callback: CallbackQuery):
         order = bot_data.create_order(callback.from_user.id, unique_amount, total_credits, network="bsc")
 
         buttons = [
+            [InlineKeyboardButton(text="✅ I Paid - Verify Now", callback_data=f"paid_{order['id']}")],
             [InlineKeyboardButton(text="❌ Cancel Order", callback_data=f"cancel_{order['id']}")],
             [InlineKeyboardButton(text="💬 Support", url=f"https://t.me/{contact.lstrip('@')}")],
         ]
@@ -483,10 +485,18 @@ async def handle_paid_callback(callback: CallbackQuery):
     order = next((o for o in orders if o["id"] == order_id), None)
 
     if not order:
-        await callback.message.edit_text("❌ Order not found.")
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer("❌ Order not found.")
         return
 
-    await callback.message.edit_text(
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.message.answer(
         f"⏳ **Payment Submitted for Review**\n\n"
         f"🆔 Order: `{order_id}`\n"
         f"💵 Amount: ${order['usdt_amount']} USDT\n"
@@ -510,7 +520,11 @@ async def handle_cancel_callback(callback: CallbackQuery):
         orders[order_id]["status"] = "cancelled"
         bot_data._save_orders(orders)
 
-    await callback.message.edit_text(
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.message.answer(
         f"❌ **Order Cancelled**\n\n"
         f"Order `{order_id}` has been cancelled.\n"
         f"Use /crypto to start a new order.",

@@ -183,7 +183,12 @@ async def cmd_services(message: types.Message):
     try:
         from aiogram.types import FSInputFile
         photo = FSInputFile("assets/services_tutorial.png")
-        await message.answer_photo(photo=photo, caption=text, parse_mode="Markdown")
+        await message.answer_photo(
+            photo=photo, 
+            caption=text, 
+            parse_mode="Markdown",
+            show_caption_above_media=True
+        )
     except Exception as e:
         logger.error(f"Failed to send services photo: {e}")
         await message.answer(text, parse_mode="Markdown")

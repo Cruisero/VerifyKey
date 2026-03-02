@@ -11,6 +11,7 @@ from typing import Optional
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandStart
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import httpx
 from httpx_sse import aconnect_sse
 from dotenv import load_dotenv
@@ -38,6 +39,21 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+
+# ==================== Constants ====================
+
+# Predefined credit packages: (usdt_price, base_credits, bonus_credits)
+CREDIT_PACKAGES = [
+    {"price": 1,   "base": 10,   "bonus": 0,    "emoji": "🌱"},
+    {"price": 5,   "base": 50,   "bonus": 0,    "emoji": "⭐"},
+    {"price": 10,  "base": 100,  "bonus": 10,   "emoji": "🚀"},
+    {"price": 20,  "base": 200,  "bonus": 30,   "emoji": "🤑"},
+    {"price": 50,  "base": 500,  "bonus": 100,  "emoji": "💎"},
+    {"price": 100, "base": 1000, "bonus": 300,  "emoji": "🏆"},
+    {"price": 500, "base": 5000, "bonus": 3000, "emoji": "👑"},
+]
+
+VERIFICATION_CREDIT_COST = 8  # 8 credits = 1 verification
 
 # ==================== Helpers ====================
 
@@ -190,60 +206,89 @@ async def cmd_referral(message: types.Message):
 
 @dp.message(Command("crypto"))
 async def cmd_crypto(message: types.Message):
-    """Generate a crypto payment order."""
+    """Show credit packages with inline keyboard buttons."""
     config = get_config()
     bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    contact = config.get("contactSupport", "@Terato1")
+
+    # Build inline keyboard with package buttons (2 per row)
+    buttons = []
+    row = []
+    for i, pkg in enumerate(CREDIT_PACKAGES):
+        total = pkg["base"] + pkg["bonus"]
+        if pkg["bonus"] > 0:
+            label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits (+{pkg['bonus']} 🎁)"
+        else:
+            label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits"
+        row.append(InlineKeyboardButton(text=label, callback_data=f"buy_{pkg['price']}"))
+        if len(row) == 2 or i == len(CREDIT_PACKAGES) - 1:
+            buttons.append(row)
+            row = []
+
+    # Add support + close buttons
+    buttons.append([InlineKeyboardButton(text=f"💬 Support", url=f"https://t.me/{contact.lstrip('@')}")])
+    buttons.append([InlineKeyboardButton(text="❌ Close", callback_data="close_menu")])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await message.answer(
+        f"💰 **Top Up Credits** 💰\n\n"
+        f"💡 How it works:\n"
+        f"• $1 = 10 Credits\n"
+        f"• {VERIFICATION_CREDIT_COST} Credits = 1 Verification\n"
+        f"• Credits are added instantly after payment\n\n"
+        f"Select a package below to pay with USDT:",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+
+@dp.callback_query(F.data.startswith("buy_"))
+async def handle_buy_callback(callback: CallbackQuery):
+    """Handle package selection from inline keyboard."""
+    await callback.answer()
+    config = get_config()
+    bot_data.get_or_create_user(callback.from_user.id, callback.from_user.username or "")
 
     wallet = config.get("usdtWalletAddress", "")
     if not wallet or not config.get("usdtEnabled"):
         contact = config.get("contactSupport", "@Terato1")
-        await message.answer(
-            f"💰 **Crypto Top-Up**\n\n"
-            f"Crypto payments are currently being set up.\n"
+        await callback.message.edit_text(
+            f"💰 Crypto payments are currently being set up.\n"
             f"Contact {contact} for manual top-up.",
             parse_mode="Markdown"
         )
         return
 
-    # Parse amount from command: /crypto 5 or /crypto
-    args = message.text.split()
-    if len(args) > 1:
-        try:
-            usdt_amount = float(args[1])
-        except ValueError:
-            await message.answer("❌ Invalid amount. Usage: `/crypto 5` (for 5 USDT)", parse_mode="Markdown")
-            return
-    else:
-        await message.answer(
-            f"💰 **Crypto Top-Up**\n\n"
-            f"Send the amount in USDT you want to pay.\n"
-            f"Example: `/crypto 5` for 5 USDT\n\n"
-            f"💱 Rate: 1 USDT = {config.get('creditPrice', 1)} credits",
-            parse_mode="Markdown"
-        )
+    # Extract selected price
+    try:
+        selected_price = int(callback.data.split("_")[1])
+    except (ValueError, IndexError):
+        await callback.message.answer("❌ Invalid selection.")
         return
 
-    if usdt_amount < 1:
-        await message.answer("❌ Minimum amount is 1 USDT")
-        return
-    if usdt_amount > 1000:
-        await message.answer("❌ Maximum amount is 1000 USDT")
+    # Find the matching package
+    pkg = next((p for p in CREDIT_PACKAGES if p["price"] == selected_price), None)
+    if not pkg:
+        await callback.message.answer("❌ Package not found.")
         return
 
-    credit_price = config.get("creditPrice", 1)
-    credits_to_add = int(usdt_amount * credit_price)
+    total_credits = pkg["base"] + pkg["bonus"]
+    usdt_amount = float(pkg["price"])
 
     # Generate unique amount for payment identification
     unique_amount = bot_data.generate_unique_usdt_amount(usdt_amount)
 
     # Create order
-    order = bot_data.create_order(message.from_user.id, unique_amount, credits_to_add)
+    order = bot_data.create_order(callback.from_user.id, unique_amount, total_credits)
 
-    await message.answer(
+    bonus_text = f" (+{pkg['bonus']} 🎁 bonus)" if pkg["bonus"] > 0 else ""
+
+    await callback.message.edit_text(
         f"💰 **USDT-TRC20 Payment**\n\n"
         f"📦 Order: `{order['id']}`\n"
         f"💵 Amount: **`{unique_amount}` USDT** (TRC20)\n"
-        f"🎁 You will receive: **{credits_to_add} credits**\n\n"
+        f"🎁 You will receive: **{total_credits} credits**{bonus_text}\n\n"
         f"📬 Send exactly **`{unique_amount}` USDT** to:\n"
         f"`{wallet}`\n\n"
         f"⚠️ **Important:**\n"
@@ -254,6 +299,13 @@ async def cmd_crypto(message: types.Message):
         f"⏳ Waiting for payment...",
         parse_mode="Markdown"
     )
+
+
+@dp.callback_query(F.data == "close_menu")
+async def handle_close_callback(callback: CallbackQuery):
+    """Handle close button."""
+    await callback.answer()
+    await callback.message.delete()
 
 
 @dp.message(Command("verify"))
@@ -297,11 +349,8 @@ async def handle_text(message: types.Message):
 
 async def _process_verification(message: types.Message, user: dict, link: str, config: dict, services: list):
     """Core verification logic — deduct credits, call API, stream progress."""
-    # Check credits
-    if not services:
-        cost = 5  # default
-    else:
-        cost = services[0].get("credits", 5)  # Use first service cost
+    # Check credits (8 credits = 1 verification)
+    cost = VERIFICATION_CREDIT_COST
 
     credits = user.get("credits", 0)
     if credits < cost:

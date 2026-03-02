@@ -17,3 +17,4 @@ playwright==1.57.0
 numpy>=1.24.0
 aiogram==3.4.1
 httpx-sse==0.4.0
+qrcode==7.4.2

@@ -3,6 +3,7 @@ SheerID Verifier — Premium Telegram Bot
 Standalone product identity, fully managed from the OnePASS Admin dashboard.
 """
 import asyncio
+import io
 import json
 import logging
 import os
@@ -11,7 +12,7 @@ from typing import Optional
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, BufferedInputFile
 import httpx
 from httpx_sse import aconnect_sse
 from dotenv import load_dotenv
@@ -56,6 +57,20 @@ CREDIT_PACKAGES = [
 VERIFICATION_CREDIT_COST = 8  # 8 credits = 1 verification
 
 # ==================== Helpers ====================
+
+def generate_qr_code(data: str) -> bytes:
+    """Generate a QR code image as PNG bytes."""
+    import qrcode
+    from PIL import Image
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=8, border=2)
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.getvalue()
+
 
 def get_config() -> dict:
     """Load dynamic bot config."""
@@ -381,6 +396,17 @@ async def handle_network_callback(callback: CallbackQuery):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
 
+        # Send QR code
+        try:
+            qr_bytes = generate_qr_code(wallet)
+            await callback.message.answer_photo(
+                photo=BufferedInputFile(qr_bytes, filename="qr_trc20.png"),
+                caption=f"🔴 TRC-20 Wallet QR\n`{wallet}`",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send QR code: {e}")
+
     elif network == "bsc":
         wallet = config.get("bscWalletAddress", "")
         if not wallet or not config.get("bscEnabled"):
@@ -408,6 +434,17 @@ async def handle_network_callback(callback: CallbackQuery):
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
+
+        # Send QR code
+        try:
+            qr_bytes = generate_qr_code(wallet)
+            await callback.message.answer_photo(
+                photo=BufferedInputFile(qr_bytes, filename="qr_bsc.png"),
+                caption=f"🟡 BSC (BEP-20) Wallet QR\n`{wallet}`",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send QR code: {e}")
 
     elif network == "binance":
         pay_id = config.get("binancePayId", "")

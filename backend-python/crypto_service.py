@@ -218,10 +218,37 @@ async def check_bsc_payments(config: dict, pending_orders: list, bot=None):
 # ==================== Shared Helpers ====================
 
 async def _notify_payment_success(bot, order: dict, amount: float, network: str, tx_ref: str):
-    """Send payment confirmation message to user."""
+    """Edit photo caption to show payment success, or send new message as fallback."""
     try:
         user = bot_data.get_user(order["telegram_id"])
         balance = user.get("credits", 0) if user else 0
+
+        success_text = (
+            f"✅ Payment Confirmed!\n\n"
+            f"💰 Received: {amount:.2f} USDT\n"
+            f"🌐 Network: {network}\n"
+            f"🎁 Credits added: {order['credits_to_add']}\n"
+            f"💳 Balance: {balance} credits\n\n"
+            f"Thank you for your purchase!"
+        )
+
+        # Try to edit the original photo message caption
+        chat_id = order.get("chat_id")
+        message_id = order.get("message_id")
+
+        if chat_id and message_id:
+            try:
+                await bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    caption=success_text,
+                    reply_markup=None
+                )
+                return  # Success — edited in place
+            except Exception as e:
+                logger.warning(f"Could not edit photo caption for order {order['id']}: {e}")
+
+        # Fallback: send a new message
         await bot.send_message(
             order["telegram_id"],
             f"✅ **Payment Confirmed!**\n\n"

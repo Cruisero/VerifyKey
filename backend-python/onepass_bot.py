@@ -400,11 +400,13 @@ async def handle_network_callback(callback: CallbackQuery):
         try:
             qr_bytes = generate_qr_code(wallet)
             await callback.message.delete()
-            await callback.message.answer_photo(
+            sent = await callback.message.answer_photo(
                 photo=BufferedInputFile(qr_bytes, filename="qr_trc20.png"),
                 caption=caption,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
+            # Save message info so auto-confirm can edit this message
+            bot_data.update_order_message_info(order['id'], sent.chat.id, sent.message_id)
         except Exception as e:
             logger.error(f"Failed to send QR payment msg: {e}")
             await callback.message.edit_text(caption, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
@@ -438,11 +440,12 @@ async def handle_network_callback(callback: CallbackQuery):
         try:
             qr_bytes = generate_qr_code(wallet)
             await callback.message.delete()
-            await callback.message.answer_photo(
+            sent = await callback.message.answer_photo(
                 photo=BufferedInputFile(qr_bytes, filename="qr_bsc.png"),
                 caption=caption,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
+            bot_data.update_order_message_info(order['id'], sent.chat.id, sent.message_id)
         except Exception as e:
             logger.error(f"Failed to send QR payment msg: {e}")
             await callback.message.edit_text(caption, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))

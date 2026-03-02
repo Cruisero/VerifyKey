@@ -264,6 +264,15 @@ def confirm_order(order_id: str, tx_hash: str) -> Optional[dict]:
         return order
     return None
 
+
+def update_order_message_info(order_id: str, chat_id: int, message_id: int):
+    """Save the Telegram message_id and chat_id for an order so we can edit it later."""
+    orders = _load_orders()
+    if order_id in orders:
+        orders[order_id]["chat_id"] = chat_id
+        orders[order_id]["message_id"] = message_id
+        _save_orders(orders)
+
 def expire_old_orders(max_age_hours: int = 24):
     """Expire orders older than max_age_hours."""
     orders = _load_orders()

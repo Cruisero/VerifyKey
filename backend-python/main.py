@@ -1934,59 +1934,66 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
 
 # ========== Telegram Bot Admin API ==========
 
+def _verify_admin_token(authorization: Optional[str]):
+    """Verify admin token from Authorization header."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization required")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
 @app.get("/api/admin/bot-config")
-async def get_bot_config(request: Request):
+async def get_bot_config(authorization: Optional[str] = Header(None)):
     """Get Telegram bot configuration."""
-    verify_admin(request)
+    _verify_admin_token(authorization)
     import crypto_service
     config = crypto_service.load_bot_config()
     return config
 
 @app.post("/api/admin/bot-config")
-async def update_bot_config(request: Request):
+async def update_bot_config(request: Request, authorization: Optional[str] = Header(None)):
     """Update Telegram bot configuration."""
-    verify_admin(request)
+    _verify_admin_token(authorization)
     import crypto_service
     body = await request.json()
-    # Merge with existing config
     config = crypto_service.load_bot_config()
     config.update(body)
     crypto_service.save_bot_config(config)
     return {"success": True, "config": config}
 
 @app.get("/api/admin/bot-stats")
-async def get_bot_stats(request: Request):
+async def get_bot_stats(authorization: Optional[str] = Header(None)):
     """Get Telegram bot aggregate statistics."""
-    verify_admin(request)
+    _verify_admin_token(authorization)
     import bot_data
     stats = bot_data.get_stats()
     return stats
 
 @app.get("/api/admin/bot-orders")
-async def get_bot_orders(request: Request):
+async def get_bot_orders(authorization: Optional[str] = Header(None)):
     """Get all bot crypto payment orders."""
-    verify_admin(request)
+    _verify_admin_token(authorization)
     import bot_data
     orders = bot_data.get_all_orders()
-    # Sort by created_at descending
     orders.sort(key=lambda o: o.get("created_at", ""), reverse=True)
     return {"orders": orders}
 
 @app.get("/api/admin/bot-users")
-async def get_bot_users(request: Request):
+async def get_bot_users(authorization: Optional[str] = Header(None)):
     """Get all Telegram bot users."""
-    verify_admin(request)
+    _verify_admin_token(authorization)
     import bot_data
     users = bot_data.get_all_users()
-    # Sort by created_at descending
     users.sort(key=lambda u: u.get("created_at", ""), reverse=True)
     return {"users": users}
 
 
 @app.post("/api/admin/bot-confirm-order")
-async def confirm_bot_order(request: Request):
+async def confirm_bot_order(request: Request, authorization: Optional[str] = Header(None)):
     """Manually confirm a crypto payment order (e.g. Binance Pay)."""
-    verify_admin(request)
+    _verify_admin_token(authorization)
     import bot_data
     body = await request.json()
     order_id = body.get("order_id")

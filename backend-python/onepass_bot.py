@@ -260,10 +260,7 @@ async def cmd_crypto(message: types.Message):
     row = []
     for i, pkg in enumerate(CREDIT_PACKAGES):
         total = pkg["base"] + pkg["bonus"]
-        if pkg["bonus"] > 0:
-            label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits (+{pkg['bonus']} 🎁)"
-        else:
-            label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits"
+        label = f"{pkg['emoji']} ${pkg['price']}({total} Credit)"
         row.append(InlineKeyboardButton(text=label, callback_data=f"pkg_{pkg['price']}"))
         if len(row) == 2 or i == len(CREDIT_PACKAGES) - 1:
             buttons.append(row)

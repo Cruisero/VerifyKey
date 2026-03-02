@@ -555,7 +555,10 @@ async def handle_paid_callback(callback: CallbackQuery):
         if admin_chat_id:
             try:
                 admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Confirm Payment", callback_data=f"admin_confirm_{order_id}")]
+                    [
+                        InlineKeyboardButton(text="✅ Confirm Payment", callback_data=f"admin_confirm_{order_id}"),
+                        InlineKeyboardButton(text="❌ Reject", callback_data=f"admin_reject_{order_id}")
+                    ]
                 ])
                 await bot.send_message(
                     chat_id=int(admin_chat_id),
@@ -574,12 +577,15 @@ async def handle_paid_callback(callback: CallbackQuery):
                 logger.error(f"Failed to send admin notification: {e}")
 
         try:
-            await callback.message.edit_caption(
-                caption=(
+            amount = order.get('usdt_amount', 0)
+            note = order.get('note_code', 'N/A')
+            await callback.message.edit_text(
+                text=(
                     f"✅ **Request Sent!**\n\n"
-                    f"Admins will verify your payment.\n"
+                    f"Admins will verify your payment of ${amount} with Note **{note}**.\n"
                     f"You will be notified once approved."
                 ),
+                parse_mode="Markdown",
                 reply_markup=None
             )
         except Exception:
@@ -650,7 +656,44 @@ async def handle_admin_confirm(callback: CallbackQuery):
         except Exception as e:
             logger.error(f"Failed to notify user: {e}")
     else:
-        await callback.answer("❌ Order already confirmed or not found.", show_alert=True)
+        await callback.answer("❌ Order already processed or not found.", show_alert=True)
+        await callback.message.edit_reply_markup(reply_markup=None)
+
+
+@dp.callback_query(F.data.startswith("admin_reject_"))
+async def handle_admin_reject(callback: CallbackQuery):
+    """Admin rejects a payment directly from bot notification."""
+    import os
+    admin_chat_id = os.getenv("ADMIN_CHAT_ID")
+    if not admin_chat_id or str(callback.from_user.id) != admin_chat_id:
+        await callback.answer("❌ Unauthorized", show_alert=True)
+        return
+
+    order_id = callback.data.replace("admin_reject_", "")
+    
+    order = bot_data.reject_order(order_id)
+    if order:
+        await callback.answer("❌ Order Rejected!")
+        await callback.message.edit_text(
+            f"{callback.message.text}\n\n❌ **[Rejected]** by Admin.",
+            reply_markup=None
+        )
+        
+        # Notify the user it was rejected
+        config = get_config()
+        contact = config.get("contactSupport", "@Terato1")
+        try:
+            await bot.send_message(
+                order["telegram_id"],
+                f"❌ **Deposit Rejected**\n\n"
+                f"Nothing received to Binance.\n"
+                f"Contact admin with screenshot: {contact}",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user of rejection: {e}")
+    else:
+        await callback.answer("❌ Order already processed or not found.", show_alert=True)
         await callback.message.edit_reply_markup(reply_markup=None)
 
 

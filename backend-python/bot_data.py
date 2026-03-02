@@ -264,6 +264,16 @@ def confirm_order(order_id: str, tx_hash: str) -> Optional[dict]:
         return order
     return None
 
+def reject_order(order_id: str) -> Optional[dict]:
+    """Reject a crypto payment order. Returns the order if found."""
+    orders = _load_orders()
+    if order_id in orders and orders[order_id]["status"] == "pending":
+        orders[order_id]["status"] = "rejected"
+        _save_orders(orders)
+        logger.info(f"Order {order_id} rejected.")
+        return orders[order_id]
+    return None
+
 
 def update_order_message_info(order_id: str, chat_id: int, message_id: int):
     """Save the Telegram message_id and chat_id for an order so we can edit it later."""

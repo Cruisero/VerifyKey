@@ -1,8 +1,8 @@
 """
-Crypto Payment Service — USDT TRC20 (TRON) blockchain polling.
-Ported from Crypto-payment/backend/usdtService.js to Python.
+Crypto Payment Service — Multi-network USDT blockchain polling.
+Supports: USDT-TRC20 (TRON), USDT-BEP20 (BSC), Binance Pay (manual).
 
-No third-party payment gateway. Polls TronGrid API directly to detect
+No third-party payment gateway. Polls blockchain APIs directly to detect
 incoming USDT transfers and match them to pending orders by amount.
 """
 import asyncio
@@ -16,14 +16,30 @@ import bot_data
 
 logger = logging.getLogger(__name__)
 
-# USDT-TRC20 contract address on TRON mainnet
-USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+# ==================== Constants ====================
+
+# USDT-TRC20 (TRON)
+TRC20_USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 TRONGRID_API = "https://api.trongrid.io"
+
+# USDT-BEP20 (BSC)
+BSC_USDT_CONTRACT = "0x55d398326f99059fF775485246999027B3197955"
+BSC_RPC_URLS = [
+    "https://bsc-dataseed.binance.org/",
+    "https://bsc-dataseed1.binance.org/",
+    "https://bsc-dataseed2.binance.org/",
+]
+
 POLL_INTERVAL = 30  # seconds
 
 # Bot config file path
 BOT_CONFIG_FILE = os.path.join(bot_data.DATA_DIR, "bot_config.json")
 
+# Last known BSC balance for balance-change detection
+_last_bsc_balance = None
+
+
+# ==================== Config Management ====================
 
 def load_bot_config() -> dict:
     """Load bot configuration from JSON file."""
@@ -51,28 +67,34 @@ def get_default_config() -> dict:
         "botName": "SheerID Verifier",
         "welcomeMessage": "Your premium gateway to instant student verifications.",
         "contactSupport": "@Terato1",
-        "usdtWalletAddress": "",
-        "usdtEnabled": False,
-        "creditPrice": 1.0,  # 1 USDT = how many credits
+        # TRC20
+        "trc20WalletAddress": "",
+        "trc20Enabled": False,
+        # BSC (BEP20)
+        "bscWalletAddress": "",
+        "bscEnabled": False,
+        # Binance Pay
+        "binancePayId": "",
+        "binancePayEnabled": False,
+        # General
         "dailyCredits": 1,
         "services": [
-            {"name": "Spotify", "emoji": "🎵", "credits": 5},
+            {"name": "Spotify", "emoji": "🎵", "credits": 8},
         ],
     }
 
 
+# ==================== TRC20 Polling ====================
+
 async def get_recent_trc20_transactions(wallet_address: str, limit: int = 50) -> list:
-    """
-    Query TronGrid API for recent TRC20 transfers to the wallet.
-    Returns list of incoming USDT transactions.
-    """
+    """Query TronGrid API for recent TRC20 transfers to the wallet."""
     if not wallet_address:
         return []
 
     url = (
         f"{TRONGRID_API}/v1/accounts/{wallet_address}"
         f"/transactions/trc20?limit={limit}"
-        f"&contract_address={USDT_CONTRACT}"
+        f"&contract_address={TRC20_USDT_CONTRACT}"
     )
 
     try:
@@ -86,84 +108,157 @@ async def get_recent_trc20_transactions(wallet_address: str, limit: int = 50) ->
         return []
 
 
-async def check_usdt_payments(bot=None):
-    """
-    Poll blockchain and match incoming transfers to pending orders.
-    If a match is found, confirm the order and notify the user via Telegram.
-    """
-    config = load_bot_config()
-    wallet = config.get("usdtWalletAddress", "")
-
-    if not config.get("usdtEnabled") or not wallet:
+async def check_trc20_payments(config: dict, pending_orders: list, bot=None):
+    """Check TRC20 pending orders against blockchain."""
+    wallet = config.get("trc20WalletAddress", "")
+    if not config.get("trc20Enabled") or not wallet:
         return
 
-    # Expire stale orders first
-    bot_data.expire_old_orders(max_age_hours=24)
-
-    pending_orders = bot_data.get_pending_orders()
-    if not pending_orders:
+    trc20_orders = [o for o in pending_orders if o.get("network") == "trc20"]
+    if not trc20_orders:
         return
 
     transactions = await get_recent_trc20_transactions(wallet)
 
     for tx in transactions:
-        # Only process incoming transfers
         if tx.get("to") != wallet:
             continue
 
-        # USDT-TRC20 has 6 decimal places
         try:
-            tx_amount = float(tx.get("value", "0")) / 1_000_000
+            tx_amount = float(tx.get("value", "0")) / 1_000_000  # 6 decimals
         except (ValueError, TypeError):
             continue
 
         tx_hash = tx.get("transaction_id", "")
 
-        # Find matching pending order by amount (±0.001 tolerance)
-        for order in pending_orders:
+        for order in trc20_orders:
             order_amount = order.get("usdt_amount", 0)
             if abs(tx_amount - order_amount) < 0.001:
                 # Check if already processed
                 all_orders = bot_data.get_all_orders()
-                already_processed = any(
-                    o.get("tx_hash") == tx_hash and o.get("status") == "confirmed"
-                    for o in all_orders
-                )
-                if already_processed:
+                if any(o.get("tx_hash") == tx_hash and o.get("status") == "confirmed" for o in all_orders):
                     continue
 
-                logger.info(
-                    f"USDT payment matched! Order {order['id']}: "
-                    f"{tx_amount} USDT, TX: {tx_hash}"
-                )
-
+                logger.info(f"TRC20 payment matched! Order {order['id']}: {tx_amount} USDT, TX: {tx_hash}")
                 confirmed = bot_data.confirm_order(order["id"], tx_hash)
                 if confirmed and bot:
-                    # Notify user via Telegram
-                    try:
-                        await bot.send_message(
-                            confirmed["telegram_id"],
-                            f"✅ **充值成功！**\n\n"
-                            f"💰 收到: `{tx_amount}` USDT\n"
-                            f"🎁 获得: `{confirmed['credits_to_add']}` 积分\n"
-                            f"💳 当前余额: `{bot_data.get_user(confirmed['telegram_id'])['credits']}` 积分\n\n"
-                            f"🔗 交易哈希: `{tx_hash[:16]}...`",
-                            parse_mode="Markdown",
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to notify user {confirmed['telegram_id']}: {e}")
-
-                # Remove from pending list for this iteration
-                pending_orders = [o for o in pending_orders if o["id"] != order["id"]]
+                    await _notify_payment_success(bot, confirmed, tx_amount, "TRON (TRC-20)", tx_hash)
+                trc20_orders = [o for o in trc20_orders if o["id"] != order["id"]]
                 break
+
+
+# ==================== BSC (BEP20) Polling ====================
+
+async def get_bsc_usdt_balance(wallet_address: str) -> float:
+    """Query BSC USDT balance via RPC (free, no API key needed)."""
+    balance_of_selector = "0x70a08231"
+    padded_address = wallet_address.replace("0x", "").lower().zfill(64)
+    data = balance_of_selector + padded_address
+
+    for rpc_url in BSC_RPC_URLS:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(rpc_url, json={
+                    "jsonrpc": "2.0",
+                    "method": "eth_call",
+                    "params": [{"to": BSC_USDT_CONTRACT, "data": data}, "latest"],
+                    "id": 1
+                })
+                result = resp.json()
+                if result.get("result"):
+                    balance_wei = int(result["result"], 16)
+                    return balance_wei / 1e18  # BSC USDT = 18 decimals
+        except Exception:
+            continue
+
+    raise Exception("All BSC RPC nodes failed")
+
+
+async def check_bsc_payments(config: dict, pending_orders: list, bot=None):
+    """Check BSC pending orders via balance-change detection."""
+    global _last_bsc_balance
+
+    wallet = config.get("bscWalletAddress", "")
+    if not config.get("bscEnabled") or not wallet:
+        return
+
+    bsc_orders = [o for o in pending_orders if o.get("network") == "bsc"]
+    if not bsc_orders:
+        return
+
+    try:
+        current_balance = await get_bsc_usdt_balance(wallet)
+    except Exception as e:
+        logger.error(f"BSC balance check failed: {e}")
+        return
+
+    if _last_bsc_balance is None:
+        _last_bsc_balance = current_balance
+        logger.info(f"BSC USDT initial balance: {current_balance}")
+        return
+
+    diff = current_balance - _last_bsc_balance
+    if diff <= 0:
+        return
+
+    logger.info(f"BSC USDT balance change: +{diff:.6f} (was {_last_bsc_balance}, now {current_balance})")
+
+    # Try single-order match
+    matched = next((o for o in bsc_orders if abs(diff - o["usdt_amount"]) < 0.01), None)
+    if matched:
+        virtual_tx = f"bsc_balance_{int(asyncio.get_event_loop().time())}_{matched['id']}"
+        logger.info(f"BSC payment matched! Order {matched['id']}: {diff:.6f} USDT")
+        confirmed = bot_data.confirm_order(matched["id"], virtual_tx)
+        if confirmed and bot:
+            await _notify_payment_success(bot, confirmed, diff, "BSC (BEP-20)", virtual_tx[:24])
+
+    _last_bsc_balance = current_balance
+
+
+# ==================== Shared Helpers ====================
+
+async def _notify_payment_success(bot, order: dict, amount: float, network: str, tx_ref: str):
+    """Send payment confirmation message to user."""
+    try:
+        user = bot_data.get_user(order["telegram_id"])
+        balance = user.get("credits", 0) if user else 0
+        await bot.send_message(
+            order["telegram_id"],
+            f"✅ **Payment Confirmed!**\n\n"
+            f"💰 Received: `{amount:.2f}` USDT\n"
+            f"🌐 Network: {network}\n"
+            f"🎁 Credits added: `{order['credits_to_add']}`\n"
+            f"💳 Balance: `{balance}` credits\n\n"
+            f"🔗 Ref: `{tx_ref}`",
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.error(f"Failed to notify user {order['telegram_id']}: {e}")
+
+
+# ==================== Main Polling Loop ====================
+
+async def check_all_payments(bot=None):
+    """Poll all enabled networks for pending payments."""
+    config = load_bot_config()
+    bot_data.expire_old_orders(max_age_hours=24)
+    pending_orders = bot_data.get_pending_orders()
+    if not pending_orders:
+        return
+
+    # Check TRC20
+    await check_trc20_payments(config, pending_orders, bot)
+    # Check BSC
+    await check_bsc_payments(config, pending_orders, bot)
+    # Binance Pay is manual — no auto-polling
 
 
 async def start_polling(bot=None):
     """Start background payment polling loop."""
-    logger.info("USDT-TRC20 payment monitor started")
+    logger.info("Multi-network payment monitor started (TRC20 + BSC)")
     while True:
         try:
-            await check_usdt_payments(bot)
+            await check_all_payments(bot)
         except Exception as e:
             logger.exception(f"Payment polling error: {e}")
         await asyncio.sleep(POLL_INTERVAL)

@@ -200,27 +200,45 @@ function TelegramBotTab() {
                             <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>客服联系人</label>
                             <input className="input" value={botConfig.contactSupport || ''} onChange={e => setBotConfig({ ...botConfig, contactSupport: e.target.value })} style={{ width: '100%' }} placeholder="@Terato1" />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
-                            <div>
-                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>USDT 钱包地址 (TRC20)</label>
-                                <input className="input" value={botConfig.usdtWalletAddress || ''} onChange={e => setBotConfig({ ...botConfig, usdtWalletAddress: e.target.value })} style={{ width: '100%' }} placeholder="Txxxxxxxxxx..." />
-                            </div>
-                            <div>
-                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                                    <input type="checkbox" checked={botConfig.usdtEnabled || false} onChange={e => setBotConfig({ ...botConfig, usdtEnabled: e.target.checked })} style={{ marginRight: '6px' }} />
-                                    启用 USDT 支付
+                        {/* TRC-20 */}
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-sm)' }}>
+                                <span>🔴</span>
+                                <strong>USDT TRC-20 (TRON)</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)' }}>
+                                    <input type="checkbox" checked={botConfig.trc20Enabled || false} onChange={e => setBotConfig({ ...botConfig, trc20Enabled: e.target.checked })} style={{ marginRight: '4px' }} />
+                                    启用
                                 </label>
                             </div>
+                            <input className="input" value={botConfig.trc20WalletAddress || ''} onChange={e => setBotConfig({ ...botConfig, trc20WalletAddress: e.target.value })} style={{ width: '100%' }} placeholder="Txxxxxxxxxx..." />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
-                            <div>
-                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>积分单价 (1 USDT = ? 积分)</label>
-                                <input className="input" type="number" min={1} value={botConfig.creditPrice || 1} onChange={e => setBotConfig({ ...botConfig, creditPrice: Number(e.target.value) })} style={{ width: '100%' }} />
+                        {/* BSC BEP-20 */}
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-sm)' }}>
+                                <span>🟡</span>
+                                <strong>USDT BEP-20 (BSC)</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)' }}>
+                                    <input type="checkbox" checked={botConfig.bscEnabled || false} onChange={e => setBotConfig({ ...botConfig, bscEnabled: e.target.checked })} style={{ marginRight: '4px' }} />
+                                    启用
+                                </label>
                             </div>
-                            <div>
-                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>每日签到积分</label>
-                                <input className="input" type="number" min={0} value={botConfig.dailyCredits || 1} onChange={e => setBotConfig({ ...botConfig, dailyCredits: Number(e.target.value) })} style={{ width: '100%' }} />
+                            <input className="input" value={botConfig.bscWalletAddress || ''} onChange={e => setBotConfig({ ...botConfig, bscWalletAddress: e.target.value })} style={{ width: '100%' }} placeholder="0xxxxxxxxxxx..." />
+                        </div>
+                        {/* Binance Pay */}
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-sm)' }}>
+                                <span>🆔</span>
+                                <strong>Binance Pay</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)' }}>
+                                    <input type="checkbox" checked={botConfig.binancePayEnabled || false} onChange={e => setBotConfig({ ...botConfig, binancePayEnabled: e.target.checked })} style={{ marginRight: '4px' }} />
+                                    启用
+                                </label>
                             </div>
+                            <input className="input" value={botConfig.binancePayId || ''} onChange={e => setBotConfig({ ...botConfig, binancePayId: e.target.value })} style={{ width: '100%' }} placeholder="Pay ID (e.g. 23137227)" />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>每日签到积分</label>
+                            <input className="input" type="number" min={0} value={botConfig.dailyCredits || 1} onChange={e => setBotConfig({ ...botConfig, dailyCredits: Number(e.target.value) })} style={{ width: '120px' }} />
                         </div>
                     </div>
                     <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-lg)' }} onClick={saveBotConfig} disabled={saving}>
@@ -319,11 +337,12 @@ function TelegramBotTab() {
                                 <tr>
                                     <th>订单 ID</th>
                                     <th>用户</th>
-                                    <th>金额 (USDT)</th>
+                                    <th>网络</th>
+                                    <th>金额</th>
                                     <th>积分</th>
                                     <th>状态</th>
-                                    <th>交易哈希</th>
-                                    <th>时间</th>
+                                    <th>备注码</th>
+                                    <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -331,21 +350,46 @@ function TelegramBotTab() {
                                     <tr key={i}>
                                         <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-xs)' }}>{o.id}</td>
                                         <td>{o.telegram_id}</td>
-                                        <td>{o.usdt_amount}</td>
+                                        <td>
+                                            <span className="badge" style={{ fontSize: 'var(--text-xs)' }}>
+                                                {o.network === 'trc20' ? '🔴 TRC20' : o.network === 'bsc' ? '🟡 BSC' : o.network === 'binance_pay' ? '🆔 Binance' : o.network || '-'}
+                                            </span>
+                                        </td>
+                                        <td>${o.usdt_amount}</td>
                                         <td>{o.credits_to_add}</td>
                                         <td>
                                             <span className={`badge badge-${o.status === 'confirmed' ? 'success' : o.status === 'pending' ? 'warning' : 'error'}`}>
-                                                {o.status === 'confirmed' ? '✅ 已确认' : o.status === 'pending' ? '⏳ 待支付' : '❌ 已过期'}
+                                                {o.status === 'confirmed' ? '✅' : o.status === 'pending' ? '⏳' : '❌'} {o.status}
                                             </span>
                                         </td>
-                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-xs)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {o.tx_hash ? o.tx_hash.substring(0, 16) + '...' : '-'}
+                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>
+                                            {o.note_code || (o.tx_hash ? o.tx_hash.substring(0, 12) + '...' : '-')}
                                         </td>
-                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{o.created_at ? new Date(o.created_at).toLocaleString() : '-'}</td>
+                                        <td>
+                                            {o.status === 'pending' && (
+                                                <button className="btn btn-sm btn-primary" onClick={async () => {
+                                                    if (!confirm(`确认订单 ${o.id}？将为用户 ${o.telegram_id} 添加 ${o.credits_to_add} 积分。`)) return;
+                                                    try {
+                                                        const res = await fetch(`${API_BASE}/api/admin/bot-confirm-order`, {
+                                                            method: 'POST',
+                                                            headers: authHeaders,
+                                                            body: JSON.stringify({ order_id: o.id })
+                                                        });
+                                                        if (res.ok) {
+                                                            alert('✅ 订单已确认');
+                                                            fetchBotOrders();
+                                                        } else {
+                                                            const err = await res.json();
+                                                            alert('失败: ' + (err.detail || '未知错误'));
+                                                        }
+                                                    } catch (e) { alert('Error: ' + e.message); }
+                                                }}>✅ 确认</button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                                 {botOrders.length === 0 && (
-                                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无订单</td></tr>
+                                    <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无订单</td></tr>
                                 )}
                             </tbody>
                         </table>

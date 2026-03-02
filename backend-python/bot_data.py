@@ -219,7 +219,7 @@ def _load_orders() -> Dict[str, dict]:
 def _save_orders(orders: Dict[str, dict]):
     _save_json(ORDERS_FILE, orders)
 
-def create_order(telegram_id: int, usdt_amount: float, credits_to_add: int) -> dict:
+def create_order(telegram_id: int, usdt_amount: float, credits_to_add: int, network: str = "trc20", note_code: str = "") -> dict:
     """Create a pending crypto payment order."""
     orders = _load_orders()
     order_id = f"ORD_{int(time.time())}_{telegram_id}"
@@ -229,6 +229,8 @@ def create_order(telegram_id: int, usdt_amount: float, credits_to_add: int) -> d
         "telegram_id": telegram_id,
         "usdt_amount": usdt_amount,
         "credits_to_add": credits_to_add,
+        "network": network,
+        "note_code": note_code,
         "status": "pending",
         "tx_hash": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -237,7 +239,7 @@ def create_order(telegram_id: int, usdt_amount: float, credits_to_add: int) -> d
     
     orders[order_id] = order
     _save_orders(orders)
-    logger.info(f"Created order {order_id}: {usdt_amount} USDT for {credits_to_add} credits (user {telegram_id})")
+    logger.info(f"Created order {order_id}: {usdt_amount} USDT ({network}) for {credits_to_add} credits (user {telegram_id})")
     return order
 
 def get_pending_orders() -> List[dict]:

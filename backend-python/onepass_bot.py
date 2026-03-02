@@ -206,7 +206,7 @@ async def cmd_referral(message: types.Message):
 
 @dp.message(Command("crypto"))
 async def cmd_crypto(message: types.Message):
-    """Show credit packages with inline keyboard buttons."""
+    """Step 1: Show credit packages with inline keyboard buttons."""
     config = get_config()
     bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
     contact = config.get("contactSupport", "@Terato1")
@@ -220,12 +220,11 @@ async def cmd_crypto(message: types.Message):
             label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits (+{pkg['bonus']} 🎁)"
         else:
             label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits"
-        row.append(InlineKeyboardButton(text=label, callback_data=f"buy_{pkg['price']}"))
+        row.append(InlineKeyboardButton(text=label, callback_data=f"pkg_{pkg['price']}"))
         if len(row) == 2 or i == len(CREDIT_PACKAGES) - 1:
             buttons.append(row)
             row = []
 
-    # Add support + close buttons
     buttons.append([InlineKeyboardButton(text=f"💬 Support", url=f"https://t.me/{contact.lstrip('@')}")])
     buttons.append([InlineKeyboardButton(text="❌ Close", callback_data="close_menu")])
 
@@ -243,60 +242,242 @@ async def cmd_crypto(message: types.Message):
     )
 
 
-@dp.callback_query(F.data.startswith("buy_"))
-async def handle_buy_callback(callback: CallbackQuery):
-    """Handle package selection from inline keyboard."""
+@dp.callback_query(F.data.startswith("pkg_"))
+async def handle_pkg_callback(callback: CallbackQuery):
+    """Step 2: Show payment network selection after package is chosen."""
     await callback.answer()
-    config = get_config()
-    bot_data.get_or_create_user(callback.from_user.id, callback.from_user.username or "")
 
-    wallet = config.get("usdtWalletAddress", "")
-    if not wallet or not config.get("usdtEnabled"):
-        contact = config.get("contactSupport", "@Terato1")
-        await callback.message.edit_text(
-            f"💰 Crypto payments are currently being set up.\n"
-            f"Contact {contact} for manual top-up.",
-            parse_mode="Markdown"
-        )
-        return
-
-    # Extract selected price
     try:
         selected_price = int(callback.data.split("_")[1])
     except (ValueError, IndexError):
-        await callback.message.answer("❌ Invalid selection.")
+        await callback.answer("❌ Invalid selection.", show_alert=True)
         return
 
-    # Find the matching package
     pkg = next((p for p in CREDIT_PACKAGES if p["price"] == selected_price), None)
     if not pkg:
-        await callback.message.answer("❌ Package not found.")
+        await callback.answer("❌ Package not found.", show_alert=True)
+        return
+
+    total = pkg["base"] + pkg["bonus"]
+    bonus_text = f"\n🎁 Bonus: +{pkg['bonus']} credits" if pkg["bonus"] > 0 else ""
+
+    # Build network selection buttons
+    buttons = [
+        [
+            InlineKeyboardButton(text="🔴 TRC-20", callback_data=f"net_trc20_{selected_price}"),
+            InlineKeyboardButton(text="🟡 BSC (BEP-20)", callback_data=f"net_bsc_{selected_price}"),
+        ],
+        [
+            InlineKeyboardButton(text="🆔 Binance Pay", callback_data=f"net_binance_{selected_price}"),
+        ],
+        [
+            InlineKeyboardButton(text="« Back", callback_data="back_to_packages"),
+        ],
+    ]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text(
+        f"📦 {pkg['emoji']} **${pkg['price']} Package**\n\n"
+        f"✨ Total Credits: {total}{bonus_text}\n"
+        f"⏰ Payment Window: 15 minutes\n\n"
+        f"Select Payment Network:",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+
+@dp.callback_query(F.data == "back_to_packages")
+async def handle_back_to_packages(callback: CallbackQuery):
+    """Go back to package selection."""
+    await callback.answer()
+    config = get_config()
+    contact = config.get("contactSupport", "@Terato1")
+
+    buttons = []
+    row = []
+    for i, pkg in enumerate(CREDIT_PACKAGES):
+        total = pkg["base"] + pkg["bonus"]
+        if pkg["bonus"] > 0:
+            label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits (+{pkg['bonus']} 🎁)"
+        else:
+            label = f"{pkg['emoji']} ${pkg['price']} → {total} Credits"
+        row.append(InlineKeyboardButton(text=label, callback_data=f"pkg_{pkg['price']}"))
+        if len(row) == 2 or i == len(CREDIT_PACKAGES) - 1:
+            buttons.append(row)
+            row = []
+
+    buttons.append([InlineKeyboardButton(text=f"💬 Support", url=f"https://t.me/{contact.lstrip('@')}")])
+    buttons.append([InlineKeyboardButton(text="❌ Close", callback_data="close_menu")])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text(
+        f"💰 **Top Up Credits** 💰\n\n"
+        f"💡 How it works:\n"
+        f"• $1 = 10 Credits\n"
+        f"• {VERIFICATION_CREDIT_COST} Credits = 1 Verification\n"
+        f"• Credits are added instantly after payment\n\n"
+        f"Select a package below to pay with USDT:",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+
+@dp.callback_query(F.data.startswith("net_"))
+async def handle_network_callback(callback: CallbackQuery):
+    """Step 3: Show payment instructions for the selected network."""
+    await callback.answer()
+    config = get_config()
+    contact = config.get("contactSupport", "@Terato1")
+
+    parts = callback.data.split("_")
+    # net_trc20_10, net_bsc_10, net_binance_10
+    if len(parts) < 3:
+        await callback.answer("❌ Invalid selection.", show_alert=True)
+        return
+
+    network = parts[1]
+    try:
+        selected_price = int(parts[2])
+    except ValueError:
+        await callback.answer("❌ Invalid price.", show_alert=True)
+        return
+
+    pkg = next((p for p in CREDIT_PACKAGES if p["price"] == selected_price), None)
+    if not pkg:
+        await callback.answer("❌ Package not found.", show_alert=True)
         return
 
     total_credits = pkg["base"] + pkg["bonus"]
     usdt_amount = float(pkg["price"])
+    bonus_text = f"\n🎁 Bonus (from offset): +{pkg['bonus']} credits" if pkg["bonus"] > 0 else ""
 
-    # Generate unique amount for payment identification
-    unique_amount = bot_data.generate_unique_usdt_amount(usdt_amount)
+    if network == "trc20":
+        wallet = config.get("trc20WalletAddress", "")
+        if not wallet or not config.get("trc20Enabled"):
+            await callback.message.edit_text(f"❌ TRC-20 payments are not available.\nContact {contact}.")
+            return
 
-    # Create order
-    order = bot_data.create_order(callback.from_user.id, unique_amount, total_credits)
+        unique_amount = bot_data.generate_unique_usdt_amount(usdt_amount)
+        order = bot_data.create_order(callback.from_user.id, unique_amount, total_credits, network="trc20")
 
-    bonus_text = f" (+{pkg['bonus']} 🎁 bonus)" if pkg["bonus"] > 0 else ""
+        buttons = [
+            [InlineKeyboardButton(text="❌ Cancel Order", callback_data=f"cancel_{order['id']}")],
+            [InlineKeyboardButton(text="💬 Support", url=f"https://t.me/{contact.lstrip('@')}")],
+        ]
+
+        await callback.message.edit_text(
+            f"💳 **Payment Instructions**\n\n"
+            f"🆔 Order ID: `{order['id']}`{bonus_text}\n"
+            f"💰 Total Credits: {total_credits}\n\n"
+            f"💵 Send EXACTLY: **`{unique_amount}`** USDT\n"
+            f"🌐 Network: 🔴 TRON (TRC-20)\n\n"
+            f"Payment Address:\n`{wallet}`\n\n"
+            f"⏰ Expires in: 15 minutes\n"
+            f"✅ Auto-credited after confirmation\n\n"
+            f"⚠️ Important: Send the exact amount shown above!",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+
+    elif network == "bsc":
+        wallet = config.get("bscWalletAddress", "")
+        if not wallet or not config.get("bscEnabled"):
+            await callback.message.edit_text(f"❌ BSC payments are not available.\nContact {contact}.")
+            return
+
+        unique_amount = bot_data.generate_unique_usdt_amount(usdt_amount)
+        order = bot_data.create_order(callback.from_user.id, unique_amount, total_credits, network="bsc")
+
+        buttons = [
+            [InlineKeyboardButton(text="❌ Cancel Order", callback_data=f"cancel_{order['id']}")],
+            [InlineKeyboardButton(text="💬 Support", url=f"https://t.me/{contact.lstrip('@')}")],
+        ]
+
+        await callback.message.edit_text(
+            f"💳 **Payment Instructions**\n\n"
+            f"🆔 Order ID: `{order['id']}`{bonus_text}\n"
+            f"💰 Total Credits: {total_credits}\n\n"
+            f"💵 Send EXACTLY: **`{unique_amount}`** USDT\n"
+            f"🌐 Network: 🟡 Binance Smart Chain (BEP-20)\n\n"
+            f"Payment Address:\n`{wallet}`\n\n"
+            f"⏰ Expires in: 15 minutes\n"
+            f"✅ Auto-credited after 15 confirmations\n\n"
+            f"⚠️ Important: Send the exact amount shown above!",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+
+    elif network == "binance":
+        pay_id = config.get("binancePayId", "")
+        if not pay_id or not config.get("binancePayEnabled"):
+            await callback.message.edit_text(f"❌ Binance Pay is not available.\nContact {contact}.")
+            return
+
+        # Generate a 6-digit note code for identification
+        import random
+        note_code = str(random.randint(100000, 999999))
+        order = bot_data.create_order(callback.from_user.id, usdt_amount, total_credits, network="binance_pay", note_code=note_code)
+
+        buttons = [
+            [InlineKeyboardButton(text="✅ I Have Paid", callback_data=f"paid_{order['id']}")],
+            [InlineKeyboardButton(text="🔙 Back", callback_data=f"pkg_{selected_price}")],
+        ]
+
+        await callback.message.edit_text(
+            f"⚡ **Binance Pay (Manual)** ⚡\n\n"
+            f"1️⃣ Go to Binance Pay and Send **${usdt_amount}**.\n"
+            f"2️⃣ Send to Pay ID: `{pay_id}` (Tap to copy)\n"
+            f"3️⃣ ⚠️ IMPORTANT: In the 'Note' field, write:\n\n"
+            f"`{note_code}` (Tap to copy note)\n\n"
+            f"4️⃣ After paying, click '✅ I Have Paid' below.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+
+
+@dp.callback_query(F.data.startswith("paid_"))
+async def handle_paid_callback(callback: CallbackQuery):
+    """Handle 'I Have Paid' for Binance Pay — notify admin for manual confirmation."""
+    await callback.answer("✅ Payment noted! Admin will verify shortly.", show_alert=True)
+
+    order_id = callback.data.replace("paid_", "")
+    orders = bot_data.get_all_orders()
+    order = next((o for o in orders if o["id"] == order_id), None)
+
+    if not order:
+        await callback.message.edit_text("❌ Order not found.")
+        return
 
     await callback.message.edit_text(
-        f"💰 **USDT-TRC20 Payment**\n\n"
-        f"📦 Order: `{order['id']}`\n"
-        f"💵 Amount: **`{unique_amount}` USDT** (TRC20)\n"
-        f"🎁 You will receive: **{total_credits} credits**{bonus_text}\n\n"
-        f"📬 Send exactly **`{unique_amount}` USDT** to:\n"
-        f"`{wallet}`\n\n"
-        f"⚠️ **Important:**\n"
-        f"• Network: **TRON (TRC20)** only\n"
-        f"• Send the **exact** amount shown above\n"
-        f"• Payment auto-confirms within 1-2 minutes\n"
-        f"• Order expires in 24 hours\n\n"
-        f"⏳ Waiting for payment...",
+        f"⏳ **Payment Submitted for Review**\n\n"
+        f"🆔 Order: `{order_id}`\n"
+        f"💵 Amount: ${order['usdt_amount']} USDT\n"
+        f"📝 Note Code: `{order.get('note_code', 'N/A')}`\n\n"
+        f"An admin will verify your payment shortly.\n"
+        f"You'll be notified once credits are added.\n\n"
+        f"⏰ Usually confirmed within 5-10 minutes.",
+        parse_mode="Markdown"
+    )
+
+
+@dp.callback_query(F.data.startswith("cancel_"))
+async def handle_cancel_callback(callback: CallbackQuery):
+    """Cancel a pending order."""
+    await callback.answer()
+    order_id = callback.data.replace("cancel_", "")
+
+    # Mark order as expired/cancelled
+    orders = bot_data._load_orders()
+    if order_id in orders and orders[order_id]["status"] == "pending":
+        orders[order_id]["status"] = "cancelled"
+        bot_data._save_orders(orders)
+
+    await callback.message.edit_text(
+        f"❌ **Order Cancelled**\n\n"
+        f"Order `{order_id}` has been cancelled.\n"
+        f"Use /crypto to start a new order.",
         parse_mode="Markdown"
     )
 

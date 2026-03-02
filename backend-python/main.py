@@ -1983,6 +1983,24 @@ async def get_bot_users(request: Request):
     return {"users": users}
 
 
+@app.post("/api/admin/bot-confirm-order")
+async def confirm_bot_order(request: Request):
+    """Manually confirm a crypto payment order (e.g. Binance Pay)."""
+    verify_admin(request)
+    import bot_data
+    body = await request.json()
+    order_id = body.get("order_id")
+    if not order_id:
+        raise HTTPException(status_code=400, detail="order_id is required")
+
+    tx_ref = f"admin_manual_{int(__import__('time').time())}"
+    confirmed = bot_data.confirm_order(order_id, tx_ref)
+    if not confirmed:
+        raise HTTPException(status_code=404, detail="Order not found or already confirmed")
+
+    return {"success": True, "order": confirmed}
+
+
 # ========== Bypass API Endpoints ==========
 
 class BypassRequest(BaseModel):

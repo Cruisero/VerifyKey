@@ -232,23 +232,17 @@ async def _notify_payment_success(bot, order: dict, amount: float, network: str,
             f"Thank you for your purchase!"
         )
 
-        # Try to edit the original photo message caption
+        # Try to delete the original photo message
         chat_id = order.get("chat_id")
         message_id = order.get("message_id")
 
         if chat_id and message_id:
             try:
-                await bot.edit_message_caption(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    caption=success_text,
-                    reply_markup=None
-                )
-                return  # Success — edited in place
+                await bot.delete_message(chat_id=chat_id, message_id=message_id)
             except Exception as e:
-                logger.warning(f"Could not edit photo caption for order {order['id']}: {e}")
+                logger.warning(f"Could not delete photo message for order {order['id']}: {e}")
 
-        # Fallback: send a new message
+        # Send a clean new text message with success info
         await bot.send_message(
             order["telegram_id"],
             f"✅ **Payment Confirmed!**\n\n"

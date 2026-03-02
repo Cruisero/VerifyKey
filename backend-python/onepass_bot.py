@@ -495,18 +495,17 @@ async def handle_paid_callback(callback: CallbackQuery):
         balance = user.get("credits", 0) if user else 0
         await callback.answer("✅ Already confirmed!", show_alert=True)
         try:
-            await callback.message.edit_caption(
-                caption=(
-                    f"✅ Payment Confirmed!\n\n"
-                    f"🆔 Order: {order_id}\n"
-                    f"💰 Credits added: {order['credits_to_add']}\n"
-                    f"💳 Balance: {balance} credits\n\n"
-                    f"Thank you for your purchase!"
-                ),
-                reply_markup=None
-            )
+            await callback.message.delete()
         except Exception:
             pass
+        await callback.message.answer(
+            f"✅ **Payment Confirmed!**\n\n"
+            f"🆔 Order: `{order_id}`\n"
+            f"💰 Credits added: `{order['credits_to_add']}`\n"
+            f"💳 Balance: `{balance}` credits\n\n"
+            f"Thank you for your purchase!",
+            parse_mode="Markdown"
+        )
         return
 
     network = order.get("network", "")

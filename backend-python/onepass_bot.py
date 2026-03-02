@@ -385,30 +385,28 @@ async def handle_network_callback(callback: CallbackQuery):
             [InlineKeyboardButton(text="💬 Support", url=f"https://t.me/{contact.lstrip('@')}")],
         ]
 
-        await callback.message.edit_text(
-            f"💳 **Payment Instructions**\n\n"
-            f"🆔 Order ID: `{order['id']}`{bonus_text}\n"
-            f"💰 Total Credits: {total_credits}\n\n"
-            f"💵 Send EXACTLY: **`{unique_amount}`** USDT\n"
+        caption = (
+            f"💳 Payment Instructions\n\n"
+            f"🆔 Order: {order['id']}\n"
+            f"💰 Credits: {total_credits}{bonus_text}\n\n"
+            f"💵 Send EXACTLY: {unique_amount} USDT\n"
             f"🌐 Network: 🔴 TRON (TRC-20)\n\n"
-            f"Payment Address:\n`{wallet}`\n\n"
-            f"⏰ Expires in: 15 minutes\n"
-            f"✅ Auto-credited after confirmation\n\n"
-            f"⚠️ Important: Send the exact amount shown above!",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+            f"📬 Address:\n{wallet}\n\n"
+            f"⏰ Expires: 15 min | ✅ Auto-confirm\n"
+            f"⚠️ Send the exact amount above!"
         )
 
-        # Send QR code
         try:
             qr_bytes = generate_qr_code(wallet)
+            await callback.message.delete()
             await callback.message.answer_photo(
                 photo=BufferedInputFile(qr_bytes, filename="qr_trc20.png"),
-                caption=f"🔴 TRC-20 Wallet QR\n`{wallet}`",
-                parse_mode="Markdown"
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
         except Exception as e:
-            logger.error(f"Failed to send QR code: {e}")
+            logger.error(f"Failed to send QR payment msg: {e}")
+            await callback.message.edit_text(caption, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
     elif network == "bsc":
         wallet = config.get("bscWalletAddress", "")
@@ -424,30 +422,28 @@ async def handle_network_callback(callback: CallbackQuery):
             [InlineKeyboardButton(text="💬 Support", url=f"https://t.me/{contact.lstrip('@')}")],
         ]
 
-        await callback.message.edit_text(
-            f"💳 **Payment Instructions**\n\n"
-            f"🆔 Order ID: `{order['id']}`{bonus_text}\n"
-            f"💰 Total Credits: {total_credits}\n\n"
-            f"💵 Send EXACTLY: **`{unique_amount}`** USDT\n"
-            f"🌐 Network: 🟡 Binance Smart Chain (BEP-20)\n\n"
-            f"Payment Address:\n`{wallet}`\n\n"
-            f"⏰ Expires in: 15 minutes\n"
-            f"✅ Auto-credited after 15 confirmations\n\n"
-            f"⚠️ Important: Send the exact amount shown above!",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        caption = (
+            f"💳 Payment Instructions\n\n"
+            f"🆔 Order: {order['id']}\n"
+            f"💰 Credits: {total_credits}{bonus_text}\n\n"
+            f"💵 Send EXACTLY: {unique_amount} USDT\n"
+            f"🌐 Network: 🟡 BSC (BEP-20)\n\n"
+            f"📬 Address:\n{wallet}\n\n"
+            f"⏰ Expires: 15 min | ✅ Auto-confirm\n"
+            f"⚠️ Send the exact amount above!"
         )
 
-        # Send QR code
         try:
             qr_bytes = generate_qr_code(wallet)
+            await callback.message.delete()
             await callback.message.answer_photo(
                 photo=BufferedInputFile(qr_bytes, filename="qr_bsc.png"),
-                caption=f"🟡 BSC (BEP-20) Wallet QR\n`{wallet}`",
-                parse_mode="Markdown"
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
         except Exception as e:
-            logger.error(f"Failed to send QR code: {e}")
+            logger.error(f"Failed to send QR payment msg: {e}")
+            await callback.message.edit_text(caption, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
     elif network == "binance":
         pay_id = config.get("binancePayId", "")

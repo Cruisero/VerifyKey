@@ -179,13 +179,16 @@ async def cmd_services(message: types.Message):
         "💡 Send your verification link with `/verify` to get started!"
     )
     
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
+    ])
     try:
         from aiogram.types import FSInputFile
         photo = FSInputFile("assets/services_tutorial.jpg")
-        await message.answer_photo(photo=photo, caption=text, parse_mode="Markdown")
+        await message.answer_photo(photo=photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
     except Exception as e:
         logger.error(f"Failed to send services photo: {e}")
-        await message.answer(text, parse_mode="Markdown")
+        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
 @dp.message(Command("balance"))
@@ -194,12 +197,16 @@ async def cmd_balance(message: types.Message):
     credits = user.get("credits", 0)
     total_v = user.get("total_verifications", 0)
 
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
+    ])
     await message.answer(
         f"💳 **Your Balance**\n\n"
         f"🔹 Credits: `{credits}`\n"
         f"🔹 Total Verifications: `{total_v}`\n\n"
         f"💡 Top up with /crypto or earn free credits with /daily",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=keyboard
     )
 
 
@@ -235,6 +242,9 @@ async def cmd_referral(message: types.Message):
     bot_info = await bot.get_me()
     ref_link = f"https://t.me/{bot_info.username}?start=ref_{stats['referral_code']}"
 
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
+    ])
     await message.answer(
         f"🤝 **Referral Program**\n\n"
         f"Invite friends and earn **+1 credit** for each friend who completes their first verification!\n\n"
@@ -243,7 +253,8 @@ async def cmd_referral(message: types.Message):
         f"👥 Invited: {stats['invited_count']}\n"
         f"✅ Verified: {stats['verified_count']}\n"
         f"🎁 Credits earned: {stats['earned_credits']}",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=keyboard
     )
 
 
@@ -266,7 +277,7 @@ async def cmd_crypto(message: types.Message):
             row = []
 
     buttons.append([InlineKeyboardButton(text=f"💬 Support", url=f"https://t.me/{contact.lstrip('@')}")])
-    buttons.append([InlineKeyboardButton(text="❌ Close", callback_data="close_menu")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")])
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 

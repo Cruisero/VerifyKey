@@ -79,7 +79,7 @@ def get_default_config() -> dict:
         # General
         "dailyCredits": 1,
         "services": [
-            {"name": "Gemini", "emoji": "🎵", "credits": 8},
+            {"name": "Spotify", "emoji": "🎵", "credits": 8},
         ],
     }
 

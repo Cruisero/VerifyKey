@@ -93,7 +93,7 @@ def build_welcome_text(config: dict, balance: int = 0, user_id: int = 0) -> str:
             services_text += f"  {emoji} {s['name']} — {s['credits']} credits\n"
 
     return (
-        f"🚀 **Welcome to @{bot_name} !**\n\n"
+        f"🚀 **Welcome!**\n\n"
         f"{welcome} 🎓✨\n"
         f"{services_text}\n"
         f"💰 **Balance:** {balance} Credits\n"

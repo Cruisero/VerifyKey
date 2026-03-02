@@ -477,35 +477,84 @@ async def handle_network_callback(callback: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("paid_"))
 async def handle_paid_callback(callback: CallbackQuery):
-    """Handle 'I Have Paid' for Binance Pay — notify admin for manual confirmation."""
-    await callback.answer("✅ Payment noted! Admin will verify shortly.", show_alert=True)
-
+    """Handle 'I Paid' — edit same message caption to show status."""
     order_id = callback.data.replace("paid_", "")
     orders = bot_data.get_all_orders()
     order = next((o for o in orders if o["id"] == order_id), None)
 
     if not order:
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        await callback.message.answer("❌ Order not found.")
+        await callback.answer("❌ Order not found.", show_alert=True)
         return
 
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass
-    await callback.message.answer(
-        f"⏳ **Payment Submitted for Review**\n\n"
-        f"🆔 Order: `{order_id}`\n"
-        f"💵 Amount: ${order['usdt_amount']} USDT\n"
-        f"📝 Note Code: `{order.get('note_code', 'N/A')}`\n\n"
-        f"An admin will verify your payment shortly.\n"
-        f"You'll be notified once credits are added.\n\n"
-        f"⏰ Usually confirmed within 5-10 minutes.",
-        parse_mode="Markdown"
-    )
+    # Check if order was already confirmed
+    if order.get("status") == "confirmed":
+        user = bot_data.get_user(order["telegram_id"])
+        balance = user.get("credits", 0) if user else 0
+        await callback.answer("✅ Already confirmed!", show_alert=True)
+        try:
+            await callback.message.edit_caption(
+                caption=(
+                    f"✅ Payment Confirmed!\n\n"
+                    f"🆔 Order: {order_id}\n"
+                    f"💰 Credits added: {order['credits_to_add']}\n"
+                    f"💳 Balance: {balance} credits\n\n"
+                    f"Thank you for your purchase!"
+                ),
+                reply_markup=None
+            )
+        except Exception:
+            pass
+        return
+
+    network = order.get("network", "")
+    config = get_config()
+    contact = config.get("contactSupport", "@Terato1")
+
+    if network == "binance_pay":
+        # Binance Pay — manual review
+        await callback.answer("✅ Payment noted! Admin will verify shortly.", show_alert=True)
+        try:
+            await callback.message.edit_caption(
+                caption=(
+                    f"⏳ Payment Submitted for Review\n\n"
+                    f"🆔 Order: {order_id}\n"
+                    f"💵 Amount: ${order['usdt_amount']} USDT\n"
+                    f"📝 Note Code: {order.get('note_code', 'N/A')}\n\n"
+                    f"An admin will verify your payment shortly.\n"
+                    f"You'll be notified once credits are added.\n\n"
+                    f"⏰ Usually confirmed within 5-10 minutes."
+                ),
+                reply_markup=None
+            )
+        except Exception:
+            pass
+    else:
+        # TRC20 / BSC — auto-detect
+        await callback.answer("🔍 Checking blockchain...", show_alert=False)
+
+        network_name = "TRC-20" if network == "trc20" else "BSC"
+        buttons = [
+            [InlineKeyboardButton(text="✅ I Paid - Verify Now", callback_data=f"paid_{order_id}")],
+            [InlineKeyboardButton(text="❌ Cancel Order", callback_data=f"cancel_{order_id}")],
+            [InlineKeyboardButton(text="💬 Support", url=f"https://t.me/{contact.lstrip('@')}")],
+        ]
+
+        try:
+            await callback.message.edit_caption(
+                caption=(
+                    f"⏳ Payment Not Detected Yet\n\n"
+                    f"Don't worry! It usually takes 1-2 minutes for the blockchain to process your transaction.\n\n"
+                    f"💡 Please Wait:\n"
+                    f"• We are automatically checking every 10 seconds.\n"
+                    f"• You can click '✅ I Paid' again in a minute.\n\n"
+                    f"⏰ Order expires in: Check timer above\n"
+                    f"📊 Network: {network_name}\n"
+                    f"💵 Amount: ${order['usdt_amount']} USDT"
+                ),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+            )
+        except Exception:
+            pass
 
 
 @dp.callback_query(F.data.startswith("cancel_"))

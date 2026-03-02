@@ -82,7 +82,7 @@ def get_config() -> dict:
 
 def build_welcome_text(config: dict, balance: int = 0, user_id: int = 0) -> str:
     """Build the premium welcome message."""
-    bot_name = config.get("botName", "SheerID")
+    bot_name = config.get("botName", "Gemini_Verifier_bot")
     welcome = config.get("welcomeMessage", "Your premium gateway to instant student verifications.")
 
     services = config.get("services", [])
@@ -126,14 +126,15 @@ async def cmd_start(message: types.Message):
                 f"Complete your first verification to reward them."
             )
 
+    contact = config.get("contactSupport", "@Terato1")
     buttons = [
         [
             InlineKeyboardButton(text="💎 Services", callback_data="cmd_services"),
             InlineKeyboardButton(text="💰 Deposit", callback_data="cmd_crypto")
         ],
         [
-            InlineKeyboardButton(text="👤 Profile", callback_data="cmd_profile"),
-            InlineKeyboardButton(text="❓ Help", callback_data="cmd_help")
+            InlineKeyboardButton(text="👤 Balance", callback_data="cmd_profile"),
+            InlineKeyboardButton(text="❓ Help", url=f"https://t.me/{contact.lstrip('@')}")
         ],
         [
             InlineKeyboardButton(text="👥 Referrals", callback_data="cmd_referral")
@@ -166,10 +167,26 @@ async def cmd_services(message: types.Message):
 
     text = "📋 **Available Services**\n\n"
     for s in services:
-        emoji = s.get("emoji", "🔹")
+        emoji = s.get("emoji", "🎵")
         text += f"{emoji} **{s['name']}** — {s['credits']} credits\n"
-    text += "\n💡 Send your verification link with /verify to get started!"
-    await message.answer(text, parse_mode="Markdown")
+        
+    text += (
+        "\n🚫 **DO NOT open the verification link!**\n"
+        "Opening the link causes instant rejection.\n\n"
+        "✅ **CORRECT WAY:**\n\n"
+        "1️⃣ Right-click on the verification button\n"
+        "2️⃣ Select \"Copy link address\"\n"
+        "3️⃣ Paste the link here directly\n"
+        "💡 Send your verification link with `/verify` to get started!"
+    )
+    
+    try:
+        from aiogram.types import FSInputFile
+        photo = FSInputFile("assets/services_tutorial.png")
+        await message.answer_photo(photo=photo, caption=text, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Failed to send services photo: {e}")
+        await message.answer(text, parse_mode="Markdown")
 
 
 @dp.message(Command("balance"))

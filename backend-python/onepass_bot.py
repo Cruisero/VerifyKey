@@ -548,6 +548,27 @@ async def handle_paid_callback(callback: CallbackQuery):
     if network == "binance_pay":
         # Binance Pay — manual review
         await callback.answer("✅ Payment noted! Admin will verify shortly.", show_alert=True)
+        
+        # Notify Admin
+        import os
+        admin_chat_id = os.getenv("ADMIN_CHAT_ID")
+        if admin_chat_id:
+            try:
+                await bot.send_message(
+                    chat_id=int(admin_chat_id),
+                    text=(
+                        f"🚨 **New Binance Pay Order** 🚨\n\n"
+                        f"👤 User: `{callback.from_user.id}` (@{callback.from_user.username or 'N/A'})\n"
+                        f"🆔 Order: `{order_id}`\n"
+                        f"💵 Amount: `${order['usdt_amount']}`\n"
+                        f"📝 Note Code: `{order.get('note_code', 'N/A')}`\n\n"
+                        f"Please verify this payment in Binance and confirm it via the Admin Panel."
+                    ),
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send admin notification: {e}")
+
         try:
             await callback.message.edit_caption(
                 caption=(

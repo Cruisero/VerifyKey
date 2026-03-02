@@ -547,13 +547,16 @@ async def handle_paid_callback(callback: CallbackQuery):
 
     if network == "binance_pay":
         # Binance Pay — manual review
-        await callback.answer("✅ Payment noted! Admin will verify shortly.", show_alert=True)
+        await callback.answer()
         
         # Notify Admin
         import os
         admin_chat_id = os.getenv("ADMIN_CHAT_ID")
         if admin_chat_id:
             try:
+                admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Confirm Payment", callback_data=f"admin_confirm_{order_id}")]
+                ])
                 await bot.send_message(
                     chat_id=int(admin_chat_id),
                     text=(
@@ -562,9 +565,10 @@ async def handle_paid_callback(callback: CallbackQuery):
                         f"🆔 Order: `{order_id}`\n"
                         f"💵 Amount: `${order['usdt_amount']}`\n"
                         f"📝 Note Code: `{order.get('note_code', 'N/A')}`\n\n"
-                        f"Please verify this payment in Binance and confirm it via the Admin Panel."
+                        f"Please verify this payment in Binance."
                     ),
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
+                    reply_markup=admin_keyboard
                 )
             except Exception as e:
                 logger.error(f"Failed to send admin notification: {e}")
@@ -572,13 +576,9 @@ async def handle_paid_callback(callback: CallbackQuery):
         try:
             await callback.message.edit_caption(
                 caption=(
-                    f"⏳ Payment Submitted for Review\n\n"
-                    f"🆔 Order: {order_id}\n"
-                    f"💵 Amount: ${order['usdt_amount']} USDT\n"
-                    f"📝 Note Code: {order.get('note_code', 'N/A')}\n\n"
-                    f"An admin will verify your payment shortly.\n"
-                    f"You'll be notified once credits are added.\n\n"
-                    f"⏰ Usually confirmed within 5-10 minutes."
+                    f"✅ **Request Sent!**\n\n"
+                    f"Admins will verify your payment.\n"
+                    f"You will be notified once approved."
                 ),
                 reply_markup=None
             )
@@ -611,6 +611,47 @@ async def handle_paid_callback(callback: CallbackQuery):
             )
         except Exception:
             pass
+
+
+@dp.callback_query(F.data.startswith("admin_confirm_"))
+async def handle_admin_confirm(callback: CallbackQuery):
+    """Admin confirms a payment directly from bot notification."""
+    import os
+    admin_chat_id = os.getenv("ADMIN_CHAT_ID")
+    if not admin_chat_id or str(callback.from_user.id) != admin_chat_id:
+        await callback.answer("❌ Unauthorized", show_alert=True)
+        return
+
+    order_id = callback.data.replace("admin_confirm_", "")
+    tx_ref = f"admin_tg_{int(__import__('time').time())}"
+    
+    order = bot_data.confirm_order(order_id, tx_ref)
+    if order:
+        await callback.answer("✅ Order Confirmed!")
+        await callback.message.edit_text(
+            f"{callback.message.text}\n\n✅ **[Confirmed]** by Admin.",
+            reply_markup=None
+        )
+        
+        # Notify the user their credits arrived
+        user = bot_data.get_user(order["telegram_id"])
+        balance = user.get("credits", 0) if user else 0
+        try:
+            await bot.send_message(
+                order["telegram_id"],
+                f"✅ **Payment Confirmed!**\n\n"
+                f"💰 Received: `{order['usdt_amount']:.2f}` USDT\n"
+                f"🌐 Network: Binance Pay\n"
+                f"🎁 Credits added: `{order['credits_to_add']}`\n"
+                f"💳 Balance: `{balance}` credits\n\n"
+                f"Thank you for your purchase!",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user: {e}")
+    else:
+        await callback.answer("❌ Order already confirmed or not found.", show_alert=True)
+        await callback.message.edit_reply_markup(reply_markup=None)
 
 
 @dp.callback_query(F.data.startswith("cancel_"))

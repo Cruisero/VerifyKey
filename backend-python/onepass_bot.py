@@ -30,6 +30,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress noisy httpx polling logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 API_URL = "http://backend:3002"
 BOT_TOKEN = os.getenv("API_BOT_TOKEN")
 

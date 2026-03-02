@@ -811,15 +811,126 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
     mock_msg = mock_msg.model_copy(update={"from_user": callback.from_user})
     
     if cmd == "services":
+        # /start is a text message, but /services has a photo. 
+        # Telegram doesn't allow editing a text message into a photo message directly.
+        # So we delete the old message and send a new photo message.
+        await callback.message.delete()
         await cmd_services(mock_msg)
-    elif cmd == "crypto":
-        await cmd_crypto(mock_msg)
-    elif cmd == "profile":
-        await cmd_balance(mock_msg)
-    elif cmd == "help":
-        await cmd_help(mock_msg)
-    elif cmd == "referral":
-        await cmd_referral(mock_msg)
+        return
+        
+    # For others, we need to extract the logic that generates the text and keyboard,
+    # or temporarily monkeypatch the answer method of mock_msg to use edit_text instead.
+    # The safest way is to intercept mock_msg.answer
+        
+    # We will override the answer method of the mock message to edit the current message instead
+    async def mock_answer(*args, **kwargs):
+        try:
+            # If the current message has a photo (e.g., coming BACK from /services), 
+            # we can't edit it to a pure text message easily, so we delete and send new.
+            if callback.message.photo:
+                await callback.message.delete()
+                await callback.message.answer(*args, **kwargs)
+            else:
+                await callback.message.edit_text(*args, **kwargs)
+        except Exception as e:
+            logger.warning(f"Could not edit message, falling back to answer: {e}")
+            await callback.message.answer(*args, **kwargs)
+
+    # In aiogram 3, we can't easily mock methods on the Pydantic model directly.
+    # Instead of mocking, let's just write the specific handler logic here for editing.
+    config = get_config()
+    user = bot_data.get_or_create_user(callback.from_user.id, callback.from_user.username or "")
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
+    ])
+
+    try:
+        if cmd == "profile": # This routes to balance
+            credits = user.get("credits", 0)
+            total_v = user.get("total_verifications", 0)
+            text = (
+                f"💳 **Your Balance**\n\n"
+                f"🔹 Credits: `{credits}`\n"
+                f"🔹 Total Verifications: `{total_v}`\n\n"
+                f"💡 Top up with /crypto or earn free credits with /daily"
+            )
+            
+        elif cmd == "referral":
+            stats = bot_data.get_referral_stats(callback.from_user.id)
+            bot_info = await bot.get_me()
+            ref_link = f"https://t.me/{bot_info.username}?start=ref_{stats['referral_code']}"
+            text = (
+                f"🤝 **Referral Program**\n\n"
+                f"Invite friends and earn **+1 credit** for each friend who completes their first verification!\n\n"
+                f"🔗 Your invite link:\n`{ref_link}`\n\n"
+                f"📊 **Your Stats:**\n"
+                f"👥 Invited: {stats['invited_count']}\n"
+                f"✅ Verified: {stats['verified_count']}\n"
+                f"🎁 Credits earned: {stats['earned_credits']}"
+            )
+            
+        elif cmd == "crypto":
+            contact = config.get("contactSupport", "@Terato1")
+            buttons = []
+            row = []
+            for i, pkg in enumerate(CREDIT_PACKAGES):
+                total = pkg["base"] + pkg["bonus"]
+                label = f"{pkg['emoji']} ${pkg['price']}({total} Credit)"
+                row.append(InlineKeyboardButton(text=label, callback_data=f"pkg_{pkg['price']}"))
+                if len(row) == 2 or i == len(CREDIT_PACKAGES) - 1:
+                    buttons.append(row)
+                    row = []
+            buttons.append([InlineKeyboardButton(text=f"💬 Support", url=f"https://t.me/{contact.lstrip('@')}")])
+            buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            
+            text = (
+                f"💰 **Top Up Credits** 💰\n\n"
+                f"💡 How it works:\n"
+                f"• $1 = 10 Credits\n"
+                f"• {VERIFICATION_CREDIT_COST} Credits = 1 Verification\n"
+                f"• Credits are added instantly after payment\n\n"
+                f"Select a package below to pay with USDT:"
+            )
+            
+        elif cmd == "start":
+            # Handle the Back button to return to the main menu
+            contact = config.get("contactSupport", "@Terato1")
+            buttons = [
+                [
+                    InlineKeyboardButton(text="💎 Services", callback_data="cmd_services"),
+                    InlineKeyboardButton(text="💰 Deposit", callback_data="cmd_crypto")
+                ],
+                [
+                    InlineKeyboardButton(text="👤 Balance", callback_data="cmd_profile"),
+                    InlineKeyboardButton(text="❓ Help", url=f"https://t.me/{contact.lstrip('@')}")
+                ],
+                [
+                    InlineKeyboardButton(text="👥 Referrals", callback_data="cmd_referral")
+                ]
+            ]
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            text = build_welcome_text(config, user.get("credits", 0), callback.from_user.id)
+            
+        else:
+            return # Unknown command
+
+        # If the current message has a photo (e.g. going back from Services), 
+        # we can't edit it to text. Delete and resend.
+        if callback.message.photo:
+            await callback.message.delete()
+            await callback.message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+        else:
+            await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f"Error handling inline button {cmd}: {e}")
+        # Fallback if editing fails (e.g. message is identical)
+        try:
+            await callback.message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+        except:
+            pass
 
 
 async def main():

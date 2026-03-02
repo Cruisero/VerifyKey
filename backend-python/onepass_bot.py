@@ -1,24 +1,34 @@
+"""
+SheerID Verifier — Premium Telegram Bot
+Standalone product identity, fully managed from the OnePASS Admin dashboard.
+"""
 import asyncio
 import json
 import logging
 import os
 import re
-from typing import Dict, Optional
+from typing import Optional
 
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandStart
 import httpx
-from httpx_sse import connect_sse
+from httpx_sse import aconnect_sse
 from dotenv import load_dotenv
 
-# Load environment variables explicitly from the same directory
+import bot_data
+import crypto_service
+
+# Load environment variables
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=env_path)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-API_URL = "http://backend:3002/api/verify/dualbot"
+API_URL = "http://backend:3002"
 BOT_TOKEN = os.getenv("API_BOT_TOKEN")
 
 if not BOT_TOKEN:
@@ -28,182 +38,411 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Simple JSON storage for user CDKs (Mounts to /app/data in Docker so it persists)
-DATA_FILE = "/app/data/user_cdks.json"
 
-def load_user_cdks() -> Dict[str, str]:
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading user CDKs: {e}")
-    return {}
+# ==================== Helpers ====================
 
-def save_user_cdk(user_id: str, cdk: str):
-    data = load_user_cdks()
-    data[str(user_id)] = cdk
-    try:
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception as e:
-        logger.error(f"Error saving user CDKs: {e}")
+def get_config() -> dict:
+    """Load dynamic bot config."""
+    return crypto_service.load_bot_config()
 
-def get_user_cdk(user_id: str) -> Optional[str]:
-    data = load_user_cdks()
-    return data.get(str(user_id))
 
-@dp.message(Command("start"))
+def build_welcome_text(config: dict) -> str:
+    """Build the premium welcome message."""
+    bot_name = config.get("botName", "SheerID Verifier")
+    welcome = config.get("welcomeMessage", "Your premium gateway to instant student verifications.")
+    contact = config.get("contactSupport", "@Terato1")
+    services = config.get("services", [])
+
+    services_text = ""
+    if services:
+        services_text = "\n📋 Available Services:\n"
+        for s in services:
+            emoji = s.get("emoji", "🔹")
+            services_text += f"  • {emoji} {s['name']} — {s['credits']} credits\n"
+
+    return (
+        f"🚀 Welcome to {bot_name}!\n\n"
+        f"{welcome} 🎓✨\n"
+        f"{services_text}\n"
+        f"🛠 Commands:\n"
+        f"🔹 /services - View services & get links\n"
+        f"🔹 /verify - Start verification\n"
+        f"🔹 /balance - Check credits\n"
+        f"🔹 /crypto - Top up with crypto\n"
+        f"🔹 /daily - Free daily credits\n"
+        f"🔹 /referral - Earn credits by inviting\n"
+        f"🔹 /help - Show this message\n\n"
+        f"📝 How to use:\n"
+        f"Use /services to get your verification link, then send /verify with the link\n\n"
+        f"❓ Need help? Contact {contact}"
+    )
+
+
+# ==================== Command Handlers ====================
+
+@dp.message(CommandStart())
 async def cmd_start(message: types.Message):
+    """Handle /start and /start ref_XXXXXX deep links."""
+    config = get_config()
+    user = bot_data.get_or_create_user(
+        message.from_user.id,
+        message.from_user.username or ""
+    )
+
+    # Handle referral deep link: /start ref_XXXXXX
+    args = message.text.split()
+    if len(args) > 1 and args[1].startswith("ref_"):
+        ref_code = args[1][4:]  # Strip "ref_" prefix
+        referrer = bot_data.get_user_by_referral_code(ref_code)
+        if referrer and referrer["telegram_id"] != message.from_user.id:
+            bot_data.set_referred_by(message.from_user.id, referrer["telegram_id"])
+            await message.answer(
+                f"🎉 You joined via {referrer.get('username', 'a friend')}'s referral!\n"
+                f"Complete your first verification to reward them."
+            )
+
+    await message.answer(build_welcome_text(config))
+
+
+@dp.message(Command("help"))
+async def cmd_help(message: types.Message):
+    config = get_config()
+    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    await message.answer(build_welcome_text(config))
+
+
+@dp.message(Command("services"))
+async def cmd_services(message: types.Message):
+    config = get_config()
+    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    services = config.get("services", [])
+
+    if not services:
+        await message.answer("📋 No services available at the moment.")
+        return
+
+    text = "📋 **Available Services**\n\n"
+    for s in services:
+        emoji = s.get("emoji", "🔹")
+        text += f"{emoji} **{s['name']}** — {s['credits']} credits\n"
+    text += "\n💡 Send your verification link with /verify to get started!"
+    await message.answer(text, parse_mode="Markdown")
+
+
+@dp.message(Command("balance"))
+async def cmd_balance(message: types.Message):
+    user = bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    credits = user.get("credits", 0)
+    total_v = user.get("total_verifications", 0)
+
     await message.answer(
-        "👋 欢迎使用 OnePASS API 认证机器人！\n\n"
-        "**使用流程**：\n"
-        "1. 使用 `/cdk 你的激活码` 绑定额度\n"
-        "2. 发送 SheerID 验证链接给我，我会自动处理并实时返回进度。\n\n"
-        "支持批量发送多个链接（每行一个）。",
+        f"💳 **Your Balance**\n\n"
+        f"🔹 Credits: `{credits}`\n"
+        f"🔹 Total Verifications: `{total_v}`\n\n"
+        f"💡 Top up with /crypto or earn free credits with /daily",
         parse_mode="Markdown"
     )
 
-@dp.message(Command("cdk"))
-async def cmd_cdk(message: types.Message):
+
+@dp.message(Command("daily"))
+async def cmd_daily(message: types.Message):
+    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    config = get_config()
+    daily_amount = config.get("dailyCredits", 1)
+
+    success, balance, msg = bot_data.claim_daily(message.from_user.id, daily_amount)
+
+    if success:
+        await message.answer(
+            f"🎁 **Daily Reward Claimed!**\n\n"
+            f"✅ +{daily_amount} credit(s)\n"
+            f"💳 Balance: `{balance}` credits\n\n"
+            f"Come back tomorrow for more!",
+            parse_mode="Markdown"
+        )
+    else:
+        await message.answer(
+            f"⏰ **Already Claimed Today**\n\n"
+            f"💳 Balance: `{balance}` credits\n"
+            f"Come back tomorrow! 🕐",
+            parse_mode="Markdown"
+        )
+
+
+@dp.message(Command("referral"))
+async def cmd_referral(message: types.Message):
+    user = bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    stats = bot_data.get_referral_stats(message.from_user.id)
+    bot_info = await bot.get_me()
+    ref_link = f"https://t.me/{bot_info.username}?start=ref_{stats['referral_code']}"
+
+    await message.answer(
+        f"🤝 **Referral Program**\n\n"
+        f"Invite friends and earn **+1 credit** for each friend who completes their first verification!\n\n"
+        f"🔗 Your invite link:\n`{ref_link}`\n\n"
+        f"📊 **Your Stats:**\n"
+        f"👥 Invited: {stats['invited_count']}\n"
+        f"✅ Verified: {stats['verified_count']}\n"
+        f"🎁 Credits earned: {stats['earned_credits']}",
+        parse_mode="Markdown"
+    )
+
+
+@dp.message(Command("crypto"))
+async def cmd_crypto(message: types.Message):
+    """Generate a crypto payment order."""
+    config = get_config()
+    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+
+    wallet = config.get("usdtWalletAddress", "")
+    if not wallet or not config.get("usdtEnabled"):
+        contact = config.get("contactSupport", "@Terato1")
+        await message.answer(
+            f"💰 **Crypto Top-Up**\n\n"
+            f"Crypto payments are currently being set up.\n"
+            f"Contact {contact} for manual top-up.",
+            parse_mode="Markdown"
+        )
+        return
+
+    # Parse amount from command: /crypto 5 or /crypto
+    args = message.text.split()
+    if len(args) > 1:
+        try:
+            usdt_amount = float(args[1])
+        except ValueError:
+            await message.answer("❌ Invalid amount. Usage: `/crypto 5` (for 5 USDT)", parse_mode="Markdown")
+            return
+    else:
+        await message.answer(
+            f"💰 **Crypto Top-Up**\n\n"
+            f"Send the amount in USDT you want to pay.\n"
+            f"Example: `/crypto 5` for 5 USDT\n\n"
+            f"💱 Rate: 1 USDT = {config.get('creditPrice', 1)} credits",
+            parse_mode="Markdown"
+        )
+        return
+
+    if usdt_amount < 1:
+        await message.answer("❌ Minimum amount is 1 USDT")
+        return
+    if usdt_amount > 1000:
+        await message.answer("❌ Maximum amount is 1000 USDT")
+        return
+
+    credit_price = config.get("creditPrice", 1)
+    credits_to_add = int(usdt_amount * credit_price)
+
+    # Generate unique amount for payment identification
+    unique_amount = bot_data.generate_unique_usdt_amount(usdt_amount)
+
+    # Create order
+    order = bot_data.create_order(message.from_user.id, unique_amount, credits_to_add)
+
+    await message.answer(
+        f"💰 **USDT-TRC20 Payment**\n\n"
+        f"📦 Order: `{order['id']}`\n"
+        f"💵 Amount: **`{unique_amount}` USDT** (TRC20)\n"
+        f"🎁 You will receive: **{credits_to_add} credits**\n\n"
+        f"📬 Send exactly **`{unique_amount}` USDT** to:\n"
+        f"`{wallet}`\n\n"
+        f"⚠️ **Important:**\n"
+        f"• Network: **TRON (TRC20)** only\n"
+        f"• Send the **exact** amount shown above\n"
+        f"• Payment auto-confirms within 1-2 minutes\n"
+        f"• Order expires in 24 hours\n\n"
+        f"⏳ Waiting for payment...",
+        parse_mode="Markdown"
+    )
+
+
+@dp.message(Command("verify"))
+async def cmd_verify(message: types.Message):
+    """Handle /verify [link] command."""
+    user = bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    config = get_config()
+    services = config.get("services", [])
+
+    # Extract link from the message
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        current_cdk = get_user_cdk(message.from_user.id)
-        if current_cdk:
-            await message.answer(f"你当前绑定的 CDK 为: `{current_cdk}`\n如需更换，请发送 `/cdk 新激活码`", parse_mode="Markdown")
-        else:
-            await message.answer("请提供你购买的 CDK 激活码。格式: `/cdk XXXXXX`", parse_mode="Markdown")
+        await message.answer(
+            "🔍 **How to verify:**\n\n"
+            "Send your verification link after the command:\n"
+            "`/verify https://services.sheerid.com/verify/...`\n\n"
+            "Or just paste the link directly!",
+            parse_mode="Markdown"
+        )
         return
-    
-    cdk = args[1].strip()
-    save_user_cdk(message.from_user.id, cdk)
-    await message.answer(f"✅ 成功绑定 CDK: `{cdk}`\n现在可以直接发链接给我了！", parse_mode="Markdown")
+
+    link = args[1].strip()
+    await _process_verification(message, user, link, config, services)
+
 
 @dp.message(F.text)
-async def handle_links(message: types.Message):
+async def handle_text(message: types.Message):
+    """Handle raw links sent without /verify command."""
     text = message.text.strip()
-    
-    # Simple check if text contains SheerID link format
-    if "services.sheerid.com/verify" not in text and "verificationId=" not in text:
-        # Ignore non-link messages, but if it looks like they are trying to chat, remind them
-        if not text.startswith("/"):
-            await message.answer("请发送包含 `services.sheerid.com/verify` 的链接以进行认证。如果还没有绑定 CDK，请先发送 `/cdk 你的激活码`。", parse_mode="Markdown")
+
+    # Check if it's a SheerID link
+    if "services.sheerid.com/verify" in text or "verificationId=" in text:
+        user = bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+        config = get_config()
+        services = config.get("services", [])
+        await _process_verification(message, user, text, config, services)
         return
 
-    user_cdk = get_user_cdk(message.from_user.id)
-    if not user_cdk:
-        await message.answer("⚠️ 你还没有绑定 CDK 激活码！\n请先使用 `/cdk 你的激活码` 进行绑定。", parse_mode="Markdown")
+    # Ignore other text (don't spam users)
+
+
+async def _process_verification(message: types.Message, user: dict, link: str, config: dict, services: list):
+    """Core verification logic — deduct credits, call API, stream progress."""
+    # Check credits
+    if not services:
+        cost = 5  # default
+    else:
+        cost = services[0].get("credits", 5)  # Use first service cost
+
+    credits = user.get("credits", 0)
+    if credits < cost:
+        await message.answer(
+            f"❌ **Insufficient Credits**\n\n"
+            f"This verification costs **{cost}** credits.\n"
+            f"Your balance: **{credits}** credits.\n\n"
+            f"💡 Top up with /crypto or claim free credits with /daily",
+            parse_mode="Markdown"
+        )
         return
 
-    # Extract all links (one per line)
-    lines = text.split("\n")
-    links = [line.strip() for line in lines if "sheerid.com" in line or "verificationId=" in line]
-    
-    if not links:
-        await message.answer("未检测到有效的验证链接，请确保链接包含 sheerid.com 或 verificationId")
+    # Deduct credits
+    if not bot_data.deduct_credits(message.from_user.id, cost):
+        await message.answer("❌ Failed to deduct credits. Please try again.")
         return
 
-    if len(links) > 5:
-        await message.answer("⚠️ 一次最多处理 5 条链接")
-        return
+    remaining = bot_data.get_user(message.from_user.id).get("credits", 0)
 
-    status_message = await message.answer(f"🚗 收到 {len(links)} 条链接，准备开始验证...")
-    
+    status_msg = await message.answer(
+        f"🔄 **Verification Started**\n\n"
+        f"💳 Deducted: {cost} credits (Remaining: {remaining})\n"
+        f"⏳ Preparing...",
+        parse_mode="Markdown"
+    )
+
+    # Call the internal API (no CDK needed — bot uses its own credit system)
+    # We'll use a special internal endpoint or pass a bot-internal flag
     payload = {
-        "links": links,
-        "cdk": user_cdk
+        "links": [link],
+        "cdk": "__BOT_INTERNAL__",
+        "bot_user_id": message.from_user.id
     }
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            async with connect_sse(client, "POST", API_URL, json=payload) as event_source:
-                link_status = {link: "⏳ 准备中" for link in links}
-                
-                async def update_telegram_message(force=False):
-                    status_text = "🔄 **认证执行中**\n\n"
-                    for i, link in enumerate(links):
-                        vid_match = re.search(r'verificationId=([A-Za-z0-9-]+)', link)
-                        vid = vid_match.group(1)[:8] + "..." if vid_match else f"链接 {i+1}"
-                        status_text += f"🔹 `{vid}`: {link_status[link]}\n"
-                    
-                    try:
-                        await status_message.edit_text(status_text, parse_mode="Markdown", disable_web_page_preview=True)
-                    except Exception as e:
-                        # Ignore "Message is not modified" errors
-                        pass
-
-                await update_telegram_message()
+            async with aconnect_sse(client, "POST", f"{API_URL}/api/verify/dualbot", json=payload) as event_source:
+                current_status = "⏳ Preparing..."
 
                 async for sse in event_source.iter_sse():
                     try:
                         event_data = json.loads(sse.data)
-                        
+
                         if event_data.get("type") == "progress":
-                            link = event_data.get("link")
                             step = event_data.get("step")
-                            msg = event_data.get("message")
-                            
-                            step_prefixes = {
-                                "warmup": "📄 文档生成中...",
-                                "verify": "📤 提交文档中...",
-                                "waiting": "⏳ 等待验证...",
-                                "cooldown_wait": f"⏳ {msg}"
+                            step_map = {
+                                "warmup": "📄 Generating document...",
+                                "verify": "📤 Submitting document...",
+                                "waiting": "⏳ Waiting for verification...",
+                                "cooldown_wait": f"⏳ {event_data.get('message', 'Waiting...')}",
                             }
-                            
-                            if link in link_status:
-                                link_status[link] = step_prefixes.get(step, msg)
-                                await update_telegram_message()
-                                
+                            new_status = step_map.get(step, current_status)
+                            if new_status != current_status:
+                                current_status = new_status
+                                try:
+                                    await status_msg.edit_text(
+                                        f"🔄 **Verification In Progress**\n\n"
+                                        f"💳 Cost: {cost} credits\n"
+                                        f"{current_status}",
+                                        parse_mode="Markdown"
+                                    )
+                                except Exception:
+                                    pass
+
                         elif event_data.get("type") == "done":
                             results = event_data.get("results", [])
-                            for res in results:
-                                link = res.get("link")
-                                if link in link_status:
-                                    status = res.get("status")
-                                    if status == "approved":
-                                        link_status[link] = f"✅ 成功 ({res.get('message', 'Approved')})"
-                                    elif status == "failed" or status == "error":
-                                        link_status[link] = f"❌ 失败 ({res.get('message', 'Failed')})"
-                                    elif status == "no_credits":
-                                        link_status[link] = "❌ 账号额度不足"
-                                    elif status == "rejected":
-                                        link_status[link] = "❌ 被拒绝"
-                                    else:
-                                        link_status[link] = f"❓ 未知状态 ({status})"
-                                        
-                            cdk_rem = event_data.get("cdkRemaining", "?")
-                            
-                            final_text = "✅ **验证任务完成**\n\n"
-                            for i, link in enumerate(links):
-                                vid_match = re.search(r'verificationId=([A-Za-z0-9-]+)', link)
-                                vid = vid_match.group(1)[:8] + "..." if vid_match else f"链接 {i+1}"
-                                final_text += f"🔹 `{vid}`: {link_status[link]}\n"
-                                
-                            final_text += f"\n💳 CDK 剩余次数: {cdk_rem}"
-                            await status_message.edit_text(final_text, parse_mode="Markdown", disable_web_page_preview=True)
-                            
+                            if results:
+                                r = results[0]
+                                status = r.get("status", "unknown")
+                                msg_text = r.get("message", "")
+
+                                if status == "approved":
+                                    result_text = f"✅ **Verification Successful!**\n\n🎉 {msg_text}"
+                                    # Track verification
+                                    bot_data.increment_verifications(message.from_user.id)
+                                    # Handle first verification referral reward
+                                    referrer_id = bot_data.mark_first_verify_done(message.from_user.id)
+                                    if referrer_id:
+                                        try:
+                                            referrer = bot_data.get_user(referrer_id)
+                                            await bot.send_message(
+                                                referrer_id,
+                                                f"🎉 **Referral Reward!**\n\n"
+                                                f"Your referral @{message.from_user.username or 'user'} "
+                                                f"completed their first verification!\n"
+                                                f"🎁 +1 credit added to your balance.\n"
+                                                f"💳 New balance: {referrer.get('credits', 0)} credits",
+                                                parse_mode="Markdown"
+                                            )
+                                        except Exception as e:
+                                            logger.error(f"Failed to notify referrer: {e}")
+                                elif status in ("failed", "error"):
+                                    result_text = f"❌ **Verification Failed**\n\n{msg_text}"
+                                    # Refund credits on failure
+                                    bot_data.add_credits(message.from_user.id, cost, "Refund - verification failed")
+                                    remaining = bot_data.get_user(message.from_user.id).get("credits", 0)
+                                    result_text += f"\n\n💳 Credits refunded. Balance: {remaining}"
+                                elif status == "no_credits":
+                                    result_text = "❌ **Bot account out of quota**\n\nPlease try again later."
+                                    bot_data.add_credits(message.from_user.id, cost, "Refund - no bot quota")
+                                else:
+                                    result_text = f"❓ Status: {status}\n{msg_text}"
+
+                                try:
+                                    await status_msg.edit_text(result_text, parse_mode="Markdown")
+                                except Exception:
+                                    await message.answer(result_text, parse_mode="Markdown")
+                            else:
+                                await status_msg.edit_text("❌ No results received.")
+
                     except json.JSONDecodeError:
                         logger.error(f"Failed to parse SSE data: {sse.data}")
-                        
+
     except httpx.HTTPStatusError as e:
         error_msg = e.response.text
         try:
             err_json = e.response.json()
             error_msg = err_json.get("detail", error_msg)
-        except:
+        except Exception:
             pass
-        await message.answer(f"❌ 请求失败: {error_msg}")
+        # Refund on API error
+        bot_data.add_credits(message.from_user.id, cost, "Refund - API error")
+        await status_msg.edit_text(f"❌ Error: {error_msg}\n\n💳 Credits refunded.")
     except httpx.ConnectError:
-        await message.answer("❌ 无法连接到后端的 OnePASS API，请检查服务是否正常启动。")
+        bot_data.add_credits(message.from_user.id, cost, "Refund - connection error")
+        await status_msg.edit_text("❌ Cannot connect to verification backend.\n\n💳 Credits refunded.")
     except Exception as e:
-        logger.exception("Error processing link")
-        await message.answer(f"❌ 发生意外错误: {str(e)}")
+        logger.exception("Verification error")
+        bot_data.add_credits(message.from_user.id, cost, "Refund - unexpected error")
+        await status_msg.edit_text(f"❌ Unexpected error: {str(e)}\n\n💳 Credits refunded.")
+
 
 async def main():
-    logger.info("Starting OnePASS API Bot...")
-    # Drop pending updates to avoid processing old messages on restart
+    logger.info("Starting SheerID Verifier Bot...")
     await bot.delete_webhook(drop_pending_updates=True)
+
+    # Start crypto payment polling in background
+    asyncio.create_task(crypto_service.start_polling(bot))
+
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

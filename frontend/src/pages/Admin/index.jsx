@@ -6,6 +6,356 @@ import '../Verify/Verify.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+// Telegram Bot Management Component
+function TelegramBotTab() {
+    const { user } = useAuth();
+    const token = user?.token || localStorage.getItem('verifykey-token');
+    const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+
+    const [botConfig, setBotConfig] = useState(null);
+    const [botStats, setBotStats] = useState(null);
+    const [botUsers, setBotUsers] = useState([]);
+    const [botOrders, setBotOrders] = useState([]);
+    const [saving, setSaving] = useState(false);
+    const [activeSection, setActiveSection] = useState('stats');
+    const [newService, setNewService] = useState({ name: '', emoji: '🔹', credits: 5 });
+
+    const fetchBotConfig = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/bot-config`, { headers: authHeaders });
+            if (res.ok) setBotConfig(await res.json());
+        } catch (e) { console.error('Failed to fetch bot config:', e); }
+    };
+
+    const fetchBotStats = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/bot-stats`, { headers: authHeaders });
+            if (res.ok) setBotStats(await res.json());
+        } catch (e) { console.error('Failed to fetch bot stats:', e); }
+    };
+
+    const fetchBotUsers = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/bot-users`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setBotUsers(data.users || []);
+            }
+        } catch (e) { console.error('Failed to fetch bot users:', e); }
+    };
+
+    const fetchBotOrders = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/bot-orders`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setBotOrders(data.orders || []);
+            }
+        } catch (e) { console.error('Failed to fetch bot orders:', e); }
+    };
+
+    useEffect(() => {
+        fetchBotConfig();
+        fetchBotStats();
+        fetchBotUsers();
+        fetchBotOrders();
+    }, []);
+
+    const saveBotConfig = async () => {
+        setSaving(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/bot-config`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify(botConfig)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setBotConfig(data.config);
+                alert('✅ 配置已保存');
+            } else {
+                alert('保存失败');
+            }
+        } catch (e) { alert('保存失败: ' + e.message); }
+        finally { setSaving(false); }
+    };
+
+    const addService = () => {
+        if (!newService.name.trim()) return;
+        const updated = { ...botConfig, services: [...(botConfig.services || []), { ...newService }] };
+        setBotConfig(updated);
+        setNewService({ name: '', emoji: '🔹', credits: 5 });
+    };
+
+    const removeService = (index) => {
+        const services = [...(botConfig.services || [])];
+        services.splice(index, 1);
+        setBotConfig({ ...botConfig, services });
+    };
+
+    if (!botConfig || !botStats) {
+        return <div className="tab-content"><p style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>⏳ 加载中...</p></div>;
+    }
+
+    const sections = [
+        { id: 'stats', label: '📊 统计', },
+        { id: 'config', label: '⚙️ 配置' },
+        { id: 'services', label: '📋 服务' },
+        { id: 'users', label: '👥 用户' },
+        { id: 'orders', label: '💰 订单' },
+    ];
+
+    return (
+        <div className="tab-content">
+            {/* Sub-navigation */}
+            <div style={{ display: 'flex', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-lg)', flexWrap: 'wrap' }}>
+                {sections.map(s => (
+                    <button key={s.id}
+                        className={`btn btn-sm ${activeSection === s.id ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setActiveSection(s.id)}
+                    >{s.label}</button>
+                ))}
+            </div>
+
+            {/* Stats Section */}
+            {activeSection === 'stats' && (
+                <>
+                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <div className="stat-card card primary">
+                            <div className="stat-icon">👥</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.total_users}</span>
+                                <span className="stat-label">总用户</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card success">
+                            <div className="stat-icon">✅</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.total_verifications}</span>
+                                <span className="stat-label">总验证</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card info">
+                            <div className="stat-icon">💰</div>
+                            <div className="stat-info">
+                                <span className="stat-value">${botStats.total_revenue_usdt}</span>
+                                <span className="stat-label">USDT 收入</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card warning">
+                            <div className="stat-icon">🤝</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.referral_rewards_given}</span>
+                                <span className="stat-label">邀请奖励</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="stats-grid">
+                        <div className="stat-card card">
+                            <div className="stat-icon">📅</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.daily_active_users}</span>
+                                <span className="stat-label">今日活跃</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card">
+                            <div className="stat-icon">🔋</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.total_credits_in_circulation}</span>
+                                <span className="stat-label">流通积分</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card">
+                            <div className="stat-icon">🔥</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.total_spent_credits}</span>
+                                <span className="stat-label">已消耗积分</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card">
+                            <div className="stat-icon">⏳</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.pending_orders}</span>
+                                <span className="stat-label">待确认订单</span>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Config Section */}
+            {activeSection === 'config' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Bot 配置</h3>
+                    <div style={{ display: 'grid', gap: 'var(--spacing-md)' }}>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Bot 名称</label>
+                            <input className="input" value={botConfig.botName || ''} onChange={e => setBotConfig({ ...botConfig, botName: e.target.value })} style={{ width: '100%' }} />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>欢迎语</label>
+                            <input className="input" value={botConfig.welcomeMessage || ''} onChange={e => setBotConfig({ ...botConfig, welcomeMessage: e.target.value })} style={{ width: '100%' }} />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>客服联系人</label>
+                            <input className="input" value={botConfig.contactSupport || ''} onChange={e => setBotConfig({ ...botConfig, contactSupport: e.target.value })} style={{ width: '100%' }} placeholder="@Terato1" />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                            <div>
+                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>USDT 钱包地址 (TRC20)</label>
+                                <input className="input" value={botConfig.usdtWalletAddress || ''} onChange={e => setBotConfig({ ...botConfig, usdtWalletAddress: e.target.value })} style={{ width: '100%' }} placeholder="Txxxxxxxxxx..." />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                                    <input type="checkbox" checked={botConfig.usdtEnabled || false} onChange={e => setBotConfig({ ...botConfig, usdtEnabled: e.target.checked })} style={{ marginRight: '6px' }} />
+                                    启用 USDT 支付
+                                </label>
+                            </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                            <div>
+                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>积分单价 (1 USDT = ? 积分)</label>
+                                <input className="input" type="number" min={1} value={botConfig.creditPrice || 1} onChange={e => setBotConfig({ ...botConfig, creditPrice: Number(e.target.value) })} style={{ width: '100%' }} />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>每日签到积分</label>
+                                <input className="input" type="number" min={0} value={botConfig.dailyCredits || 1} onChange={e => setBotConfig({ ...botConfig, dailyCredits: Number(e.target.value) })} style={{ width: '100%' }} />
+                            </div>
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-lg)' }} onClick={saveBotConfig} disabled={saving}>
+                        {saving ? '⏳ 保存中...' : '💾 保存配置'}
+                    </button>
+                </div>
+            )}
+
+            {/* Services Section */}
+            {activeSection === 'services' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📋 服务管理</h3>
+                    <div style={{ marginBottom: 'var(--spacing-md)' }}>
+                        {(botConfig.services || []).map((s, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-sm)', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                                <span style={{ fontSize: '20px' }}>{s.emoji}</span>
+                                <span style={{ flex: 1, fontWeight: 500 }}>{s.name}</span>
+                                <span style={{ color: 'var(--text-muted)' }}>{s.credits} credits</span>
+                                <button className="btn btn-sm btn-outline" onClick={() => removeService(i)} style={{ color: 'var(--color-danger)' }}>🗑️</button>
+                            </div>
+                        ))}
+                        {(botConfig.services || []).length === 0 && (
+                            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--spacing-md)' }}>暂无服务</p>
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>表情</label>
+                            <input className="input" value={newService.emoji} onChange={e => setNewService({ ...newService, emoji: e.target.value })} style={{ width: '60px' }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: '120px' }}>
+                            <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>名称</label>
+                            <input className="input" value={newService.name} onChange={e => setNewService({ ...newService, name: e.target.value })} placeholder="例: Apple Music" style={{ width: '100%' }} />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>积分</label>
+                            <input className="input" type="number" min={1} value={newService.credits} onChange={e => setNewService({ ...newService, credits: Number(e.target.value) })} style={{ width: '80px' }} />
+                        </div>
+                        <button className="btn btn-primary btn-sm" onClick={addService}>➕ 添加</button>
+                    </div>
+                    <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-lg)' }} onClick={saveBotConfig} disabled={saving}>
+                        {saving ? '⏳ 保存中...' : '💾 保存服务'}
+                    </button>
+                </div>
+            )}
+
+            {/* Users Section */}
+            {activeSection === 'users' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+                        <h3>👥 Bot 用户 ({botUsers.length})</h3>
+                        <button className="btn btn-sm btn-secondary" onClick={fetchBotUsers}>🔄</button>
+                    </div>
+                    <div className="users-table">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Telegram ID</th>
+                                    <th>用户名</th>
+                                    <th>积分</th>
+                                    <th>验证次数</th>
+                                    <th>邀请码</th>
+                                    <th>注册时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {botUsers.map((u, i) => (
+                                    <tr key={i}>
+                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{u.telegram_id}</td>
+                                        <td>@{u.username || '-'}</td>
+                                        <td><span className="badge badge-info">{u.credits}</span></td>
+                                        <td>{u.total_verifications || 0}</td>
+                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{u.referral_code}</td>
+                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{u.created_at ? new Date(u.created_at).toLocaleString() : '-'}</td>
+                                    </tr>
+                                ))}
+                                {botUsers.length === 0 && (
+                                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无用户</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Orders Section */}
+            {activeSection === 'orders' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+                        <h3>💰 充值订单 ({botOrders.length})</h3>
+                        <button className="btn btn-sm btn-secondary" onClick={fetchBotOrders}>🔄</button>
+                    </div>
+                    <div className="users-table">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>订单 ID</th>
+                                    <th>用户</th>
+                                    <th>金额 (USDT)</th>
+                                    <th>积分</th>
+                                    <th>状态</th>
+                                    <th>交易哈希</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {botOrders.map((o, i) => (
+                                    <tr key={i}>
+                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-xs)' }}>{o.id}</td>
+                                        <td>{o.telegram_id}</td>
+                                        <td>{o.usdt_amount}</td>
+                                        <td>{o.credits_to_add}</td>
+                                        <td>
+                                            <span className={`badge badge-${o.status === 'confirmed' ? 'success' : o.status === 'pending' ? 'warning' : 'error'}`}>
+                                                {o.status === 'confirmed' ? '✅ 已确认' : o.status === 'pending' ? '⏳ 待支付' : '❌ 已过期'}
+                                            </span>
+                                        </td>
+                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-xs)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {o.tx_hash ? o.tx_hash.substring(0, 16) + '...' : '-'}
+                                        </td>
+                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{o.created_at ? new Date(o.created_at).toLocaleString() : '-'}</td>
+                                    </tr>
+                                ))}
+                                {botOrders.length === 0 && (
+                                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无订单</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // CDK Management Component
 function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkGenerating, setCdkGenerating, cdkGenQuota, setCdkGenQuota, cdkGenCount, setCdkGenCount, cdkGenNote, setCdkGenNote, cdkFilter, setCdkFilter, cdkNewCodes, setCdkNewCodes }) {
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -858,6 +1208,7 @@ export default function Admin() {
         { id: 'users', label: '用户管理', icon: '👥' },
         { id: 'ai-generator', label: 'AI 文档生成', icon: '🤖' },
         { id: 'verify-status', label: '验证状态', icon: '📋' },
+        { id: 'telegram-bot', label: 'Telegram Bot', icon: '🤖' },
         { id: 'settings', label: '系统设置', icon: '⚙️' },
     ];
 
@@ -2972,6 +3323,11 @@ export default function Admin() {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* Telegram Bot Tab */}
+                {activeTab === 'telegram-bot' && (
+                    <TelegramBotTab />
                 )}
 
                 {/* Settings Tab */}

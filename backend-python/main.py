@@ -1771,23 +1771,28 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     if len(request.links) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 links per request")
 
-    # Validate CDK
-    if not request.cdk:
-        raise HTTPException(status_code=400, detail="请提供 CDK 激活码")
+    # Validate CDK (skip for bot-internal requests)
+    is_bot_internal = request.cdk == "__BOT_INTERNAL__"
+    cdk_check = {"valid": True, "remaining": 999}  # Default for bot-internal
 
-    cdk_check = cdk_manager.validate_cdk(request.cdk)
-    if not cdk_check["valid"]:
-        raise HTTPException(status_code=403, detail=cdk_check["message"])
+    if not is_bot_internal:
+        if not request.cdk:
+            raise HTTPException(status_code=400, detail="请提供 CDK 激活码")
+
+        cdk_check = cdk_manager.validate_cdk(request.cdk)
+        if not cdk_check["valid"]:
+            raise HTTPException(status_code=403, detail=cdk_check["message"])
 
     clean_links = [link.strip() for link in request.links if link.strip()]
     if not clean_links:
         raise HTTPException(status_code=400, detail="No valid links provided")
 
-    if cdk_check["remaining"] < len(clean_links):
-        raise HTTPException(
-            status_code=403,
-            detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
-        )
+    if not is_bot_internal:
+        if cdk_check["remaining"] < len(clean_links):
+            raise HTTPException(
+                status_code=403,
+                detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
+            )
 
     # Get dual bot config
     import config_manager as cm
@@ -1889,10 +1894,10 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             if acc_id and r.get("remaining_quota") is not None:
                 tg_manager.update_quota(acc_id, r["remaining_quota"])
 
-        # Log and deduct
+        # Log and deduct (skip for bot-internal requests)
         successful = sum(1 for r in results if r.get("success"))
-        cdk_remaining = cdk_check["remaining"]
-        if successful > 0:
+        cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
+        if successful > 0 and not is_bot_internal:
             deduct = cdk_manager.use_cdk(request.cdk, successful)
             cdk_remaining = deduct.get("remaining", cdk_remaining)
 
@@ -1925,6 +1930,57 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             "Connection": "keep-alive",
         }
     )
+
+
+# ========== Telegram Bot Admin API ==========
+
+@app.get("/api/admin/bot-config")
+async def get_bot_config(request: Request):
+    """Get Telegram bot configuration."""
+    verify_admin(request)
+    import crypto_service
+    config = crypto_service.load_bot_config()
+    return config
+
+@app.post("/api/admin/bot-config")
+async def update_bot_config(request: Request):
+    """Update Telegram bot configuration."""
+    verify_admin(request)
+    import crypto_service
+    body = await request.json()
+    # Merge with existing config
+    config = crypto_service.load_bot_config()
+    config.update(body)
+    crypto_service.save_bot_config(config)
+    return {"success": True, "config": config}
+
+@app.get("/api/admin/bot-stats")
+async def get_bot_stats(request: Request):
+    """Get Telegram bot aggregate statistics."""
+    verify_admin(request)
+    import bot_data
+    stats = bot_data.get_stats()
+    return stats
+
+@app.get("/api/admin/bot-orders")
+async def get_bot_orders(request: Request):
+    """Get all bot crypto payment orders."""
+    verify_admin(request)
+    import bot_data
+    orders = bot_data.get_all_orders()
+    # Sort by created_at descending
+    orders.sort(key=lambda o: o.get("created_at", ""), reverse=True)
+    return {"orders": orders}
+
+@app.get("/api/admin/bot-users")
+async def get_bot_users(request: Request):
+    """Get all Telegram bot users."""
+    verify_admin(request)
+    import bot_data
+    users = bot_data.get_all_users()
+    # Sort by created_at descending
+    users.sort(key=lambda u: u.get("created_at", ""), reverse=True)
+    return {"users": users}
 
 
 # ========== Bypass API Endpoints ==========

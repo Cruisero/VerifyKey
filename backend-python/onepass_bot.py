@@ -81,8 +81,7 @@ def get_config() -> dict:
 
 
 def build_welcome_text(config: dict, balance: int = 0, user_id: int = 0) -> str:
-    """Build the premium welcome message."""
-    bot_name = config.get("botName", "Gemini_Verifier_bot")
+    bot_name = config.get("botName", "Gemini_Verifier_bot").lstrip("@")
     welcome = config.get("welcomeMessage", "Your premium gateway to instant student verifications.")
 
     services = config.get("services", [])

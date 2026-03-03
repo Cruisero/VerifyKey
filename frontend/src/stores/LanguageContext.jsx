@@ -92,6 +92,48 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         msgNoCredits: '⚠️ CDK 配额不足',
         msgApiSuccess: '✅ 验证通过',
         msgApiFail: '❌ ',
+
+        // Admin - page
+        adminTitle: '⚙️ 管理后台',
+        adminDesc: '管理用户、配置系统和查看统计数据',
+
+        // Admin - tabs
+        tabOverview: '概览',
+        tabCdk: 'CDK 管理',
+        tabUsers: '用户管理',
+        tabAiGen: 'AI 文档生成',
+        tabVerifyStatus: '验证状态',
+        tabTgBot: 'Telegram Bot',
+        tabSettings: '系统设置',
+
+        // Admin - overview stats
+        statTotalSuccess: '总验证成功',
+        stat1hRate: '1小时成功率',
+        stat5hRate: '5小时成功率',
+        statApiUsage: 'API 消耗',
+        statLocalUsage: '本地消耗',
+
+        // Admin - verify log
+        logTotal: '共',
+        logEntries: '条',
+        logSuccess: '成功',
+        logFailed: '失败',
+        logNoRecords: '暂无验证记录',
+
+        // Admin - telegram bot sections
+        tgStats: '📊 统计',
+        tgVerifyLog: '📋 验证日志',
+        tgConfig: '⚙️ 配置',
+        tgServices: '📋 服务',
+        tgUsers: '👥 用户',
+        tgOrders: '💰 订单',
+        tgNoBotLog: '暂无 Bot 验证记录',
+
+        // Admin common
+        loading: '⏳ 加载中...',
+        save: '保存',
+        saving: '保存中...',
+        refresh: '🔄',
     },
     en: {
         // Layout
@@ -182,6 +224,48 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         msgNoCredits: '⚠️ Insufficient CDK credits',
         msgApiSuccess: '✅ Approved',
         msgApiFail: '❌ ',
+
+        // Admin - page
+        adminTitle: '⚙️ Admin Dashboard',
+        adminDesc: 'Manage users, configure system, and view analytics',
+
+        // Admin - tabs
+        tabOverview: 'Overview',
+        tabCdk: 'CDK Management',
+        tabUsers: 'User Management',
+        tabAiGen: 'AI Doc Generator',
+        tabVerifyStatus: 'Verify Status',
+        tabTgBot: 'Telegram Bot',
+        tabSettings: 'Settings',
+
+        // Admin - overview stats
+        statTotalSuccess: 'Total Verified',
+        stat1hRate: '1h Success Rate',
+        stat5hRate: '5h Success Rate',
+        statApiUsage: 'API Usage',
+        statLocalUsage: 'Local Usage',
+
+        // Admin - verify log
+        logTotal: 'Total',
+        logEntries: 'entries',
+        logSuccess: 'Success',
+        logFailed: 'Failed',
+        logNoRecords: 'No verification records',
+
+        // Admin - telegram bot sections
+        tgStats: '📊 Stats',
+        tgVerifyLog: '📋 Verify Log',
+        tgConfig: '⚙️ Config',
+        tgServices: '📋 Services',
+        tgUsers: '👥 Users',
+        tgOrders: '💰 Orders',
+        tgNoBotLog: 'No bot verification records',
+
+        // Admin common
+        loading: '⏳ Loading...',
+        save: 'Save',
+        saving: 'Saving...',
+        refresh: '🔄',
     }
 };
 

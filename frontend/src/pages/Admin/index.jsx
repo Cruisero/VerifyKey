@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
+import { useLang } from '../../stores/LanguageContext';
 import './Admin.css';
 import '../Verify/Verify.css';
 
@@ -9,6 +10,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 // Telegram Bot Management Component
 function TelegramBotTab() {
     const { user } = useAuth();
+    const { t } = useLang();
     const token = user?.token || localStorage.getItem('verifykey-token');
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
@@ -111,12 +113,12 @@ function TelegramBotTab() {
     }
 
     const sections = [
-        { id: 'stats', label: '📊 统计', },
-        { id: 'verify-log', label: '📋 验证日志' },
-        { id: 'config', label: '⚙️ 配置' },
-        { id: 'services', label: '📋 服务' },
-        { id: 'users', label: '👥 用户' },
-        { id: 'orders', label: '💰 订单' },
+        { id: 'stats', label: t('tgStats'), },
+        { id: 'verify-log', label: t('tgVerifyLog') },
+        { id: 'config', label: t('tgConfig') },
+        { id: 'services', label: t('tgServices') },
+        { id: 'users', label: t('tgUsers') },
+        { id: 'orders', label: t('tgOrders') },
     ];
 
     return (
@@ -229,13 +231,13 @@ function TelegramBotTab() {
             {activeSection === 'verify-log' && (
                 <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px' }}>
-                        <span>共 <strong>{botVerifyLog.length}</strong> 条</span>
+                        <span>{t('logTotal')} <strong>{botVerifyLog.length}</strong> {t('logEntries')}</span>
                         <span>|</span>
-                        <span style={{ color: '#16a34a', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status === 'success').length} 成功</span>
-                        <span style={{ color: '#dc2626', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status !== 'success').length} 失败</span>
+                        <span style={{ color: '#16a34a', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status === 'success').length} {t('logSuccess')}</span>
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status !== 'success').length} {t('logFailed')}</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '700px', overflowY: 'auto' }}>
-                        {botVerifyLog.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>暂无 Bot 验证记录</div>}
+                        {botVerifyLog.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>{t('tgNoBotLog')}</div>}
                         {botVerifyLog.map((r, i) => {
                             const isPass = r.status === 'success';
                             const shortLink = r.link && r.link.length > 60 ? r.link.slice(0, 55) + '...' : (r.link || '');
@@ -693,6 +695,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
 
 export default function Admin() {
     const { user, loading } = useAuth();
+    const { t } = useLang();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
     const [siteStats, setSiteStats] = useState({});
@@ -1357,13 +1360,13 @@ export default function Admin() {
     ];
 
     const tabs = [
-        { id: 'overview', label: '概览', icon: '📊' },
-        { id: 'cdk', label: 'CDK 管理', icon: '🔑' },
-        { id: 'users', label: '用户管理', icon: '👥' },
-        { id: 'ai-generator', label: 'AI 文档生成', icon: '🤖' },
-        { id: 'verify-status', label: '验证状态', icon: '📋' },
-        { id: 'telegram-bot', label: 'Telegram Bot', icon: '🤖' },
-        { id: 'settings', label: '系统设置', icon: '⚙️' },
+        { id: 'overview', label: t('tabOverview'), icon: '📊' },
+        { id: 'cdk', label: t('tabCdk'), icon: '🔑' },
+        { id: 'users', label: t('tabUsers'), icon: '👥' },
+        { id: 'ai-generator', label: t('tabAiGen'), icon: '🤖' },
+        { id: 'verify-status', label: t('tabVerifyStatus'), icon: '📋' },
+        { id: 'telegram-bot', label: t('tabTgBot'), icon: '🤖' },
+        { id: 'settings', label: t('tabSettings'), icon: '⚙️' },
     ];
 
     if (loading || !user) return null;
@@ -1373,8 +1376,8 @@ export default function Admin() {
             <div className="container">
                 {/* Header */}
                 <div className="admin-header">
-                    <h1 className="page-title">⚙️ 管理后台</h1>
-                    <p className="page-desc">管理用户、配置系统和查看统计数据</p>
+                    <h1 className="page-title">{t('adminTitle')}</h1>
+                    <p className="page-desc">{t('adminDesc')}</p>
                 </div>
 
                 {/* Tabs */}
@@ -1399,35 +1402,35 @@ export default function Admin() {
                                 <div className="stat-icon">🎓</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_total_success || 0}</span>
-                                    <span className="stat-label">总验证成功</span>
+                                    <span className="stat-label">{t('statTotalSuccess')}</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">⏱️</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_1h_success_rate || 0}%</span>
-                                    <span className="stat-label">1小时成功率</span>
+                                    <span className="stat-label">{t('stat1hRate')}</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">📈</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_5h_success_rate || 0}%</span>
-                                    <span className="stat-label">5小时成功率</span>
+                                    <span className="stat-label">{t('stat5hRate')}</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">🌐</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_cdk_api || 0}</span>
-                                    <span className="stat-label">API 消耗</span>
+                                    <span className="stat-label">{t('statApiUsage')}</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">🤖</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_cdk_local || 0}</span>
-                                    <span className="stat-label">本地消耗</span>
+                                    <span className="stat-label">{t('statLocalUsage')}</span>
                                 </div>
                             </div>
                         </div>
@@ -1435,13 +1438,13 @@ export default function Admin() {
                         {/* Verification Log */}
                         <div className="card" style={{ marginTop: 'var(--spacing-lg)', padding: 'var(--spacing-lg)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px' }}>
-                                <span>共 <strong>{verifyLog.length}</strong> 条</span>
+                                <span>{t('logTotal')} <strong>{verifyLog.length}</strong> {t('logEntries')}</span>
                                 <span>|</span>
-                                <span style={{ color: '#16a34a', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'pass').length} 成功</span>
-                                <span style={{ color: '#dc2626', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'failed').length} 失败</span>
+                                <span style={{ color: '#16a34a', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'pass').length} {t('logSuccess')}</span>
+                                <span style={{ color: '#dc2626', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'failed').length} {t('logFailed')}</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '600px', overflowY: 'auto' }}>
-                                {verifyLog.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '24px' }}>暂无验证记录</div>}
+                                {verifyLog.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '24px' }}>{t('logNoRecords')}</div>}
                                 {verifyLog.map(r => {
                                     const isPass = r.status === 'pass';
                                     const vid = r.verificationId || '';

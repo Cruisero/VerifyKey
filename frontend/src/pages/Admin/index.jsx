@@ -635,6 +635,7 @@ export default function Admin() {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
+    const [siteStats, setSiteStats] = useState({});
     const [config, setConfig] = useState(null);
     const [showSaveNotice, setShowSaveNotice] = useState(false);
     const [testResult, setTestResult] = useState(null);
@@ -755,6 +756,16 @@ export default function Admin() {
     useEffect(() => {
         fetchConfig();
         fetchTgAccounts();
+        // Fetch site-wide stats for Overview tab
+        (async () => {
+            try {
+                const token = user?.token || localStorage.getItem('verifykey-token');
+                const res = await fetch(`${API_BASE}/api/admin/bot-stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) setSiteStats(await res.json());
+            } catch (e) { console.error('Failed to fetch site stats:', e); }
+        })();
     }, []);
 
     // Fetch verification history when tab is activated
@@ -1316,56 +1327,56 @@ export default function Admin() {
                             <div className="stat-card card">
                                 <div className="stat-icon">👥</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.total_users || 0}</span>
+                                    <span className="stat-value">{siteStats?.total_users || 0}</span>
                                     <span className="stat-label">总用户数</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">✅</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.daily_active_users || 0}</span>
+                                    <span className="stat-value">{siteStats?.daily_active_users || 0}</span>
                                     <span className="stat-label">今日活跃</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">🎓</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.site_total_success || 0}</span>
+                                    <span className="stat-value">{siteStats?.site_total_success || 0}</span>
                                     <span className="stat-label">总验证成功</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">📈</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.site_real_success_rate || 0}%</span>
+                                    <span className="stat-value">{siteStats?.site_real_success_rate || 0}%</span>
                                     <span className="stat-label">真实成功率</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">🤖</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.site_api_success || 0}</span>
+                                    <span className="stat-value">{siteStats?.site_api_success || 0}</span>
                                     <span className="stat-label">API 验证成功</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">🔑</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.site_cdk_used || 0}</span>
+                                    <span className="stat-value">{siteStats?.site_cdk_used || 0}</span>
                                     <span className="stat-label">CDK 总消耗</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">💰</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.total_spent_credits || 0}</span>
+                                    <span className="stat-value">{siteStats?.total_spent_credits || 0}</span>
                                     <span className="stat-label">积分总消耗</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">🛒</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{botStats?.pending_orders || 0}</span>
+                                    <span className="stat-value">{siteStats?.pending_orders || 0}</span>
                                     <span className="stat-label">待确认订单</span>
                                 </div>
                             </div>

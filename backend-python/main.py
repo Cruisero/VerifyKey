@@ -2023,6 +2023,13 @@ async def get_bot_orders(authorization: Optional[str] = Header(None)):
     orders.sort(key=lambda o: o.get("created_at", ""), reverse=True)
     return {"orders": orders}
 
+@app.get("/api/admin/bot-verify-log")
+async def get_bot_verify_log(authorization: Optional[str] = Header(None)):
+    """Get recent bot verification log entries."""
+    _verify_admin_token(authorization)
+    import bot_verify_log
+    return {"log": bot_verify_log.get_recent(50)}
+
 @app.get("/api/admin/bot-users")
 async def get_bot_users(authorization: Optional[str] = Header(None)):
     """Get all Telegram bot users."""

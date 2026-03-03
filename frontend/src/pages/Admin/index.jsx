@@ -19,6 +19,7 @@ function TelegramBotTab() {
     const [saving, setSaving] = useState(false);
     const [activeSection, setActiveSection] = useState('stats');
     const [newService, setNewService] = useState({ name: '', emoji: '🔹', credits: 5 });
+    const [botVerifyLog, setBotVerifyLog] = useState([]);
 
     const fetchBotConfig = async () => {
         try {
@@ -59,6 +60,18 @@ function TelegramBotTab() {
         fetchBotStats();
         fetchBotUsers();
         fetchBotOrders();
+        const fetchLog = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/admin/bot-verify-log`, { headers: authHeaders });
+                if (res.ok) {
+                    const data = await res.json();
+                    setBotVerifyLog(data.log || []);
+                }
+            } catch (e) { console.error('Failed to fetch bot verify log:', e); }
+        };
+        fetchLog();
+        const interval = setInterval(fetchLog, 15000);
+        return () => clearInterval(interval);
     }, []);
 
     const saveBotConfig = async () => {
@@ -99,6 +112,7 @@ function TelegramBotTab() {
 
     const sections = [
         { id: 'stats', label: '📊 统计', },
+        { id: 'verify-log', label: '📋 验证日志' },
         { id: 'config', label: '⚙️ 配置' },
         { id: 'services', label: '📋 服务' },
         { id: 'users', label: '👥 用户' },
@@ -209,6 +223,52 @@ function TelegramBotTab() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {/* Bot Verify Log Section */}
+            {activeSection === 'verify-log' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px' }}>
+                        <span>共 <strong>{botVerifyLog.length}</strong> 条</span>
+                        <span>|</span>
+                        <span style={{ color: '#16a34a', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status === 'success').length} 成功</span>
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status !== 'success').length} 失败</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '700px', overflowY: 'auto' }}>
+                        {botVerifyLog.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>暂无 Bot 验证记录</div>}
+                        {botVerifyLog.map((r, i) => {
+                            const isPass = r.status === 'success';
+                            const shortLink = r.link && r.link.length > 60 ? r.link.slice(0, 55) + '...' : (r.link || '');
+                            const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
+                            return (
+                                <div key={i} style={{
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '14px',
+                                    padding: '14px 18px',
+                                    borderRadius: '10px',
+                                    background: isPass ? 'rgba(22, 163, 74, 0.06)' : 'rgba(220, 38, 38, 0.06)',
+                                    border: `1px solid ${isPass ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)'}`,
+                                }}>
+                                    <div style={{
+                                        width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                                        background: isPass ? '#16a34a' : '#dc2626',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px'
+                                    }}>{isPass ? '✓' : '✕'}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>@{r.username || r.user_id}</span>
+                                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{ts}</span>
+                                        </div>
+                                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', wordBreak: 'break-all' }}>{shortLink}</div>
+                                        {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: isPass ? '#16a34a' : '#dc2626', marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
             )}
 
             {/* Config Section */}

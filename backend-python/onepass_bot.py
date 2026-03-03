@@ -770,6 +770,8 @@ async def handle_text(message: types.Message):
 
 async def _process_verification(message: types.Message, user: dict, link: str, config: dict, services: list):
     """Core verification logic — deduct credits, call API, stream progress."""
+    import bot_verify_log
+    username = message.from_user.username or ""
     # Check credits (8 credits = 1 verification)
     cost = VERIFICATION_CREDIT_COST
 
@@ -845,6 +847,7 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
 
                                 if status == "approved":
                                     result_text = f"✅ **Verification Successful!**\n\n🎉 {msg_text}"
+                                    bot_verify_log.log_bot_verify(link, username, message.from_user.id, "success", msg_text)
                                     # Track verification
                                     bot_data.increment_verifications(message.from_user.id)
                                     # Handle first verification referral reward
@@ -865,12 +868,14 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
                                             logger.error(f"Failed to notify referrer: {e}")
                                 elif status in ("failed", "error"):
                                     result_text = f"❌ **Verification Failed**\n\n{msg_text}"
+                                    bot_verify_log.log_bot_verify(link, username, message.from_user.id, "failed", msg_text)
                                     # Refund credits on failure
                                     bot_data.add_credits(message.from_user.id, cost, "Refund - verification failed")
                                     remaining = bot_data.get_user(message.from_user.id).get("credits", 0)
                                     result_text += f"\n\n💳 Credits refunded. Balance: {remaining}"
                                 elif status == "no_credits":
                                     result_text = "❌ **Bot account out of quota**\n\nPlease try again later."
+                                    bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", "No bot quota")
                                     bot_data.add_credits(message.from_user.id, cost, "Refund - no bot quota")
                                 else:
                                     result_text = f"❓ Status: {status}\n{msg_text}"
@@ -893,9 +898,11 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
         except Exception:
             pass
         # Refund on API error
+        bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", str(error_msg))
         bot_data.add_credits(message.from_user.id, cost, "Refund - API error")
         await status_msg.edit_text(f"❌ Error: {error_msg}\n\n💳 Credits refunded.")
     except httpx.ConnectError:
+        bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", "Connection error")
         bot_data.add_credits(message.from_user.id, cost, "Refund - connection error")
         await status_msg.edit_text("❌ Cannot connect to verification backend.\n\n💳 Credits refunded.")
     except Exception as e:

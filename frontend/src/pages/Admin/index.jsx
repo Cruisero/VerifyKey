@@ -1339,13 +1339,6 @@ export default function Admin() {
                                 </div>
                             </div>
                             <div className="stat-card card">
-                                <div className="stat-icon">🤖</div>
-                                <div className="stat-info">
-                                    <span className="stat-value">{siteStats?.site_api_success || 0}</span>
-                                    <span className="stat-label">API 验证成功</span>
-                                </div>
-                            </div>
-                            <div className="stat-card card">
                                 <div className="stat-icon">🔑</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_cdk_used || 0}</span>

@@ -1969,6 +1969,39 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
     _verify_admin_token(authorization)
     import bot_data
     stats = bot_data.get_stats()
+    
+    try:
+        import verification_history
+        import cdk_manager
+        
+        # Calculate real verifications (excluding auto-generated virtual data)
+        history = verification_history._load_history()
+        real_verifications = [r for r in history if not r.get("verificationId", "").startswith("auto-")]
+        
+        total_real_attempts = len(real_verifications)
+        total_real_success = sum(1 for r in real_verifications if r.get("status") == "pass")
+        
+        real_success_rate = 0
+        if total_real_attempts > 0:
+            real_success_rate = round((total_real_success / total_real_attempts) * 100, 2)
+            
+        # Bot sum
+        bot_success = stats.get("total_verifications", 0)
+        
+        # API sum
+        api_success = max(0, total_real_success - bot_success)
+        
+        # CDK sum
+        cdk_stats = cdk_manager.get_cdk_stats()
+        total_cdk_used = cdk_stats.get("totalUsed", 0)
+        
+        stats["site_total_success"] = total_real_success
+        stats["site_real_success_rate"] = real_success_rate
+        stats["site_api_success"] = api_success
+        stats["site_cdk_used"] = total_cdk_used
+    except Exception as e:
+        print(f"[Admin] Error adding site stats: {e}")
+        
     return stats
 
 @app.get("/api/admin/bot-orders")

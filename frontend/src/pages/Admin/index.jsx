@@ -173,10 +173,38 @@ function TelegramBotTab() {
                             </div>
                         </div>
                         <div className="stat-card card">
-                            <div className="stat-icon">⏳</div>
+                            <div className="stat-icon">🛒</div>
                             <div className="stat-info">
                                 <span className="stat-value">{botStats.pending_orders}</span>
                                 <span className="stat-label">待确认订单</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card">
+                            <div className="stat-icon">🎓</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.site_total_success || 0}</span>
+                                <span className="stat-label">总验证成功</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card">
+                            <div className="stat-icon">📈</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.site_real_success_rate || 0}%</span>
+                                <span className="stat-label">真实成功率</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card">
+                            <div className="stat-icon">🤖</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.site_api_success || 0}</span>
+                                <span className="stat-label">API 验证成功</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card">
+                            <div className="stat-icon">🔑</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{botStats.site_cdk_used || 0}</span>
+                                <span className="stat-label">CDK 总消耗</span>
                             </div>
                         </div>
                     </div>

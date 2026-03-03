@@ -813,7 +813,7 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
             async with aconnect_sse(client, "POST", f"{API_URL}/api/verify/dualbot", json=payload) as event_source:
                 current_status = "⏳ Preparing..."
 
-                async for sse in event_source.iter_sse():
+                async for sse in event_source.aiter_sse():
                     try:
                         event_data = json.loads(sse.data)
 

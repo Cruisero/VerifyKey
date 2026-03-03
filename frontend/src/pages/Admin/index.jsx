@@ -1332,17 +1332,31 @@ export default function Admin() {
                                 </div>
                             </div>
                             <div className="stat-card card">
-                                <div className="stat-icon">📈</div>
+                                <div className="stat-icon">⏱️</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{siteStats?.site_real_success_rate || 0}%</span>
+                                    <span className="stat-value">{siteStats?.site_1h_success_rate || 0}%</span>
                                     <span className="stat-label">1小时成功率</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
-                                <div className="stat-icon">🔑</div>
+                                <div className="stat-icon">📈</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{siteStats?.site_cdk_used || 0}</span>
-                                    <span className="stat-label">CDK 总消耗</span>
+                                    <span className="stat-value">{siteStats?.site_5h_success_rate || 0}%</span>
+                                    <span className="stat-label">5小时成功率</span>
+                                </div>
+                            </div>
+                            <div className="stat-card card">
+                                <div className="stat-icon">🌐</div>
+                                <div className="stat-info">
+                                    <span className="stat-value">{siteStats?.site_cdk_api || 0}</span>
+                                    <span className="stat-label">API 消耗</span>
+                                </div>
+                            </div>
+                            <div className="stat-card card">
+                                <div className="stat-icon">🤖</div>
+                                <div className="stat-info">
+                                    <span className="stat-value">{siteStats?.site_cdk_local || 0}</span>
+                                    <span className="stat-label">本地消耗</span>
                                 </div>
                             </div>
                         </div>

@@ -1984,27 +1984,30 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
         # 1-hour success rate
         from datetime import datetime, timedelta, timezone
         one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-        recent = [r for r in real_verifications if r.get("timestamp", "") >= one_hour_ago]
-        recent_attempts = len(recent)
-        recent_success = sum(1 for r in recent if r.get("status") == "pass")
-        hourly_success_rate = 0
-        if recent_attempts > 0:
-            hourly_success_rate = round((recent_success / recent_attempts) * 100, 2)
+        recent_1h = [r for r in real_verifications if r.get("timestamp", "") >= one_hour_ago]
+        recent_1h_attempts = len(recent_1h)
+        recent_1h_success = sum(1 for r in recent_1h if r.get("status") == "pass")
+        hourly_success_rate = round((recent_1h_success / recent_1h_attempts) * 100, 2) if recent_1h_attempts > 0 else 0
+        
+        # 5-hour success rate
+        five_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        recent_5h = [r for r in real_verifications if r.get("timestamp", "") >= five_hours_ago]
+        recent_5h_attempts = len(recent_5h)
+        recent_5h_success = sum(1 for r in recent_5h if r.get("status") == "pass")
+        five_hour_success_rate = round((recent_5h_success / recent_5h_attempts) * 100, 2) if recent_5h_attempts > 0 else 0
             
-        # Bot sum
-        bot_success = stats.get("total_verifications", 0)
+        # Bot credits consumed (local)
+        bot_spent = stats.get("total_spent_credits", 0)
         
-        # API sum
-        api_success = max(0, total_real_success - bot_success)
-        
-        # CDK sum
+        # CDK consumed (API)
         cdk_stats = cdk_manager.get_cdk_stats()
-        total_cdk_used = cdk_stats.get("totalUsed", 0)
+        api_cdk_used = cdk_stats.get("totalUsed", 0)
         
         stats["site_total_success"] = total_real_success
-        stats["site_real_success_rate"] = hourly_success_rate
-        stats["site_api_success"] = api_success
-        stats["site_cdk_used"] = total_cdk_used
+        stats["site_1h_success_rate"] = hourly_success_rate
+        stats["site_5h_success_rate"] = five_hour_success_rate
+        stats["site_cdk_api"] = api_cdk_used
+        stats["site_cdk_local"] = bot_spent
     except Exception as e:
         print(f"[Admin] Error adding site stats: {e}")
         

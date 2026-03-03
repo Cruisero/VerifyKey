@@ -1316,43 +1316,57 @@ export default function Admin() {
                             <div className="stat-card card">
                                 <div className="stat-icon">👥</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{stats.totalUsers}</span>
+                                    <span className="stat-value">{botStats?.total_users || 0}</span>
                                     <span className="stat-label">总用户数</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">✅</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{stats.activeUsers}</span>
-                                    <span className="stat-label">活跃用户</span>
+                                    <span className="stat-value">{botStats?.daily_active_users || 0}</span>
+                                    <span className="stat-label">今日活跃</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
-                                <div className="stat-icon">⚡</div>
+                                <div className="stat-icon">🎓</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{stats.totalVerifications.toLocaleString()}</span>
-                                    <span className="stat-label">总验证次数</span>
+                                    <span className="stat-value">{botStats?.site_total_success || 0}</span>
+                                    <span className="stat-label">总验证成功</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">📈</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{stats.successRate}%</span>
-                                    <span className="stat-label">成功率</span>
+                                    <span className="stat-value">{botStats?.site_real_success_rate || 0}%</span>
+                                    <span className="stat-label">真实成功率</span>
+                                </div>
+                            </div>
+                            <div className="stat-card card">
+                                <div className="stat-icon">🤖</div>
+                                <div className="stat-info">
+                                    <span className="stat-value">{botStats?.site_api_success || 0}</span>
+                                    <span className="stat-label">API 验证成功</span>
+                                </div>
+                            </div>
+                            <div className="stat-card card">
+                                <div className="stat-icon">🔑</div>
+                                <div className="stat-info">
+                                    <span className="stat-value">{botStats?.site_cdk_used || 0}</span>
+                                    <span className="stat-label">CDK 总消耗</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
                                 <div className="stat-icon">💰</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">¥{stats.revenue.toLocaleString()}</span>
-                                    <span className="stat-label">总收入</span>
+                                    <span className="stat-value">{botStats?.total_spent_credits || 0}</span>
+                                    <span className="stat-label">积分总消耗</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
-                                <div className="stat-icon">📋</div>
+                                <div className="stat-icon">🛒</div>
                                 <div className="stat-info">
-                                    <span className="stat-value">{stats.pendingWithdrawals}</span>
-                                    <span className="stat-label">待处理提现</span>
+                                    <span className="stat-value">{botStats?.pending_orders || 0}</span>
+                                    <span className="stat-label">待确认订单</span>
                                 </div>
                             </div>
                         </div>

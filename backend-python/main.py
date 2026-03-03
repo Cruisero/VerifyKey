@@ -654,15 +654,15 @@ async def verify(request: VerifyRequest):
         
         # Log verification result to history (skip user-side link issues)
         if result.get("success"):
-            verification_history.log_verification("pass", vid)
+            verification_history.log_verification("pass", vid, result.get("message", ""))
         elif result.get("status") == "pending":
-            verification_history.log_verification("processing", vid)
+            verification_history.log_verification("processing", vid, "Pending review")
         elif result.get("status") == "rejected":
             reason = result.get("reason", "unknown")
             if reason not in ("link_opened", "expired", "invalid", "rate_limited"):
-                verification_history.log_verification("failed", vid)
+                verification_history.log_verification("failed", vid, f"Rejected: {reason}")
         elif result.get("status") == "error":
-            verification_history.log_verification("failed", vid)
+            verification_history.log_verification("failed", vid, result.get("message", "Error"))
     
     return {
         "results": results,
@@ -1903,10 +1903,11 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
 
         for r in results:
             vid = r.get("verificationId", "")
+            msg = r.get("message", r.get("reason", ""))
             if r.get("status") == "approved":
-                verification_history.log_verification("pass", vid)
+                verification_history.log_verification("pass", vid, msg)
             elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
-                verification_history.log_verification("failed", vid)
+                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}")
 
         # Send final done event with all results
         done_event = {

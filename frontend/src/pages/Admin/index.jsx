@@ -636,6 +636,7 @@ export default function Admin() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
     const [siteStats, setSiteStats] = useState({});
+    const [verifyLog, setVerifyLog] = useState([]);
     const [config, setConfig] = useState(null);
     const [showSaveNotice, setShowSaveNotice] = useState(false);
     const [testResult, setTestResult] = useState(null);
@@ -757,15 +758,25 @@ export default function Admin() {
         fetchConfig();
         fetchTgAccounts();
         // Fetch site-wide stats for Overview tab
-        (async () => {
+        const fetchSiteData = async () => {
             try {
                 const token = user?.token || localStorage.getItem('verifykey-token');
-                const res = await fetch(`${API_BASE}/api/admin/bot-stats`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) setSiteStats(await res.json());
-            } catch (e) { console.error('Failed to fetch site stats:', e); }
-        })();
+                const headers = { 'Authorization': `Bearer ${token}` };
+                const [statsRes, logRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/admin/bot-stats`, { headers }),
+                    fetch(`${API_BASE}/api/verify/history`)
+                ]);
+                if (statsRes.ok) setSiteStats(await statsRes.json());
+                if (logRes.ok) {
+                    const logData = await logRes.json();
+                    const all = (logData.history || []).filter(r => !r.verificationId?.startsWith('auto-'));
+                    setVerifyLog(all.slice(-50).reverse());
+                }
+            } catch (e) { console.error('Failed to fetch site data:', e); }
+        };
+        fetchSiteData();
+        const interval = setInterval(fetchSiteData, 15000);
+        return () => clearInterval(interval);
     }, []);
 
     // Fetch verification history when tab is activated
@@ -1358,6 +1369,48 @@ export default function Admin() {
                                     <span className="stat-value">{siteStats?.site_cdk_local || 0}</span>
                                     <span className="stat-label">本地消耗</span>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Verification Log */}
+                        <div className="card" style={{ marginTop: 'var(--spacing-lg)', padding: 'var(--spacing-lg)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px' }}>
+                                <span>共 <strong>{verifyLog.length}</strong> 条</span>
+                                <span>|</span>
+                                <span style={{ color: '#16a34a', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'pass').length} 成功</span>
+                                <span style={{ color: '#dc2626', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'failed').length} 失败</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '600px', overflowY: 'auto' }}>
+                                {verifyLog.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '24px' }}>暂无验证记录</div>}
+                                {verifyLog.map(r => {
+                                    const isPass = r.status === 'pass';
+                                    const vid = r.verificationId || '';
+                                    const shortVid = vid.length > 20 ? `${vid.slice(0, 8)}...${vid.slice(-8)}` : vid;
+                                    const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
+                                    return (
+                                        <div key={r.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            gap: '14px',
+                                            padding: '14px 18px',
+                                            borderRadius: '10px',
+                                            background: isPass ? 'rgba(22, 163, 74, 0.06)' : 'rgba(220, 38, 38, 0.06)',
+                                            border: `1px solid ${isPass ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)'}`,
+                                        }}>
+                                            <div style={{
+                                                width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                                                background: isPass ? '#16a34a' : '#dc2626',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px'
+                                            }}>{isPass ? '✓' : '✕'}</div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>VID: {shortVid}</div>
+                                                {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: isPass ? '#16a34a' : '#dc2626', marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
+                                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{ts}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

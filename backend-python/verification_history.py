@@ -44,13 +44,14 @@ def _save_history(data: List[Dict]) -> bool:
         return False
 
 
-def log_verification(status: str, verification_id: str = "") -> Dict:
+def log_verification(status: str, verification_id: str = "", message: str = "") -> Dict:
     """
     Log a verification result.
     
     Args:
         status: One of 'pass', 'failed', 'processing', 'cancel'
         verification_id: Optional verification ID
+        message: Optional status message (rejection reason, success URL, etc.)
     
     Returns:
         The logged record
@@ -59,6 +60,7 @@ def log_verification(status: str, verification_id: str = "") -> Dict:
         "id": str(uuid.uuid4())[:8],
         "status": status,
         "verificationId": verification_id,
+        "message": message,
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
     

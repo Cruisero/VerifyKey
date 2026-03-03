@@ -36,6 +36,12 @@ class TelegramAccountManager:
         
         # Pending login sessions: {account_id: TelegramClient}
         self._login_sessions: Dict[str, TelegramClient] = {}
+        
+        # Load persisted quotas from config
+        config = config_manager.get_config()
+        for acc in config.get("telegramAccounts", []):
+            if acc.get("quota") is not None:
+                self._quotas[acc["id"]] = acc["quota"]
 
     # ------ Properties ------
 
@@ -113,6 +119,16 @@ class TelegramAccountManager:
         """Update the bot quota for an account (extracted from @AutoGeminiProbot responses)."""
         self._quotas[account_id] = quota
         logger.info(f"[TGManager] Updated quota for {account_id}: {quota}")
+        # Persist to config
+        try:
+            config = config_manager.get_config()
+            for acc in config.get("telegramAccounts", []):
+                if acc.get("id") == account_id:
+                    acc["quota"] = quota
+                    break
+            config_manager.save_config(config)
+        except Exception as e:
+            logger.error(f"[TGManager] Failed to persist quota: {e}")
 
     def set_cooldown(self, account_id: str, seconds: int):
         """Set a cooldown for an account. It will be skipped in get_next_client() until it expires."""

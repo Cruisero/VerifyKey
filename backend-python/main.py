@@ -1981,9 +1981,15 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
         total_real_attempts = len(real_verifications)
         total_real_success = sum(1 for r in real_verifications if r.get("status") == "pass")
         
-        real_success_rate = 0
-        if total_real_attempts > 0:
-            real_success_rate = round((total_real_success / total_real_attempts) * 100, 2)
+        # 1-hour success rate
+        from datetime import datetime, timedelta, timezone
+        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        recent = [r for r in real_verifications if r.get("timestamp", "") >= one_hour_ago]
+        recent_attempts = len(recent)
+        recent_success = sum(1 for r in recent if r.get("status") == "pass")
+        hourly_success_rate = 0
+        if recent_attempts > 0:
+            hourly_success_rate = round((recent_success / recent_attempts) * 100, 2)
             
         # Bot sum
         bot_success = stats.get("total_verifications", 0)
@@ -1996,7 +2002,7 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
         total_cdk_used = cdk_stats.get("totalUsed", 0)
         
         stats["site_total_success"] = total_real_success
-        stats["site_real_success_rate"] = real_success_rate
+        stats["site_real_success_rate"] = hourly_success_rate
         stats["site_api_success"] = api_success
         stats["site_cdk_used"] = total_cdk_used
     except Exception as e:

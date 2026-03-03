@@ -1325,20 +1325,6 @@ export default function Admin() {
                     <div className="tab-content">
                         <div className="stats-grid">
                             <div className="stat-card card">
-                                <div className="stat-icon">👥</div>
-                                <div className="stat-info">
-                                    <span className="stat-value">{siteStats?.total_users || 0}</span>
-                                    <span className="stat-label">总用户数</span>
-                                </div>
-                            </div>
-                            <div className="stat-card card">
-                                <div className="stat-icon">✅</div>
-                                <div className="stat-info">
-                                    <span className="stat-value">{siteStats?.daily_active_users || 0}</span>
-                                    <span className="stat-label">今日活跃</span>
-                                </div>
-                            </div>
-                            <div className="stat-card card">
                                 <div className="stat-icon">🎓</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_total_success || 0}</span>
@@ -1349,7 +1335,7 @@ export default function Admin() {
                                 <div className="stat-icon">📈</div>
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_real_success_rate || 0}%</span>
-                                    <span className="stat-label">真实成功率</span>
+                                    <span className="stat-label">1小时成功率</span>
                                 </div>
                             </div>
                             <div className="stat-card card">
@@ -1364,20 +1350,6 @@ export default function Admin() {
                                 <div className="stat-info">
                                     <span className="stat-value">{siteStats?.site_cdk_used || 0}</span>
                                     <span className="stat-label">CDK 总消耗</span>
-                                </div>
-                            </div>
-                            <div className="stat-card card">
-                                <div className="stat-icon">💰</div>
-                                <div className="stat-info">
-                                    <span className="stat-value">{siteStats?.total_spent_credits || 0}</span>
-                                    <span className="stat-label">积分总消耗</span>
-                                </div>
-                            </div>
-                            <div className="stat-card card">
-                                <div className="stat-icon">🛒</div>
-                                <div className="stat-info">
-                                    <span className="stat-value">{siteStats?.pending_orders || 0}</span>
-                                    <span className="stat-label">待确认订单</span>
                                 </div>
                             </div>
                         </div>

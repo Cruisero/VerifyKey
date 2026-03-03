@@ -55,7 +55,7 @@ class DualBotVerifier:
 
         async with self._get_lock(account_id):
             if not client or not client.is_connected():
-                return {"success": False, "status": "error", "message": "Telegram 未连接"}
+                return {"success": False, "status": "error", "message": "Telegram not connected"}
 
             # Use provided bots or instance defaults
             w_bot = (warmup_bot or self.warmup_bot).lstrip("@")
@@ -63,10 +63,10 @@ class DualBotVerifier:
 
             vid = self._extract_vid(link)
             if not vid:
-                return {"success": False, "status": "error", "message": "无法从链接中提取 verificationId"}
+                return {"success": False, "status": "error", "message": "Cannot extract verificationId from link"}
 
             # ---- Step 1: Warmup via @SatsetHelperbot ----
-            await emit("warmup", "文档生成中...")
+            await emit("warmup", "Generating document...")
             logger.info(f"[DualBot] [{account_id}] Step 1: Warmup {vid[:8]}... via @{w_bot}")
             # We wait for the FINAL result (not just 'Processing...')
             warmup_result = await self._send_and_wait(client, w_bot, link, wait_for_final=True, timeout=90)
@@ -76,7 +76,7 @@ class DualBotVerifier:
                     "success": False,
                     "status": "warmup_timeout",
                     "verificationId": vid,
-                    "message": f"预热阶段超时 (@{w_bot} 没有最终回应)"
+                    "message": f"Warmup timed out (@{w_bot} no final response)"
                 }
 
             logger.info(f"[DualBot] [{account_id}] Warmup response: {warmup_result[:100]}...")
@@ -86,19 +86,19 @@ class DualBotVerifier:
             
             if not warmup_parsed.get("success"):
                 logger.warning(f"[DualBot] [{account_id}] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
-                warmup_parsed["message"] = f"预热阶段未成功 (@{w_bot}): {warmup_parsed['message']}"
+                warmup_parsed["message"] = f"Warmup failed (@{w_bot}): {warmup_parsed['message']}"
                 return warmup_parsed
 
             logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
 
             # ---- Step 2: Verify via @AutoGeminiProbot ----
-            await emit("verify", "提交文档中...")
+            await emit("verify", "Submitting document...")
             logger.info(f"[DualBot] [{account_id}] Step 2: Verify {vid[:8]}... via @{v_bot}")
             
             # Schedule a delayed "waiting" progress update
             async def delayed_waiting():
                 await asyncio.sleep(10)
-                await emit("waiting", "等待验证...")
+                await emit("waiting", "Waiting for verification...")
             waiting_task = asyncio.create_task(delayed_waiting())
             
             # ENABLING wait_for_final=True because @AutoGeminiProbot edits "Processing" -> "Success/Fail"
@@ -112,7 +112,7 @@ class DualBotVerifier:
                     "success": False,
                     "status": "timeout",
                     "verificationId": vid,
-                    "message": f"验证超时（@{v_bot} 没有回应，请重试）"
+                    "message": f"Verification timed out (@{v_bot} no response, please retry)"
                 }
 
             # Parse result
@@ -124,7 +124,7 @@ class DualBotVerifier:
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
                 logger.info(f"[DualBot] [{account_id}] Step 3: Launching background bypass for {vid[:8]}...")
                 asyncio.create_task(self._background_bypass(vid, account_id))
-                parsed["message"] = "验证失败，请刷新页面获取新链接重试"
+                parsed["message"] = "Verification failed, please refresh the page and get a new link"
                 parsed["bypassed"] = "pending"
 
             return parsed
@@ -233,7 +233,7 @@ class DualBotVerifier:
                 "success": False,
                 "status": "failed",
                 "verificationId": vid,
-                "message": "机器人返回了空内容",
+                "message": "Bot returned empty content",
                 "raw_response": ""
             }
 
@@ -266,7 +266,7 @@ class DualBotVerifier:
                 logger.info(f"[DualBot] Matched processing keyword: {kw}")
                 result["success"] = None
                 result["status"] = "processing"
-                result["message"] = "正在处理..."
+                result["message"] = "Processing..."
                 return result
 
         # 1.5 Check for Cooldown
@@ -292,7 +292,7 @@ class DualBotVerifier:
             
             result["success"] = False
             result["status"] = "cooldown"
-            result["message"] = f"程序崩溃，请重试"
+            result["message"] = f"Program crashed, please retry"
             result["cooldown_seconds"] = total_seconds
             logger.info(f"[DualBot] Cooldown: {total_seconds}s")
             return result
@@ -305,7 +305,7 @@ class DualBotVerifier:
                 logger.info(f"[DualBot] Definitive success matched: {kw}")
                 result["success"] = True
                 result["status"] = "approved"
-                result["message"] = "验证通过"
+                result["message"] = "Verification approved"
                 
                 # Extract remaining quota from "Total tersedia: X verifikasi" (handles **bold** markdown)
                 quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
@@ -329,13 +329,13 @@ class DualBotVerifier:
                 
                 # Indonesian/English combined failure reason mapping
                 if any(k in text_clean for k in ["HABIS", "KURANG", "TIDAK BISA"]):
-                    result["message"] = "程序崩溃，请重试"
+                    result["message"] = "Program crashed, please retry"
                     # Extract quota from "Quota: X/Y" format (handles **bold**)
                     quota_match = re.search(r'QUOTA[:\s]*\*{0,2}(\d+)\*{0,2}/\*{0,2}\d+\*{0,2}', text_clean)
                     if quota_match:
                         result["remaining_quota"] = int(quota_match.group(1))
                 else:
-                    result["message"] = f"验证失败: {text[:50]}..."
+                    result["message"] = f"Verification failed: {text[:50]}..."
                     # Also try to extract quota from failure messages
                     quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
                     if quota_match:
@@ -351,7 +351,7 @@ class DualBotVerifier:
                     logger.info(f"[DualBot] Stage 1 Success: {kw}")
                     result["success"] = True
                     result["status"] = "approved"
-                    result["message"] = "预热完成"
+                    result["message"] = "Warmup complete"
                     return result
 
         # General successes
@@ -365,14 +365,14 @@ class DualBotVerifier:
                 logger.info(f"[DualBot] Matched success keyword: {kw}")
                 result["success"] = True
                 result["status"] = "approved"
-                result["message"] = "通过"
+                result["message"] = "Approved"
                 return result
         
         # 4. Safe Fallback: Unrecognized -> treated as failure.
         logger.info("[DualBot] No status matched, falling back to failed.")
         result["success"] = False
         result["status"] = "failed"
-        result["message"] = f"请求未成功: {text[:50]}..."
+        result["message"] = f"Request failed: {text[:50]}..."
         return result
 
     # ---- Bypass (submit empty doc to invalidate link) ----

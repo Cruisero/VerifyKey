@@ -2703,7 +2703,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                                     "verificationId": vid,
                                     "status": "rejected",
                                     "success": False,
-                                    "message": f"验证失败: {last_error}",
+                                    "message": f"Verification failed: {last_error}",
                                     "taskId": task_id
                                 }
                 

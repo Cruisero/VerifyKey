@@ -169,7 +169,7 @@ class SheerIDUserbot:
         # Extract verificationId from the link
         vid_match = re.search(r'verificationId=([a-zA-Z0-9]+)', verification_link)
         if not vid_match:
-            return {"success": False, "status": "error", "message": "无法从链接中提取 verificationId"}
+            return {"success": False, "status": "error", "message": "Cannot extract verificationId from link"}
 
         verification_id = vid_match.group(1)
         logger.info(f"Sending verification: {verification_id}")
@@ -201,7 +201,7 @@ class SheerIDUserbot:
                 "success": False,
                 "status": "timeout",
                 "verificationId": verification_id,
-                "message": f"验证未在 {timeout}秒内返回结果,已自动取消！"
+                "message": f"Verification did not return results within {timeout}s, auto-cancelled!"
             }
         except Exception as e:
             logger.error(f"Verification error for {verification_id}: {e}")
@@ -209,7 +209,7 @@ class SheerIDUserbot:
                 "success": False,
                 "status": "error",
                 "verificationId": verification_id,
-                "message": f"验证出错: {str(e)}"
+                "message": f"Verification error: {str(e)}"
             }
         finally:
             # Clean up pending entry
@@ -274,43 +274,43 @@ class SheerIDUserbot:
 
             # Extract rejection reason
             if "RATE LIMITED" in text_upper or "TOO MANY REQUESTS" in text_upper:
-                result["message"] = "被拒绝：请求过于频繁"
+                result["message"] = "Rejected: Too many requests"
                 result["reason"] = "rate_limited"
             elif "DO NOT OPEN" in text_upper or "DIFFERENT IP" in text_upper:
-                result["message"] = "被拒绝：链接已被打开,请刷新页面重新获取链接"
+                result["message"] = "Rejected: Link already opened, please refresh the page"
                 result["reason"] = "link_opened"
             elif "EXPIRED" in text_upper:
-                result["message"] = "被拒绝：链接已过期,请刷新页面重新获取链接"
+                result["message"] = "Rejected: Link expired, please refresh the page"
                 result["reason"] = "expired"
             elif "INVALID" in text_upper or "COULD NOT BE VERIFIED" in text_upper:
-                result["message"] = "被拒绝：无效链接,请刷新页面重新获取链接"
+                result["message"] = "Rejected: Invalid link, please refresh the page"
                 result["reason"] = "invalid"
             else:
-                result["message"] = "验证被拒绝"
+                result["message"] = "Verification rejected"
                 result["reason"] = "unknown"
             return result
 
         if any(kw in text_upper for kw in ["CONGRATULATIONS", "VERIFICATION APPROVED", "STATUS: VERIFIED", "SUCCESS"]):
             result["success"] = True
             result["status"] = "approved"
-            result["message"] = "验证通过！"
+            result["message"] = "Verification approved!"
             return result
 
         if "PROCESSING" in text_upper or "请求" in text:
             result["status"] = "processing"
-            result["message"] = "⏳ 正在处理..."
+            result["message"] = "⏳ Processing..."
             return result
 
         if any(kw in text_upper for kw in ["ERROR", "FAILED"]):
             result["success"] = False
             result["status"] = "error"
-            result["message"] = "验证出错"
+            result["message"] = "Verification error"
             return result
 
         if "INSUFFICIENT" in text_upper or "NOT ENOUGH" in text_upper:
             result["success"] = False
             result["status"] = "no_credits"
-            result["message"] = "文档不足"
+            result["message"] = "Insufficient documents"
             return result
 
         # Unknown - return raw

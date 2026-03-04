@@ -112,7 +112,7 @@ def build_welcome_text(config: dict, balance: int = 0, user_id: int = 0) -> str:
     return (
         f"🚀 **Welcome!**\n\n"
         f"{welcome} 🎓✨\n"
-        f"📣 Join the Notification Channel **@Gemini\\_ProV**\n"
+        f"📣 Join the Group **@Gemini\\_Vchat**\n"
         f"{services_text}\n"
         f"💰 **Balance:** {balance} Credits\n"
         f"🆔 **Your ID:** `{user_id}`\n\n"

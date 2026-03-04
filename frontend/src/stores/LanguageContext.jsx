@@ -34,9 +34,11 @@ const translations = {
         textareaPlaceholderTelegram: `粘贴验证链接，每行一个...
 例如：
 https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699528d723c407520aeadc45
-验证失败不消耗额度
+
 注意：右键复制链接，不要点击打开！
-链接验证失败后等待几秒钟刷新页面即可得到新链接。`,
+链接验证失败后等待几秒钟刷新页面即可得到新链接。
+
+验证失败不消耗额度`,
         textareaPlaceholderApi: `粘贴验证 ID 或链接，每行一个...
 
 例如：

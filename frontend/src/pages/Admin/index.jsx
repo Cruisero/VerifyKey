@@ -835,11 +835,7 @@ export default function Admin() {
     const [maintenanceSaved, setMaintenanceSaved] = useState(false);
 
     // Tips inline state
-    const [tipsInline, setTipsInline] = useState({
-        tip1: '在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。',
-        tip2: '如果验证链接中 verificationId= 后面是空的，建议直接换号。',
-        tip3: '一次消耗一个配额，成功后自动扣除。'
-    });
+    const [tipsContent, setTipsContent] = useState('在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。\n如果验证链接中 verificationId= 后面是空的，建议直接换号。\n一次消耗一个配额，成功后自动扣除。');
     const [tipsSaving, setTipsSaving] = useState(false);
     const [tipsSaved, setTipsSaved] = useState(false);
 
@@ -940,13 +936,8 @@ export default function Admin() {
                     const res = await fetch(`${API_BASE}/api/config`);
                     if (res.ok) {
                         const data = await res.json();
-                        if (data.tipsInline) {
-                            setTipsInline(prev => ({
-                                ...prev,
-                                tip1: data.tipsInline.tip1 || prev.tip1,
-                                tip2: data.tipsInline.tip2 || prev.tip2,
-                                tip3: data.tipsInline.tip3 || prev.tip3
-                            }));
+                        if (data.tipsInline?.content) {
+                            setTipsContent(data.tipsInline.content);
                         }
                     }
                 } catch (e) {
@@ -998,7 +989,7 @@ export default function Admin() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ tipsInline })
+                body: JSON.stringify({ tipsInline: { content: tipsContent } })
             });
             if (res.ok) {
                 setTipsSaved(true);
@@ -3858,25 +3849,18 @@ export default function Admin() {
                                 <span style={{ fontSize: '12px', color: '#60a5fa', marginLeft: 'auto' }}>显示在验证页面底部</span>
                             </div>
 
-                            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                {['tip1', 'tip2', 'tip3'].map((key, i) => (
-                                    <div key={key}>
-                                        <label style={{
-                                            display: 'block', fontSize: '13px', fontWeight: 500,
-                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
-                                        }}>
-                                            提示 {i + 1}
-                                        </label>
-                                        <input
-                                            className="input"
-                                            type="text"
-                                            value={tipsInline[key]}
-                                            onChange={(e) => setTipsInline(prev => ({ ...prev, [key]: e.target.value }))}
-                                            style={{ width: '100%', fontSize: '14px', boxSizing: 'border-box' }}
-                                            placeholder={`输入第 ${i + 1} 条提示内容...`}
-                                        />
-                                    </div>
-                                ))}
+                            <div style={{ padding: '20px' }}>
+                                <textarea
+                                    className="input textarea"
+                                    value={tipsContent}
+                                    onChange={(e) => setTipsContent(e.target.value)}
+                                    rows={4}
+                                    style={{
+                                        width: '100%', fontSize: '14px', boxSizing: 'border-box',
+                                        resize: 'vertical', minHeight: '80px', lineHeight: '1.6'
+                                    }}
+                                    placeholder="输入提示内容，每行一条..."
+                                />
                             </div>
 
                             <div style={{

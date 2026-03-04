@@ -24,7 +24,7 @@ export default function Verify() {
     const [dualBotEnabled, setDualBotEnabled] = useState(false);
 
     // Tips inline state (loaded from config)
-    const [tipsInline, setTipsInline] = useState(null);
+    const [tipsContent, setTipsContent] = useState(null);
 
     // CDK state
     const [cdkCode, setCdkCode] = useState(() => localStorage.getItem('verifykey-cdk') || '');
@@ -86,8 +86,8 @@ export default function Verify() {
                     }
 
                     // Load tips inline from config
-                    if (data.tipsInline) {
-                        setTipsInline(data.tipsInline);
+                    if (data.tipsInline?.content) {
+                        setTipsContent(data.tipsInline.content);
                     }
                 }
             } catch (e) {
@@ -811,12 +811,10 @@ export default function Verify() {
                     <div className="tips-inline">
 
                         <div className="tips-content">
-                            {tipsInline ? (
-                                <>
-                                    {tipsInline.tip1 && <p>{tipsInline.tip1}</p>}
-                                    {tipsInline.tip2 && <p>{tipsInline.tip2}</p>}
-                                    {tipsInline.tip3 && <p>{tipsInline.tip3}</p>}
-                                </>
+                            {tipsContent ? (
+                                tipsContent.split('\n').filter(line => line.trim()).map((line, i) => (
+                                    <p key={i}>{line}</p>
+                                ))
                             ) : (
                                 <>
                                     <p>{t('tip1pre')}<a href="https://one.google.com/ai-student" target="_blank" rel="noopener noreferrer">{t('tip1link')}</a>{t('tip1post')}<strong>{t('tip1bold')}</strong>{t('tip1end')}</p>

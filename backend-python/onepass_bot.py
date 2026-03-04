@@ -1002,6 +1002,7 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
     
     if cmd == "services":
         # Generate services text inline (no photo) for consistent button behavior
+        config = get_config()
         services = config.get("services", [])
         if not services:
             text = "📋 No services available at the moment."

@@ -31,12 +31,14 @@ from vsid_generator import generate_vsid_document, get_available_document_types 
 import auth
 import cdk_manager
 import verification_history
+import database
 
 # Load environment variables
 load_dotenv()
 
 # Initialize database
 auth.init_database()
+database.init_db()
 
 # Configuration
 PORT = int(os.getenv("PORT", 3002))

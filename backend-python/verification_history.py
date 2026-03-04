@@ -1,47 +1,14 @@
 """
 Verification History Logger for VerifyKey
 Records each verification result for the real-time status grid.
-Storage: JSON file at /app/data/verification_history.json
+Storage: SQLite database at /app/data/onepass.db
 """
 
-import json
-import os
-import threading
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-# History storage file
-HISTORY_FILE = "/app/data/verification_history.json"
-
-# Max records to keep
-MAX_RECORDS = 500
-
-# Thread lock for concurrent access safety
-_lock = threading.Lock()
-
-
-def _load_history() -> List[Dict]:
-    """Load history data from file"""
-    try:
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"[History] Error loading history: {e}")
-    return []
-
-
-def _save_history(data: List[Dict]) -> bool:
-    """Save history data to file"""
-    try:
-        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
-        with open(HISTORY_FILE, 'w') as f:
-            json.dump(data, f, ensure_ascii=False)
-        return True
-    except Exception as e:
-        print(f"[History] Error saving history: {e}")
-        return False
+import database
 
 
 def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "") -> Dict:
@@ -65,17 +32,14 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
         "cdk": cdk,
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
-    
-    with _lock:
-        history = _load_history()
-        history.append(record)
-        
-        # Trim old records
-        if len(history) > MAX_RECORDS:
-            history = history[-MAX_RECORDS:]
-        
-        _save_history(history)
-    
+
+    conn = database.get_connection()
+    conn.execute(
+        "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+        (record["id"], record["status"], record["verificationId"], record["message"], record["cdk"], record["timestamp"])
+    )
+    conn.commit()
+
     return record
 
 
@@ -91,15 +55,13 @@ def update_verification(record_id: str, status: str) -> bool:
     Returns:
         True if updated successfully
     """
-    with _lock:
-        history = _load_history()
-        for record in history:
-            if record["id"] == record_id:
-                record["status"] = status
-                record["timestamp"] = datetime.now().isoformat()
-                _save_history(history)
-                return True
-    return False
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "UPDATE verification_history SET status = ?, timestamp = ? WHERE id = ?",
+        (status, datetime.now().isoformat(), record_id)
+    )
+    conn.commit()
+    return cursor.rowcount > 0
 
 
 def get_recent_history(limit: int = 200) -> List[Dict]:
@@ -112,40 +74,57 @@ def get_recent_history(limit: int = 200) -> List[Dict]:
     Returns:
         List of verification records, newest last
     """
-    history = _load_history()
-    return history[-limit:]
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT id, status, verification_id, message, cdk, timestamp FROM verification_history ORDER BY rowid DESC LIMIT ?",
+        (limit,)
+    )
+    rows = cursor.fetchall()
+    # Return newest last (reverse the DESC order)
+    return [
+        {
+            "id": r["id"],
+            "status": r["status"],
+            "verificationId": r["verification_id"],
+            "message": r["message"],
+            "cdk": r["cdk"],
+            "timestamp": r["timestamp"]
+        }
+        for r in reversed(rows)
+    ]
 
 
 def get_history_stats() -> Dict:
     """Get statistics from verification history"""
-    history = _load_history()
-    
-    stats = {
-        "total": len(history),
-        "pass": sum(1 for r in history if r["status"] == "pass"),
-        "failed": sum(1 for r in history if r["status"] == "failed"),
-        "processing": sum(1 for r in history if r["status"] == "processing"),
-        "cancel": sum(1 for r in history if r["status"] == "cancel"),
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT status, COUNT(*) as cnt FROM verification_history GROUP BY status"
+    )
+    counts = {row["status"]: row["cnt"] for row in cursor.fetchall()}
+
+    total = sum(counts.values())
+    return {
+        "total": total,
+        "pass": counts.get("pass", 0),
+        "failed": counts.get("failed", 0),
+        "processing": counts.get("processing", 0),
+        "cancel": counts.get("cancel", 0),
     }
-    
-    return stats
 
 
 def delete_verification(record_id: str) -> bool:
     """Delete a verification record by ID."""
-    with _lock:
-        history = _load_history()
-        new_history = [r for r in history if r["id"] != record_id]
-        if len(new_history) < len(history):
-            _save_history(new_history)
-            return True
-    return False
+    conn = database.get_connection()
+    cursor = conn.execute("DELETE FROM verification_history WHERE id = ?", (record_id,))
+    conn.commit()
+    return cursor.rowcount > 0
 
 
 def clear_history() -> int:
     """Clear all verification history. Returns count of deleted records."""
-    with _lock:
-        history = _load_history()
-        count = len(history)
-        _save_history([])
-        return count
+    conn = database.get_connection()
+    cursor = conn.execute("SELECT COUNT(*) FROM verification_history")
+    count = cursor.fetchone()[0]
+    conn.execute("DELETE FROM verification_history")
+    conn.commit()
+    return count

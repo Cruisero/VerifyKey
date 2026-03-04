@@ -1249,4 +1249,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    import database
+    database.init_db()
     asyncio.run(main())

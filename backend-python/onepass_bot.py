@@ -80,6 +80,23 @@ def get_config() -> dict:
     return crypto_service.load_bot_config()
 
 
+def _increment_status_count(result: str):
+    """Increment statusConfig success/fail count after each verification.
+    result should be 'success' or 'fail'.
+    """
+    try:
+        config = crypto_service.load_bot_config()
+        status_cfg = config.get("statusConfig", {})
+        if result == "success":
+            status_cfg["successCount"] = status_cfg.get("successCount", 0) + 1
+        elif result == "fail":
+            status_cfg["failCount"] = status_cfg.get("failCount", 0) + 1
+        config["statusConfig"] = status_cfg
+        crypto_service.save_bot_config(config)
+    except Exception as e:
+        logger.error(f"Failed to increment status count: {e}")
+
+
 def build_welcome_text(config: dict, balance: int = 0, user_id: int = 0) -> str:
     bot_name = "Gemini_Verifier_bot"
     welcome = config.get("welcomeMessage", "Your premium gateway to instant student verifications.")
@@ -906,6 +923,7 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
                                 if status == "approved":
                                     result_text = f"✅ **Verification Successful!**\n\n🎉 {msg_text}"
                                     bot_verify_log.log_bot_verify(link, username, message.from_user.id, "success", msg_text)
+                                    _increment_status_count("success")
                                     # Track verification
                                     bot_data.increment_verifications(message.from_user.id)
                                     # Handle first verification referral reward
@@ -927,6 +945,7 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
                                 elif status in ("failed", "error"):
                                     result_text = f"❌ **Verification Failed**\n\n{msg_text}"
                                     bot_verify_log.log_bot_verify(link, username, message.from_user.id, "failed", msg_text)
+                                    _increment_status_count("fail")
                                     # Refund credits on failure
                                     bot_data.add_credits(message.from_user.id, cost, "Refund - verification failed")
                                     remaining = bot_data.get_user(message.from_user.id).get("credits", 0)

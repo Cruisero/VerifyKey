@@ -118,6 +118,24 @@ class DualBotVerifier:
             # Parse result
             parsed = self._parse_response(verify_result, vid, is_warmup=False)
 
+            # ---- Race condition check ----
+            # If bot says "failed" but another account already succeeded,
+            # check SheerID's actual status to detect the win.
+            if not parsed["success"] and parsed["status"] in ("failed", "rejected", "no_credits"):
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=10) as http_client:
+                        check_resp = await http_client.get(f"https://services.sheerid.com/rest/v2/verification/{vid}")
+                        if check_resp.status_code == 200:
+                            actual_step = check_resp.json().get("currentStep", "")
+                            if actual_step == "success":
+                                logger.info(f"[DualBot] [{account_id}] Race condition detected! Bot said fail but SheerID says SUCCESS for {vid[:8]}")
+                                parsed["success"] = True
+                                parsed["status"] = "approved"
+                                parsed["message"] = "Verification approved"
+                except Exception as e:
+                    logger.warning(f"[DualBot] [{account_id}] Race check failed: {e}")
+
             # ---- Step 3: Auto bypass on failure (fire-and-forget background task) ----
             # Skip bypass if bot quota exhausted (nothing to bypass on SheerID side)
             skip_bypass = "程序崩溃" in parsed.get("message", "")

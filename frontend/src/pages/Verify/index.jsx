@@ -144,10 +144,19 @@ export default function Verify() {
     const isTelegramMode = provider === 'telegram';
     const isGetgemMode = provider === 'getgem';
 
-    // 提取输入内容（链接或ID）
+    // 提取输入内容（链接或ID）— 过滤无效行
     const extractItems = (text) => {
         const lines = text.split('\n').filter(line => line.trim());
-        return lines.map(line => line.trim()).filter(line => line.length > 0);
+        return lines.map(line => line.trim()).filter(line => {
+            if (line.length === 0) return false;
+            if (isTelegramMode) {
+                // Telegram mode: only accept SheerID verification links
+                return line.includes('sheerid.com/verify') || line.includes('verificationId=');
+            } else {
+                // API mode: accept URLs with verificationId or plain hex IDs (24+ chars)
+                return line.includes('verificationId=') || /^[a-f0-9]{24,}$/i.test(line);
+            }
+        });
     };
 
     // 统一验证入口

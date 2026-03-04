@@ -1942,13 +1942,14 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             deduct = cdk_manager.use_cdk(request.cdk, successful)
             cdk_remaining = deduct.get("remaining", cdk_remaining)
 
+        cdk_label = request.cdk if not is_bot_internal else "BOT"
         for r in results:
             vid = r.get("verificationId", "")
             msg = r.get("message", r.get("reason", ""))
             if r.get("status") == "approved":
-                verification_history.log_verification("pass", vid, msg)
+                verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
             elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
-                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}")
+                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label)
 
         # Send final done event with all results
         done_event = {

@@ -1514,7 +1514,10 @@ export default function Admin() {
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>VID: {shortVid}</div>
                                                 {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: isPass ? '#16a34a' : '#dc2626', marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
-                                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{ts}</div>
+                                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span>{ts}</span>
+                                                    {r.cdk && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.cdk}</span>}
+                                                </div>
                                             </div>
                                         </div>
                                     );

@@ -44,7 +44,7 @@ def _save_history(data: List[Dict]) -> bool:
         return False
 
 
-def log_verification(status: str, verification_id: str = "", message: str = "") -> Dict:
+def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "") -> Dict:
     """
     Log a verification result.
     
@@ -52,6 +52,7 @@ def log_verification(status: str, verification_id: str = "", message: str = "") 
         status: One of 'pass', 'failed', 'processing', 'cancel'
         verification_id: Optional verification ID
         message: Optional status message (rejection reason, success URL, etc.)
+        cdk: Optional CDK code used for this verification
     
     Returns:
         The logged record
@@ -61,6 +62,7 @@ def log_verification(status: str, verification_id: str = "", message: str = "") 
         "status": status,
         "verificationId": verification_id,
         "message": message,
+        "cdk": cdk,
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
     

@@ -253,6 +253,42 @@ async def cmd_referral(message: types.Message):
     )
 
 
+@dp.message(Command("status"))
+async def cmd_status(message: types.Message):
+    """Show service status (manually configured data)."""
+    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    config = get_config()
+
+    # Read manually configured status data
+    status_cfg = config.get("statusConfig", {})
+    is_online = status_cfg.get("online", True)
+    success_rate = status_cfg.get("successRate", 95)
+    success_count = status_cfg.get("successCount", 0)
+    fail_count = status_cfg.get("failCount", 0)
+    notice = status_cfg.get("notice", "")
+
+    status_emoji = "🟢" if is_online else "🔴"
+    status_text = "Online" if is_online else "Offline"
+
+    text = (
+        f"📊 **Service Status**\n\n"
+        f"{status_emoji} Status: **{status_text}**\n"
+        f"📈 Success Rate: **{success_rate}%**\n"
+        f"✅ Verified Today: **{success_count}**\n"
+        f"❌ Failed Today: **{fail_count}**\n"
+    )
+
+    if notice:
+        text += f"\n📢 **Notice:** {notice}\n"
+
+    text += f"\n🕐 Last updated: {status_cfg.get('lastUpdated', 'N/A')}"
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
+    ])
+    await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+
+
 @dp.message(Command("deposit"))
 async def cmd_deposit(message: types.Message):
     """Step 1: Show credit packages with inline keyboard buttons."""

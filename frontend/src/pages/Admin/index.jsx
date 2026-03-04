@@ -79,10 +79,14 @@ function TelegramBotTab() {
     const saveBotConfig = async () => {
         setSaving(true);
         try {
+            const configToSave = { ...botConfig };
+            if (configToSave.statusConfig) {
+                configToSave.statusConfig = { ...configToSave.statusConfig, lastUpdated: new Date().toLocaleString() };
+            }
             const res = await fetch(`${API_BASE}/api/admin/bot-config`, {
                 method: 'POST',
                 headers: authHeaders,
-                body: JSON.stringify(botConfig)
+                body: JSON.stringify(configToSave)
             });
             if (res.ok) {
                 const data = await res.json();
@@ -329,6 +333,38 @@ function TelegramBotTab() {
                         <div>
                             <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>每日签到积分</label>
                             <input className="input" type="number" min={0} value={botConfig.dailyCredits || 1} onChange={e => setBotConfig({ ...botConfig, dailyCredits: Number(e.target.value) })} style={{ width: '120px' }} />
+                        </div>
+
+                        {/* Status Command Config */}
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-md)' }}>
+                                <span>📊</span>
+                                <strong>/status 指令配置</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: (botConfig.statusConfig?.online !== false) ? '#4caf50' : '#f44336' }}>
+                                        {(botConfig.statusConfig?.online !== false) ? '🟢 Online' : '🔴 Offline'}
+                                    </span>
+                                    <input type="checkbox" checked={botConfig.statusConfig?.online !== false} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), online: e.target.checked } })} />
+                                </label>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--spacing-sm)' }}>
+                                <div>
+                                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>成功率 (%)</label>
+                                    <input className="input" type="number" min={0} max={100} value={botConfig.statusConfig?.successRate ?? 95} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), successRate: Number(e.target.value) } })} style={{ width: '100%' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>成功次数</label>
+                                    <input className="input" type="number" min={0} value={botConfig.statusConfig?.successCount ?? 0} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), successCount: Number(e.target.value) } })} style={{ width: '100%' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>失败次数</label>
+                                    <input className="input" type="number" min={0} value={botConfig.statusConfig?.failCount ?? 0} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), failCount: Number(e.target.value) } })} style={{ width: '100%' }} />
+                                </div>
+                            </div>
+                            <div style={{ marginTop: 'var(--spacing-sm)' }}>
+                                <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>公告信息 (可选)</label>
+                                <input className="input" value={botConfig.statusConfig?.notice || ''} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), notice: e.target.value } })} style={{ width: '100%' }} placeholder="e.g. Maintenance at 3AM UTC" />
+                            </div>
                         </div>
                     </div>
                     <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-lg)' }} onClick={saveBotConfig} disabled={saving}>

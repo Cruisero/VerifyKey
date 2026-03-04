@@ -243,7 +243,7 @@
     flex: 1;
     min-height: 280px;
     resize: none;
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
 }
 
 .input-footer {

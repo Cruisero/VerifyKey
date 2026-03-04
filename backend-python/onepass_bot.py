@@ -148,12 +148,6 @@ async def cmd_start(message: types.Message):
     )
 
 
-@dp.message(Command("help"))
-async def cmd_help(message: types.Message):
-    config = get_config()
-    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
-    await message.answer(build_welcome_text(config))
-
 
 @dp.message(Command("services"))
 async def cmd_services(message: types.Message):
@@ -205,14 +199,14 @@ async def cmd_balance(message: types.Message):
         f"💳 **Your Balance**\n\n"
         f"🔹 Credits: `{credits}`\n"
         f"🔹 Total Verifications: `{total_v}`\n\n"
-        f"💡 Top up with /crypto or earn free credits with /daily",
+        f"💡 Top up with /deposit or earn free credits with /checkin",
         parse_mode="Markdown",
         reply_markup=keyboard
     )
 
 
-@dp.message(Command("daily"))
-async def cmd_daily(message: types.Message):
+@dp.message(Command("checkin"))
+async def cmd_checkin(message: types.Message):
     bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
     config = get_config()
     daily_amount = config.get("dailyCredits", 1)
@@ -259,8 +253,8 @@ async def cmd_referral(message: types.Message):
     )
 
 
-@dp.message(Command("crypto"))
-async def cmd_crypto(message: types.Message):
+@dp.message(Command("deposit"))
+async def cmd_deposit(message: types.Message):
     """Step 1: Show credit packages with inline keyboard buttons."""
     config = get_config()
     bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
@@ -717,7 +711,7 @@ async def handle_cancel_callback(callback: CallbackQuery):
     await callback.message.answer(
         f"❌ **Order Cancelled**\n\n"
         f"Order `{order_id}` has been cancelled.\n"
-        f"Use /crypto to start a new order.",
+        f"Use /deposit to start a new order.",
         parse_mode="Markdown"
     )
 
@@ -781,7 +775,7 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
             f"❌ **Insufficient Credits**\n\n"
             f"This verification costs **{cost}** credits.\n"
             f"Your balance: **{credits}** credits.\n\n"
-            f"💡 Top up with /crypto or claim free credits with /daily",
+            f"💡 Top up with /deposit or claim free credits with /checkin",
             parse_mode="Markdown"
         )
         return
@@ -966,7 +960,7 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
                 f"💳 **Your Balance**\n\n"
                 f"🔹 Credits: `{credits}`\n"
                 f"🔹 Total Verifications: `{total_v}`\n\n"
-                f"💡 Top up with /crypto or earn free credits with /daily"
+                f"💡 Top up with /deposit or earn free credits with /checkin"
             )
             
         elif cmd == "referral":

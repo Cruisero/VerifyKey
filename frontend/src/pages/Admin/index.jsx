@@ -834,6 +834,15 @@ export default function Admin() {
     const [maintenanceSaving, setMaintenanceSaving] = useState(false);
     const [maintenanceSaved, setMaintenanceSaved] = useState(false);
 
+    // Tips inline state
+    const [tipsInline, setTipsInline] = useState({
+        tip1: '在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。',
+        tip2: '如果验证链接中 verificationId= 后面是空的，建议直接换号。',
+        tip3: '一次消耗一个配额，成功后自动扣除。'
+    });
+    const [tipsSaving, setTipsSaving] = useState(false);
+    const [tipsSaved, setTipsSaved] = useState(false);
+
     // Verification mode: 'api' (default) or 'browser' (Puppeteer) — only for non-telegram providers
     const [browserMode, setBrowserMode] = useState(false);
 
@@ -911,7 +920,7 @@ export default function Admin() {
         }
     }, [activeTab]);
 
-    // Fetch maintenance status when settings tab is activated
+    // Fetch maintenance status and tips when settings tab is activated
     useEffect(() => {
         if (activeTab === 'settings') {
             (async () => {
@@ -925,6 +934,23 @@ export default function Admin() {
                     }
                 } catch (e) {
                     console.warn('Failed to fetch maintenance status:', e);
+                }
+                // Fetch tips inline config
+                try {
+                    const res = await fetch(`${API_BASE}/api/config`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.tipsInline) {
+                            setTipsInline(prev => ({
+                                ...prev,
+                                tip1: data.tipsInline.tip1 || prev.tip1,
+                                tip2: data.tipsInline.tip2 || prev.tip2,
+                                tip3: data.tipsInline.tip3 || prev.tip3
+                            }));
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch tips config:', e);
                 }
             })();
         }
@@ -958,6 +984,33 @@ export default function Admin() {
             alert('保存失败: ' + e.message);
         } finally {
             setMaintenanceSaving(false);
+        }
+    };
+
+    const handleSaveTips = async () => {
+        setTipsSaving(true);
+        setTipsSaved(false);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ tipsInline })
+            });
+            if (res.ok) {
+                setTipsSaved(true);
+                setTimeout(() => setTipsSaved(false), 2000);
+            } else {
+                const err = await res.json();
+                alert(err.error || '保存失败');
+            }
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        } finally {
+            setTipsSaving(false);
         }
     };
 
@@ -3788,6 +3841,76 @@ export default function Admin() {
                                     ) : (
                                         '保存设置'
                                     )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Tips Inline Config Card */}
+                        <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                            <div style={{
+                                padding: '14px 20px',
+                                background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                                borderBottom: '1px solid #bfdbfe',
+                                display: 'flex', alignItems: 'center', gap: '10px'
+                            }}>
+                                <span style={{ fontSize: '20px' }}>💡</span>
+                                <h3 style={{ margin: 0, fontSize: '16px', color: '#1e40af' }}>页面提示文案配置</h3>
+                                <span style={{ fontSize: '12px', color: '#60a5fa', marginLeft: 'auto' }}>显示在验证页面底部</span>
+                            </div>
+
+                            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {['tip1', 'tip2', 'tip3'].map((key, i) => (
+                                    <div key={key}>
+                                        <label style={{
+                                            display: 'block', fontSize: '13px', fontWeight: 500,
+                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                        }}>
+                                            提示 {i + 1}
+                                        </label>
+                                        <input
+                                            className="input"
+                                            type="text"
+                                            value={tipsInline[key]}
+                                            onChange={(e) => setTipsInline(prev => ({ ...prev, [key]: e.target.value }))}
+                                            style={{ width: '100%', fontSize: '14px', boxSizing: 'border-box' }}
+                                            placeholder={`输入第 ${i + 1} 条提示内容...`}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={{
+                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                padding: '16px 20px',
+                                borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                background: 'var(--bg-secondary, #f8fafc)'
+                            }}>
+                                {tipsSaved && (
+                                    <span style={{
+                                        color: '#10b981', fontSize: '13px', fontWeight: 500,
+                                        display: 'flex', alignItems: 'center', gap: '4px',
+                                        animation: 'fadeIn 0.3s ease'
+                                    }}>
+                                        <span>✓</span> 已保存
+                                    </span>
+                                )}
+                                <button
+                                    onClick={handleSaveTips}
+                                    disabled={tipsSaving}
+                                    style={{
+                                        padding: '8px 24px', borderRadius: '8px', border: 'none',
+                                        cursor: tipsSaving ? 'not-allowed' : 'pointer',
+                                        fontSize: '14px', fontWeight: 600, color: '#fff',
+                                        background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                                        boxShadow: '0 2px 8px rgba(59,130,246,0.3)',
+                                        transition: 'all 0.2s ease',
+                                        opacity: tipsSaving ? 0.7 : 1,
+                                        display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}
+                                >
+                                    {tipsSaving ? (
+                                        <><span className="loading-spinner small" /> 保存中...</>
+                                    ) : '保存提示文案'}
                                 </button>
                             </div>
                         </div>

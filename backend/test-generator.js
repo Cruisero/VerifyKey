@@ -58,7 +58,7 @@ async function test() {
         console.log(`   ✅ Saved: ${svgPath}`);
         console.log(`   📊 Size: ${svgDoc.data.length} bytes`);
     } catch (error) {
-        console.log(`   ❌ Error: ${error.message}`);
+        console.log(`    Error: ${error.message}`);
     }
     console.log('');
 
@@ -114,7 +114,7 @@ async function testAntigravityGenerator(settings) {
             console.log('   💡 Check if Antigravity Tools is running');
         }
     } catch (error) {
-        console.log(`   ❌ Error: ${error.message}`);
+        console.log(`    Error: ${error.message}`);
     }
 }
 
@@ -180,7 +180,7 @@ Create a realistic-looking official academic transcript with courses, grades, an
             }
         }
     } catch (error) {
-        console.log(`   ❌ Error: ${error.message}`);
+        console.log(`   Error: ${error.message}`);
     }
 }
 

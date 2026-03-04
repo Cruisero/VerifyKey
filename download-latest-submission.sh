@@ -15,7 +15,7 @@ echo "🔍 查找最新提交..."
 LATEST_PREFIX=$(ssh $SERVER "ls -1 $REMOTE_DIR/*.json 2>/dev/null | sort -r | head -1 | xargs -I {} basename {} _data.json")
 
 if [ -z "$LATEST_PREFIX" ]; then
-    echo "❌ 没有找到提交记录"
+    echo "没有找到提交记录"
     exit 1
 fi
 
@@ -41,6 +41,6 @@ if [ $? -eq 0 ]; then
         cat "$JSON_FILE" | python3 -m json.tool 2>/dev/null || cat "$JSON_FILE"
     fi
 else
-    echo "❌ 下载失败"
+    echo "下载失败"
     exit 1
 fi

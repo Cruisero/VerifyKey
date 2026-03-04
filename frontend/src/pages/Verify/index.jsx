@@ -23,6 +23,9 @@ export default function Verify() {
     const [verifyMethod, setVerifyMethod] = useState('standard'); // 'standard' | 'dualbot'
     const [dualBotEnabled, setDualBotEnabled] = useState(false);
 
+    // Tips inline state (loaded from config)
+    const [tipsInline, setTipsInline] = useState(null);
+
     // CDK state
     const [cdkCode, setCdkCode] = useState(() => localStorage.getItem('verifykey-cdk') || '');
     const [cdkValid, setCdkValid] = useState(false);
@@ -80,6 +83,11 @@ export default function Verify() {
                         setVerifyMethod('dualbot');
                     } else {
                         setVerifyMethod('standard');
+                    }
+
+                    // Load tips inline from config
+                    if (data.tipsInline) {
+                        setTipsInline(data.tipsInline);
                     }
                 }
             } catch (e) {
@@ -803,9 +811,19 @@ export default function Verify() {
                     <div className="tips-inline">
 
                         <div className="tips-content">
-                            <p>{t('tip1pre')}<a href="https://one.google.com/ai-student" target="_blank" rel="noopener noreferrer">{t('tip1link')}</a>{t('tip1post')}<strong>{t('tip1bold')}</strong>{t('tip1end')}</p>
-                            <p>{t('tip2')}</p>
-                            <p>{t('tip3')}</p>
+                            {tipsInline ? (
+                                <>
+                                    {tipsInline.tip1 && <p>{tipsInline.tip1}</p>}
+                                    {tipsInline.tip2 && <p>{tipsInline.tip2}</p>}
+                                    {tipsInline.tip3 && <p>{tipsInline.tip3}</p>}
+                                </>
+                            ) : (
+                                <>
+                                    <p>{t('tip1pre')}<a href="https://one.google.com/ai-student" target="_blank" rel="noopener noreferrer">{t('tip1link')}</a>{t('tip1post')}<strong>{t('tip1bold')}</strong>{t('tip1end')}</p>
+                                    <p>{t('tip2')}</p>
+                                    <p>{t('tip3')}</p>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -103,6 +103,13 @@ DEFAULT_CONFIG = {
         "estimatedEnd": None
     },
     
+    # Tips inline (shown on verify page)
+    "tipsInline": {
+        "tip1": "在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。",
+        "tip2": "如果验证链接中 verificationId= 后面是空的，建议直接换号。",
+        "tip3": "一次消耗一个配额，成功后自动扣除。"
+    },
+    
     # Last updated
     "updatedAt": None
 }

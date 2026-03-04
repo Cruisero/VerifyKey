@@ -1798,7 +1798,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         if not _re_val.match(clean_url_pattern, link):
             raise HTTPException(
                 status_code=400,
-                detail=f"链接格式错误，请移除多余参数。正确格式: https://services.sheerid.com/verify/xxx/?verificationId=xxx"
+                detail=f"链接格式错误，请刷新页面获取重新获取链接。注意右击按钮获取！"
             )
 
     # Pre-check VID status: reject already-failed/expired links before processing
@@ -2606,7 +2606,7 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
         if not _re_val2.match(clean_url_pattern, link):
             raise HTTPException(
                 status_code=400,
-                detail=f"链接格式错误，请移除多余参数。正确格式: https://services.sheerid.com/verify/xxx/?verificationId=xxx"
+                detail=f"链接格式错误，请刷新页面获取重新获取链接。注意右击按钮获取！"
             )
     
     # Check if CDK has enough quota

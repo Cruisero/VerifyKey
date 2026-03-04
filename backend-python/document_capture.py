@@ -120,11 +120,11 @@ def download_document(url: str, save_path: str, proxy: str = None) -> bool:
                 print(f"[Capture] ✅ Downloaded: {os.path.basename(save_path)}")
                 return True
             else:
-                print(f"[Capture] ❌ Failed to download: HTTP {response.status_code}")
+                print(f"[Capture]  Failed to download: HTTP {response.status_code}")
                 return False
                 
     except Exception as e:
-        print(f"[Capture] ❌ Download error: {e}")
+        print(f"[Capture]  Download error: {e}")
         return False
 
 

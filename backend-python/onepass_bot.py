@@ -284,6 +284,10 @@ async def cmd_status(message: types.Message):
     text += f"\n🕐 Last updated: {status_cfg.get('lastUpdated', 'N/A')}"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🎁 Checkin", callback_data="cmd_checkin"),
+            InlineKeyboardButton(text="💎 Services", callback_data="cmd_services")
+        ],
         [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
     ])
     await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
@@ -1013,6 +1017,23 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
                 f"🎁 Credits earned: {stats['earned_credits']}"
             )
             
+        elif cmd == "checkin":
+            daily_amount = config.get("dailyCredits", 1)
+            success, balance, msg = bot_data.claim_daily(callback.from_user.id, daily_amount)
+            if success:
+                text = (
+                    f"🎁 **Daily Reward Claimed!**\n\n"
+                    f"✅ +{daily_amount} credit(s)\n"
+                    f"💳 Balance: `{balance}` credits\n\n"
+                    f"Come back tomorrow for more!"
+                )
+            else:
+                text = (
+                    f"⏰ **Already Claimed Today**\n\n"
+                    f"💳 Balance: `{balance}` credits\n"
+                    f"Come back tomorrow! 🕐"
+                )
+
         elif cmd == "crypto":
             contact = config.get("contactSupport", "@Terato1")
             buttons = []

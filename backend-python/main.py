@@ -1975,9 +1975,11 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
         import verification_history
         import cdk_manager
         
-        # Calculate real verifications (excluding auto-generated virtual data)
+        # Calculate real verifications (excluding auto-generated and empty VIDs)
         history = verification_history._load_history()
-        real_verifications = [r for r in history if not r.get("verificationId", "").startswith("auto-")]
+        real_verifications = [r for r in history 
+                              if r.get("verificationId", "").strip() 
+                              and not r.get("verificationId", "").startswith("auto-")]
         
         total_real_attempts = len(real_verifications)
         total_real_success = sum(1 for r in real_verifications if r.get("status") == "pass")

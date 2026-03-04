@@ -832,7 +832,7 @@ export default function Admin() {
                 if (statsRes.ok) setSiteStats(await statsRes.json());
                 if (logRes.ok) {
                     const logData = await logRes.json();
-                    const all = (logData.history || []).filter(r => !r.verificationId?.startsWith('auto-'));
+                    const all = (logData.history || []).filter(r => r.verificationId?.trim() && !r.verificationId.startsWith('auto-'));
                     setVerifyLog(all.slice(-50).reverse());
                 }
             } catch (e) { console.error('Failed to fetch site data:', e); }

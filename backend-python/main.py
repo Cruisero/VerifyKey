@@ -53,6 +53,10 @@ telegram_bot: Optional[SheerIDUserbot] = None
 tg_manager = TelegramAccountManager()
 dual_bot = DualBotVerifier()
 
+# VID deduplication: prevent the same VID from being processed simultaneously
+_vid_locks: dict = {}  # vid -> asyncio.Lock
+_vid_results: dict = {}  # vid -> result dict (cached for 60s)
+
 app = FastAPI(
     title="OnePass Python Backend",
     description="SheerID Verification with curl_cffi Anti-Detection",
@@ -1820,12 +1824,33 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             vid = link_vid_map.get(link_to_verify, "")
             max_retries = 5
             
+            # VID deduplication: if this VID is already being processed, wait for it
+            if vid:
+                if vid not in _vid_locks:
+                    _vid_locks[vid] = asyncio.Lock()
+                vid_lock = _vid_locks[vid]
+                
+                if vid_lock.locked():
+                    # Another request is already processing this VID, wait for it
+                    logger.info(f"[Verify] VID {vid[:8]}... already being processed, waiting for result...")
+                    async with vid_lock:
+                        # Return the cached result from the first request
+                        if vid in _vid_results:
+                            cached = _vid_results[vid]
+                            logger.info(f"[Verify] Returning cached result for {vid[:8]}: {cached.get('status')}")
+                            return cached.get('acc_id'), cached.get('result', cached)
+                        return None, {"success": False, "status": "error", "message": "Duplicate VID, no result cached"}
+            else:
+                vid_lock = None
+            
             async def on_progress(progress):
                 event = {"type": "progress", "link": link_to_verify, "vid": vid, **progress}
                 yield_data = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                 progress_events.append(yield_data)
 
-            for attempt in range(max_retries):
+            lock_ctx = vid_lock if vid_lock else asyncio.Lock()  # fallback
+            async with lock_ctx:
+              for attempt in range(max_retries):
                 pool_item = tg_manager.get_next_client()
                 
                 if not pool_item:
@@ -1843,7 +1868,10 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
                                 pool_item = tg_manager.get_next_client()
                     
                     if not pool_item:
-                        return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+                        result = {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+                        if vid:
+                            _vid_results[vid] = {"acc_id": None, "result": result}
+                        return None, result
                 
                 acc_id, client = pool_item
                 result = await dual_bot.verify(
@@ -1863,9 +1891,22 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
                         tg_manager.update_quota(acc_id, result["remaining_quota"])
                     continue
                 
+                # Cache result for deduplication
+                if vid:
+                    _vid_results[vid] = {"acc_id": acc_id, "result": result}
+                    # Auto-cleanup after 60s
+                    async def cleanup_vid(v):
+                        await asyncio.sleep(60)
+                        _vid_results.pop(v, None)
+                        _vid_locks.pop(v, None)
+                    asyncio.create_task(cleanup_vid(vid))
+                
                 return acc_id, result
-            
-            return None, {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+              
+              result = {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+              if vid:
+                  _vid_results[vid] = {"acc_id": None, "result": result}
+              return None, result
 
         # Shared progress events list (appended by callbacks, consumed by stream)
         progress_events = []

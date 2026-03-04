@@ -134,10 +134,14 @@ async def cmd_start(message: types.Message):
         ],
         [
             InlineKeyboardButton(text="👤 Balance", callback_data="cmd_profile"),
-            InlineKeyboardButton(text="❓ Help", url=f"https://t.me/{contact.lstrip('@')}")
+            InlineKeyboardButton(text="📊 Status", callback_data="cmd_status")
         ],
         [
+            InlineKeyboardButton(text="🎁 Check In", callback_data="cmd_checkin"),
             InlineKeyboardButton(text="👥 Referrals", callback_data="cmd_referral")
+        ],
+        [
+            InlineKeyboardButton(text="❓ Help", url=f"https://t.me/{contact.lstrip('@')}")
         ]
     ]
 
@@ -284,10 +288,6 @@ async def cmd_status(message: types.Message):
     text += f"\n🕐 Last updated: {status_cfg.get('lastUpdated', 'N/A')}"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🎁 Checkin", callback_data="cmd_checkin"),
-            InlineKeyboardButton(text="💎 Services", callback_data="cmd_services")
-        ],
         [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
     ])
     await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
@@ -1017,23 +1017,6 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
                 f"🎁 Credits earned: {stats['earned_credits']}"
             )
             
-        elif cmd == "checkin":
-            daily_amount = config.get("dailyCredits", 1)
-            success, balance, msg = bot_data.claim_daily(callback.from_user.id, daily_amount)
-            if success:
-                text = (
-                    f"🎁 **Daily Reward Claimed!**\n\n"
-                    f"✅ +{daily_amount} credit(s)\n"
-                    f"💳 Balance: `{balance}` credits\n\n"
-                    f"Come back tomorrow for more!"
-                )
-            else:
-                text = (
-                    f"⏰ **Already Claimed Today**\n\n"
-                    f"💳 Balance: `{balance}` credits\n"
-                    f"Come back tomorrow! 🕐"
-                )
-
         elif cmd == "crypto":
             contact = config.get("contactSupport", "@Terato1")
             buttons = []
@@ -1058,6 +1041,43 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
                 f"Select a package below to pay with USDT:"
             )
             
+        elif cmd == "checkin":
+            daily_amount = config.get("dailyCredits", 1)
+            success, balance, msg = bot_data.claim_daily(callback.from_user.id, daily_amount)
+            if success:
+                text = (
+                    f"🎁 **Daily Reward Claimed!**\n\n"
+                    f"✅ +{daily_amount} credit(s)\n"
+                    f"💳 Balance: `{balance}` credits\n\n"
+                    f"Come back tomorrow for more!"
+                )
+            else:
+                text = (
+                    f"⏰ **Already Claimed Today**\n\n"
+                    f"💳 Balance: `{balance}` credits\n"
+                    f"Come back tomorrow! 🕐"
+                )
+
+        elif cmd == "status":
+            status_cfg = config.get("statusConfig", {})
+            is_online = status_cfg.get("online", True)
+            success_rate = status_cfg.get("successRate", 95)
+            success_count = status_cfg.get("successCount", 0)
+            fail_count = status_cfg.get("failCount", 0)
+            notice = status_cfg.get("notice", "")
+            status_emoji = "🟢" if is_online else "🔴"
+            status_text = "Online" if is_online else "Offline"
+            text = (
+                f"📊 **Service Status**\n\n"
+                f"{status_emoji} Status: **{status_text}**\n"
+                f"📈 Success Rate: **{success_rate}%**\n"
+                f"✅ Verified Today: **{success_count}**\n"
+                f"❌ Failed Today: **{fail_count}**\n"
+            )
+            if notice:
+                text += f"\n📢 **Notice:** {notice}\n"
+            text += f"\n🕐 Last updated: {status_cfg.get('lastUpdated', 'N/A')}"
+
         elif cmd == "start":
             # Handle the Back button to return to the main menu
             contact = config.get("contactSupport", "@Terato1")
@@ -1068,10 +1088,14 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
                 ],
                 [
                     InlineKeyboardButton(text="👤 Balance", callback_data="cmd_profile"),
-                    InlineKeyboardButton(text="❓ Help", url=f"https://t.me/{contact.lstrip('@')}")
+                    InlineKeyboardButton(text="📊 Status", callback_data="cmd_status")
                 ],
                 [
+                    InlineKeyboardButton(text="🎁 Check In", callback_data="cmd_checkin"),
                     InlineKeyboardButton(text="👥 Referrals", callback_data="cmd_referral")
+                ],
+                [
+                    InlineKeyboardButton(text="❓ Help", url=f"https://t.me/{contact.lstrip('@')}")
                 ]
             ]
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)

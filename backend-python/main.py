@@ -2065,28 +2065,39 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
         import verification_history
         import cdk_manager
         
-        # Calculate real verifications (excluding auto-generated and empty VIDs)
-        history = verification_history._load_history()
-        real_verifications = [r for r in history 
-                              if r.get("verificationId", "").strip() 
-                              and not r.get("verificationId", "").startswith("auto-")]
+        # Calculate real verifications (excluding auto-generated and empty VIDs) using SQLite
+        import database
+        conn = database.get_connection()
         
-        total_real_attempts = len(real_verifications)
-        total_real_success = sum(1 for r in real_verifications if r.get("status") == "pass")
+        # Total real verifications (non-empty, non-auto VIDs)
+        row = conn.execute(
+            "SELECT COUNT(*) as total, SUM(CASE WHEN status='pass' THEN 1 ELSE 0 END) as success "
+            "FROM verification_history WHERE verification_id != '' AND verification_id NOT LIKE 'auto-%'"
+        ).fetchone()
+        total_real_attempts = row["total"]
+        total_real_success = row["success"] or 0
         
         # 1-hour success rate
         from datetime import datetime, timedelta, timezone
         one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-        recent_1h = [r for r in real_verifications if r.get("timestamp", "") >= one_hour_ago]
-        recent_1h_attempts = len(recent_1h)
-        recent_1h_success = sum(1 for r in recent_1h if r.get("status") == "pass")
+        row_1h = conn.execute(
+            "SELECT COUNT(*) as total, SUM(CASE WHEN status='pass' THEN 1 ELSE 0 END) as success "
+            "FROM verification_history WHERE verification_id != '' AND verification_id NOT LIKE 'auto-%' AND timestamp >= ?",
+            (one_hour_ago,)
+        ).fetchone()
+        recent_1h_attempts = row_1h["total"]
+        recent_1h_success = row_1h["success"] or 0
         hourly_success_rate = round((recent_1h_success / recent_1h_attempts) * 100, 2) if recent_1h_attempts > 0 else 0
         
         # 5-hour success rate
         five_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
-        recent_5h = [r for r in real_verifications if r.get("timestamp", "") >= five_hours_ago]
-        recent_5h_attempts = len(recent_5h)
-        recent_5h_success = sum(1 for r in recent_5h if r.get("status") == "pass")
+        row_5h = conn.execute(
+            "SELECT COUNT(*) as total, SUM(CASE WHEN status='pass' THEN 1 ELSE 0 END) as success "
+            "FROM verification_history WHERE verification_id != '' AND verification_id NOT LIKE 'auto-%' AND timestamp >= ?",
+            (five_hours_ago,)
+        ).fetchone()
+        recent_5h_attempts = row_5h["total"]
+        recent_5h_success = row_5h["success"] or 0
         five_hour_success_rate = round((recent_5h_success / recent_5h_attempts) * 100, 2) if recent_5h_attempts > 0 else 0
             
         # Bot credits consumed (local)

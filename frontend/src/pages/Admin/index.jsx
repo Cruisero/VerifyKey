@@ -839,6 +839,11 @@ export default function Admin() {
     const [tipsSaving, setTipsSaving] = useState(false);
     const [tipsSaved, setTipsSaved] = useState(false);
 
+    // Database backup state
+    const [backupList, setBackupList] = useState([]);
+    const [backupCreating, setBackupCreating] = useState(false);
+    const [backupDownloading, setBackupDownloading] = useState(false);
+
     // Verification mode: 'api' (default) or 'browser' (Puppeteer) — only for non-telegram providers
     const [browserMode, setBrowserMode] = useState(false);
 
@@ -943,6 +948,19 @@ export default function Admin() {
                 } catch (e) {
                     console.warn('Failed to fetch tips config:', e);
                 }
+                // Fetch backup list
+                try {
+                    const token = user?.token || localStorage.getItem('verifykey-token');
+                    const res = await fetch(`${API_BASE}/api/backup/list`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setBackupList(data.backups || []);
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch backup list:', e);
+                }
             })();
         }
     }, [activeTab]);
@@ -1002,6 +1020,60 @@ export default function Admin() {
             alert('保存失败: ' + e.message);
         } finally {
             setTipsSaving(false);
+        }
+    };
+
+    const handleCreateBackup = async () => {
+        setBackupCreating(true);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/backup/create`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setBackupList(data.backups || []);
+            } else {
+                alert('备份创建失败');
+            }
+        } catch (e) {
+            alert('备份创建失败: ' + e.message);
+        } finally {
+            setBackupCreating(false);
+        }
+    };
+
+    const handleDownloadBackup = async () => {
+        setBackupDownloading(true);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/backup/download`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `onepass_backup_${new Date().toISOString().slice(0, 10)}.db`;
+                a.click();
+                URL.revokeObjectURL(url);
+                // Refresh backup list
+                const listRes = await fetch(`${API_BASE}/api/backup/list`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (listRes.ok) {
+                    const data = await listRes.json();
+                    setBackupList(data.backups || []);
+                }
+            } else {
+                alert('下载备份失败');
+            }
+        } catch (e) {
+            alert('下载备份失败: ' + e.message);
+        } finally {
+            setBackupDownloading(false);
         }
     };
 
@@ -3895,6 +3967,88 @@ export default function Admin() {
                                     {tipsSaving ? (
                                         <><span className="loading-spinner small" /> 保存中...</>
                                     ) : '保存提示文案'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Database Backup Card */}
+                        <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                            <div style={{
+                                padding: '14px 20px',
+                                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                                borderBottom: '1px solid #bbf7d0',
+                                display: 'flex', alignItems: 'center', gap: '10px'
+                            }}>
+                                <span style={{ fontSize: '20px' }}>🗄️</span>
+                                <h3 style={{ margin: 0, fontSize: '16px', color: '#166534' }}>数据库备份</h3>
+                                <span style={{ fontSize: '12px', color: '#4ade80', marginLeft: 'auto' }}>自动每日备份 · 保留最近 7 份</span>
+                            </div>
+
+                            <div style={{ padding: '20px' }}>
+                                {backupList.length > 0 ? (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '1px solid var(--border-color, #e2e8f0)' }}>
+                                                    <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>文件名</th>
+                                                    <th style={{ textAlign: 'right', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>大小</th>
+                                                    <th style={{ textAlign: 'right', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>创建时间</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {backupList.map((b, i) => (
+                                                    <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #f1f5f9)' }}>
+                                                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: '12px' }}>{b.filename}</td>
+                                                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{b.sizeMB} MB</td>
+                                                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{new Date(b.createdAt).toLocaleString('zh-CN')}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <p style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '14px', margin: '0 0 16px' }}>暂无备份记录，首次自动备份将在启动后 1 分钟内创建。</p>
+                                )}
+                            </div>
+
+                            <div style={{
+                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px',
+                                padding: '16px 20px',
+                                borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                background: 'var(--bg-secondary, #f8fafc)'
+                            }}>
+                                <button
+                                    onClick={handleCreateBackup}
+                                    disabled={backupCreating}
+                                    style={{
+                                        padding: '8px 20px', borderRadius: '8px', border: '1px solid var(--border-color, #d1d5db)',
+                                        cursor: backupCreating ? 'not-allowed' : 'pointer',
+                                        fontSize: '13px', fontWeight: 500, color: 'var(--text-primary, #334155)',
+                                        background: 'var(--bg-primary, #fff)',
+                                        opacity: backupCreating ? 0.7 : 1,
+                                        display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}
+                                >
+                                    {backupCreating ? (
+                                        <><span className="loading-spinner small" /> 备份中...</>
+                                    ) : '📋 手动备份'}
+                                </button>
+                                <button
+                                    onClick={handleDownloadBackup}
+                                    disabled={backupDownloading}
+                                    style={{
+                                        padding: '8px 20px', borderRadius: '8px', border: 'none',
+                                        cursor: backupDownloading ? 'not-allowed' : 'pointer',
+                                        fontSize: '13px', fontWeight: 600, color: '#fff',
+                                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                                        boxShadow: '0 2px 8px rgba(34,197,94,0.3)',
+                                        opacity: backupDownloading ? 0.7 : 1,
+                                        display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}
+                                >
+                                    {backupDownloading ? (
+                                        <><span className="loading-spinner small" /> 下载中...</>
+                                    ) : '⬇️ 下载备份'}
                                 </button>
                             </div>
                         </div>

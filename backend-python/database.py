@@ -6,8 +6,11 @@ Database file: /app/data/onepass.db
 
 import json
 import os
+import shutil
 import sqlite3
 import threading
+import time
+from datetime import datetime
 from pathlib import Path
 
 # Database file path (inside docker /app/data, locally in current dir)
@@ -186,3 +189,97 @@ def _migrate_cdkeys(conn: sqlite3.Connection):
         print(f"[DB] Backed up old JSON to {backup}")
     except Exception as e:
         print(f"[DB] Error migrating cdkeys: {e}")
+
+
+# ========== Backup Functions ==========
+
+BACKUP_DIR = os.path.join(DB_DIR, "backups")
+MAX_BACKUPS = 7  # Keep last 7 backups
+AUTO_BACKUP_INTERVAL = 24 * 60 * 60  # 24 hours in seconds
+
+
+def create_backup() -> str:
+    """
+    Create a safe backup of the database using SQLite's online backup API.
+    
+    Returns:
+        Path to the backup file
+    """
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = os.path.join(BACKUP_DIR, f"onepass_backup_{timestamp}.db")
+
+    try:
+        source = sqlite3.connect(DB_FILE)
+        dest = sqlite3.connect(backup_path)
+        source.backup(dest)
+        dest.close()
+        source.close()
+        
+        size_mb = os.path.getsize(backup_path) / (1024 * 1024)
+        print(f"[DB Backup] Created backup: {backup_path} ({size_mb:.2f} MB)")
+        
+        cleanup_old_backups()
+        return backup_path
+    except Exception as e:
+        print(f"[DB Backup] Error creating backup: {e}")
+        # Cleanup failed backup file
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+        raise
+
+
+def cleanup_old_backups():
+    """Remove old backups, keeping only the most recent MAX_BACKUPS."""
+    try:
+        if not os.path.exists(BACKUP_DIR):
+            return
+        
+        backups = sorted(
+            [f for f in os.listdir(BACKUP_DIR) if f.startswith("onepass_backup_") and f.endswith(".db")],
+            reverse=True
+        )
+        
+        for old_backup in backups[MAX_BACKUPS:]:
+            path = os.path.join(BACKUP_DIR, old_backup)
+            os.remove(path)
+            print(f"[DB Backup] Removed old backup: {old_backup}")
+    except Exception as e:
+        print(f"[DB Backup] Error cleaning old backups: {e}")
+
+
+def get_backup_list() -> list:
+    """Get list of available backups with metadata."""
+    if not os.path.exists(BACKUP_DIR):
+        return []
+    
+    backups = []
+    for f in sorted(os.listdir(BACKUP_DIR), reverse=True):
+        if f.startswith("onepass_backup_") and f.endswith(".db"):
+            path = os.path.join(BACKUP_DIR, f)
+            stat = os.stat(path)
+            backups.append({
+                "filename": f,
+                "size": stat.st_size,
+                "sizeMB": round(stat.st_size / (1024 * 1024), 2),
+                "createdAt": datetime.fromtimestamp(stat.st_mtime).isoformat()
+            })
+    return backups
+
+
+def start_auto_backup():
+    """Start a background daemon thread that creates daily backups."""
+    def _backup_loop():
+        # Wait 60 seconds after startup before first backup
+        time.sleep(60)
+        while True:
+            try:
+                create_backup()
+            except Exception as e:
+                print(f"[DB Backup] Auto-backup failed: {e}")
+            time.sleep(AUTO_BACKUP_INTERVAL)
+
+    t = threading.Thread(target=_backup_loop, daemon=True, name="db-auto-backup")
+    t.start()
+    print("[DB Backup] Auto-backup scheduled (every 24h)")
+

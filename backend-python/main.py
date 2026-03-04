@@ -39,6 +39,7 @@ load_dotenv()
 # Initialize database
 auth.init_database()
 database.init_db()
+database.start_auto_backup()
 
 # Configuration
 PORT = int(os.getenv("PORT", 3002))
@@ -2372,6 +2373,49 @@ async def delete_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional
 async def cdk_stats_endpoint():
     """Get CDK statistics"""
     return cdk_manager.get_cdk_stats()
+
+
+# ========== Database Backup Endpoints ==========
+
+@app.get("/api/backup/list")
+async def backup_list_endpoint(authorization: Optional[str] = Header(None)):
+    """Get list of available database backups"""
+    if not auth.verify_token(authorization):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {"backups": database.get_backup_list()}
+
+
+@app.post("/api/backup/create")
+async def backup_create_endpoint(authorization: Optional[str] = Header(None)):
+    """Create a new database backup"""
+    if not auth.verify_token(authorization):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        path = database.create_backup()
+        return {"success": True, "path": path, "backups": database.get_backup_list()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backup/download")
+async def backup_download_endpoint(authorization: Optional[str] = Header(None)):
+    """Download the latest database backup"""
+    if not auth.verify_token(authorization):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # Create a fresh backup for download
+    try:
+        backup_path = database.create_backup()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Backup failed: {e}")
+    
+    from fastapi.responses import FileResponse
+    filename = os.path.basename(backup_path)
+    return FileResponse(
+        path=backup_path,
+        media_type="application/octet-stream",
+        filename=filename
+    )
 
 
 @app.get("/api/verify/history")

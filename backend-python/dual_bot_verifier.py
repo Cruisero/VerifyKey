@@ -76,7 +76,7 @@ class DualBotVerifier:
                     "success": False,
                     "status": "warmup_timeout",
                     "verificationId": vid,
-                    "message": f"Warmup timed out (@{w_bot} no final response)"
+                    "message": f"Document generation timed out, please retry"
                 }
 
             logger.info(f"[DualBot] [{account_id}] Warmup response: {warmup_result[:100]}...")
@@ -86,7 +86,7 @@ class DualBotVerifier:
             
             if not warmup_parsed.get("success"):
                 logger.warning(f"[DualBot] [{account_id}] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
-                warmup_parsed["message"] = f"Warmup failed (@{w_bot}): {warmup_parsed['message']}"
+                warmup_parsed["message"] = f"Document generation failed: {warmup_parsed['message']}"
                 return warmup_parsed
 
             logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
@@ -112,7 +112,7 @@ class DualBotVerifier:
                     "success": False,
                     "status": "timeout",
                     "verificationId": vid,
-                    "message": f"Verification timed out (@{v_bot} no response, please retry)"
+                    "message": f"Verification timed out, please retry"
                 }
 
             # Parse result

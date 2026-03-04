@@ -349,10 +349,6 @@ function TelegramBotTab() {
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--spacing-sm)' }}>
                                 <div>
-                                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>成功率 (%)</label>
-                                    <input className="input" type="number" min={0} max={100} value={botConfig.statusConfig?.successRate ?? 95} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), successRate: Number(e.target.value) } })} style={{ width: '100%' }} />
-                                </div>
-                                <div>
                                     <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>成功次数</label>
                                     <input className="input" type="number" min={0} value={botConfig.statusConfig?.successCount ?? 0} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), successCount: Number(e.target.value) } })} style={{ width: '100%' }} />
                                 </div>
@@ -360,10 +356,23 @@ function TelegramBotTab() {
                                     <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>失败次数</label>
                                     <input className="input" type="number" min={0} value={botConfig.statusConfig?.failCount ?? 0} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), failCount: Number(e.target.value) } })} style={{ width: '100%' }} />
                                 </div>
+                                <div>
+                                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>成功率 (自动)</label>
+                                    <div className="input" style={{ width: '100%', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center' }}>
+                                        {(() => { const s = botConfig.statusConfig?.successCount ?? 0; const f = botConfig.statusConfig?.failCount ?? 0; const t = s + f; return t > 0 ? `${(s / t * 100).toFixed(1)}%` : '0%'; })()}
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ marginTop: 'var(--spacing-sm)' }}>
-                                <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>公告信息 (可选)</label>
-                                <input className="input" value={botConfig.statusConfig?.notice || ''} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), notice: e.target.value } })} style={{ width: '100%' }} placeholder="e.g. Maintenance at 3AM UTC" />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }}>
+                                <div>
+                                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>时间刷新间隔 (分钟)</label>
+                                    <input className="input" type="number" min={1} max={60} value={botConfig.statusConfig?.refreshInterval ?? 5} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), refreshInterval: Number(e.target.value) } })} style={{ width: '100%' }} placeholder="5" />
+                                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>每 N 分钟随机刷新 Last Updated 时间</span>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>公告信息 (可选)</label>
+                                    <input className="input" value={botConfig.statusConfig?.notice || ''} onChange={e => setBotConfig({ ...botConfig, statusConfig: { ...(botConfig.statusConfig || {}), notice: e.target.value } })} style={{ width: '100%' }} placeholder="e.g. Maintenance at 3AM UTC" />
+                                </div>
                             </div>
                         </div>
                     </div>

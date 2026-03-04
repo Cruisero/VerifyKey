@@ -257,19 +257,34 @@ async def cmd_referral(message: types.Message):
     )
 
 
-@dp.message(Command("status"))
-async def cmd_status(message: types.Message):
-    """Show service status (manually configured data)."""
-    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
-    config = get_config()
+def _build_status_text(config: dict) -> str:
+    """Build status text with auto-calculated rate and dynamic timestamp."""
+    import random
+    from datetime import datetime, timezone, timedelta
 
-    # Read manually configured status data
     status_cfg = config.get("statusConfig", {})
     is_online = status_cfg.get("online", True)
-    success_rate = status_cfg.get("successRate", 95)
     success_count = status_cfg.get("successCount", 0)
     fail_count = status_cfg.get("failCount", 0)
     notice = status_cfg.get("notice", "")
+    refresh_interval = status_cfg.get("refreshInterval", 5)  # minutes
+
+    # Auto-calculate success rate
+    total = success_count + fail_count
+    success_rate = round(success_count / total * 100, 1) if total > 0 else 0
+
+    # Generate dynamic "last updated" time
+    # Round current time down to the nearest refresh_interval, add random offset
+    now = datetime.now(timezone(timedelta(hours=8)))  # UTC+8
+    interval_seconds = max(refresh_interval, 1) * 60
+    epoch = now.timestamp()
+    rounded = epoch - (epoch % interval_seconds)
+    # Add a random offset (0 to 60% of the interval) for natural feel
+    random.seed(int(rounded))  # Same seed for same interval = stable display
+    offset = random.randint(0, int(interval_seconds * 0.6))
+    last_updated_ts = rounded + offset
+    last_updated = datetime.fromtimestamp(last_updated_ts, tz=timezone(timedelta(hours=8)))
+    last_updated_str = last_updated.strftime("%Y-%m-%d %H:%M")
 
     status_emoji = "🟢" if is_online else "🔴"
     status_text = "Online" if is_online else "Offline"
@@ -285,7 +300,16 @@ async def cmd_status(message: types.Message):
     if notice:
         text += f"\n📢 **Notice:** {notice}\n"
 
-    text += f"\n🕐 Last updated: {status_cfg.get('lastUpdated', 'N/A')}"
+    text += f"\n🕐 Last updated: {last_updated_str}"
+    return text
+
+
+@dp.message(Command("status"))
+async def cmd_status(message: types.Message):
+    """Show service status (manually configured data)."""
+    bot_data.get_or_create_user(message.from_user.id, message.from_user.username or "")
+    config = get_config()
+    text = _build_status_text(config)
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
@@ -1084,24 +1108,7 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
                 )
 
         elif cmd == "status":
-            status_cfg = config.get("statusConfig", {})
-            is_online = status_cfg.get("online", True)
-            success_rate = status_cfg.get("successRate", 95)
-            success_count = status_cfg.get("successCount", 0)
-            fail_count = status_cfg.get("failCount", 0)
-            notice = status_cfg.get("notice", "")
-            status_emoji = "🟢" if is_online else "🔴"
-            status_text = "Online" if is_online else "Offline"
-            text = (
-                f"📊 **Service Status**\n\n"
-                f"{status_emoji} Status: **{status_text}**\n"
-                f"📈 Success Rate: **{success_rate}%**\n"
-                f"✅ Verified Today: **{success_count}**\n"
-                f"❌ Failed Today: **{fail_count}**\n"
-            )
-            if notice:
-                text += f"\n📢 **Notice:** {notice}\n"
-            text += f"\n🕐 Last updated: {status_cfg.get('lastUpdated', 'N/A')}"
+            text = _build_status_text(config)
 
         elif cmd == "start":
             # Handle the Back button to return to the main menu

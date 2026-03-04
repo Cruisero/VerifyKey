@@ -2391,16 +2391,14 @@ async def cdk_stats_endpoint():
 @app.get("/api/backup/list")
 async def backup_list_endpoint(authorization: Optional[str] = Header(None)):
     """Get list of available database backups"""
-    if not auth.verify_token(authorization):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_admin_token(authorization)
     return {"backups": database.get_backup_list()}
 
 
 @app.post("/api/backup/create")
 async def backup_create_endpoint(authorization: Optional[str] = Header(None)):
     """Create a new database backup"""
-    if not auth.verify_token(authorization):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_admin_token(authorization)
     try:
         path = database.create_backup()
         return {"success": True, "path": path, "backups": database.get_backup_list()}
@@ -2411,8 +2409,7 @@ async def backup_create_endpoint(authorization: Optional[str] = Header(None)):
 @app.get("/api/backup/download")
 async def backup_download_endpoint(authorization: Optional[str] = Header(None)):
     """Download the latest database backup"""
-    if not auth.verify_token(authorization):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_admin_token(authorization)
     
     # Create a fresh backup for download
     try:

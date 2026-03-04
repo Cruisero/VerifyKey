@@ -750,7 +750,7 @@ export default function Verify() {
                                             </div>
                                             <div className="result-info">
                                                 <span className="result-id">{result.verificationId}</span>
-                                                <span className="result-message">{result.message || t('resultProcessing')}</span>
+                                                <span className="result-message">{(result.message || t('resultProcessing')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, '')}</span>
                                             </div>
                                             <span className="result-time">{formatTime(result.timestamp)}</span>
                                         </div>

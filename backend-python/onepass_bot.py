@@ -846,7 +846,72 @@ async def handle_text(message: types.Message):
 async def _process_verification(message: types.Message, user: dict, link: str, config: dict, services: list):
     """Core verification logic — deduct credits, call API, stream progress."""
     import bot_verify_log
+    import re as _re
     username = message.from_user.username or ""
+
+    # Validate link format: only accept clean SheerID URLs without extra query params
+    clean_pattern = r'^https://services\.sheerid\.com/verify/[a-fA-F0-9]+/\?verificationId=[a-fA-F0-9]+$'
+    if not _re.match(clean_pattern, link.strip()):
+        await message.answer(
+            "❌ **Invalid Link Format**\n\n"
+            "Your link contains extra parameters or is not in the correct format.\n\n"
+            "✅ **Correct format:**\n"
+            "`https://services.sheerid.com/verify/xxxxx/?verificationId=xxxxx`\n\n"
+            "❌ **Incorrect format (with extra params):**\n"
+            "`...?verificationId=xxx&utm_source=...`\n\n"
+            "💡 **How to fix:** Right-click the verification button → Copy link address → "
+            "Remove everything after the verificationId value (delete from `&` onwards).",
+            parse_mode="Markdown"
+        )
+        return
+
+    # Pre-check VID status: reject already-failed/expired links before deducting credits
+    vid_match = _re.search(r'verificationId=([a-fA-F0-9]+)', link)
+    if vid_match:
+        pre_vid = vid_match.group(1)
+        try:
+            async with httpx.AsyncClient(timeout=10) as _client:
+                _resp = await _client.get(f"https://services.sheerid.com/rest/v2/verification/{pre_vid}")
+                if _resp.status_code == 200:
+                    _data = _resp.json()
+                    _step = _data.get("currentStep", "")
+                    _error_ids = _data.get("errorIds", [])
+                    _rejection = _data.get("rejectionReasons", [])
+
+                    if _step == "error":
+                        await message.answer(
+                            "❌ **Link Already Failed**\n\n"
+                            f"This verification link has already failed (error: {', '.join(_error_ids) if _error_ids else 'unknown'}).\n\n"
+                            "💡 Please refresh the page and get a new verification link.",
+                            parse_mode="Markdown"
+                        )
+                        return
+
+                    if _step == "success":
+                        await message.answer(
+                            "✅ **Already Verified**\n\n"
+                            "This verification link has already been verified successfully.\n"
+                            "No further action needed.",
+                            parse_mode="Markdown"
+                        )
+                        return
+
+                    if _step == "docUpload" and _rejection:
+                        await message.answer(
+                            "❌ **Link Already Rejected**\n\n"
+                            f"This verification link was already rejected: {', '.join(_rejection)}.\n\n"
+                            "💡 Please refresh the page and get a new verification link.",
+                            parse_mode="Markdown"
+                        )
+                        return
+                elif _resp.status_code == 429:
+                    pass  # Rate limited, skip pre-check and proceed
+                else:
+                    logger.warning(f"VID pre-check returned HTTP {_resp.status_code} for {pre_vid[:8]}")
+        except Exception as _e:
+            logger.warning(f"VID pre-check failed for {pre_vid[:8]}: {_e}")
+            # Don't block on pre-check failures, let the verification proceed
+
     # Check credits (8 credits = 1 verification)
     cost = VERIFICATION_CREDIT_COST
 

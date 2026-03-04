@@ -65,6 +65,36 @@ class DualBotVerifier:
             if not vid:
                 return {"success": False, "status": "error", "message": "Cannot extract verificationId from link"}
 
+            # ---- Pre-check VID status before processing ----
+            initial_step = None
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=10) as http_client:
+                    pre_resp = await http_client.get(f"https://services.sheerid.com/rest/v2/verification/{vid}")
+                    if pre_resp.status_code == 200:
+                        pre_data = pre_resp.json()
+                        initial_step = pre_data.get("currentStep", "")
+                        error_ids = pre_data.get("errorIds", [])
+                        rejection_reasons = pre_data.get("rejectionReasons", [])
+
+                        if initial_step == "error":
+                            return {
+                                "success": False, "status": "failed", "verificationId": vid,
+                                "message": f"该链接已失败 ({', '.join(error_ids) if error_ids else '未知错误'})，请刷新页面获取新链接"
+                            }
+                        if initial_step == "success":
+                            return {
+                                "success": False, "status": "failed", "verificationId": vid,
+                                "message": "该链接已验证成功，无需重复提交"
+                            }
+                        if initial_step == "docUpload" and rejection_reasons:
+                            return {
+                                "success": False, "status": "failed", "verificationId": vid,
+                                "message": f"该链接已被拒绝 ({', '.join(rejection_reasons)})，请刷新页面获取新链接"
+                            }
+            except Exception as e:
+                logger.warning(f"[DualBot] [{account_id}] Pre-check failed: {e}")
+
             # ---- Step 1: Warmup via @SatsetHelperbot ----
             await emit("warmup", "Generating document...")
             logger.info(f"[DualBot] [{account_id}] Step 1: Warmup {vid[:8]}... via @{w_bot}")
@@ -121,7 +151,8 @@ class DualBotVerifier:
             # ---- Race condition check ----
             # If bot says "failed" but another account already succeeded,
             # check SheerID's actual status to detect the win.
-            if not parsed["success"] and parsed["status"] in ("failed", "rejected", "no_credits"):
+            # IMPORTANT: Only do this if VID was NOT already in 'success' state before we started.
+            if not parsed["success"] and parsed["status"] in ("failed", "rejected", "no_credits") and initial_step not in ("success", "error"):
                 try:
                     import httpx
                     async with httpx.AsyncClient(timeout=10) as http_client:

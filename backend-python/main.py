@@ -1791,6 +1791,51 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     if not clean_links:
         raise HTTPException(status_code=400, detail="No valid links provided")
 
+    # Validate link format: only accept clean SheerID URLs without extra query params
+    import re as _re_val
+    clean_url_pattern = r'^https://services\.sheerid\.com/verify/[a-fA-F0-9]+/\?verificationId=[a-fA-F0-9]+$'
+    for link in clean_links:
+        if not _re_val.match(clean_url_pattern, link):
+            raise HTTPException(
+                status_code=400,
+                detail=f"链接格式错误，请移除多余参数。正确格式: https://services.sheerid.com/verify/xxx/?verificationId=xxx"
+            )
+
+    # Pre-check VID status: reject already-failed/expired links before processing
+    import httpx as _httpx_pre
+    for link in clean_links:
+        _vid_m = _re_val.search(r'verificationId=([a-fA-F0-9]+)', link)
+        if _vid_m:
+            _pre_vid = _vid_m.group(1)
+            try:
+                async with _httpx_pre.AsyncClient(timeout=10) as _pc:
+                    _pr = await _pc.get(f"https://services.sheerid.com/rest/v2/verification/{_pre_vid}")
+                    if _pr.status_code == 200:
+                        _pd = _pr.json()
+                        _ps = _pd.get("currentStep", "")
+                        _pe = _pd.get("errorIds", [])
+                        _prj = _pd.get("rejectionReasons", [])
+
+                        if _ps == "error":
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            )
+                        if _ps == "success":
+                            raise HTTPException(
+                                status_code=400,
+                                detail="该链接已验证成功，无需重复提交"
+                            )
+                        if _ps == "docUpload" and _prj:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            )
+            except HTTPException:
+                raise  # Re-raise HTTP exceptions
+            except Exception as _pre_err:
+                logger.warning(f"VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
+
     if not is_bot_internal:
         if cdk_check["remaining"] < len(clean_links):
             raise HTTPException(
@@ -2553,6 +2598,16 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     clean_links = [link.strip() for link in request.links if link.strip()]
     if not clean_links:
         raise HTTPException(status_code=400, detail="No valid links provided")
+
+    # Validate link format: only accept clean SheerID URLs without extra query params
+    import re as _re_val2
+    clean_url_pattern = r'^https://services\.sheerid\.com/verify/[a-fA-F0-9]+/\?verificationId=[a-fA-F0-9]+$'
+    for link in clean_links:
+        if not _re_val2.match(clean_url_pattern, link):
+            raise HTTPException(
+                status_code=400,
+                detail=f"链接格式错误，请移除多余参数。正确格式: https://services.sheerid.com/verify/xxx/?verificationId=xxx"
+            )
     
     # Check if CDK has enough quota
     if cdk_check["remaining"] < len(clean_links):

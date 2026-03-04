@@ -239,7 +239,7 @@
 }
 
 /* Input Panel */
-.verify-input {
+.verify-input.input {
     flex: 1;
     min-height: 280px;
     resize: none;

@@ -958,11 +958,36 @@ async def handle_main_menu_buttons(callback: CallbackQuery):
     mock_msg = mock_msg.model_copy(update={"from_user": callback.from_user})
     
     if cmd == "services":
-        # /start is a text message, but /services has a photo. 
-        # Telegram doesn't allow editing a text message into a photo message directly.
-        # So we delete the old message and send a new photo message.
-        await callback.message.delete()
-        await cmd_services(mock_msg)
+        # Generate services text inline (no photo) for consistent button behavior
+        services = config.get("services", [])
+        if not services:
+            text = "📋 No services available at the moment."
+        else:
+            text = "📋 **Available Services**\n\n"
+            for s in services:
+                emoji = s.get("emoji", "🎵")
+                text += f"{emoji} **{s['name']}** — {s['credits']} credits\n"
+            text += (
+                "\n🚫 **DO NOT open the verification link!**\n"
+                "Opening the link causes instant rejection.\n\n"
+                "✅ **CORRECT WAY:**\n\n"
+                "1️⃣ Right-click on the verification button\n"
+                "2️⃣ Select \"Copy link address\"\n"
+                "3️⃣ Paste the link here directly\n"
+                "💡 Send your verification link with `/verify` to get started!"
+            )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Back", callback_data="cmd_start")]
+        ])
+        try:
+            if callback.message.photo:
+                await callback.message.delete()
+                await callback.message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+            else:
+                await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+        except Exception as e:
+            logger.warning(f"Services edit error: {e}")
+            await callback.message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
         return
         
     # For others, we need to extract the logic that generates the text and keyboard,

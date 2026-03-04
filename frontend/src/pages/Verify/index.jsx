@@ -813,7 +813,13 @@ export default function Verify() {
                         <div className="tips-content">
                             {tipsContent ? (
                                 tipsContent.split('\n').filter(line => line.trim()).map((line, i) => (
-                                    <p key={i}>{line}</p>
+                                    <p key={i}>
+                                        {line.split(/(https?:\/\/[^\s]+)/g).map((part, j) =>
+                                            /^https?:\/\//.test(part)
+                                                ? <a key={j} href={part} target="_blank" rel="noopener noreferrer">{part}</a>
+                                                : part
+                                        )}
+                                    </p>
                                 ))
                             ) : (
                                 <>

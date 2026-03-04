@@ -300,8 +300,8 @@ def _build_status_text(config: dict) -> str:
     random.seed(int(rounded))  # Same seed for same interval = stable display
     offset = random.randint(0, int(interval_seconds * 0.6))
     last_updated_ts = rounded + offset
-    last_updated = datetime.fromtimestamp(last_updated_ts, tz=timezone(timedelta(hours=8)))
-    last_updated_str = last_updated.strftime("%Y-%m-%d %H:%M")
+    mins_ago = max(1, int((epoch - last_updated_ts) / 60))
+    last_updated_str = f"{mins_ago} min ago"
 
     status_emoji = "🟢" if is_online else "🔴"
     status_text = "Online" if is_online else "Offline"

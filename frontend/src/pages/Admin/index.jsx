@@ -599,7 +599,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
         return true;
     });
 
-    const quotaOptions = [1, 2, 5, 20, 100];
+    const quotaOptions = [1, 5, 20, 50, 100];
 
     return (
         <div className="tab-content">

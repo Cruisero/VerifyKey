@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './stores/ThemeContext';
 import { LanguageProvider } from './stores/LanguageContext';
-import { AuthProvider } from './stores/AuthContext';
+import { AuthProvider, useAuth } from './stores/AuthContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Verify from './pages/Verify';
@@ -15,6 +15,82 @@ import Bypass from './pages/Bypass';
 import './assets/styles/index.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3002' : '');
+
+/* ── Route tree (needs useAuth, so must be inside AuthProvider) ── */
+function AppRoutes({ maintenance }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  // Admins bypass maintenance — they see all normal routes
+  const showMaintenance = maintenance.enabled && !isAdmin;
+
+  if (showMaintenance) {
+    return (
+      <Routes>
+        {/* During maintenance: only admin + login routes work */}
+        <Route path="/login" element={<Home />} />
+        <Route
+          path="/admin"
+          element={
+            <Layout>
+              <Admin />
+            </Layout>
+          }
+        />
+        {/* Everything else shows maintenance page */}
+        <Route path="*" element={
+          <Maintenance
+            message={maintenance.message}
+            estimatedEnd={maintenance.estimatedEnd}
+          />
+        } />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      {/* Normal routes */}
+      <Route
+        path="/"
+        element={
+          <Layout>
+            <Verify />
+          </Layout>
+        }
+      />
+      <Route path="/login" element={<Home />} />
+      <Route path="/verify" element={<Navigate to="/" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/" replace />} />
+      <Route path="/recharge" element={<Navigate to="/" replace />} />
+      <Route
+        path="/profile"
+        element={
+          <Layout>
+            <Profile />
+          </Layout>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <Layout>
+            <Admin />
+          </Layout>
+        }
+      />
+      <Route
+        path="/api-docs"
+        element={
+          <Layout>
+            <ApiDocs />
+          </Layout>
+        }
+      />
+      <Route path="/pass" element={<Bypass />} />
+    </Routes>
+  );
+}
 
 function App() {
   const [maintenance, setMaintenance] = useState({ enabled: false, message: '', estimatedEnd: null });
@@ -49,70 +125,7 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <BrowserRouter>
-            <Routes>
-              {maintenance.enabled ? (
-                <>
-                  {/* During maintenance: only admin + login routes work */}
-                  <Route path="/login" element={<Home />} />
-                  <Route
-                    path="/admin"
-                    element={
-                      <Layout>
-                        <Admin />
-                      </Layout>
-                    }
-                  />
-                  {/* Everything else shows maintenance page */}
-                  <Route path="*" element={
-                    <Maintenance
-                      message={maintenance.message}
-                      estimatedEnd={maintenance.estimatedEnd}
-                    />
-                  } />
-                </>
-              ) : (
-                <>
-                  {/* Normal routes */}
-                  <Route
-                    path="/"
-                    element={
-                      <Layout>
-                        <Verify />
-                      </Layout>
-                    }
-                  />
-                  <Route path="/login" element={<Home />} />
-                  <Route path="/verify" element={<Navigate to="/" replace />} />
-                  <Route path="/dashboard" element={<Navigate to="/" replace />} />
-                  <Route path="/recharge" element={<Navigate to="/" replace />} />
-                  <Route
-                    path="/profile"
-                    element={
-                      <Layout>
-                        <Profile />
-                      </Layout>
-                    }
-                  />
-                  <Route
-                    path="/admin"
-                    element={
-                      <Layout>
-                        <Admin />
-                      </Layout>
-                    }
-                  />
-                  <Route
-                    path="/api-docs"
-                    element={
-                      <Layout>
-                        <ApiDocs />
-                      </Layout>
-                    }
-                  />
-                  <Route path="/pass" element={<Bypass />} />
-                </>
-              )}
-            </Routes>
+            <AppRoutes maintenance={maintenance} />
           </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>
@@ -121,3 +134,4 @@ function App() {
 }
 
 export default App;
+

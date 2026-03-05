@@ -268,7 +268,9 @@ class SheerIDUserbot:
         # Determine status
         # IMPORTANT: Check rejection FIRST — some rejection messages contain 
         # "success" in educational text (e.g. "ensures success!")
-        if "VERIFICATION REJECTED" in text_upper or "VERIFICATION UNSUCCESSFUL" in text_upper or "❌" in text:
+        if ("VERIFICATION REJECTED" in text_upper or "VERIFICATION UNSUCCESSFUL" in text_upper 
+                or "❌" in text or "⛔" in text
+                or "LINK EXPIRED" in text_upper or "CANNOT RESUME" in text_upper):
             result["success"] = False
             result["status"] = "rejected"
 
@@ -279,12 +281,15 @@ class SheerIDUserbot:
             elif "DO NOT OPEN" in text_upper or "DIFFERENT IP" in text_upper:
                 result["message"] = "Rejected: Link already opened, please refresh the page"
                 result["reason"] = "link_opened"
-            elif "EXPIRED" in text_upper:
+            elif "EXPIRED" in text_upper or "DOES NOT EXIST" in text_upper:
                 result["message"] = "Rejected: Link expired, please refresh the page"
                 result["reason"] = "expired"
             elif "INVALID" in text_upper or "COULD NOT BE VERIFIED" in text_upper:
                 result["message"] = "Rejected: Invalid link, please refresh the page"
                 result["reason"] = "invalid"
+            elif "CANNOT RESUME" in text_upper:
+                result["message"] = "Rejected: Cannot resume session"
+                result["reason"] = "expired"
             else:
                 result["message"] = "Verification rejected"
                 result["reason"] = "unknown"

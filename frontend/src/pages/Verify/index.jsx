@@ -273,18 +273,23 @@ export default function Verify() {
                                         );
                                         if (resultItem) {
                                             let status = 'failed';
-                                            let message = result.message || t('msgError');
+                                            // Prefer translated messageKey over raw backend message
+                                            const resolveMsg = (fallbackKey) => {
+                                                if (result.messageKey) return t(result.messageKey);
+                                                return result.message || t(fallbackKey);
+                                            };
+                                            let message = resolveMsg('msgError');
 
                                             if (result.status === 'approved') {
                                                 status = 'success';
-                                                message = result.message || t('msgApproved');
+                                                message = resolveMsg('msgApproved');
                                                 setLastSuccess(new Date().toISOString());
                                                 fetchHistory();
                                             } else if (result.status === 'processing') {
                                                 status = 'processing';
-                                                message = result.message || t('processing');
+                                                message = resolveMsg('processing');
                                             } else if (result.status === 'rejected') {
-                                                message = result.message || t('msgRejected');
+                                                message = resolveMsg('msgRejected');
                                             } else if (result.status === 'no_credits') {
                                                 message = t('msgNoCredits');
                                             }
@@ -329,18 +334,22 @@ export default function Verify() {
                         );
                         if (resultItem) {
                             let status = 'failed';
-                            let message = result.message || t('msgError');
+                            const resolveMsg = (fallbackKey) => {
+                                if (result.messageKey) return t(result.messageKey);
+                                return result.message || t(fallbackKey);
+                            };
+                            let message = resolveMsg('msgError');
 
                             if (result.status === 'approved') {
                                 status = 'success';
-                                message = result.message || t('msgApproved');
+                                message = resolveMsg('msgApproved');
                                 setLastSuccess(new Date().toISOString());
                                 fetchHistory();
                             } else if (result.status === 'processing') {
                                 status = 'processing';
-                                message = result.message || t('processing');
+                                message = resolveMsg('processing');
                             } else if (result.status === 'rejected') {
-                                message = result.message || t('msgRejected');
+                                message = resolveMsg('msgRejected');
                             } else if (result.status === 'no_credits') {
                                 message = t('msgNoCredits');
                             }
@@ -404,18 +413,22 @@ export default function Verify() {
                     const resultItem = resultItems.find(r => r.verificationId === result.verificationId);
                     if (resultItem) {
                         let status = 'failed';
-                        let message = result.message || t('msgError');
+                        const resolveMsg = (fallbackKey) => {
+                            if (result.messageKey) return t(result.messageKey);
+                            return result.message || t(fallbackKey);
+                        };
+                        let message = resolveMsg('msgError');
 
                         if (result.status === 'approved') {
                             status = 'success';
-                            message = result.message || t('msgApproved');
+                            message = resolveMsg('msgApproved');
                             setLastSuccess(new Date().toISOString());
                             fetchHistory();
                         } else if (result.status === 'processing') {
                             status = 'processing';
-                            message = result.message || t('processing');
+                            message = resolveMsg('processing');
                         } else if (result.status === 'rejected') {
-                            message = result.message || t('msgRejected');
+                            message = resolveMsg('msgRejected');
                         }
                         setResults(prev => prev.map(r =>
                             r.id === resultItem.id

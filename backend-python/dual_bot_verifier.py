@@ -80,17 +80,20 @@ class DualBotVerifier:
                         if initial_step == "error":
                             return {
                                 "success": False, "status": "failed", "verificationId": vid,
-                                "message": f"该链接已失败 ({', '.join(error_ids) if error_ids else '未知错误'})，请刷新页面获取新链接"
+                                "message": f"该链接已失败 ({', '.join(error_ids) if error_ids else '未知错误'})，请刷新页面获取新链接",
+                                "messageKey": "msgLinkFailed"
                             }
                         if initial_step == "success":
                             return {
                                 "success": False, "status": "failed", "verificationId": vid,
-                                "message": "该链接已验证成功，无需重复提交"
+                                "message": "该链接已验证成功，无需重复提交",
+                                "messageKey": "msgAlreadyVerified"
                             }
                         if initial_step == "docUpload" and rejection_reasons:
                             return {
                                 "success": False, "status": "failed", "verificationId": vid,
-                                "message": f"该链接已被拒绝 ({', '.join(rejection_reasons)})，请刷新页面获取新链接"
+                                "message": f"该链接已被拒绝 ({', '.join(rejection_reasons)})，请刷新页面获取新链接",
+                                "messageKey": "msgLinkRejected"
                             }
             except Exception as e:
                 logger.warning(f"[DualBot] [{account_id}] Pre-check failed: {e}")
@@ -106,7 +109,8 @@ class DualBotVerifier:
                     "success": False,
                     "status": "warmup_timeout",
                     "verificationId": vid,
-                    "message": f"文档生成超时，请重试"
+                    "message": f"文档生成超时，请重试",
+                    "messageKey": "msgWarmupTimeout"
                 }
 
             logger.info(f"[DualBot] [{account_id}] Warmup response: {warmup_result[:100]}...")
@@ -117,6 +121,7 @@ class DualBotVerifier:
             if not warmup_parsed.get("success"):
                 logger.warning(f"[DualBot] [{account_id}] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
                 warmup_parsed["message"] = f"文档生成失败: {warmup_parsed['message']}"
+                warmup_parsed["messageKey"] = "msgWarmupFailed"
                 return warmup_parsed
 
             logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
@@ -142,7 +147,8 @@ class DualBotVerifier:
                     "success": False,
                     "status": "timeout",
                     "verificationId": vid,
-                    "message": f"验证超时，请重试"
+                    "message": f"验证超时，请重试",
+                    "messageKey": "msgVerifyTimeout"
                 }
 
             # Parse result
@@ -164,6 +170,7 @@ class DualBotVerifier:
                                 parsed["success"] = True
                                 parsed["status"] = "approved"
                                 parsed["message"] = "验证通过"
+                                parsed["messageKey"] = "msgApproved"
                 except Exception as e:
                     logger.warning(f"[DualBot] [{account_id}] Race check failed: {e}")
 
@@ -174,6 +181,7 @@ class DualBotVerifier:
                 logger.info(f"[DualBot] [{account_id}] Step 3: Launching background bypass for {vid[:8]}...")
                 asyncio.create_task(self._background_bypass(vid, account_id))
                 parsed["message"] = "验证失败，请刷新页面获取新链接"
+                parsed["messageKey"] = "msgVerifyFailedRefresh"
                 parsed["bypassed"] = "pending"
 
             return parsed
@@ -342,6 +350,7 @@ class DualBotVerifier:
             result["success"] = False
             result["status"] = "cooldown"
             result["message"] = f"程序崩溃，请重试"
+            result["messageKey"] = "msgCrashed"
             result["cooldown_seconds"] = total_seconds
             logger.info(f"[DualBot] Cooldown: {total_seconds}s")
             return result
@@ -355,6 +364,7 @@ class DualBotVerifier:
                 result["success"] = True
                 result["status"] = "approved"
                 result["message"] = "验证通过"
+                result["messageKey"] = "msgApproved"
                 
                 # Extract remaining quota from "Total tersedia: X verifikasi" (handles **bold** markdown)
                 quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
@@ -370,6 +380,7 @@ class DualBotVerifier:
             result["success"] = False
             result["status"] = "failed"
             result["message"] = "检测到欺诈行为，请刷新页面获取新链接"
+            result["messageKey"] = "msgFraudDetected"
             return result
 
         # 3. Check for Explicit Failure Keywords (Priority over generic success to avoid false positives from bypass instructions)
@@ -387,12 +398,14 @@ class DualBotVerifier:
                 # Indonesian/English combined failure reason mapping
                 if any(k in text_clean for k in ["HABIS", "KURANG", "TIDAK BISA"]):
                     result["message"] = "程序崩溃，请重试"
+                    result["messageKey"] = "msgCrashed"
                     # Extract quota from "Quota: X/Y" format (handles **bold**)
                     quota_match = re.search(r'QUOTA[:\s]*\*{0,2}(\d+)\*{0,2}/\*{0,2}\d+\*{0,2}', text_clean)
                     if quota_match:
                         result["remaining_quota"] = int(quota_match.group(1))
                 else:
                     result["message"] = f"验证失败: {text[:50]}..."
+                    result["messageKey"] = "msgVerifyFailedDetail"
                     # Also try to extract quota from failure messages
                     quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
                     if quota_match:
@@ -423,6 +436,7 @@ class DualBotVerifier:
                 result["success"] = True
                 result["status"] = "approved"
                 result["message"] = "验证通过"
+                result["messageKey"] = "msgApproved"
                 return result
         
         # 4. Safe Fallback: Unrecognized -> treated as failure.
@@ -430,6 +444,7 @@ class DualBotVerifier:
         result["success"] = False
         result["status"] = "failed"
         result["message"] = f"请求失败: {text[:50]}..."
+        result["messageKey"] = "msgRequestFailed"
         return result
 
     # ---- Bypass (submit empty doc to invalidate link) ----

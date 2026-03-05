@@ -72,6 +72,18 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         stepWarmup: '文档生成中...',
         stepVerify: '提交文档中...',
         stepWaiting: '等待验证...',
+        // Backend messageKey translations
+        msgLinkFailed: '该链接已失败，请刷新页面获取新链接',
+        msgAlreadyVerified: '该链接已验证成功，无需重复提交',
+        msgLinkRejected: '该链接已被拒绝，请刷新页面获取新链接',
+        msgWarmupTimeout: '文档生成超时，请重试',
+        msgWarmupFailed: '文档生成失败',
+        msgVerifyTimeout: '验证超时，请重试',
+        msgVerifyFailedRefresh: '验证失败，请刷新页面获取新链接',
+        msgFraudDetected: '检测到欺诈行为，请刷新页面获取新链接',
+        msgCrashed: '程序崩溃，请重试',
+        msgVerifyFailedDetail: '验证失败',
+        msgRequestFailed: '请求失败',
 
         // Verify - live status
         liveStatusTitle: '📊 实时验证状态',
@@ -207,6 +219,18 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         stepWarmup: 'Generating document...',
         stepVerify: 'Submitting document...',
         stepWaiting: 'Waiting for verification...',
+        // Backend messageKey translations
+        msgLinkFailed: 'Link already failed, please refresh for a new link',
+        msgAlreadyVerified: 'Link already verified, no need to resubmit',
+        msgLinkRejected: 'Link already rejected, please refresh for a new link',
+        msgWarmupTimeout: 'Document generation timed out, please retry',
+        msgWarmupFailed: 'Document generation failed',
+        msgVerifyTimeout: 'Verification timed out, please retry',
+        msgVerifyFailedRefresh: 'Verification failed, please refresh for a new link',
+        msgFraudDetected: 'Fraud detected, please refresh for a new link',
+        msgCrashed: 'Program crashed, please retry',
+        msgVerifyFailedDetail: 'Verification failed',
+        msgRequestFailed: 'Request failed',
 
         // Verify - live status
         liveStatusTitle: '📊 Live Verification Status',

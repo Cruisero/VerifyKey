@@ -251,10 +251,10 @@ export default function Verify() {
                             if (event.type === 'progress') {
                                 // Update the specific link's progress message
                                 const stepMessages = {
-                                    warmup: '📄 文档生成中...',
-                                    verify: '📤 提交文档中...',
-                                    waiting: '⏳ 等待验证...',
-                                    cooldown_wait: `⏳ ${event.message}`
+                                    warmup: '文档生成中...',
+                                    verify: '提交文档中...',
+                                    waiting: '等待验证...',
+                                    cooldown_wait: `${event.message}`
                                 };
                                 const progressMsg = stepMessages[event.step] || event.message;
 

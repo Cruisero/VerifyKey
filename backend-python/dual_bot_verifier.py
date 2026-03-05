@@ -106,7 +106,7 @@ class DualBotVerifier:
                     "success": False,
                     "status": "warmup_timeout",
                     "verificationId": vid,
-                    "message": f"Document generation timed out, please retry"
+                    "message": f"文档生成超时，请重试"
                 }
 
             logger.info(f"[DualBot] [{account_id}] Warmup response: {warmup_result[:100]}...")
@@ -116,7 +116,7 @@ class DualBotVerifier:
             
             if not warmup_parsed.get("success"):
                 logger.warning(f"[DualBot] [{account_id}] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
-                warmup_parsed["message"] = f"Document generation failed: {warmup_parsed['message']}"
+                warmup_parsed["message"] = f"文档生成失败: {warmup_parsed['message']}"
                 return warmup_parsed
 
             logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
@@ -142,7 +142,7 @@ class DualBotVerifier:
                     "success": False,
                     "status": "timeout",
                     "verificationId": vid,
-                    "message": f"Verification timed out, please retry"
+                    "message": f"验证超时，请重试"
                 }
 
             # Parse result
@@ -163,7 +163,7 @@ class DualBotVerifier:
                                 logger.info(f"[DualBot] [{account_id}] Race condition detected! Bot said fail but SheerID says SUCCESS for {vid[:8]}")
                                 parsed["success"] = True
                                 parsed["status"] = "approved"
-                                parsed["message"] = "Verification approved"
+                                parsed["message"] = "验证通过"
                 except Exception as e:
                     logger.warning(f"[DualBot] [{account_id}] Race check failed: {e}")
 
@@ -173,7 +173,7 @@ class DualBotVerifier:
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
                 logger.info(f"[DualBot] [{account_id}] Step 3: Launching background bypass for {vid[:8]}...")
                 asyncio.create_task(self._background_bypass(vid, account_id))
-                parsed["message"] = "Verification failed, please refresh the page and get a new link"
+                parsed["message"] = "验证失败，请刷新页面获取新链接"
                 parsed["bypassed"] = "pending"
 
             return parsed
@@ -341,7 +341,7 @@ class DualBotVerifier:
             
             result["success"] = False
             result["status"] = "cooldown"
-            result["message"] = f"Program crashed, please retry"
+            result["message"] = f"程序崩溃，请重试"
             result["cooldown_seconds"] = total_seconds
             logger.info(f"[DualBot] Cooldown: {total_seconds}s")
             return result
@@ -354,7 +354,7 @@ class DualBotVerifier:
                 logger.info(f"[DualBot] Definitive success matched: {kw}")
                 result["success"] = True
                 result["status"] = "approved"
-                result["message"] = "Verification approved"
+                result["message"] = "验证通过"
                 
                 # Extract remaining quota from "Total tersedia: X verifikasi" (handles **bold** markdown)
                 quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
@@ -363,6 +363,14 @@ class DualBotVerifier:
                     logger.info(f"[DualBot] Extracted remaining quota: {result['remaining_quota']}")
                 
                 return result
+
+        # 2.5 Check for Fraud Detection (specific message before generic failures)
+        if "FRAUD" in text_clean or "DETECTING FRAUD" in text_clean:
+            logger.info(f"[DualBot] Fraud detection matched")
+            result["success"] = False
+            result["status"] = "failed"
+            result["message"] = "检测到欺诈行为，请刷新页面获取新链接"
+            return result
 
         # 3. Check for Explicit Failure Keywords (Priority over generic success to avoid false positives from bypass instructions)
         # ❌ is often used by robots to indicate definitive failure.
@@ -378,13 +386,13 @@ class DualBotVerifier:
                 
                 # Indonesian/English combined failure reason mapping
                 if any(k in text_clean for k in ["HABIS", "KURANG", "TIDAK BISA"]):
-                    result["message"] = "Program crashed, please retry"
+                    result["message"] = "程序崩溃，请重试"
                     # Extract quota from "Quota: X/Y" format (handles **bold**)
                     quota_match = re.search(r'QUOTA[:\s]*\*{0,2}(\d+)\*{0,2}/\*{0,2}\d+\*{0,2}', text_clean)
                     if quota_match:
                         result["remaining_quota"] = int(quota_match.group(1))
                 else:
-                    result["message"] = f"Verification failed: {text[:50]}..."
+                    result["message"] = f"验证失败: {text[:50]}..."
                     # Also try to extract quota from failure messages
                     quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
                     if quota_match:
@@ -414,14 +422,14 @@ class DualBotVerifier:
                 logger.info(f"[DualBot] Matched success keyword: {kw}")
                 result["success"] = True
                 result["status"] = "approved"
-                result["message"] = "Approved"
+                result["message"] = "验证通过"
                 return result
         
         # 4. Safe Fallback: Unrecognized -> treated as failure.
         logger.info("[DualBot] No status matched, falling back to failed.")
         result["success"] = False
         result["status"] = "failed"
-        result["message"] = f"Request failed: {text[:50]}..."
+        result["message"] = f"请求失败: {text[:50]}..."
         return result
 
     # ---- Bypass (submit empty doc to invalidate link) ----

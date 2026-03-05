@@ -69,6 +69,9 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         noResults: '暂无结果',
         noResultsHint: '粘贴验证链接后点击开始',
         resultProcessing: '处理中...',
+        stepWarmup: '文档生成中...',
+        stepVerify: '提交文档中...',
+        stepWaiting: '等待验证...',
 
         // Verify - live status
         liveStatusTitle: '📊 实时验证状态',
@@ -201,6 +204,9 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         noResults: 'No results yet',
         noResultsHint: 'Paste verification links and click Start',
         resultProcessing: 'Processing...',
+        stepWarmup: 'Generating document...',
+        stepVerify: 'Submitting document...',
+        stepWaiting: 'Waiting for verification...',
 
         // Verify - live status
         liveStatusTitle: '📊 Live Verification Status',

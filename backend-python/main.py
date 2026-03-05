@@ -2699,11 +2699,11 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
         vid = r.get("verificationId", "")
         reason = r.get("reason", "")
         if r["status"] == "approved":
-            verification_history.log_verification("pass", vid)
+            verification_history.log_verification("pass", vid, cdk=request.cdk)
         elif r["status"] == "rejected" and reason not in ("link_opened", "expired", "invalid", "rate_limited"):
-            verification_history.log_verification("failed", vid)
+            verification_history.log_verification("failed", vid, cdk=request.cdk)
         elif r["status"] in ("error",):
-            verification_history.log_verification("failed", vid)
+            verification_history.log_verification("failed", vid, cdk=request.cdk)
     
     # Deduct CDK quota for successful verifications
     successful = sum(1 for r in results if r["status"] == "approved")

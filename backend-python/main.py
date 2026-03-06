@@ -52,11 +52,15 @@ PROXY_PASS = os.getenv("PROXY_PASS", "")
 from telegram_userbot import SheerIDUserbot
 from telegram_manager import TelegramAccountManager
 from dual_bot_verifier import DualBotVerifier
+from black_bot_verifier import BlackBotVerifier
 telegram_bot: Optional[SheerIDUserbot] = None
 # Old bot per-account cooldown tracking {account_id: expiry_timestamp}
 _oldbot_cooldowns: Dict[str, float] = {}
+# Black bot per-account cooldown tracking {account_id: expiry_timestamp}
+_blackbot_cooldowns: Dict[str, float] = {}
 tg_manager = TelegramAccountManager()
 dual_bot = DualBotVerifier()
+black_bot = BlackBotVerifier()
 
 # VID deduplication: prevent the same VID from being processed simultaneously
 _vid_locks: dict = {}  # vid -> asyncio.Lock
@@ -2051,6 +2055,285 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # Disable Nginx proxy buffering
+            "Connection": "keep-alive",
+        }
+    )
+
+
+# ========== Black Bot Verification ==========
+
+class BlackBotVerifyRequest(BaseModel):
+    links: List[str]
+    cdk: Optional[str] = None
+
+
+@app.post("/api/verify/blackbot")
+async def verify_via_blackbot(request: BlackBotVerifyRequest):
+    """
+    Verify using @Black_Verifier bot with SSE streaming progress.
+    Single-bot flow: send link → wait for result → parse response.
+    """
+    if not tg_manager.is_connected:
+        raise HTTPException(status_code=503, detail="程序离线，请联系管理员")
+
+    if not request.links:
+        raise HTTPException(status_code=400, detail="No verification links provided")
+
+    if len(request.links) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 links per request")
+
+    # Validate CDK (skip for bot-internal requests)
+    is_bot_internal = request.cdk == "__BOT_INTERNAL__"
+    cdk_check = {"valid": True, "remaining": 999}
+
+    if not is_bot_internal:
+        if not request.cdk:
+            raise HTTPException(status_code=400, detail="请提供 CDK 激活码")
+        cdk_check = cdk_manager.validate_cdk(request.cdk)
+        if not cdk_check["valid"]:
+            raise HTTPException(status_code=403, detail=cdk_check["message"])
+
+    clean_links = [link.strip() for link in request.links if link.strip()]
+    if not clean_links:
+        raise HTTPException(status_code=400, detail="No valid links provided")
+
+    # Validate link format
+    import re as _re_bb
+    clean_url_pattern = r'^https://services\.sheerid\.com/verify/[a-fA-F0-9]+/\?verificationId=[a-fA-F0-9]+$'
+    for link in clean_links:
+        if not _re_bb.match(clean_url_pattern, link):
+            raise HTTPException(
+                status_code=400,
+                detail=f"链接格式错误，请刷新页面获取重新获取链接。注意右击按钮获取！"
+            )
+
+    # Pre-check VID status
+    import httpx as _httpx_bb
+    for link in clean_links:
+        _vid_m = _re_bb.search(r'verificationId=([a-fA-F0-9]+)', link)
+        if _vid_m:
+            _pre_vid = _vid_m.group(1)
+            try:
+                async with _httpx_bb.AsyncClient(timeout=10) as _pc:
+                    _pr = await _pc.get(f"https://services.sheerid.com/rest/v2/verification/{_pre_vid}")
+                    if _pr.status_code == 200:
+                        _pd = _pr.json()
+                        _ps = _pd.get("currentStep", "")
+                        _pe = _pd.get("errorIds", [])
+                        _prj = _pd.get("rejectionReasons", [])
+
+                        if _ps == "error":
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            )
+                        if _ps == "success":
+                            raise HTTPException(
+                                status_code=400,
+                                detail="该链接已验证成功，无需重复提交"
+                            )
+                        if _ps == "docUpload" and _prj:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            )
+            except HTTPException:
+                raise
+            except Exception as _pre_err:
+                logger.warning(f"[BlackBot] VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
+
+    if not is_bot_internal:
+        if cdk_check["remaining"] < len(clean_links):
+            raise HTTPException(
+                status_code=403,
+                detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
+            )
+
+    # Get black bot config
+    import config_manager as _cm_bb
+    _cfg_bb = _cm_bb.get_config()
+    _bb_config = _cfg_bb.get("verification", {}).get("blackBot", {})
+    auto_bypass = _bb_config.get("autoBypass", True)
+    bb_bot_username = _bb_config.get("botUsername")
+
+    import re as re_mod_bb
+    def extract_vid_bb(link):
+        m = re_mod_bb.search(r'verificationId=([A-Za-z0-9-]+)', link)
+        return m.group(1) if m else link[-12:]
+
+    link_vid_map = {link: extract_vid_bb(link) for link in clean_links}
+
+    async def event_stream():
+        import json
+        import time as _time
+
+        cooldown_wait_lock = asyncio.Lock()
+
+        def _get_next_blackbot_client():
+            """Get next available blackbot-assigned client, skipping cooldown accounts."""
+            now = _time.time()
+            config = _cm_bb.get_config()
+            accounts = config.get("telegramAccounts", [])
+
+            blackbot_ids = []
+            for acc in accounts:
+                if not acc.get("enabled", True):
+                    continue
+                assigned = acc.get("assignedBots", ["dualbot"])
+                if "blackbot" not in assigned:
+                    continue
+                if _blackbot_cooldowns.get(acc["id"], 0) > now:
+                    continue
+                blackbot_ids.append(acc["id"])
+
+            all_clients = tg_manager.get_all_clients()
+            available = [(aid, all_clients[aid]) for aid in blackbot_ids
+                         if aid in all_clients and all_clients[aid].is_connected()]
+
+            if not available:
+                return None
+
+            if not hasattr(_get_next_blackbot_client, '_idx'):
+                _get_next_blackbot_client._idx = 0
+            _get_next_blackbot_client._idx = (_get_next_blackbot_client._idx + 1) % len(available)
+            return available[_get_next_blackbot_client._idx]
+
+        def _get_shortest_blackbot_cooldown():
+            now = _time.time()
+            active = [exp - now for exp in _blackbot_cooldowns.values() if exp > now]
+            return min(active) if active else 0
+
+        async def process_single_link(link_to_verify):
+            vid = link_vid_map.get(link_to_verify, "")
+            max_retries = 5
+
+            # VID deduplication
+            if vid:
+                if vid not in _vid_locks:
+                    _vid_locks[vid] = asyncio.Lock()
+                vid_lock = _vid_locks[vid]
+
+                if vid_lock.locked():
+                    logger.info(f"[BlackBot] VID {vid[:8]}... already being processed, waiting...")
+                    async with vid_lock:
+                        if vid in _vid_results:
+                            cached = _vid_results[vid]
+                            return cached.get('acc_id'), cached.get('result', cached)
+                        return None, {"success": False, "status": "error", "message": "Duplicate VID, no result cached"}
+            else:
+                vid_lock = None
+
+            async def on_progress(progress):
+                event = {"type": "progress", "link": link_to_verify, "vid": vid, **progress}
+                progress_events.append(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
+
+            lock_ctx = vid_lock if vid_lock else asyncio.Lock()
+            async with lock_ctx:
+              for attempt in range(max_retries):
+                pool_item = _get_next_blackbot_client()
+
+                if not pool_item:
+                    wait_time = _get_shortest_blackbot_cooldown()
+                    if wait_time > 0:
+                        logger.info(f"[BlackBot] All accounts in cooldown, waiting {wait_time:.0f}s...")
+                        on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "step": "cooldown_wait", "message": f"等待可用账号 ({int(wait_time)}s)..."}
+                        progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
+                        async with cooldown_wait_lock:
+                            pool_item = _get_next_blackbot_client()
+                            if not pool_item:
+                                wait_time = _get_shortest_blackbot_cooldown()
+                                if wait_time > 0:
+                                    await asyncio.sleep(wait_time + 2)
+                                pool_item = _get_next_blackbot_client()
+
+                    if not pool_item:
+                        result = {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+                        if vid:
+                            _vid_results[vid] = {"acc_id": None, "result": result}
+                        return None, result
+
+                acc_id, client = pool_item
+                result = await black_bot.verify(
+                    client=client,
+                    link=link_to_verify,
+                    account_id=acc_id,
+                    bot_username=bb_bot_username,
+                    auto_bypass=auto_bypass,
+                    on_progress=on_progress
+                )
+
+                if result.get("status") == "cooldown":
+                    logger.info(f"[BlackBot] Account {acc_id} in cooldown, retrying...")
+                    _blackbot_cooldowns[acc_id] = _time.time() + result.get("cooldown_seconds", 90)
+                    continue
+
+                # Cache result for deduplication
+                if vid:
+                    _vid_results[vid] = {"acc_id": acc_id, "result": result}
+                    async def cleanup_vid(v):
+                        await asyncio.sleep(60)
+                        _vid_results.pop(v, None)
+                        _vid_locks.pop(v, None)
+                    asyncio.create_task(cleanup_vid(vid))
+
+                return acc_id, result
+
+              result = {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
+              if vid:
+                  _vid_results[vid] = {"acc_id": None, "result": result}
+              return None, result
+
+        progress_events = []
+        tasks = [asyncio.create_task(process_single_link(link)) for link in clean_links]
+
+        while not all(t.done() for t in tasks):
+            while progress_events:
+                yield progress_events.pop(0)
+            await asyncio.sleep(0.3)
+
+        while progress_events:
+            yield progress_events.pop(0)
+
+        paired_results = [t.result() for t in tasks]
+
+        results = []
+        for acc_id, r in paired_results:
+            results.append(r)
+
+        # Log and deduct
+        successful = sum(1 for r in results if r.get("success"))
+        cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
+        if successful > 0 and not is_bot_internal:
+            deduct = cdk_manager.use_cdk(request.cdk, successful)
+            cdk_remaining = deduct.get("remaining", cdk_remaining)
+
+        cdk_label = request.cdk if not is_bot_internal else "BOT"
+        for r in results:
+            vid = r.get("verificationId", "")
+            msg = r.get("message", r.get("reason", ""))
+            if r.get("status") == "approved":
+                verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
+            elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
+                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label)
+
+        done_event = {
+            "type": "done",
+            "results": results,
+            "stats": {
+                "total": len(results),
+                "approved": successful,
+                "failed": sum(1 for r in results if not r.get("success"))
+            },
+            "cdkRemaining": cdk_remaining
+        }
+        yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
         }
     )

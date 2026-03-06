@@ -1499,6 +1499,11 @@ export default function Admin() {
                         warmupBot: config?.verification?.dualBot?.warmupBot || '@SatsetHelperbot',
                         verifyBot: config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot',
                         autoBypass: config?.verification?.dualBot?.autoBypass !== false
+                    },
+                    blackBot: {
+                        enabled: config?.verification?.blackBot?.enabled || false,
+                        botUsername: config?.verification?.blackBot?.botUsername || '@Black_Verifier',
+                        autoBypass: config?.verification?.blackBot?.autoBypass !== false
                     }
                 }
             };
@@ -2819,7 +2824,8 @@ export default function Admin() {
                                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                                     {[
                                                                         { key: 'dualbot', label: '新Bot' },
-                                                                        { key: 'oldbot', label: '老Bot' }
+                                                                        { key: 'oldbot', label: '老Bot' },
+                                                                        { key: 'blackbot', label: 'BlackBot' }
                                                                     ].map(bot => {
                                                                         const assigned = (acc.assignedBots || ['dualbot']);
                                                                         const isOn = assigned.includes(bot.key);

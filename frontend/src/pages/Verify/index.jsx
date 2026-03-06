@@ -20,7 +20,7 @@ export default function Verify() {
     const [provider, setProvider] = useState('telegram');
     const [browserMode, setBrowserMode] = useState(false);
     const [program, setProgram] = useState('google-student');
-    const [verifyMethod, setVerifyMethod] = useState('standard'); // 'standard' | 'dualbot'
+    const [verifyMethod, setVerifyMethod] = useState('standard'); // 'standard' | 'dualbot' | 'blackbot'
     const [dualBotEnabled, setDualBotEnabled] = useState(false);
 
     // Tips inline state (loaded from config)
@@ -76,10 +76,13 @@ export default function Verify() {
                     setBrowserMode(data.verification?.browserMode === true);
 
                     // Auto-select verify method based on admin config
+                    const isBlackBotEnabled = !!data.verification?.blackBot?.enabled;
                     const isDualBotEnabled = !!data.verification?.dualBot?.enabled;
                     setDualBotEnabled(isDualBotEnabled);
 
-                    if (isDualBotEnabled) {
+                    if (isBlackBotEnabled) {
+                        setVerifyMethod('blackbot');
+                    } else if (isDualBotEnabled) {
                         setVerifyMethod('dualbot');
                     } else {
                         setVerifyMethod('standard');
@@ -216,10 +219,12 @@ export default function Verify() {
         setResults(prev => [...resultItems, ...prev]);
 
         try {
-            const apiEndpoint = verifyMethod === 'dualbot' ? '/api/verify/dualbot' : '/api/verify/telegram';
+            const apiEndpoint = verifyMethod === 'blackbot' ? '/api/verify/blackbot'
+                : verifyMethod === 'dualbot' ? '/api/verify/dualbot'
+                    : '/api/verify/telegram';
 
-            if (verifyMethod === 'dualbot') {
-                // SSE streaming mode for dualbot
+            if (verifyMethod === 'dualbot' || verifyMethod === 'blackbot') {
+                // SSE streaming mode for dualbot and blackbot
                 const response = await fetch(`${API_BASE}${apiEndpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

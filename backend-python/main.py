@@ -12,7 +12,7 @@ Features:
 import os
 import json
 import asyncio
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request
@@ -53,6 +53,8 @@ from telegram_userbot import SheerIDUserbot
 from telegram_manager import TelegramAccountManager
 from dual_bot_verifier import DualBotVerifier
 telegram_bot: Optional[SheerIDUserbot] = None
+# Old bot per-account cooldown tracking {account_id: expiry_timestamp}
+_oldbot_cooldowns: Dict[str, float] = {}
 tg_manager = TelegramAccountManager()
 dual_bot = DualBotVerifier()
 
@@ -1574,7 +1576,13 @@ async def startup_event():
     config = config_manager.get_config()
     
     # Multi-account auto-connect (new system)
-    asyncio.create_task(tg_manager.auto_connect())
+    async def _startup_connect():
+        await tg_manager.auto_connect()
+        # Register old bot (SheerIDUserbot) handler on all pool clients
+        if telegram_bot:
+            for _acc_id, _client in tg_manager.get_all_clients().items():
+                telegram_bot.register_handler(_client)
+    asyncio.create_task(_startup_connect())
     
     # Update dual bot config
     dual_config = config.get("verification", {}).get("dualBot", {})
@@ -1679,6 +1687,10 @@ async def telegram_status():
 async def telegram_reconnect():
     """Manually reconnect all enabled Telegram accounts"""
     result = await tg_manager.auto_connect()
+    # Re-register old bot handlers on reconnected pool clients
+    if telegram_bot:
+        for _acc_id, _client in tg_manager.get_all_clients().items():
+            telegram_bot.register_handler(_client)
     return {
         "success": result.get("success", False),
         "connected": tg_manager.is_connected,
@@ -1763,6 +1775,9 @@ async def activate_telegram_account(account_id: str):
     result = await tg_manager.activate(account_id)
     if result.get("success"):
         sync_telegram_bot(account_id)
+        # Register old bot handler on the newly activated client
+        if telegram_bot and account_id in tg_manager._clients:
+            telegram_bot.register_handler(tg_manager._clients[account_id])
     elif not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Activation failed"))
     return result
@@ -2645,13 +2660,19 @@ async def startup_auto_records():
 async def verify_via_telegram(request: TelegramVerifyRequest):
     """
     Verify by sending full verification links to Telegram SheerID Bot.
-    Requires a valid CDK with sufficient quota.
-    Links are processed concurrently — results are matched by verificationId.
+    Uses unified account pool with round-robin and per-account cooldown.
     """
-    if not telegram_bot or not telegram_bot.is_connected:
+    # Check if pool has any connected clients
+    if not tg_manager.is_connected:
         raise HTTPException(
             status_code=503, 
-            detail="Not connected. Please enable it in settings."
+            detail="没有可用的账号连接，请在管理面板添加或重连账号"
+        )
+    
+    if not telegram_bot:
+        raise HTTPException(
+            status_code=503, 
+            detail="老 Bot 未初始化，请检查配置"
         )
     
     if not request.links:
@@ -2673,7 +2694,7 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     if not clean_links:
         raise HTTPException(status_code=400, detail="No valid links provided")
 
-    # Validate link format: only accept clean SheerID URLs without extra query params
+    # Validate link format
     import re as _re_val2
     clean_url_pattern = r'^https://services\.sheerid\.com/verify/[a-fA-F0-9]+/\?verificationId=[a-fA-F0-9]+$'
     for link in clean_links:
@@ -2690,31 +2711,101 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
             detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
         )
     
-    # Send all links concurrently
     import re
+    import time as _time
+    
+    def _get_next_oldbot_client():
+        """Get next available client from pool, skipping old-bot-cooldown accounts."""
+        now = _time.time()
+        import config_manager as _cm
+        config = _cm.get_config()
+        accounts = config.get("telegramAccounts", [])
+        enabled_ids = [acc["id"] for acc in accounts if acc.get("enabled", True)]
+        
+        all_clients = tg_manager.get_all_clients()
+        available = [(aid, client) for aid, client in all_clients.items()
+                     if aid in enabled_ids and client.is_connected()
+                     and _oldbot_cooldowns.get(aid, 0) <= now]
+        
+        if not available:
+            return None
+        
+        # Simple round-robin via modular index
+        if not hasattr(_get_next_oldbot_client, '_idx'):
+            _get_next_oldbot_client._idx = 0
+        _get_next_oldbot_client._idx = (_get_next_oldbot_client._idx + 1) % len(available)
+        return available[_get_next_oldbot_client._idx]
+    
+    def _get_shortest_oldbot_cooldown():
+        """Return seconds until the soonest old-bot cooldown expires. 0 if none."""
+        now = _time.time()
+        active = [exp - now for exp in _oldbot_cooldowns.values() if exp > now]
+        return min(active) if active else 0
     
     async def process_link(link):
         vid_match = re.search(r'verificationId=([a-zA-Z0-9]+)', link)
         display_id = vid_match.group(1) if vid_match else link[:30]
         
-        result = await telegram_bot.verify(link)
+        max_retries = 5
+        for attempt in range(max_retries):
+            pool_item = _get_next_oldbot_client()
+            
+            if not pool_item:
+                # All accounts in cooldown, wait for shortest
+                wait_time = _get_shortest_oldbot_cooldown()
+                if wait_time > 0:
+                    logger.info(f"[OldBot] All accounts in cooldown, waiting {wait_time:.0f}s...")
+                    await asyncio.sleep(wait_time + 2)
+                    pool_item = _get_next_oldbot_client()
+                
+                if not pool_item:
+                    return {
+                        "link": link,
+                        "verificationId": display_id,
+                        "status": "error",
+                        "success": False,
+                        "message": "所有账号冷却中，请稍后重试"
+                    }
+            
+            acc_id, client = pool_item
+            
+            # Register handler if not already done
+            telegram_bot.register_handler(client)
+            
+            result = await telegram_bot.verify_with_client(client, link)
+            
+            # Handle cooldown — mark this account and retry with next
+            if result.get("status") == "cooldown":
+                wait_seconds = result.get("cooldown_seconds", 90)
+                _oldbot_cooldowns[acc_id] = _time.time() + wait_seconds
+                logger.info(f"[OldBot] Account {acc_id} cooldown {wait_seconds}s, retrying with next...")
+                continue
+            
+            return {
+                "link": link,
+                "verificationId": result.get("verificationId") or display_id,
+                "status": result.get("status", "unknown"),
+                "success": result.get("success", False),
+                "message": result.get("message", ""),
+                "credits": result.get("credits"),
+                "claimLink": result.get("claimLink"),
+                "reason": result.get("reason"),
+                "raw_response": result.get("raw_response")
+            }
         
+        # Exhausted retries
         return {
             "link": link,
-            "verificationId": result.get("verificationId") or display_id,
-            "status": result.get("status", "unknown"),
-            "success": result.get("success", False),
-            "message": result.get("message", ""),
-            "credits": result.get("credits"),
-            "claimLink": result.get("claimLink"),
-            "reason": result.get("reason"),
-            "raw_response": result.get("raw_response")
+            "verificationId": display_id,
+            "status": "cooldown",
+            "success": False,
+            "message": "所有账号冷却中，请稍后重试"
         }
     
     results = await asyncio.gather(*[process_link(link) for link in clean_links])
     results = list(results)
     
-    # Log verification results to history (skip user-side link issues)
+    # Log verification results to history
     for r in results:
         vid = r.get("verificationId", "")
         reason = r.get("reason", "")

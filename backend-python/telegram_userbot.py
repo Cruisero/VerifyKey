@@ -37,6 +37,8 @@ class SheerIDUserbot:
         self._pending_verifications: Dict[str, asyncio.Future] = {}
         # Fallback queue for messages we can't match by ID (e.g. "Processing...")
         self._unmatched_messages: List[str] = []
+        # Track which external clients already have our handler registered
+        self._registered_clients: set = set()
 
     async def start(self):
         """Start the client and register event handler"""
@@ -145,93 +147,83 @@ class SheerIDUserbot:
 
     # ========== Verification (ID-based concurrent matching) ==========
 
-    async def verify(self, verification_link: str, timeout: int = 120) -> dict:
+    def register_handler(self, client: TelegramClient):
         """
-        Send a verification link to the bot and wait for the matching result by verificationId.
+        Register the bot message event handler on an external TelegramClient.
+        This allows pool clients to forward bot responses to our _pending_verifications matching.
+        Safe to call multiple times — will skip already-registered clients.
+        """
+        client_id = id(client)
+        if client_id in self._registered_clients:
+            return
+        client.add_event_handler(self._on_bot_message, events.NewMessage(from_users=self.bot_username))
+        self._registered_clients.add(client_id)
+        logger.info(f"[OldBot] Registered handler on pool client {client_id}")
+
+    async def verify(self, verification_link: str, timeout: int = 120) -> dict:
+        """Send a verification link using the internal client (backward compat)."""
+        if not self.is_connected:
+            return {"success": False, "status": "error", "message": "Userbot not connected"}
+        return await self.verify_with_client(self.client, verification_link, timeout=timeout)
+
+    async def verify_with_client(self, client: TelegramClient, verification_link: str, timeout: int = 120) -> dict:
+        """
+        Send a verification link using any TelegramClient from the pool.
 
         Concurrent-safe: multiple links can be sent simultaneously.
         Each bot response contains the verificationId (e.g. "ID: 6995269523c407520aeac689"),
         which is used to match the response back to the correct request.
 
-        Flow:
-        1. Extract verificationId from the link
-        2. Register a Future in _pending_verifications[verificationId]
-        3. Send the link to the bot
-        4. _on_bot_message parses each bot reply, extracts ID, resolves the matching Future
-        5. If cooldown, wait and retry (up to 3 times)
-        6. Return the parsed result
-
         Returns:
             dict with: success, status, verificationId, credits, message, claimLink, raw_response
         """
-        if not self.is_connected:
-            return {"success": False, "status": "error", "message": "Userbot not connected"}
-
         # Extract verificationId from the link
         vid_match = re.search(r'verificationId=([a-zA-Z0-9]+)', verification_link)
         if not vid_match:
             return {"success": False, "status": "error", "message": "Cannot extract verificationId from link"}
 
         verification_id = vid_match.group(1)
-        max_cooldown_retries = 3
 
-        for attempt in range(max_cooldown_retries + 1):
-            logger.info(f"Sending verification: {verification_id} (attempt {attempt + 1})")
+        logger.info(f"Sending verification: {verification_id}")
 
-            # Register pending verification with a Future
-            loop = asyncio.get_event_loop()
-            future = loop.create_future()
-            self._pending_verifications[verification_id] = future
+        # Register pending verification with a Future
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        self._pending_verifications[verification_id] = future
 
-            try:
-                # Format message based on target bot
-                if "gemini_2026" in self.bot_username.lower():
-                    message = f"/verify {verification_link}"
-                else:
-                    message = verification_link
+        try:
+            # Format message based on target bot
+            if "gemini_2026" in self.bot_username.lower():
+                message = f"/verify {verification_link}"
+            else:
+                message = verification_link
 
-                # Send to the bot
-                await self.client.send_message(self.bot_username, message)
+            # Send to the bot via the provided client
+            await client.send_message(self.bot_username, message)
 
-                # Wait for the matching result
-                result = await asyncio.wait_for(future, timeout=timeout)
+            # Wait for the matching result
+            result = await asyncio.wait_for(future, timeout=timeout)
+            return result
 
-                # Check if cooldown — wait and retry
-                if result.get("status") == "cooldown" and attempt < max_cooldown_retries:
-                    wait_seconds = result.get("cooldown_seconds", 5)
-                    logger.info(f"Cooldown active for {verification_id}, waiting {wait_seconds}s before retry...")
-                    await asyncio.sleep(wait_seconds + 1)  # +1s buffer
-                    continue  # Retry
-
-                return result
-
-            except asyncio.TimeoutError:
-                logger.warning(f"Verification timeout for {verification_id} after {timeout}s")
-                return {
-                    "success": False,
-                    "status": "timeout",
-                    "verificationId": verification_id,
-                    "message": f"Verification did not return results within {timeout}s, auto-cancelled!"
-                }
-            except Exception as e:
-                logger.error(f"Verification error for {verification_id}: {e}")
-                return {
-                    "success": False,
-                    "status": "error",
-                    "verificationId": verification_id,
-                    "message": f"Verification error: {str(e)}"
-                }
-            finally:
-                # Clean up pending entry
-                self._pending_verifications.pop(verification_id, None)
-
-        # Exhausted retries
-        return {
-            "success": False,
-            "status": "cooldown",
-            "verificationId": verification_id,
-            "message": "Cooldown active, please try again later"
-        }
+        except asyncio.TimeoutError:
+            logger.warning(f"Verification timeout for {verification_id} after {timeout}s")
+            return {
+                "success": False,
+                "status": "timeout",
+                "verificationId": verification_id,
+                "message": f"Verification did not return results within {timeout}s, auto-cancelled!"
+            }
+        except Exception as e:
+            logger.error(f"Verification error for {verification_id}: {e}")
+            return {
+                "success": False,
+                "status": "error",
+                "verificationId": verification_id,
+                "message": f"Verification error: {str(e)}"
+            }
+        finally:
+            # Clean up pending entry
+            self._pending_verifications.pop(verification_id, None)
 
     def _parse_bot_response(self, text: str) -> dict:
         """

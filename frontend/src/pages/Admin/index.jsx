@@ -1243,6 +1243,22 @@ export default function Admin() {
         } catch (e) { console.error('Toggle failed:', e); }
     };
 
+    const handleTgBotAssign = async (accountId, botType, currentAssigned) => {
+        const newAssigned = currentAssigned.includes(botType)
+            ? currentAssigned.filter(b => b !== botType)
+            : [...currentAssigned, botType];
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}/toggle`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assignedBots: newAssigned })
+            });
+            if (res.ok) {
+                fetchTgAccounts();
+            }
+        } catch (e) { console.error('Bot assign failed:', e); }
+    };
+
     const fetchConfig = async () => {
         try {
             const res = await fetch(`${API_BASE}/api/config`);
@@ -2795,6 +2811,40 @@ export default function Admin() {
                                                                         transition: 'all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
                                                                         boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
                                                                     }} />
+                                                                </div>
+                                                            )}
+
+                                                            {/* Bot Assignment Badges */}
+                                                            {acc.hasSession && acc.enabled && (
+                                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                                    {[
+                                                                        { key: 'dualbot', label: '新Bot' },
+                                                                        { key: 'oldbot', label: '老Bot' }
+                                                                    ].map(bot => {
+                                                                        const assigned = (acc.assignedBots || ['dualbot']);
+                                                                        const isOn = assigned.includes(bot.key);
+                                                                        return (
+                                                                            <span
+                                                                                key={bot.key}
+                                                                                onClick={() => handleTgBotAssign(acc.id, bot.key, assigned)}
+                                                                                style={{
+                                                                                    padding: '2px 8px',
+                                                                                    fontSize: '11px',
+                                                                                    fontWeight: 600,
+                                                                                    borderRadius: '10px',
+                                                                                    cursor: 'pointer',
+                                                                                    transition: 'all 0.2s',
+                                                                                    background: isOn ? 'rgba(76, 175, 80, 0.15)' : 'rgba(150, 150, 150, 0.1)',
+                                                                                    color: isOn ? '#4caf50' : '#999',
+                                                                                    border: `1px solid ${isOn ? 'rgba(76, 175, 80, 0.3)' : 'rgba(150, 150, 150, 0.2)'}`,
+                                                                                    userSelect: 'none'
+                                                                                }}
+                                                                                title={isOn ? `点击取消 ${bot.label} 使用此账号` : `点击允许 ${bot.label} 使用此账号`}
+                                                                            >
+                                                                                {isOn ? '✓ ' : ''}{bot.label}
+                                                                            </span>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                             )}
 

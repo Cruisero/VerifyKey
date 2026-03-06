@@ -65,10 +65,12 @@ class TelegramAccountManager:
         """Returns all currently connected clients."""
         return {aid: c for aid, c in self._clients.items() if c.is_connected()}
 
-    def get_next_client(self) -> Optional[tuple[str, TelegramClient]]:
+    def get_next_client(self, bot_type: str = None) -> Optional[tuple[str, TelegramClient]]:
         """
         Returns the next available client from the pool (Round-Robin).
         Skips accounts that are in cooldown.
+        If bot_type is provided (e.g. 'dualbot', 'oldbot'), only returns accounts
+        whose assignedBots contains that bot_type.
         Returns: (account_id, client) or None
         """
         import time
@@ -76,15 +78,24 @@ class TelegramAccountManager:
         config = config_manager.get_config()
         accounts = config.get("telegramAccounts", [])
         
-        # Filter accounts that are enabled AND have an active client AND not in cooldown
-        enabled_ids = [acc["id"] for acc in accounts if acc.get("enabled", True)]
+        # Filter accounts that are enabled AND (optionally) assigned to this bot_type
+        enabled_ids = []
+        for acc in accounts:
+            if not acc.get("enabled", True):
+                continue
+            if bot_type:
+                assigned = acc.get("assignedBots", ["dualbot"])  # default: dualbot only
+                if bot_type not in assigned:
+                    continue
+            enabled_ids.append(acc["id"])
+        
         available_pool = [(aid, self._clients[aid]) for aid in enabled_ids 
                          if aid in self._clients and self._clients[aid].is_connected()
                          and self._cooldowns.get(aid, 0) <= now]
         
         if not available_pool:
-            # Fallback to single primary client if pool is empty
-            if self._client and self._client.is_connected():
+            # Fallback to single primary client if pool is empty (only if no bot_type filter)
+            if not bot_type and self._client and self._client.is_connected():
                 return (self._active_account_id, self._client)
             return None
             
@@ -108,6 +119,7 @@ class TelegramAccountManager:
                 "phone": self._mask_phone(acc.get("phone", "")),
                 "active": acc_id == self._active_account_id,
                 "enabled": acc.get("enabled", True),
+                "assignedBots": acc.get("assignedBots", ["dualbot"]),
                 "hasSession": bool(acc.get("sessionString")),
                 "connected": acc_id in self._clients and self._clients[acc_id].is_connected(),
                 "quota": self._quotas.get(acc_id),
@@ -168,7 +180,8 @@ class TelegramAccountManager:
             "apiHash": api_hash,
             "phone": "",
             "sessionString": "",
-            "enabled": True # Default to enabled
+            "enabled": True,
+            "assignedBots": ["dualbot"]  # Default: only new bot
         }
         accounts.append(account)
         config["telegramAccounts"] = accounts
@@ -196,7 +209,7 @@ class TelegramAccountManager:
         return True
 
     def update_account(self, account_id: str, updates: dict) -> bool:
-        """Update label, enabled status or other editable fields."""
+        """Update label, enabled status, assignedBots or other editable fields."""
         config = config_manager.get_config()
         accounts = config.get("telegramAccounts", [])
         changed = False
@@ -210,14 +223,15 @@ class TelegramAccountManager:
                     acc["enabled"] = bool(updates["enabled"])
                     changed = True
                     logger.info(f"[TGManager] Account {account_id} enabled={acc['enabled']}")
+                if "assignedBots" in updates:
+                    acc["assignedBots"] = list(updates["assignedBots"])
+                    changed = True
+                    logger.info(f"[TGManager] Account {account_id} assignedBots={acc['assignedBots']}")
                 
                 if changed:
                     config["telegramAccounts"] = accounts
                     config_manager.save_config(config)
                     
-                    # If disabling, we don't necessarily disconnect, 
-                    # get_next_client will just skip it.
-                    # If enabling and has session but no client, we could try to connect.
                     if acc.get("enabled") and acc.get("sessionString") and account_id not in self._clients:
                         asyncio.create_task(self.activate(account_id, set_as_primary=False))
                     

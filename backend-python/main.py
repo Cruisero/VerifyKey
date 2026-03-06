@@ -1740,13 +1740,19 @@ async def remove_telegram_account(account_id: str):
 
 @app.put("/api/telegram/accounts/{account_id}/toggle")
 async def toggle_telegram_account(account_id: str, request: Request):
-    """Enable or disable a Telegram account in the pool."""
+    """Enable/disable or update bot assignments for a Telegram account."""
     data = await request.json()
-    enabled = data.get("enabled", True)
-    success = tg_manager.update_account(account_id, {"enabled": enabled})
+    updates = {}
+    if "enabled" in data:
+        updates["enabled"] = data["enabled"]
+    if "assignedBots" in data:
+        updates["assignedBots"] = data["assignedBots"]
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    success = tg_manager.update_account(account_id, updates)
     if not success:
         raise HTTPException(status_code=404, detail="Account not found")
-    return {"success": True, "enabled": enabled}
+    return {"success": True}
 
 
 @app.post("/api/telegram/accounts/{account_id}/login")
@@ -1926,7 +1932,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             lock_ctx = vid_lock if vid_lock else asyncio.Lock()  # fallback
             async with lock_ctx:
               for attempt in range(max_retries):
-                pool_item = tg_manager.get_next_client()
+                pool_item = tg_manager.get_next_client(bot_type="dualbot")
                 
                 if not pool_item:
                     wait_time = tg_manager.get_shortest_cooldown_wait()
@@ -1935,12 +1941,12 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
                         on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "step": "cooldown_wait", "message": f"等待可用账号 ({int(wait_time)}s)..."}
                         progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
                         async with cooldown_wait_lock:
-                            pool_item = tg_manager.get_next_client()
+                            pool_item = tg_manager.get_next_client(bot_type="dualbot")
                             if not pool_item:
                                 wait_time = tg_manager.get_shortest_cooldown_wait()
                                 if wait_time > 0:
                                     await asyncio.sleep(wait_time + 2)
-                                pool_item = tg_manager.get_next_client()
+                                pool_item = tg_manager.get_next_client(bot_type="dualbot")
                     
                     if not pool_item:
                         result = {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
@@ -2715,22 +2721,33 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     import time as _time
     
     def _get_next_oldbot_client():
-        """Get next available client from pool, skipping old-bot-cooldown accounts."""
+        """Get next available oldbot-assigned client, skipping old-bot-cooldown accounts."""
         now = _time.time()
+        # Use the manager's bot_type filter to get only oldbot-assigned accounts
+        # But we need to also skip accounts that are in _oldbot_cooldowns
+        # So we iterate through all oldbot-assigned connected accounts manually
         import config_manager as _cm
         config = _cm.get_config()
         accounts = config.get("telegramAccounts", [])
-        enabled_ids = [acc["id"] for acc in accounts if acc.get("enabled", True)]
+        
+        oldbot_ids = []
+        for acc in accounts:
+            if not acc.get("enabled", True):
+                continue
+            assigned = acc.get("assignedBots", ["dualbot"])
+            if "oldbot" not in assigned:
+                continue
+            if _oldbot_cooldowns.get(acc["id"], 0) > now:
+                continue
+            oldbot_ids.append(acc["id"])
         
         all_clients = tg_manager.get_all_clients()
-        available = [(aid, client) for aid, client in all_clients.items()
-                     if aid in enabled_ids and client.is_connected()
-                     and _oldbot_cooldowns.get(aid, 0) <= now]
+        available = [(aid, all_clients[aid]) for aid in oldbot_ids
+                     if aid in all_clients and all_clients[aid].is_connected()]
         
         if not available:
             return None
         
-        # Simple round-robin via modular index
         if not hasattr(_get_next_oldbot_client, '_idx'):
             _get_next_oldbot_client._idx = 0
         _get_next_oldbot_client._idx = (_get_next_oldbot_client._idx + 1) % len(available)

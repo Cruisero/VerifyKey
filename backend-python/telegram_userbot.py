@@ -158,7 +158,8 @@ class SheerIDUserbot:
         2. Register a Future in _pending_verifications[verificationId]
         3. Send the link to the bot
         4. _on_bot_message parses each bot reply, extracts ID, resolves the matching Future
-        5. Return the parsed result
+        5. If cooldown, wait and retry (up to 3 times)
+        6. Return the parsed result
 
         Returns:
             dict with: success, status, verificationId, credits, message, claimLink, raw_response
@@ -172,48 +173,65 @@ class SheerIDUserbot:
             return {"success": False, "status": "error", "message": "Cannot extract verificationId from link"}
 
         verification_id = vid_match.group(1)
-        logger.info(f"Sending verification: {verification_id}")
+        max_cooldown_retries = 3
 
-        # Register pending verification with a Future
-        loop = asyncio.get_event_loop()
-        future = loop.create_future()
-        self._pending_verifications[verification_id] = future
+        for attempt in range(max_cooldown_retries + 1):
+            logger.info(f"Sending verification: {verification_id} (attempt {attempt + 1})")
 
-        try:
-            # Format message based on target bot
-            if "gemini_2026" in self.bot_username.lower():
-                # @SheerID_Gemini_2026_Bot requires /verify command
-                message = f"/verify {verification_link}"
-            else:
-                # @SheerID_Bot accepts raw link
-                message = verification_link
+            # Register pending verification with a Future
+            loop = asyncio.get_event_loop()
+            future = loop.create_future()
+            self._pending_verifications[verification_id] = future
 
-            # Send to the bot
-            await self.client.send_message(self.bot_username, message)
+            try:
+                # Format message based on target bot
+                if "gemini_2026" in self.bot_username.lower():
+                    message = f"/verify {verification_link}"
+                else:
+                    message = verification_link
 
-            # Wait for the matching result (bot will reply with ID in the response)
-            result = await asyncio.wait_for(future, timeout=timeout)
-            return result
+                # Send to the bot
+                await self.client.send_message(self.bot_username, message)
 
-        except asyncio.TimeoutError:
-            logger.warning(f"Verification timeout for {verification_id} after {timeout}s")
-            return {
-                "success": False,
-                "status": "timeout",
-                "verificationId": verification_id,
-                "message": f"Verification did not return results within {timeout}s, auto-cancelled!"
-            }
-        except Exception as e:
-            logger.error(f"Verification error for {verification_id}: {e}")
-            return {
-                "success": False,
-                "status": "error",
-                "verificationId": verification_id,
-                "message": f"Verification error: {str(e)}"
-            }
-        finally:
-            # Clean up pending entry
-            self._pending_verifications.pop(verification_id, None)
+                # Wait for the matching result
+                result = await asyncio.wait_for(future, timeout=timeout)
+
+                # Check if cooldown — wait and retry
+                if result.get("status") == "cooldown" and attempt < max_cooldown_retries:
+                    wait_seconds = result.get("cooldown_seconds", 5)
+                    logger.info(f"Cooldown active for {verification_id}, waiting {wait_seconds}s before retry...")
+                    await asyncio.sleep(wait_seconds + 1)  # +1s buffer
+                    continue  # Retry
+
+                return result
+
+            except asyncio.TimeoutError:
+                logger.warning(f"Verification timeout for {verification_id} after {timeout}s")
+                return {
+                    "success": False,
+                    "status": "timeout",
+                    "verificationId": verification_id,
+                    "message": f"Verification did not return results within {timeout}s, auto-cancelled!"
+                }
+            except Exception as e:
+                logger.error(f"Verification error for {verification_id}: {e}")
+                return {
+                    "success": False,
+                    "status": "error",
+                    "verificationId": verification_id,
+                    "message": f"Verification error: {str(e)}"
+                }
+            finally:
+                # Clean up pending entry
+                self._pending_verifications.pop(verification_id, None)
+
+        # Exhausted retries
+        return {
+            "success": False,
+            "status": "cooldown",
+            "verificationId": verification_id,
+            "message": "Cooldown active, please try again later"
+        }
 
     def _parse_bot_response(self, text: str) -> dict:
         """
@@ -347,11 +365,38 @@ class SheerIDUserbot:
         For verification results: extract verificationId from the message and resolve
         the matching pending Future in _pending_verifications.
         
+        For cooldown messages: resolve the most recent pending verification with cooldown status.
+        
         For other messages (/daily, /balance): resolve via _response_waiters.
         """
         try:
             text = event.message.text or ""
             logger.info(f"Bot message received: {text[:120]}...")
+
+            text_upper = text.upper()
+
+            # Check for Cooldown Active message (no VID in these messages)
+            if "COOLDOWN" in text_upper:
+                # Extract wait time: "Please wait X seconds..."
+                wait_match = re.search(r'wait\s+(\d+)\s*second', text, re.IGNORECASE)
+                wait_seconds = int(wait_match.group(1)) if wait_match else 5
+                logger.info(f"Cooldown detected: {wait_seconds}s")
+
+                # Resolve the most recent pending verification with cooldown status
+                if self._pending_verifications:
+                    # Get the most recently added pending VID
+                    vid = list(self._pending_verifications.keys())[-1]
+                    future = self._pending_verifications.get(vid)
+                    if future and not future.done():
+                        future.set_result({
+                            "success": False,
+                            "status": "cooldown",
+                            "verificationId": vid,
+                            "cooldown_seconds": wait_seconds,
+                            "message": f"Cooldown active, waiting {wait_seconds}s..."
+                        })
+                        logger.info(f"Cooldown resolved for pending VID {vid}")
+                        return
 
             # Try to extract verificationId from the message
             id_match = re.search(r'ID:\s*`?([a-zA-Z0-9]+)`?', text)
@@ -373,7 +418,6 @@ class SheerIDUserbot:
                         return
 
             # Skip "Processing..." messages — they don't have an ID
-            text_upper = text.upper()
             if "PROCESSING" in text_upper:
                 logger.info("Processing message received, waiting for final result...")
                 return

@@ -2906,11 +2906,11 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
         vid = r.get("verificationId", "")
         reason = r.get("reason", "")
         if r["status"] == "approved":
-            verification_history.log_verification("pass", vid)
+            verification_history.log_verification("pass", vid, cdk=request.cdk or "")
         elif r["status"] == "rejected" and reason not in ("link_opened", "expired", "invalid", "rate_limited"):
-            verification_history.log_verification("failed", vid)
+            verification_history.log_verification("failed", vid, cdk=request.cdk or "")
         elif r["status"] in ("error",):
-            verification_history.log_verification("failed", vid)
+            verification_history.log_verification("failed", vid, cdk=request.cdk or "")
 
     # Deduct local CDK quota for successful verifications
     successful = sum(1 for r in results if r["status"] == "approved")
@@ -3129,14 +3129,14 @@ async def public_verify(request: PublicVerifyRequest):
         # Log to history (skip user-side link issues)
         vid = request.verificationId
         if result["status"] == "approved":
-            verification_history.log_verification("pass", vid)
+            verification_history.log_verification("pass", vid, cdk=request.cdk)
             cdk_manager.use_cdk(request.cdk, 1)
         elif result["status"] == "rejected":
             reason = result.get("reason", "unknown")
             if reason not in ("link_opened", "expired", "invalid", "rate_limited"):
-                verification_history.log_verification("failed", vid)
+                verification_history.log_verification("failed", vid, cdk=request.cdk)
         elif result["status"] == "error":
-            verification_history.log_verification("failed", vid)
+            verification_history.log_verification("failed", vid, cdk=request.cdk)
 
     asyncio.create_task(run_task())
 
@@ -3194,14 +3194,14 @@ async def public_verify_batch(request: PublicBatchVerifyRequest):
             _api_tasks[tid]["completedAt"] = dt.now().isoformat()
 
             if result["status"] == "approved":
-                verification_history.log_verification("pass", v)
+                verification_history.log_verification("pass", v, cdk=request.cdk)
                 cdk_manager.use_cdk(request.cdk, 1)
             elif result["status"] == "rejected":
                 reason = result.get("reason", "unknown")
                 if reason not in ("link_opened", "expired", "invalid", "rate_limited"):
-                    verification_history.log_verification("failed", v)
+                    verification_history.log_verification("failed", v, cdk=request.cdk)
             elif result["status"] == "error":
-                verification_history.log_verification("failed", v)
+                verification_history.log_verification("failed", v, cdk=request.cdk)
 
         asyncio.create_task(run_task())
         tasks.append({"taskId": task_id, "verificationId": vid, "status": "pending"})

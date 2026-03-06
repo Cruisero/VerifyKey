@@ -2747,7 +2747,7 @@ export default function Admin() {
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                         <span style={{ fontSize: '20px' }}>🔐</span>
                                                         <div>
-                                                            <div style={{ fontWeight: 700, fontSize: '14px' }}>登录 Telegram</div>
+                                                            <div style={{ fontWeight: 700, fontSize: '14px' }}>登录账号</div>
                                                             <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                                                                 {tgLoginStep === 'phone' ? '步骤 1/2 · 输入手机号' :
                                                                     tgLoginStep === 'code' ? '步骤 2/2 · 输入验证码' :

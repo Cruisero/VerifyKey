@@ -2815,7 +2815,7 @@ export default function Admin() {
                                                             )}
 
                                                             {/* Bot Assignment Badges */}
-                                                            {acc.hasSession && acc.enabled && (
+                                                            {acc.hasSession && (
                                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                                     {[
                                                                         { key: 'dualbot', label: '新Bot' },

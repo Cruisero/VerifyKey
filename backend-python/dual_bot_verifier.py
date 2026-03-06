@@ -174,20 +174,28 @@ class DualBotVerifier:
                 except Exception as e:
                     logger.warning(f"[DualBot] [{account_id}] Race check failed: {e}")
 
-            # ---- Step 3: Auto bypass on failure (fire-and-forget background task) ----
+            # ---- Step 3: Auto bypass on failure (synchronous — wait for completion) ----
             # Skip bypass if bot quota exhausted (nothing to bypass on SheerID side)
             skip_bypass = "程序崩溃" in parsed.get("message", "")
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
-                logger.info(f"[DualBot] [{account_id}] Step 3: Launching background bypass for {vid[:8]}...")
-                asyncio.create_task(self._background_bypass(vid, account_id))
-                parsed["message"] = "验证失败，请刷新页面获取新链接"
-                parsed["messageKey"] = "msgVerifyFailedRefresh"
-                parsed["bypassed"] = "pending"
+                # Emit "failed" progress first, then "bypass" progress
+                await emit("failed", "Verification failed, refreshing link...")
+                await emit("bypass", "Refreshing link...")
+                logger.info(f"[DualBot] [{account_id}] Step 3: Running bypass for {vid[:8]}...")
+                bypass_ok = await self._run_bypass(vid, account_id)
+                if bypass_ok:
+                    parsed["message"] = "验证失败，链接已刷新，请获取新链接"
+                    parsed["messageKey"] = "msgBypassDone"
+                    parsed["bypassed"] = "done"
+                else:
+                    parsed["message"] = "验证失败，请刷新页面获取新链接"
+                    parsed["messageKey"] = "msgVerifyFailedRefresh"
+                    parsed["bypassed"] = "failed"
 
             return parsed
 
-    async def _background_bypass(self, vid: str, account_id: str):
-        """Run the full bypass sequence in the background (fire-and-forget)."""
+    async def _run_bypass(self, vid: str, account_id: str) -> bool:
+        """Run the full bypass sequence synchronously. Returns True if at least 1 upload succeeded."""
         import httpx
         base_url = "https://services.sheerid.com/rest/v2"
 
@@ -202,14 +210,14 @@ class DualBotVerifier:
                         step = f"error_{check_resp.status_code}"
 
                     if step != "pending":
-                        logger.info(f"[DualBot] [{account_id}] BG Bypass: Pending cleared -> {step}")
+                        logger.info(f"[DualBot] [{account_id}] Bypass: Pending cleared -> {step}")
                         break
 
                     if poll % 5 == 0:
-                        logger.info(f"[DualBot] [{account_id}] BG Bypass: Waiting for pending... ({(poll+1)*3}s)")
+                        logger.info(f"[DualBot] [{account_id}] Bypass: Waiting for pending... ({(poll+1)*3}s)")
                     await asyncio.sleep(3)
                 else:
-                    logger.warning(f"[DualBot] [{account_id}] BG Bypass: Pending timeout 120s, trying anyway...")
+                    logger.warning(f"[DualBot] [{account_id}] Bypass: Pending timeout 120s, trying anyway...")
 
             # Run bypass uploads
             bypass_count = 0
@@ -221,10 +229,12 @@ class DualBotVerifier:
                 else:
                     break
 
-            logger.info(f"[DualBot] [{account_id}] BG Bypass: Done. {bypass_count} uploads for {vid[:8]}")
+            logger.info(f"[DualBot] [{account_id}] Bypass: Done. {bypass_count} uploads for {vid[:8]}")
+            return bypass_count > 0
 
         except Exception as e:
-            logger.error(f"[DualBot] [{account_id}] BG Bypass error: {e}")
+            logger.error(f"[DualBot] [{account_id}] Bypass error: {e}")
+            return False
 
     # ---- Send message and wait for reply ----
 

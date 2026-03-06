@@ -254,6 +254,8 @@ export default function Verify() {
                                     warmup: t('stepWarmup'),
                                     verify: t('stepVerify'),
                                     waiting: t('stepWaiting'),
+                                    failed: t('stepFailed'),
+                                    bypass: t('stepBypass'),
                                     cooldown_wait: `${event.message}`
                                 };
                                 const progressMsg = stepMessages[event.step] || event.message;

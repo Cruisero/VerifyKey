@@ -84,6 +84,9 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         msgCrashed: '程序崩溃，请重试',
         msgVerifyFailedDetail: '验证失败',
         msgRequestFailed: '请求失败',
+        stepFailed: '验证失败，链接刷新中...',
+        stepBypass: '链接刷新中...',
+        msgBypassDone: '验证失败，链接已刷新，请获取新链接',
 
         // Verify - live status
         liveStatusTitle: '📊 实时验证状态',
@@ -231,6 +234,9 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         msgCrashed: 'Program crashed, please retry',
         msgVerifyFailedDetail: 'Verification failed',
         msgRequestFailed: 'Request failed',
+        stepFailed: 'Verification failed, refreshing link...',
+        stepBypass: 'Refreshing link...',
+        msgBypassDone: 'Verification failed, link refreshed, please get a new link',
 
         // Verify - live status
         liveStatusTitle: '📊 Live Verification Status',

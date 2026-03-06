@@ -3084,7 +3084,8 @@ export default function Admin() {
                                                                     verification: {
                                                                         ...prev.verification || {},
                                                                         dualBot: { ...prev.verification?.dualBot || {}, enabled: val },
-                                                                        telegram: { ...prev.verification?.telegram || {}, enabled: val ? false : prev.verification?.telegram?.enabled }
+                                                                        telegram: { ...prev.verification?.telegram || {}, enabled: val ? false : prev.verification?.telegram?.enabled },
+                                                                        blackBot: { ...prev.verification?.blackBot || {}, enabled: val ? false : prev.verification?.blackBot?.enabled }
                                                                     }
                                                                 }));
                                                             }}
@@ -3147,6 +3148,91 @@ export default function Admin() {
                                                 </div>
                                             </div>
 
+                                            {/* ── Black Bot Config ── */}
+                                            <div style={{
+                                                borderRadius: '12px', overflow: 'hidden',
+                                                border: '1px solid var(--border)', marginTop: '12px'
+                                            }}>
+                                                <div style={{
+                                                    padding: '14px 18px',
+                                                    background: 'linear-gradient(135deg, rgba(33,33,33,0.08), rgba(33,33,33,0.02))',
+                                                    borderBottom: '1px solid var(--border)',
+                                                    display: 'flex', alignItems: 'center', gap: '8px'
+                                                }}>
+                                                    <span style={{ fontSize: '16px' }}>🖤</span>
+                                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>Black Bot 验证</span>
+                                                    <span style={{
+                                                        fontSize: '10px', padding: '2px 8px',
+                                                        background: 'rgba(33,33,33,0.15)', color: '#555',
+                                                        borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
+                                                    }}>新</span>
+                                                </div>
+                                                <div style={{ padding: '16px 18px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                                                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                                                            单 Bot 验证：发送链接 → 等待结果
+                                                        </p>
+                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, color: '#333' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={config?.verification?.blackBot?.enabled || false}
+                                                                onChange={e => {
+                                                                    const val = e.target.checked;
+                                                                    setConfig(prev => ({
+                                                                        ...prev,
+                                                                        verification: {
+                                                                            ...prev.verification || {},
+                                                                            blackBot: { ...prev.verification?.blackBot || {}, enabled: val },
+                                                                            dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled },
+                                                                            telegram: { ...prev.verification?.telegram || {}, enabled: val ? false : prev.verification?.telegram?.enabled }
+                                                                        }
+                                                                    }));
+                                                                }}
+                                                                style={{ width: '18px', height: '18px' }}
+                                                            />
+                                                            启用
+                                                        </label>
+                                                    </div>
+                                                    <div style={{
+                                                        display: 'flex', flexDirection: 'column', gap: '12px',
+                                                        opacity: config?.verification?.blackBot?.enabled ? 1 : 0.6,
+                                                        pointerEvents: config?.verification?.blackBot?.enabled ? 'auto' : 'none',
+                                                        transition: 'all 0.3s'
+                                                    }}>
+                                                        <div>
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
+                                                            <input type="text" className="input"
+                                                                value={config?.verification?.blackBot?.botUsername || '@Black_Verifier'}
+                                                                onChange={e => setConfig(prev => ({
+                                                                    ...prev,
+                                                                    verification: {
+                                                                        ...prev.verification || {},
+                                                                        blackBot: { ...prev.verification?.blackBot || {}, botUsername: e.target.value }
+                                                                    }
+                                                                }))}
+                                                                placeholder="@Black_Verifier"
+                                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                                            />
+                                                        </div>
+                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={config?.verification?.blackBot?.autoBypass !== false}
+                                                                onChange={e => setConfig(prev => ({
+                                                                    ...prev,
+                                                                    verification: {
+                                                                        ...prev.verification || {},
+                                                                        blackBot: { ...prev.verification?.blackBot || {}, autoBypass: e.target.checked }
+                                                                    }
+                                                                }))}
+                                                                style={{ width: '16px', height: '16px' }}
+                                                            />
+                                                            验证失败时自动 Bypass（刷新链接）
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             {/* ── Legacy SheerID Bot ── */}
                                             <div style={{
                                                 borderRadius: '12px', overflow: 'hidden',
@@ -3185,7 +3271,8 @@ export default function Admin() {
                                                                     verification: {
                                                                         ...prev.verification || {},
                                                                         telegram: { ...prev.verification?.telegram || {}, enabled: val },
-                                                                        dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled }
+                                                                        dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled },
+                                                                        blackBot: { ...prev.verification?.blackBot || {}, enabled: val ? false : prev.verification?.blackBot?.enabled }
                                                                     }
                                                                 }));
                                                             }}

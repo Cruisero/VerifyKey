@@ -933,6 +933,16 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
 
     remaining = bot_data.get_user(message.from_user.id).get("credits", 0)
 
+    # Extract VID for logging
+    _vid_for_log = ""
+    _vid_m = _re.search(r'verificationId=([a-fA-F0-9]+)', link)
+    if _vid_m:
+        _vid_for_log = _vid_m.group(1)
+
+    # Log 'submitted' immediately so admin can see it in real-time
+    log_entry = bot_verify_log.log_bot_verify(link, username, message.from_user.id, "submitted", "验证已提交，等待处理...", vid=_vid_for_log)
+    log_entry_id = log_entry.get("id")
+
     status_msg = await message.answer(
         f"🔄 **Verification Started**\n\n"
         f"💳 Deducted: {cost} credits (Remaining: {remaining})\n"
@@ -968,6 +978,15 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
                             new_status = step_map.get(step, current_status)
                             if new_status != current_status:
                                 current_status = new_status
+                                # Update log entry to 'processing' with current step
+                                if log_entry_id:
+                                    step_msg_map = {
+                                        "warmup": "正在生成文档...",
+                                        "verify": "正在提交文档...",
+                                        "waiting": "等待验证结果...",
+                                        "cooldown_wait": event_data.get('message', '等待中...'),
+                                    }
+                                    bot_verify_log.update_status(log_entry_id, "processing", step_msg_map.get(step, current_status))
                                 try:
                                     await status_msg.edit_text(
                                         f"🔄 **Verification In Progress**\n\n"
@@ -987,7 +1006,10 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
 
                                 if status == "approved":
                                     result_text = f"✅ **Verification Successful!**\n\n🎉 {msg_text}"
-                                    bot_verify_log.log_bot_verify(link, username, message.from_user.id, "success", msg_text)
+                                    if log_entry_id:
+                                        bot_verify_log.update_status(log_entry_id, "success", msg_text)
+                                    else:
+                                        bot_verify_log.log_bot_verify(link, username, message.from_user.id, "success", msg_text, vid=_vid_for_log)
                                     _increment_status_count("success")
                                     # Track verification
                                     bot_data.increment_verifications(message.from_user.id)
@@ -1009,7 +1031,10 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
                                             logger.error(f"Failed to notify referrer: {e}")
                                 elif status in ("failed", "error"):
                                     result_text = f"❌ **Verification Failed**\n\n{msg_text}"
-                                    bot_verify_log.log_bot_verify(link, username, message.from_user.id, "failed", msg_text)
+                                    if log_entry_id:
+                                        bot_verify_log.update_status(log_entry_id, "failed", msg_text)
+                                    else:
+                                        bot_verify_log.log_bot_verify(link, username, message.from_user.id, "failed", msg_text, vid=_vid_for_log)
                                     _increment_status_count("fail")
                                     # Refund credits on failure
                                     bot_data.add_credits(message.from_user.id, cost, "Refund - verification failed")
@@ -1017,7 +1042,10 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
                                     result_text += f"\n\n💳 Credits refunded. Balance: {remaining}"
                                 elif status == "no_credits":
                                     result_text = "❌ **Bot account out of quota**\n\nPlease try again later."
-                                    bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", "No bot quota")
+                                    if log_entry_id:
+                                        bot_verify_log.update_status(log_entry_id, "error", "No bot quota")
+                                    else:
+                                        bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", "No bot quota", vid=_vid_for_log)
                                     bot_data.add_credits(message.from_user.id, cost, "Refund - no bot quota")
                                 else:
                                     result_text = f"❓ Status: {status}\n{msg_text}"
@@ -1040,11 +1068,17 @@ async def _process_verification(message: types.Message, user: dict, link: str, c
         except Exception:
             pass
         # Refund on API error
-        bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", str(error_msg))
+        if log_entry_id:
+            bot_verify_log.update_status(log_entry_id, "error", str(error_msg))
+        else:
+            bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", str(error_msg), vid=_vid_for_log)
         bot_data.add_credits(message.from_user.id, cost, "Refund - API error")
         await status_msg.edit_text(f"❌ Error: {error_msg}\n\n💳 Credits refunded.")
     except httpx.ConnectError:
-        bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", "Connection error")
+        if log_entry_id:
+            bot_verify_log.update_status(log_entry_id, "error", "Connection error")
+        else:
+            bot_verify_log.log_bot_verify(link, username, message.from_user.id, "error", "Connection error", vid=_vid_for_log)
         bot_data.add_credits(message.from_user.id, cost, "Refund - connection error")
         await status_msg.edit_text("❌ Cannot connect to verification backend.\n\n💳 Credits refunded.")
     except Exception as e:

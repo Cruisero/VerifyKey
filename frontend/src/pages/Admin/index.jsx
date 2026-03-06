@@ -72,7 +72,7 @@ function TelegramBotTab() {
             } catch (e) { console.error('Failed to fetch bot verify log:', e); }
         };
         fetchLog();
-        const interval = setInterval(fetchLog, 15000);
+        const interval = setInterval(fetchLog, 5000);
         return () => clearInterval(interval);
     }, []);
 
@@ -234,41 +234,81 @@ function TelegramBotTab() {
             {/* Bot Verify Log Section */}
             {activeSection === 'verify-log' && (
                 <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px', flexWrap: 'wrap' }}>
                         <span>{t('logTotal')} <strong>{botVerifyLog.length}</strong> {t('logEntries')}</span>
                         <span>|</span>
+                        <span style={{ color: '#3b82f6', fontWeight: 600 }}>
+                            {botVerifyLog.filter(r => r.status === 'submitted').length} 已提交
+                        </span>
+                        <span style={{ color: '#f59e0b', fontWeight: 600 }}>
+                            {botVerifyLog.filter(r => r.status === 'processing').length} 处理中
+                        </span>
                         <span style={{ color: '#16a34a', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status === 'success').length} {t('logSuccess')}</span>
-                        <span style={{ color: '#dc2626', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status !== 'success').length} {t('logFailed')}</span>
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>{botVerifyLog.filter(r => !['success', 'submitted', 'processing'].includes(r.status)).length} {t('logFailed')}</span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '700px', overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '800px', overflowY: 'auto' }}>
                         {botVerifyLog.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>{t('tgNoBotLog')}</div>}
                         {botVerifyLog.map((r, i) => {
                             const isPass = r.status === 'success';
-                            const shortLink = r.link && r.link.length > 60 ? r.link.slice(0, 55) + '...' : (r.link || '');
+                            const isProcessing = r.status === 'processing';
+                            const isSubmitted = r.status === 'submitted';
+                            const isInProgress = isSubmitted || isProcessing;
+                            const vid = r.vid || '';
+                            const shortVid = vid.length > 20 ? `${vid.slice(0, 8)}...${vid.slice(-8)}` : vid;
+                            const shortLink = !vid && r.link && r.link.length > 60 ? r.link.slice(0, 55) + '...' : (!vid ? (r.link || '') : '');
                             const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
+
+                            const statusConfig = {
+                                submitted: { bg: 'rgba(59, 130, 246, 0.06)', border: 'rgba(59, 130, 246, 0.15)', iconBg: '#3b82f6', icon: '◌', color: '#3b82f6' },
+                                processing: { bg: 'rgba(245, 158, 11, 0.06)', border: 'rgba(245, 158, 11, 0.15)', iconBg: '#f59e0b', icon: '◎', color: '#f59e0b' },
+                                success: { bg: 'rgba(22, 163, 74, 0.06)', border: 'rgba(22, 163, 74, 0.15)', iconBg: '#16a34a', icon: '✓', color: '#16a34a' },
+                                failed: { bg: 'rgba(220, 38, 38, 0.06)', border: 'rgba(220, 38, 38, 0.15)', iconBg: '#dc2626', icon: '✕', color: '#dc2626' },
+                                error: { bg: 'rgba(220, 38, 38, 0.06)', border: 'rgba(220, 38, 38, 0.15)', iconBg: '#dc2626', icon: '✕', color: '#dc2626' },
+                                refunded: { bg: 'rgba(107, 114, 128, 0.06)', border: 'rgba(107, 114, 128, 0.15)', iconBg: '#6b7280', icon: '↩', color: '#6b7280' },
+                            };
+                            const cfg = statusConfig[r.status] || statusConfig.error;
+
                             return (
-                                <div key={i} style={{
+                                <div key={r.id || i} style={{
                                     display: 'flex',
                                     alignItems: 'flex-start',
                                     gap: '14px',
                                     padding: '14px 18px',
                                     borderRadius: '10px',
-                                    background: isPass ? 'rgba(22, 163, 74, 0.06)' : 'rgba(220, 38, 38, 0.06)',
-                                    border: `1px solid ${isPass ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)'}`,
+                                    background: cfg.bg,
+                                    border: `1px solid ${cfg.border}`,
                                 }}>
                                     <div style={{
                                         width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                                        background: isPass ? '#16a34a' : '#dc2626',
+                                        background: cfg.iconBg,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px'
-                                    }}>{isPass ? '✓' : '✕'}</div>
+                                        color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px',
+                                        ...(isInProgress ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
+                                    }}>{cfg.icon}</div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>@{r.username || r.user_id}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
+                                                    {vid ? `VID: ${shortVid}` : `@${r.username || r.user_id}`}
+                                                </span>
+                                                {isInProgress && (
+                                                    <span style={{
+                                                        fontSize: '11px',
+                                                        padding: '1px 8px',
+                                                        borderRadius: '10px',
+                                                        background: cfg.iconBg,
+                                                        color: '#fff',
+                                                        fontWeight: 600,
+                                                    }}>
+                                                        {isSubmitted ? '已提交' : '处理中'}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{ts}</span>
                                         </div>
-                                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', wordBreak: 'break-all' }}>{shortLink}</div>
-                                        {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: isPass ? '#16a34a' : '#dc2626', marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
+                                        {vid && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>🔑 @{r.username || r.user_id}</div>}
+                                        {shortLink && <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', wordBreak: 'break-all' }}>{shortLink}</div>}
+                                        {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: cfg.color, marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
                                     </div>
                                 </div>
                             );
@@ -2824,8 +2864,7 @@ export default function Admin() {
                                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                                     {[
                                                                         { key: 'dualbot', label: '新Bot' },
-                                                                        { key: 'oldbot', label: '老Bot' },
-                                                                        { key: 'blackbot', label: 'BlackBot' }
+                                                                        ...(config?.verification?.singleBots || []).map(b => ({ key: b.id, label: b.id === 'blackbot' ? 'BlackBot' : b.id === 'oldbot' ? '老Bot' : b.username }))
                                                                     ].map(bot => {
                                                                         const assigned = (acc.assignedBots || ['dualbot']);
                                                                         const isOn = assigned.includes(bot.key);
@@ -3148,165 +3187,111 @@ export default function Admin() {
                                                 </div>
                                             </div>
 
-                                            {/* ── Black Bot Config ── */}
-                                            <div style={{
-                                                borderRadius: '12px', overflow: 'hidden',
-                                                border: '1px solid var(--border)', marginTop: '12px'
-                                            }}>
-                                                <div style={{
-                                                    padding: '14px 18px',
-                                                    background: 'linear-gradient(135deg, rgba(33,33,33,0.08), rgba(33,33,33,0.02))',
-                                                    borderBottom: '1px solid var(--border)',
-                                                    display: 'flex', alignItems: 'center', gap: '8px'
-                                                }}>
-                                                    <span style={{ fontSize: '16px' }}>🖤</span>
-                                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>Black Bot 验证</span>
-                                                    <span style={{
-                                                        fontSize: '10px', padding: '2px 8px',
-                                                        background: 'rgba(33,33,33,0.15)', color: '#555',
-                                                        borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
-                                                    }}>新</span>
-                                                </div>
-                                                <div style={{ padding: '16px 18px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-                                                            单 Bot 验证：发送链接 → 等待结果
-                                                        </p>
-                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, color: '#333' }}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={config?.verification?.blackBot?.enabled || false}
-                                                                onChange={e => {
-                                                                    const val = e.target.checked;
-                                                                    setConfig(prev => ({
-                                                                        ...prev,
-                                                                        verification: {
-                                                                            ...prev.verification || {},
-                                                                            blackBot: { ...prev.verification?.blackBot || {}, enabled: val },
-                                                                            dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled },
-                                                                            telegram: { ...prev.verification?.telegram || {}, enabled: val ? false : prev.verification?.telegram?.enabled }
-                                                                        }
-                                                                    }));
-                                                                }}
-                                                                style={{ width: '18px', height: '18px' }}
-                                                            />
-                                                            启用
-                                                        </label>
-                                                    </div>
-                                                    <div style={{
-                                                        display: 'flex', flexDirection: 'column', gap: '12px',
-                                                        opacity: config?.verification?.blackBot?.enabled ? 1 : 0.6,
-                                                        pointerEvents: config?.verification?.blackBot?.enabled ? 'auto' : 'none',
-                                                        transition: 'all 0.3s'
+                                            {/* ── Dynamic Single Bot Configs ── */}
+                                            {(config?.verification?.singleBots || []).map((bot, idx) => {
+                                                const isBlack = bot.id === 'blackbot';
+                                                const isLegacy = bot.id === 'oldbot';
+                                                const icon = isBlack ? '🖤' : isLegacy ? '📨' : '🤖';
+                                                
+                                                return (
+                                                    <div key={bot.id} style={{
+                                                        borderRadius: '12px', overflow: 'hidden',
+                                                        border: '1px solid var(--border)', marginTop: '12px'
                                                     }}>
-                                                        <div>
-                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
-                                                            <input type="text" className="input"
-                                                                value={config?.verification?.blackBot?.botUsername || '@Black_Verifier'}
-                                                                onChange={e => setConfig(prev => ({
-                                                                    ...prev,
-                                                                    verification: {
-                                                                        ...prev.verification || {},
-                                                                        blackBot: { ...prev.verification?.blackBot || {}, botUsername: e.target.value }
-                                                                    }
-                                                                }))}
-                                                                placeholder="@Black_Verifier"
-                                                                style={{ width: '100%', boxSizing: 'border-box' }}
-                                                            />
+                                                        <div style={{
+                                                            padding: '14px 18px',
+                                                            background: isBlack ? 'linear-gradient(135deg, rgba(33,33,33,0.08), rgba(33,33,33,0.02))' 
+                                                                        : isLegacy ? 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))'
+                                                                        : 'linear-gradient(135deg, rgba(76,175,80,0.08), rgba(76,175,80,0.02))',
+                                                            borderBottom: '1px solid var(--border)',
+                                                            display: 'flex', alignItems: 'center', gap: '8px'
+                                                        }}>
+                                                            <span style={{ fontSize: '16px' }}>{icon}</span>
+                                                            <span style={{ fontWeight: 700, fontSize: '14px' }}>{bot.username || bot.id} 验证</span>
+                                                            <span style={{
+                                                                fontSize: '10px', padding: '2px 8px',
+                                                                background: 'rgba(33,33,33,0.15)', color: '#555',
+                                                                borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
+                                                            }}>单Bot ({bot.id})</span>
                                                         </div>
-                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={config?.verification?.blackBot?.autoBypass !== false}
-                                                                onChange={e => setConfig(prev => ({
-                                                                    ...prev,
-                                                                    verification: {
-                                                                        ...prev.verification || {},
-                                                                        blackBot: { ...prev.verification?.blackBot || {}, autoBypass: e.target.checked }
-                                                                    }
-                                                                }))}
-                                                                style={{ width: '16px', height: '16px' }}
-                                                            />
-                                                            验证失败时自动 Bypass（刷新链接）
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* ── Legacy SheerID Bot ── */}
-                                            <div style={{
-                                                borderRadius: '12px', overflow: 'hidden',
-                                                border: '1px solid var(--border)', marginTop: '12px'
-                                            }}>
-                                                <div style={{
-                                                    padding: '14px 18px',
-                                                    background: 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))',
-                                                    borderBottom: '1px solid var(--border)',
-                                                    display: 'flex', alignItems: 'center', gap: '8px'
-                                                }}>
-                                                    <span style={{ fontSize: '16px' }}>📨</span>
-                                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>SheerID Bot 验证</span>
-                                                    <span style={{
-                                                        fontSize: '10px', padding: '2px 8px',
-                                                        background: 'rgba(255,152,0,0.15)', color: '#f57c00',
-                                                        borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
-                                                    }}>旧版</span>
-                                                </div>
-                                                <div style={{ padding: '16px 18px' }}>
-                                                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', margin: '0 0 14px' }}>
-                                                        使用当前激活的账号向 Bot 发送验证请求
-                                                    </p>
-                                                    <label style={{
-                                                        display: 'flex', alignItems: 'center', gap: '10px',
-                                                        fontSize: '14px', cursor: 'pointer', marginBottom: '14px',
-                                                        fontWeight: 600, color: '#f57c00'
-                                                    }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={config?.verification?.telegram?.enabled || false}
-                                                            onChange={(e) => {
-                                                                const val = e.target.checked;
-                                                                setConfig(prev => ({
-                                                                    ...prev,
-                                                                    verification: {
-                                                                        ...prev.verification || {},
-                                                                        telegram: { ...prev.verification?.telegram || {}, enabled: val },
-                                                                        dualBot: { ...prev.verification?.dualBot || {}, enabled: val ? false : prev.verification?.dualBot?.enabled },
-                                                                        blackBot: { ...prev.verification?.blackBot || {}, enabled: val ? false : prev.verification?.blackBot?.enabled }
-                                                                    }
-                                                                }));
-                                                            }}
-                                                            style={{ width: '18px', height: '18px' }}
-                                                        />
-                                                        启用
-                                                    </label>
-                                                    <div style={{
-                                                        opacity: config?.verification?.telegram?.enabled ? 1 : 0.6,
-                                                        pointerEvents: config?.verification?.telegram?.enabled ? 'auto' : 'none',
-                                                        transition: 'all 0.3s'
-                                                    }}>
-                                                        {config?.verification?.telegram?.enabled && (
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
-                                                                <select className="input"
-                                                                    value={config?.verification?.telegram?.botUsername || '@SheerID_Verification_bot'}
-                                                                    onChange={e => setConfig(prev => ({
-                                                                        ...prev,
-                                                                        verification: {
-                                                                            ...prev.verification || {},
-                                                                            telegram: { ...prev.verification?.telegram || {}, botUsername: e.target.value }
-                                                                        }
-                                                                    }))}
-                                                                    style={{ cursor: 'pointer', width: '100%', boxSizing: 'border-box' }}
-                                                                >
-                                                                    <option value="@SheerID_Verification_bot">@SheerID_Verification_bot</option>
-                                                                    <option value="@SheerID_Gemini_2026_Bot">@SheerID_Gemini_2026_Bot</option>
-                                                                </select>
+                                                        <div style={{ padding: '16px 18px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                                                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                                                                    使用分配给该Bot的账号发送验证请求
+                                                                </p>
+                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, color: '#333' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={bot.enabled === true}
+                                                                        onChange={e => {
+                                                                            const val = e.target.checked;
+                                                                            setConfig(prev => {
+                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                newBots[idx] = { ...newBots[idx], enabled: val };
+                                                                                return {
+                                                                                    ...prev,
+                                                                                    verification: {
+                                                                                        ...prev.verification,
+                                                                                        singleBots: newBots,
+                                                                                        dualBot: { ...prev.verification?.dualBot, enabled: val ? false : prev.verification?.dualBot?.enabled }
+                                                                                    }
+                                                                                };
+                                                                            });
+                                                                        }}
+                                                                        style={{ width: '18px', height: '18px' }}
+                                                                    />
+                                                                    启用
+                                                                </label>
                                                             </div>
-                                                        )}
+                                                            <div style={{
+                                                                display: 'flex', flexDirection: 'column', gap: '12px',
+                                                                opacity: bot.enabled ? 1 : 0.6,
+                                                                pointerEvents: bot.enabled ? 'auto' : 'none',
+                                                                transition: 'all 0.3s'
+                                                            }}>
+                                                                <div>
+                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>目标 Bot</label>
+                                                                    <input type="text" className="input"
+                                                                        value={bot.username || ''}
+                                                                        onChange={e => setConfig(prev => {
+                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                            newBots[idx] = { ...newBots[idx], username: e.target.value };
+                                                                            return {
+                                                                                ...prev,
+                                                                                verification: {
+                                                                                    ...prev.verification,
+                                                                                    singleBots: newBots
+                                                                                }
+                                                                            };
+                                                                        })}
+                                                                        placeholder="@Bot_Username"
+                                                                        style={{ width: '100%', boxSizing: 'border-box' }}
+                                                                    />
+                                                                </div>
+                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={bot.autoBypass !== false}
+                                                                        onChange={e => setConfig(prev => {
+                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                            newBots[idx] = { ...newBots[idx], autoBypass: e.target.checked };
+                                                                            return {
+                                                                                ...prev,
+                                                                                verification: {
+                                                                                    ...prev.verification,
+                                                                                    singleBots: newBots
+                                                                                }
+                                                                            };
+                                                                        })}
+                                                                        style={{ width: '16px', height: '16px' }}
+                                                                    />
+                                                                    验证失败时自动 Bypass（刷新链接）
+                                                                </label>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>

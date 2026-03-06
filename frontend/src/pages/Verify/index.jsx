@@ -76,12 +76,13 @@ export default function Verify() {
                     setBrowserMode(data.verification?.browserMode === true);
 
                     // Auto-select verify method based on admin config
-                    const isBlackBotEnabled = !!data.verification?.blackBot?.enabled;
+                    const singleBots = data.verification?.singleBots || [];
+                    const activeSingleBot = singleBots.find(b => b.enabled);
                     const isDualBotEnabled = !!data.verification?.dualBot?.enabled;
                     setDualBotEnabled(isDualBotEnabled);
 
-                    if (isBlackBotEnabled) {
-                        setVerifyMethod('blackbot');
+                    if (activeSingleBot) {
+                        setVerifyMethod(activeSingleBot.id);
                     } else if (isDualBotEnabled) {
                         setVerifyMethod('dualbot');
                     } else {
@@ -219,16 +220,16 @@ export default function Verify() {
         setResults(prev => [...resultItems, ...prev]);
 
         try {
-            const apiEndpoint = verifyMethod === 'blackbot' ? '/api/verify/blackbot'
-                : verifyMethod === 'dualbot' ? '/api/verify/dualbot'
-                    : '/api/verify/telegram';
+            const apiEndpoint = verifyMethod === 'dualbot' ? '/api/verify/dualbot'
+                : verifyMethod === 'standard' ? '/api/verify/telegram'
+                    : '/api/verify/singlebot';
 
-            if (verifyMethod === 'dualbot' || verifyMethod === 'blackbot') {
-                // SSE streaming mode for dualbot and blackbot
+            if (verifyMethod !== 'standard') {
+                // SSE streaming mode for dualbot and singlebot
                 const response = await fetch(`${API_BASE}${apiEndpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ links, cdk: cdkCode })
+                    body: JSON.stringify({ links, cdk: cdkCode, botId: verifyMethod })
                 });
 
                 if (!response.ok) {

@@ -52,16 +52,14 @@ PROXY_PASS = os.getenv("PROXY_PASS", "")
 from telegram_userbot import SheerIDUserbot
 from telegram_manager import TelegramAccountManager
 from dual_bot_verifier import DualBotVerifier
-from black_bot_verifier import BlackBotVerifier
+from generic_single_bot_verifier import GenericSingleBotVerifier
 telegram_bot: Optional[SheerIDUserbot] = None
 # Old bot per-account cooldown tracking {account_id: expiry_timestamp}
 _oldbot_cooldowns: Dict[str, float] = {}
-# Black bot per-account cooldown tracking {account_id: expiry_timestamp}
-_blackbot_cooldowns: Dict[str, float] = {}
+# Single bots per-account cooldown tracking {bot_id: {account_id: expiry_timestamp}}
+_singlebot_cooldowns: Dict[str, Dict[str, float]] = {}
 tg_manager = TelegramAccountManager()
 dual_bot = DualBotVerifier()
-black_bot = BlackBotVerifier()
-
 # VID deduplication: prevent the same VID from being processed simultaneously
 _vid_locks: dict = {}  # vid -> asyncio.Lock
 _vid_results: dict = {}  # vid -> result dict (cached for 60s)
@@ -2060,18 +2058,31 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     )
 
 
-# ========== Black Bot Verification ==========
+# ========== Single Bot Verification ==========
 
-class BlackBotVerifyRequest(BaseModel):
+class SingleBotVerifyRequest(BaseModel):
+    botId: str
     links: List[str]
     cdk: Optional[str] = None
 
 
 @app.post("/api/verify/blackbot")
-async def verify_via_blackbot(request: BlackBotVerifyRequest):
+async def verify_via_blackbot_shim(request: Request):
+    # Backward compatibility shim for older frontends or clients
+    body = await request.json()
+    req = SingleBotVerifyRequest(
+        botId="blackbot",
+        links=body.get("links", []),
+        cdk=body.get("cdk")
+    )
+    return await verify_via_singlebot(req)
+
+
+@app.post("/api/verify/singlebot")
+async def verify_via_singlebot(request: SingleBotVerifyRequest):
     """
-    Verify using @Black_Verifier bot with SSE streaming progress.
-    Single-bot flow: send link → wait for result → parse response.
+    Verify using any configured single-bot via GenericSingleBotVerifier.
+    Supports SSE streaming progress.
     """
     if not tg_manager.is_connected:
         raise HTTPException(status_code=503, detail="程序离线，请联系管理员")
@@ -2140,7 +2151,7 @@ async def verify_via_blackbot(request: BlackBotVerifyRequest):
             except HTTPException:
                 raise
             except Exception as _pre_err:
-                logger.warning(f"[BlackBot] VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
+                logger.warning(f"[SingleBot] VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
 
     if not is_bot_internal:
         if cdk_check["remaining"] < len(clean_links):
@@ -2149,19 +2160,37 @@ async def verify_via_blackbot(request: BlackBotVerifyRequest):
                 detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
             )
 
-    # Get black bot config
+    # Load bot configuration
     import config_manager as _cm_bb
     _cfg_bb = _cm_bb.get_config()
-    _bb_config = _cfg_bb.get("verification", {}).get("blackBot", {})
-    auto_bypass = _bb_config.get("autoBypass", True)
-    bb_bot_username = _bb_config.get("botUsername")
+    single_bots = _cfg_bb.get("verification", {}).get("singleBots", [])
+    
+    bot_config = next((b for b in single_bots if b.get("id") == request.botId), None)
+    if not bot_config:
+        # Fallback to singlebots from telegram or legacy blackbot config if missing
+        if request.botId == "blackbot":
+            from_legacy = _cfg_bb.get("verification", {}).get("blackBot", {})
+            bot_config = {
+                "id": "blackbot",
+                "username": from_legacy.get("botUsername", "Black_Verifier"),
+                "autoBypass": from_legacy.get("autoBypass", True)
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"未找到该单 Bot 验证配置 ({request.botId})")
 
+    # Instantiate the generic verifier with the configuration
+    single_verifier = GenericSingleBotVerifier(bot_config)
+    
     import re as re_mod_bb
     def extract_vid_bb(link):
         m = re_mod_bb.search(r'verificationId=([A-Za-z0-9-]+)', link)
         return m.group(1) if m else link[-12:]
 
     link_vid_map = {link: extract_vid_bb(link) for link in clean_links}
+    
+    # Initialize bot cooldown tracking map if not exists
+    if request.botId not in _singlebot_cooldowns:
+        _singlebot_cooldowns[request.botId] = {}
 
     async def event_stream():
         import json
@@ -2169,38 +2198,38 @@ async def verify_via_blackbot(request: BlackBotVerifyRequest):
 
         cooldown_wait_lock = asyncio.Lock()
 
-        def _get_next_blackbot_client():
-            """Get next available blackbot-assigned client, skipping cooldown accounts."""
+        def _get_next_singlebot_client():
+            """Get next available client assigned to this specific botId, skipping cooldowns."""
             now = _time.time()
             config = _cm_bb.get_config()
             accounts = config.get("telegramAccounts", [])
 
-            blackbot_ids = []
+            valid_ids = []
             for acc in accounts:
                 if not acc.get("enabled", True):
                     continue
-                assigned = acc.get("assignedBots", ["dualbot"])
-                if "blackbot" not in assigned:
+                assigned = acc.get("assignedBots", [])
+                if request.botId not in assigned:
                     continue
-                if _blackbot_cooldowns.get(acc["id"], 0) > now:
+                if _singlebot_cooldowns[request.botId].get(acc["id"], 0) > now:
                     continue
-                blackbot_ids.append(acc["id"])
+                valid_ids.append(acc["id"])
 
             all_clients = tg_manager.get_all_clients()
-            available = [(aid, all_clients[aid]) for aid in blackbot_ids
+            available = [(aid, all_clients[aid]) for aid in valid_ids
                          if aid in all_clients and all_clients[aid].is_connected()]
 
             if not available:
                 return None
 
-            if not hasattr(_get_next_blackbot_client, '_idx'):
-                _get_next_blackbot_client._idx = 0
-            _get_next_blackbot_client._idx = (_get_next_blackbot_client._idx + 1) % len(available)
-            return available[_get_next_blackbot_client._idx]
+            if not hasattr(_get_next_singlebot_client, '_idx'):
+                _get_next_singlebot_client._idx = 0
+            _get_next_singlebot_client._idx = (_get_next_singlebot_client._idx + 1) % len(available)
+            return available[_get_next_singlebot_client._idx]
 
-        def _get_shortest_blackbot_cooldown():
+        def _get_shortest_singlebot_cooldown():
             now = _time.time()
-            active = [exp - now for exp in _blackbot_cooldowns.values() if exp > now]
+            active = [exp - now for exp in _singlebot_cooldowns[request.botId].values() if exp > now]
             return min(active) if active else 0
 
         async def process_single_link(link_to_verify):
@@ -2214,7 +2243,7 @@ async def verify_via_blackbot(request: BlackBotVerifyRequest):
                 vid_lock = _vid_locks[vid]
 
                 if vid_lock.locked():
-                    logger.info(f"[BlackBot] VID {vid[:8]}... already being processed, waiting...")
+                    logger.info(f"[SingleBot] VID {vid[:8]}... already being processed, waiting...")
                     async with vid_lock:
                         if vid in _vid_results:
                             cached = _vid_results[vid]
@@ -2230,21 +2259,21 @@ async def verify_via_blackbot(request: BlackBotVerifyRequest):
             lock_ctx = vid_lock if vid_lock else asyncio.Lock()
             async with lock_ctx:
               for attempt in range(max_retries):
-                pool_item = _get_next_blackbot_client()
+                pool_item = _get_next_singlebot_client()
 
                 if not pool_item:
-                    wait_time = _get_shortest_blackbot_cooldown()
+                    wait_time = _get_shortest_singlebot_cooldown()
                     if wait_time > 0:
-                        logger.info(f"[BlackBot] All accounts in cooldown, waiting {wait_time:.0f}s...")
+                        logger.info(f"[SingleBot] All accounts in cooldown, waiting {wait_time:.0f}s...")
                         on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "step": "cooldown_wait", "message": f"等待可用账号 ({int(wait_time)}s)..."}
                         progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
                         async with cooldown_wait_lock:
-                            pool_item = _get_next_blackbot_client()
+                            pool_item = _get_next_singlebot_client()
                             if not pool_item:
-                                wait_time = _get_shortest_blackbot_cooldown()
+                                wait_time = _get_shortest_singlebot_cooldown()
                                 if wait_time > 0:
                                     await asyncio.sleep(wait_time + 2)
-                                pool_item = _get_next_blackbot_client()
+                                pool_item = _get_next_singlebot_client()
 
                     if not pool_item:
                         result = {"success": False, "status": "error", "message": "所有账号冷却中，请稍后重试"}
@@ -2253,18 +2282,16 @@ async def verify_via_blackbot(request: BlackBotVerifyRequest):
                         return None, result
 
                 acc_id, client = pool_item
-                result = await black_bot.verify(
+                result = await single_verifier.verify(
                     client=client,
                     link=link_to_verify,
                     account_id=acc_id,
-                    bot_username=bb_bot_username,
-                    auto_bypass=auto_bypass,
                     on_progress=on_progress
                 )
 
                 if result.get("status") == "cooldown":
-                    logger.info(f"[BlackBot] Account {acc_id} in cooldown, retrying...")
-                    _blackbot_cooldowns[acc_id] = _time.time() + result.get("cooldown_seconds", 90)
+                    logger.info(f"[SingleBot] Account {acc_id} in cooldown, retrying...")
+                    _singlebot_cooldowns[request.botId][acc_id] = _time.time() + result.get("cooldown_seconds", 90)
                     continue
 
                 # Cache result for deduplication

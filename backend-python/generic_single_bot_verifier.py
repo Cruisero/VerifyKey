@@ -1,14 +1,7 @@
 """
-Black Bot Verifier
-Single-bot verification via @Black_Verifier.
-Send SheerID link → wait for result message → parse response.
-
-Response patterns (from bot):
-  ✅ "VERIFICATION SUCCESSFUL!" + "Status: VERIFIED"
-  ❌ "Verification Rejected" — Document verification failed
-  ❌ "Task Failed" — Error: collectStudentPersonalInfo failed
-  ❌ "Fraud Reject (Anti-Fraud)" — SheerID rejected the request
-  ❌ "Verification Timed Out" — in review status for more than 3 minutes
+Generic Single Bot Verifier
+Config-driven single-bot verification pipeline.
+Takes a bot configuration object from the admin settings.
 """
 
 import asyncio
@@ -20,14 +13,16 @@ from telethon import TelegramClient, events
 logger = logging.getLogger(__name__)
 
 
-class BlackBotVerifier:
+class GenericSingleBotVerifier:
     """
-    Single-bot verifier for @Black_Verifier.
-    Sends a SheerID link and waits for the final result.
+    Config-driven single-bot verifier.
+    Sends a formatted link and waits for the final result based on configured rules.
     """
 
-    def __init__(self, bot_username: str = "Black_Verifier"):
-        self.bot_username = bot_username.lstrip("@")
+    def __init__(self, bot_config: dict):
+        self.config = bot_config
+        self.bot_id = bot_config.get("id", "unknown")
+        self.bot_username = bot_config.get("username", "").lstrip("@")
         self._locks: Dict[str, asyncio.Lock] = {}
 
     def _get_lock(self, account_id: str) -> asyncio.Lock:
@@ -36,19 +31,10 @@ class BlackBotVerifier:
         return self._locks[account_id]
 
     async def verify(self, client: TelegramClient, link: str, account_id: str = "default",
-                     bot_username: str = None, auto_bypass: bool = True,
+                     bot_username: str = None, auto_bypass: bool = None,
                      timeout: int = 180, on_progress=None) -> dict:
         """
         Run single-bot verification pipeline with per-account locking.
-
-        Args:
-            client: The Telegram client to use
-            link: The verification link
-            account_id: ID of the Telegram account (for locking)
-            bot_username: Override bot username
-            auto_bypass: Whether to automatically refresh the link on failure
-            timeout: Maximum time to wait for responses (default 180s — bot may take 3+ min)
-            on_progress: Optional async callback(dict) for progress updates
         """
         async def emit(step, message):
             if on_progress:
@@ -98,11 +84,11 @@ class BlackBotVerifier:
                                 "messageKey": "msgLinkRejected"
                             }
             except Exception as e:
-                logger.warning(f"[BlackBot] [{account_id}] Pre-check failed: {e}")
+                logger.warning(f"[GenericBot:{self.bot_id}] [{account_id}] Pre-check failed: {e}")
 
             # ---- Send link and wait for result ----
             await emit("verify", "正在验证...")
-            logger.info(f"[BlackBot] [{account_id}] Sending {vid[:8]}... to @{bot}")
+            logger.info(f"[GenericBot:{self.bot_id}] [{account_id}] Sending {vid[:8]}... to @{bot}")
 
             # Schedule a delayed "waiting" progress update
             async def delayed_waiting():
@@ -110,9 +96,22 @@ class BlackBotVerifier:
                 await emit("waiting", "等待验证结果...")
             waiting_task = asyncio.create_task(delayed_waiting())
 
-            reply = await self._send_and_wait(client, bot, link, wait_for_final=True, timeout=timeout)
+            # Format the outbound message using config
+            send_format = self.config.get("sendFormat", "{link}")
+            outbound_msg = send_format.replace("{link}", link)
+
+            reply = await self._send_and_wait(client, bot, outbound_msg, wait_for_final=True, timeout=timeout)
 
             waiting_task.cancel()
+
+            if getattr(self, '_cooldown_seconds', None) is not None:
+                return {
+                    "success": False, 
+                    "status": "cooldown", 
+                    "cooldown_seconds": self._cooldown_seconds,
+                    "verificationId": vid,
+                    "message": f"账号冷却中，请等待 {self._cooldown_seconds} 秒后再试"
+                }
 
             if reply is None:
                 return {
@@ -126,28 +125,28 @@ class BlackBotVerifier:
             # Parse result
             parsed = self._parse_response(reply, vid)
 
-            # ---- Race condition check ----
-            if not parsed["success"] and parsed["status"] in ("failed", "rejected") and initial_step not in ("success", "error"):
+            # ---- Race condition check (for SheerID API sync) ----
+            if not parsed.get("success") and parsed.get("status") in ("failed", "rejected") and initial_step not in ("success", "error"):
                 try:
-                    import httpx
                     async with httpx.AsyncClient(timeout=10) as http_client:
                         check_resp = await http_client.get(f"https://services.sheerid.com/rest/v2/verification/{vid}")
                         if check_resp.status_code == 200:
                             actual_step = check_resp.json().get("currentStep", "")
                             if actual_step == "success":
-                                logger.info(f"[BlackBot] [{account_id}] Race condition! Bot said fail but SheerID says SUCCESS for {vid[:8]}")
+                                logger.info(f"[GenericBot:{self.bot_id}] [{account_id}] Race condition! Bot said fail but SheerID says SUCCESS for {vid[:8]}")
                                 parsed["success"] = True
                                 parsed["status"] = "approved"
                                 parsed["message"] = "验证通过"
                                 parsed["messageKey"] = "msgApproved"
                 except Exception as e:
-                    logger.warning(f"[BlackBot] [{account_id}] Race check failed: {e}")
+                    logger.warning(f"[GenericBot:{self.bot_id}] [{account_id}] Race check failed: {e}")
 
             # ---- Auto bypass on failure ----
-            if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected"):
+            do_bypass = auto_bypass if auto_bypass is not None else self.config.get("autoBypass", False)
+            if not parsed.get("success") and do_bypass and parsed.get("status") in ("failed", "rejected"):
                 await emit("failed", "验证失败，正在刷新链接...")
                 await emit("bypass", "刷新链接中...")
-                logger.info(f"[BlackBot] [{account_id}] Running bypass for {vid[:8]}...")
+                logger.info(f"[GenericBot:{self.bot_id}] [{account_id}] Running bypass for {vid[:8]}...")
                 bypass_ok = await self._run_bypass(vid, account_id)
 
                 reason_key = parsed.get("failureReasonKey", "reasonFailed")
@@ -180,13 +179,12 @@ class BlackBotVerifier:
         Send a message to a bot and wait for the reply.
         If wait_for_final is True, skips intermediate/processing messages.
         Supports both NewMessage and MessageEdited events.
-
-        Auto-handles the billing method selection:
-        When bot replies with "Choose billing method:" and inline buttons,
-        automatically clicks the "API Key" button.
         """
         loop = asyncio.get_event_loop()
         future = loop.create_future()
+        self._cooldown_seconds = None
+
+        auto_click_buttons = [btn.lower() for btn in self.config.get("autoClickButtons", [])]
 
         async def handler(event):
             if future.done():
@@ -200,28 +198,31 @@ class BlackBotVerifier:
                 return
 
             event_type = "New" if isinstance(event, events.NewMessage.Event) else "Edit"
-            logger.info(f"[BlackBot] {event_type} message from @{bot_username}: {reply_text[:120]}...")
+            logger.info(f"[GenericBot:{self.bot_id}] {event_type} message from @{bot_username}: {reply_text[:120]}...")
 
-            # ---- Auto-click "API Key" button if billing method prompt ----
-            if "billing method" in reply_text.lower() or "choose" in reply_text.lower():
-                if event.message.buttons:
-                    for i, row in enumerate(event.message.buttons):
-                        for j, btn in enumerate(row):
-                            btn_text = btn.text or ""
-                            if "api" in btn_text.lower():
-                                logger.info(f"[BlackBot] Auto-clicking billing button: '{btn_text}'")
-                                try:
-                                    await event.message.click(i, j)
-                                except Exception as e:
-                                    logger.error(f"[BlackBot] Failed to click button: {e}")
-                                return  # Don't set future — wait for the actual verification result
+            # ---- Auto-click configured buttons ----
+            if auto_click_buttons and event.message.buttons:
+                for i, row in enumerate(event.message.buttons):
+                    for j, btn in enumerate(row):
+                        btn_text = btn.text or ""
+                        if any(k in btn_text.lower() for k in auto_click_buttons):
+                            logger.info(f"[GenericBot:{self.bot_id}] Auto-clicking button: '{btn_text}'")
+                            try:
+                                await event.message.click(i, j)
+                            except Exception as e:
+                                logger.error(f"[GenericBot:{self.bot_id}] Failed to click button: {e}")
+                            return  # Wait for the actual result msg
 
+            # ---- Parse Status ----
             if wait_for_final:
                 parsed = self._parse_response(reply_text, "temp")
-                logger.info(f"[BlackBot] Parsed status for @{bot_username}: {parsed['status']}")
-                if parsed["status"] == "processing":
-                    logger.info(f"[BlackBot] Skipping processing message from @{bot_username}...")
+                logger.info(f"[GenericBot:{self.bot_id}] Parsed status for @{bot_username}: {parsed['status']}")
+
+                if parsed.get("status") == "processing":
+                    logger.info(f"[GenericBot:{self.bot_id}] Skipping processing message...")
                     return
+                elif parsed.get("status") == "cooldown":
+                    self._cooldown_seconds = parsed.get("cooldown_seconds")
 
             future.set_result(reply_text)
 
@@ -233,10 +234,10 @@ class BlackBotVerifier:
             result = await asyncio.wait_for(future, timeout=timeout)
             return result
         except asyncio.TimeoutError:
-            logger.warning(f"[BlackBot] Timeout waiting for @{bot_username}")
+            logger.warning(f"[GenericBot:{self.bot_id}] Timeout waiting for @{bot_username}")
             return None
         except Exception as e:
-            logger.error(f"[BlackBot] Error with @{bot_username}: {e}")
+            logger.error(f"[GenericBot:{self.bot_id}] Error with @{bot_username}: {e}")
             return None
         finally:
             client.remove_event_handler(handler, events.NewMessage)
@@ -246,16 +247,7 @@ class BlackBotVerifier:
 
     def _parse_response(self, text: str, vid: str) -> dict:
         """
-        Parse @Black_Verifier bot response.
-
-        Response patterns:
-          ✅ "VERIFICATION SUCCESSFUL!" + "Status: VERIFIED"  (no emoji prefixes)
-          ❌ "Verification Rejected" + "Document verification failed"
-          ❌ "Task Failed" + "Error: ..."
-          ❌ "Fraud Reject (Anti-Fraud)"
-          ❌ "Verification Timed Out"
-
-        All failures show "Balance: not charged".
+        Parse bot response using dynamic configuration rules.
         """
         if not text:
             return {
@@ -274,10 +266,9 @@ class BlackBotVerifier:
 
         text_upper = text.upper()
         text_clean = " ".join(text_upper.split())
-        logger.info(f"[BlackBot] Parsing {vid[:8]} - Text: {text_clean[:100]}...")
 
-        # Extract Verification ID from "Verification ID: xxxx"
-        vid_match = re.search(r'Verification\s+ID:\s*([a-fA-F0-9]+)', text)
+        # Extract Verification ID
+        vid_match = re.search(r'Verification\s+ID:\s*([a-fA-F0-9]+)', text, flags=re.IGNORECASE)
         if vid_match:
             result["verificationId"] = vid_match.group(1)
 
@@ -286,99 +277,67 @@ class BlackBotVerifier:
         if link_match:
             result["claimLink"] = link_match.group(1)
 
-        # Extract remaining verifications from "X verifications remaining"
-        remaining_match = re.search(r'(\d+)\s+VERIFICATIONS?\s+REMAINING', text_clean)
-        if remaining_match:
-            result["remaining_quota"] = int(remaining_match.group(1))
+        # Config: Quota Parsing
+        quota_config = self.config.get("quota", {})
+        if quota_config and quota_config.get("remainingPattern"):
+            quota_match = re.search(quota_config["remainingPattern"], text_clean, flags=re.IGNORECASE)
+            if quota_match:
+                result["remaining_quota"] = int(quota_match.group(1))
 
-        # ======== 1. Check for PROCESSING (skip intermediate) ========
-        # @Black_Verifier doesn't seem to send processing messages based on screenshots,
-        # but handle it defensively if they add ⏳ or "Processing" in the future
-        proc_keywords = ["PROCESSING", "⏳", "WAIT", "LOADING"]
-        # Only match if there's NO definitive status in the same message
-        is_definitive = any(k in text_clean for k in [
-            "VERIFICATION SUCCESSFUL", "VERIFICATION REJECTED", "TASK FAILED",
-            "FRAUD REJECT", "VERIFICATION TIMED OUT", "STATUS: VERIFIED"
-        ])
-        if not is_definitive:
-            for kw in proc_keywords:
-                if kw in text_clean:
-                    result["success"] = None
-                    result["status"] = "processing"
-                    result["message"] = "Processing..."
-                    return result
-
-        # ======== 2. DEFINITIVE SUCCESS ========
-        # "🎉🎉🎉 VERIFICATION SUCCESSFUL! 🎉🎉🎉" with "Status: VERIFIED"
-        if "VERIFICATION SUCCESSFUL" in text_clean:
-            logger.info(f"[BlackBot] Success matched: VERIFICATION SUCCESSFUL")
-            result["success"] = True
-            result["status"] = "approved"
-            result["message"] = "验证通过"
-            result["messageKey"] = "msgApproved"
-            return result
-
-        # ======== 3. FRAUD REJECT ========
-        # "Fraud Reject (Anti-Fraud)" — SheerID rejected the request
-        if "FRAUD REJECT" in text_clean or "FRAUD" in text_clean:
-            logger.info(f"[BlackBot] Fraud rejection matched")
-            result["success"] = False
-            result["status"] = "failed"
-            result["message"] = "检测到欺诈行为，请刷新页面获取新链接"
-            result["messageKey"] = "msgFraudDetected"
-            result["failureReasonKey"] = "reasonFraud"
-            return result
-
-        # ======== 4. VERIFICATION REJECTED ========
-        # "Verification Rejected" + "Document verification failed — SheerID rejected the uploaded file"
-        if "VERIFICATION REJECTED" in text_clean:
-            logger.info(f"[BlackBot] Verification rejected matched")
-            result["success"] = False
-            result["status"] = "failed"
-            result["message"] = "文档验证失败，SheerID 拒绝了上传的文件"
-            result["messageKey"] = "msgVerifyFailedDetail"
-            result["failureReasonKey"] = "reasonDocRejected"
-            return result
-
-        # ======== 5. TASK FAILED ========
-        # "Task Failed" + "Error: collectStudentPersonalInfo failed: HTTP 400"
-        if "TASK FAILED" in text_clean:
-            logger.info(f"[BlackBot] Task failed matched")
-            # Extract specific error message
-            error_match = re.search(r'Error:\s*(.+?)(?:\n|$)', text)
-            error_detail = error_match.group(1).strip() if error_match else "Unknown error"
-            result["success"] = False
-            result["status"] = "failed"
-            result["message"] = f"任务失败: {error_detail}"
-            result["messageKey"] = "msgVerifyFailedDetail"
-            result["failureReasonKey"] = "reasonTaskFailed"
-            return result
-
-        # ======== 6. VERIFICATION TIMED OUT ========
-        # "Verification Timed Out" — link in review status for too long
-        if "VERIFICATION TIMED OUT" in text_clean or "TIMED OUT" in text_clean:
-            logger.info(f"[BlackBot] Verification timed out matched")
-            result["success"] = False
-            result["status"] = "failed"
-            result["message"] = "验证超时，链接审核时间过长"
-            result["messageKey"] = "msgVerifyFailedDetail"
-            result["failureReasonKey"] = "reasonTimedOut"
-            return result
-
-        # ======== 7. Fallback: generic failure keywords ========
-        fail_keywords = ["FAILED", "❌", "REJECTED", "ERROR", "EXPIRED"]
-        for kw in fail_keywords:
-            if kw in text_clean:
-                logger.info(f"[BlackBot] Generic failure keyword matched: {kw}")
+        # Config: Cooldown Parsing
+        cooldown_config = self.config.get("cooldown", {})
+        if cooldown_config and cooldown_config.get("keywords"):
+            if any(k.upper() in text_clean for k in cooldown_config.get("keywords", [])):
+                cd_pattern = cooldown_config.get("timePattern")
+                result["status"] = "cooldown"
                 result["success"] = False
-                result["status"] = "failed"
-                result["message"] = f"验证失败: {text[:60]}..."
-                result["messageKey"] = "msgVerifyFailedDetail"
-                result["failureReasonKey"] = "reasonFailed"
+                result["cooldown_seconds"] = 90  # Default
+                
+                if cd_pattern:
+                    min_match = re.search(cd_pattern, text_clean, flags=re.IGNORECASE)
+                    if min_match:
+                        try:
+                            result["cooldown_seconds"] = int(min_match.group(1)) * 60 + 10
+                        except Exception:
+                            pass
                 return result
 
-        # ======== 8. Safe fallback: unknown → failure ========
-        logger.info("[BlackBot] No status matched, falling back to failed.")
+        # Config: Processing Keywords
+        processing_kws = self.config.get("processingKeywords", [])
+        if processing_kws:
+            # Check if this is exclusively a processing message (no definitive rules match)
+            is_definitive = False
+            for rule in self.config.get("responseRules", []):
+                if any(kw.upper() in text_clean for kw in rule.get("keywords", [])):
+                    is_definitive = True
+                    break
+            
+            if not is_definitive:
+                for kw in processing_kws:
+                    if kw.upper() in text_clean:
+                        result["success"] = None
+                        result["status"] = "processing"
+                        result["message"] = "Processing..."
+                        return result
+
+        # Config: Evaluate Response Rules
+        rules = self.config.get("responseRules", [])
+        for rule in rules:
+            keywords = [k.upper() for k in rule.get("keywords", [])]
+            if any(k in text_clean for k in keywords):
+                result["success"] = rule.get("success", False)
+                result["status"] = rule.get("status", "failed")
+                result["message"] = rule.get("message", "Rule matched")
+                if "failureReasonKey" in rule:
+                    result["failureReasonKey"] = rule["failureReasonKey"]
+                if "messageKey" in rule:
+                    result["messageKey"] = rule["messageKey"]
+                return result
+
+        # Safe fallback: unknown → processing or failure? 
+        # Since it's generic, if no rules match and wait_for_final is checked later,
+        # we mark as unknown. For generic failures we fall back to failed.
+        logger.info(f"[GenericBot:{self.bot_id}] No status matched, falling back.")
         result["success"] = False
         result["status"] = "failed"
         result["message"] = f"请求失败: {text[:60]}..."
@@ -386,10 +345,10 @@ class BlackBotVerifier:
         result["failureReasonKey"] = "reasonFailed"
         return result
 
-    # ---- Bypass (reuse DualBot's bypass logic) ----
+    # ---- Bypass (reuse logic) ----
 
     async def _run_bypass(self, vid: str, account_id: str) -> bool:
-        """Run bypass sequence: upload dummy docs to invalidate link."""
+        """Submit dummy docs to SheerID to invalidate the link."""
         import httpx
         base_url = "https://services.sheerid.com/rest/v2"
 
@@ -404,14 +363,13 @@ class BlackBotVerifier:
                         step = f"error_{check_resp.status_code}"
 
                     if step != "pending":
-                        logger.info(f"[BlackBot] [{account_id}] Bypass: Pending cleared -> {step}")
+                        logger.info(f"[GenericBot:{self.bot_id}] [{account_id}] Bypass: Pending cleared -> {step}")
                         break
 
                     if poll % 5 == 0:
-                        logger.info(f"[BlackBot] [{account_id}] Bypass: Waiting for pending... ({(poll+1)*3}s)")
+                        logger.info(f"[GenericBot] [{account_id}] Bypass: Waiting pending... ({(poll+1)*3}s)")
                     await asyncio.sleep(3)
                 else:
-                    logger.warning(f"[BlackBot] [{account_id}] Bypass: Pending timeout, aborting")
                     return False
 
             # Run bypass uploads
@@ -424,11 +382,11 @@ class BlackBotVerifier:
                 else:
                     break
 
-            logger.info(f"[BlackBot] [{account_id}] Bypass: Done. {bypass_count} uploads for {vid[:8]}")
+            logger.info(f"[GenericBot:{self.bot_id}] [{account_id}] Bypass: Done. {bypass_count} uploads")
             return bypass_count > 0
 
         except Exception as e:
-            logger.error(f"[BlackBot] [{account_id}] Bypass error: {e}")
+            logger.error(f"[GenericBot:{self.bot_id}] [{account_id}] Bypass error: {e}")
             return False
 
     async def _bypass_link(self, vid: str) -> bool:
@@ -482,7 +440,6 @@ class BlackBotVerifier:
                 return True
 
         except Exception as e:
-            logger.error(f"[BlackBot Bypass] Error: {e}")
             return False
 
     @staticmethod

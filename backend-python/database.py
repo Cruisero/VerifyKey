@@ -65,6 +65,7 @@ def init_db():
                 user_id INTEGER DEFAULT 0,
                 status TEXT NOT NULL,
                 message TEXT DEFAULT '',
+                vid TEXT DEFAULT '',
                 timestamp TEXT NOT NULL
             );
 
@@ -88,6 +89,9 @@ def init_db():
         _migrate_verification_history(conn)
         _migrate_bot_verify_log(conn)
         _migrate_cdkeys(conn)
+
+        # Schema migrations for existing databases
+        _add_vid_column_to_bot_verify_log(conn)
 
         conn.commit()
         _initialized = True
@@ -189,6 +193,17 @@ def _migrate_cdkeys(conn: sqlite3.Connection):
         print(f"[DB] Backed up old JSON to {backup}")
     except Exception as e:
         print(f"[DB] Error migrating cdkeys: {e}")
+
+def _add_vid_column_to_bot_verify_log(conn: sqlite3.Connection):
+    """Add vid column to bot_verify_log if it doesn't exist yet."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(bot_verify_log)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "vid" not in columns:
+            conn.execute("ALTER TABLE bot_verify_log ADD COLUMN vid TEXT DEFAULT ''")
+            print("[DB] Added 'vid' column to bot_verify_log table")
+    except Exception as e:
+        print(f"[DB] Error adding vid column: {e}")
 
 
 # ========== Backup Functions ==========

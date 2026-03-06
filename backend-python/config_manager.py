@@ -72,6 +72,101 @@ DEFAULT_CONFIG = {
             "verifyBot": "@AutoGeminiProbot",
             "autoBypass": True
         },
+        "singleBots": [
+            {
+                "id": "blackbot",
+                "name": "Black Bot",
+                "username": "@Black_Verifier",
+                "enabled": False,
+                "autoBypass": True,
+                "sendFormat": "{link}",
+                "autoClickButtons": ["API Key", "API"],
+                "responseRules": [
+                    {
+                        "keywords": ["VERIFICATION SUCCESSFUL"],
+                        "status": "approved",
+                        "success": True,
+                        "message": "验证通过",
+                        "messageKey": "msgApproved"
+                    },
+                    {
+                        "keywords": ["FRAUD REJECT", "FRAUD"],
+                        "status": "failed",
+                        "success": False,
+                        "message": "检测到欺诈行为，请刷新页面获取新链接",
+                        "failureReasonKey": "reasonFraud",
+                        "messageKey": "msgFraudDetected"
+                    },
+                    {
+                        "keywords": ["VERIFICATION REJECTED"],
+                        "status": "failed",
+                        "success": False,
+                        "message": "文档验证失败，SheerID 拒绝了上传的文件",
+                        "failureReasonKey": "reasonDocRejected",
+                        "messageKey": "msgVerifyFailedDetail"
+                    },
+                    {
+                        "keywords": ["TASK FAILED"],
+                        "status": "failed",
+                        "success": False,
+                        "message": "任务失败",
+                        "failureReasonKey": "reasonTaskFailed",
+                        "messageKey": "msgVerifyFailedDetail"
+                    },
+                    {
+                        "keywords": ["VERIFICATION TIMED OUT", "TIMED OUT"],
+                        "status": "failed",
+                        "success": False,
+                        "message": "验证超时，链接审核时间过长",
+                        "failureReasonKey": "reasonTimedOut",
+                        "messageKey": "msgVerifyFailedDetail"
+                    },
+                    {
+                        "keywords": ["FAILED", "❌", "REJECTED", "ERROR", "EXPIRED"],
+                        "status": "failed",
+                        "success": False,
+                        "message": "验证失败",
+                        "failureReasonKey": "reasonFailed",
+                        "messageKey": "msgVerifyFailedDetail"
+                    }
+                ],
+                "processingKeywords": ["PROCESSING", "⏳", "WAIT", "LOADING"],
+                "quota": {
+                    "remainingPattern": r"(\d+)\s+VERIFICATIONS?\s+REMAINING"
+                }
+            },
+            {
+                "id": "oldbot",
+                "name": "SheerID Bot",
+                "username": "@SheerID_Verification_bot",
+                "enabled": False,
+                "autoBypass": False,
+                "sendFormat": "{link}",
+                "autoClickButtons": [],
+                "responseRules": [
+                    {
+                        "keywords": ["YOUR LINK HAS BEEN VERIFIED SUCCESSFULLY", "SUCCESSFULLY"],
+                        "status": "approved",
+                        "success": True,
+                        "message": "验证成功",
+                        "messageKey": "msgApproved"
+                    },
+                    {
+                        "keywords": ["FAILED TO VERIFY", "REJECTED", "ERROR", "EXPIRED", "❌"],
+                        "status": "failed",
+                        "success": False,
+                        "message": "验证失败",
+                        "failureReasonKey": "reasonFailed",
+                        "messageKey": "msgVerifyFailedDetail"
+                    }
+                ],
+                "processingKeywords": ["PROCESSING", "⏳", "PLEASE WAIT"],
+                "cooldown": {
+                    "keywords": ["COOLDOWN", "WAIT"],
+                    "timePattern": r"(\d+)\s*M"
+                }
+            }
+        ],
         "maxConcurrent": 2,
         "delayBetweenMs": 2000,
         "useCurlCffi": True  # Use curl_cffi for TLS spoofing

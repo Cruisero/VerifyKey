@@ -2754,8 +2754,7 @@ class GetGemVerifyRequest(BaseModel):
 async def verify_via_getgem(request: GetGemVerifyRequest):
     """
     Verify by forwarding verification IDs to GetGem.cc API.
-    Uses GetGem CDK from saved config for authentication.
-    Local CDK is used for quota tracking only.
+    Uses SSE streaming to send real-time progress like DualBot.
     """
     import config_manager
     import httpx
@@ -2787,146 +2786,169 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
             )
         cdk_remaining = cdk_check["remaining"]
 
-    async def process_single(vid: str):
-        """Submit one verification to GetGem and poll until completion."""
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-                # Step 1: Submit verification
-                submit_resp = await client.post(
-                    f"{getgem_url}/api/verify",
-                    json={"verificationId": vid, "cdk": getgem_cdk}
-                )
-                
-                if submit_resp.status_code != 200:
-                    error_detail = ""
-                    try:
-                        err = submit_resp.json()
-                        error_detail = err.get("detail") or err.get("message") or err.get("error") or str(err)
-                    except:
-                        error_detail = submit_resp.text[:200]
-                    return {
-                        "verificationId": vid,
-                        "status": "error",
-                        "success": False,
-                        "message": f"提交失败 ({submit_resp.status_code}): {error_detail}"
-                    }
+    async def event_stream():
+        import json as _json
 
-                submit_data = submit_resp.json()
-                task_id = submit_data.get("taskId")
-                
-                if not task_id:
-                    return {
-                        "verificationId": vid,
-                        "status": "error",
-                        "success": False,
-                        "message": f"提交失败: 未返回任务ID — {submit_data}"
-                    }
+        def fmt(data):
+            return f"data: {_json.dumps(data, ensure_ascii=False)}\n\n"
 
-                # Step 2: Poll for result
-                interval = 5
-                max_attempts = 60  # 5 minutes max
-                for attempt in range(max_attempts):
-                    await asyncio.sleep(interval)
-                    
-                    status_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
-                    
-                    if status_resp.status_code == 429:
-                        # Rate limited — exponential backoff
-                        interval = min(interval * 2, 30)
+        all_results = []
+
+        for vid in request.verificationIds:
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                    # Step 1: warmup — submitting
+                    yield fmt({"type": "progress", "vid": vid, "step": "warmup", "message": "文档生成中..."})
+
+                    submit_resp = await client.post(
+                        f"{getgem_url}/api/verify",
+                        json={"verificationId": vid, "cdk": getgem_cdk}
+                    )
+
+                    if submit_resp.status_code != 200:
+                        error_detail = ""
+                        try:
+                            err = submit_resp.json()
+                            error_detail = err.get("detail") or err.get("message") or err.get("error") or str(err)
+                        except:
+                            error_detail = submit_resp.text[:200]
+                        all_results.append({
+                            "verificationId": vid,
+                            "status": "error",
+                            "success": False,
+                            "message": f"提交失败 ({submit_resp.status_code}): {error_detail}"
+                        })
                         continue
-                    
-                    if status_resp.status_code != 200:
+
+                    submit_data = submit_resp.json()
+                    task_id = submit_data.get("taskId")
+
+                    if not task_id:
+                        all_results.append({
+                            "verificationId": vid,
+                            "status": "error",
+                            "success": False,
+                            "message": "提交失败: 未返回任务ID"
+                        })
                         continue
-                    
-                    status_data = status_resp.json()
-                    interval = 5  # Reset on success
-                    
-                    if status_data.get("completed"):
-                        if status_data.get("success"):
-                            return {
-                                "verificationId": vid,
-                                "status": "approved",
-                                "success": True,
-                                "message": f"验证成功",
-                                "redirectUrl": status_data.get("redirectUrl"),
-                                "taskId": task_id
-                            }
-                        else:
-                            # GetGem may retry internally — don't give up on first failure.
-                            # Wait and re-poll a few more times before declaring failure.
-                            last_error = status_data.get('error', 'Unknown error')
-                            retry_ok = False
-                            for _retry in range(6):  # up to 30s more
-                                await asyncio.sleep(5)
-                                retry_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
-                                if retry_resp.status_code == 200:
-                                    rd = retry_resp.json()
-                                    if rd.get("completed") and rd.get("success"):
-                                        retry_ok = True
-                                        return {
-                                            "verificationId": vid,
-                                            "status": "approved",
-                                            "success": True,
-                                            "message": f"验证成功",
-                                            "redirectUrl": rd.get("redirectUrl"),
-                                            "taskId": task_id
-                                        }
-                            if not retry_ok:
-                                return {
+
+                    # Step 2: verify — submitted
+                    yield fmt({"type": "progress", "vid": vid, "step": "verify", "message": "提交文档中..."})
+
+                    await asyncio.sleep(2)
+
+                    # Step 3: waiting — polling for result
+                    yield fmt({"type": "progress", "vid": vid, "step": "waiting", "message": "等待验证..."})
+
+                    interval = 5
+                    max_attempts = 60
+                    result_found = False
+
+                    for attempt in range(max_attempts):
+                        await asyncio.sleep(interval)
+
+                        status_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
+
+                        if status_resp.status_code == 429:
+                            interval = min(interval * 2, 30)
+                            continue
+
+                        if status_resp.status_code != 200:
+                            continue
+
+                        status_data = status_resp.json()
+                        interval = 5
+
+                        if status_data.get("completed"):
+                            if status_data.get("success"):
+                                all_results.append({
                                     "verificationId": vid,
-                                    "status": "rejected",
-                                    "success": False,
-                                    "message": f"Verification failed: {last_error}",
+                                    "status": "approved",
+                                    "success": True,
+                                    "message": "验证成功",
+                                    "redirectUrl": status_data.get("redirectUrl"),
                                     "taskId": task_id
-                                }
-                
-                # Timeout
-                return {
+                                })
+                                result_found = True
+                                break
+                            else:
+                                last_error = status_data.get('error', 'Unknown error')
+                                yield fmt({"type": "progress", "vid": vid, "step": "failed", "message": f"验证失败: {last_error}，重试中..."})
+
+                                retry_ok = False
+                                for _retry in range(6):
+                                    await asyncio.sleep(5)
+                                    retry_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
+                                    if retry_resp.status_code == 200:
+                                        rd = retry_resp.json()
+                                        if rd.get("completed") and rd.get("success"):
+                                            retry_ok = True
+                                            all_results.append({
+                                                "verificationId": vid,
+                                                "status": "approved",
+                                                "success": True,
+                                                "message": "验证成功",
+                                                "redirectUrl": rd.get("redirectUrl"),
+                                                "taskId": task_id
+                                            })
+                                            break
+                                if not retry_ok:
+                                    all_results.append({
+                                        "verificationId": vid,
+                                        "status": "rejected",
+                                        "success": False,
+                                        "message": f"验证失败: {last_error}",
+                                        "taskId": task_id
+                                    })
+                                result_found = True
+                                break
+
+                    if not result_found:
+                        all_results.append({
+                            "verificationId": vid,
+                            "status": "timeout",
+                            "success": False,
+                            "message": "轮询超时（5分钟）",
+                            "taskId": task_id
+                        })
+
+            except Exception as e:
+                all_results.append({
                     "verificationId": vid,
-                    "status": "timeout",
+                    "status": "error",
                     "success": False,
-                    "message": "⏰ 轮询超时（5分钟）",
-                    "taskId": task_id
-                }
-        
-        except Exception as e:
-            return {
-                "verificationId": vid,
-                "status": "error",
-                "success": False,
-                "message": f"❌ 错误: {str(e)}"
-            }
+                    "message": f"错误: {str(e)}"
+                })
 
-    # Process all IDs concurrently
-    results = await asyncio.gather(*[process_single(vid) for vid in request.verificationIds])
-    results = list(results)
+        # Log verification results to history
+        for r in all_results:
+            vid_log = r.get("verificationId", "")
+            if r["status"] == "approved":
+                verification_history.log_verification("pass", vid_log, cdk=request.cdk or "")
+            elif r["status"] in ("rejected", "error"):
+                verification_history.log_verification("failed", vid_log, cdk=request.cdk or "")
 
-    # Log verification results to history (skip user-side link issues)
-    for r in results:
-        vid = r.get("verificationId", "")
-        reason = r.get("reason", "")
-        if r["status"] == "approved":
-            verification_history.log_verification("pass", vid, cdk=request.cdk or "")
-        elif r["status"] == "rejected" and reason not in ("link_opened", "expired", "invalid", "rate_limited"):
-            verification_history.log_verification("failed", vid, cdk=request.cdk or "")
-        elif r["status"] in ("error",):
-            verification_history.log_verification("failed", vid, cdk=request.cdk or "")
+        # Deduct local CDK quota
+        nonlocal cdk_remaining
+        successful = sum(1 for r in all_results if r["status"] == "approved")
+        if request.cdk and successful > 0:
+            deduct = cdk_manager.use_cdk(request.cdk, successful)
+            cdk_remaining = deduct.get("remaining", cdk_remaining)
 
-    # Deduct local CDK quota for successful verifications
-    successful = sum(1 for r in results if r["status"] == "approved")
-    if request.cdk and successful > 0:
-        deduct = cdk_manager.use_cdk(request.cdk, successful)
-        cdk_remaining = deduct.get("remaining", cdk_remaining)
+        # Send final done event
+        yield fmt({
+            "type": "done",
+            "results": all_results,
+            "stats": {
+                "total": len(all_results),
+                "approved": successful,
+                "rejected": sum(1 for r in all_results if r["status"] == "rejected")
+            },
+            "cdkRemaining": cdk_remaining
+        })
 
-    return {
-        "results": results,
-        "stats": {
-            "total": len(results),
-            "approved": successful,
-            "rejected": sum(1 for r in results if r["status"] == "rejected")
-        },
-        "cdkRemaining": cdk_remaining
-    }
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/api/getgem/status")

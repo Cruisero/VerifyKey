@@ -392,7 +392,7 @@ export default function Verify() {
         }
     };
 
-    // GetGem API 验证
+    // GetGem API 验证 (SSE streaming, same as DualBot)
     const handleGetgemVerify = async (items) => {
         // Extract verificationIds from URLs or plain IDs
         const verificationIds = items.map(item => {
@@ -421,46 +421,84 @@ export default function Verify() {
                 throw new Error(err.detail || `Request failed: ${response.status}`);
             }
 
-            const data = await response.json();
-            if (data.results && Array.isArray(data.results)) {
-                for (const result of data.results) {
-                    const resultItem = resultItems.find(r => r.verificationId === result.verificationId);
-                    if (resultItem) {
-                        let status = 'failed';
-                        const resolveMsg = (fallbackKey) => {
-                            if (result.messageKey) {
-                                let msg = t(result.messageKey);
-                                if (result.failureReasonKey) {
-                                    msg = msg.replace('{reason}', t(result.failureReasonKey));
-                                }
-                                return msg;
-                            }
-                            return result.message || t(fallbackKey);
-                        };
-                        let message = resolveMsg('msgError');
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
 
-                        if (result.status === 'approved') {
-                            status = 'success';
-                            message = resolveMsg('msgApproved');
-                            setLastSuccess(new Date().toISOString());
-                            fetchHistory();
-                        } else if (result.status === 'processing') {
-                            status = 'processing';
-                            message = resolveMsg('processing');
-                        } else if (result.status === 'rejected') {
-                            message = resolveMsg('msgRejected');
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+
+                        if (event.type === 'progress') {
+                            const stepMessages = {
+                                warmup: t('stepWarmup'),
+                                verify: t('stepVerify'),
+                                waiting: t('stepWaiting'),
+                                failed: t('stepFailed'),
+                                bypass: t('stepBypass'),
+                            };
+                            const progressMsg = stepMessages[event.step] || event.message;
+
+                            setResults(prev => prev.map(r => {
+                                const matchVid = r.verificationId === event.vid;
+                                return matchVid && r.status === 'processing'
+                                    ? { ...r, message: progressMsg }
+                                    : r;
+                            }));
+                        } else if (event.type === 'done') {
+                            if (event.results && Array.isArray(event.results)) {
+                                for (const result of event.results) {
+                                    const resultItem = resultItems.find(r => r.verificationId === result.verificationId);
+                                    if (resultItem) {
+                                        let status = 'failed';
+                                        const resolveMsg = (fallbackKey) => {
+                                            if (result.messageKey) {
+                                                let msg = t(result.messageKey);
+                                                if (result.failureReasonKey) {
+                                                    msg = msg.replace('{reason}', t(result.failureReasonKey));
+                                                }
+                                                return msg;
+                                            }
+                                            return result.message || t(fallbackKey);
+                                        };
+                                        let message = resolveMsg('msgError');
+
+                                        if (result.status === 'approved') {
+                                            status = 'success';
+                                            message = resolveMsg('msgApproved');
+                                            setLastSuccess(new Date().toISOString());
+                                            fetchHistory();
+                                        } else if (result.status === 'processing') {
+                                            status = 'processing';
+                                            message = resolveMsg('processing');
+                                        } else if (result.status === 'rejected') {
+                                            message = resolveMsg('msgRejected');
+                                        }
+                                        setResults(prev => prev.map(r =>
+                                            r.id === resultItem.id
+                                                ? { ...r, status, message, verificationId: result.verificationId, redirectUrl: result.redirectUrl }
+                                                : r
+                                        ));
+                                    }
+                                }
+                            }
+                            if (event.cdkRemaining !== undefined) {
+                                setCdkRemaining(event.cdkRemaining);
+                            }
                         }
-                        setResults(prev => prev.map(r =>
-                            r.id === resultItem.id
-                                ? { ...r, status, message, verificationId: result.verificationId, redirectUrl: result.redirectUrl }
-                                : r
-                        ));
+                    } catch (e) {
+                        console.warn('SSE parse error:', e);
                     }
                 }
-            }
-            // Update CDK remaining from response
-            if (data.cdkRemaining !== undefined) {
-                setCdkRemaining(data.cdkRemaining);
             }
         } catch (error) {
             console.error('GetGem verify error:', error);

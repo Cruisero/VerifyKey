@@ -86,7 +86,11 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         msgRequestFailed: '请求失败',
         stepFailed: '验证失败，链接刷新中...',
         stepBypass: '链接刷新中...',
-        msgBypassDone: '验证失败，链接已刷新，请获取新链接',
+        msgBypassDone: '{reason}，链接已刷新，请重新获取新链接',
+        msgBypassFailed: '{reason}，请等待几分钟后刷新页面获取新链接',
+        reasonFraud: '检测到欺诈',
+        reasonDocRejected: '文档被拒绝',
+        reasonFailed: '验证失败',
 
         // Verify - live status
         liveStatusTitle: '📊 实时验证状态',
@@ -236,7 +240,11 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         msgRequestFailed: 'Request failed',
         stepFailed: 'Verification failed, refreshing link...',
         stepBypass: 'Refreshing link...',
-        msgBypassDone: 'Verification failed, link refreshed, please get a new link',
+        msgBypassDone: '{reason}, link refreshed, please get a new link',
+        msgBypassFailed: '{reason}, please wait a few minutes then refresh for a new link',
+        reasonFraud: 'Fraud detected',
+        reasonDocRejected: 'Document rejected',
+        reasonFailed: 'Verification failed',
 
         // Verify - live status
         liveStatusTitle: '📊 Live Verification Status',

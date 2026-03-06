@@ -277,7 +277,13 @@ export default function Verify() {
                                             let status = 'failed';
                                             // Prefer translated messageKey over raw backend message
                                             const resolveMsg = (fallbackKey) => {
-                                                if (result.messageKey) return t(result.messageKey);
+                                                if (result.messageKey) {
+                                                    let msg = t(result.messageKey);
+                                                    if (result.failureReasonKey) {
+                                                        msg = msg.replace('{reason}', t(result.failureReasonKey));
+                                                    }
+                                                    return msg;
+                                                }
                                                 return result.message || t(fallbackKey);
                                             };
                                             let message = resolveMsg('msgError');
@@ -337,7 +343,13 @@ export default function Verify() {
                         if (resultItem) {
                             let status = 'failed';
                             const resolveMsg = (fallbackKey) => {
-                                if (result.messageKey) return t(result.messageKey);
+                                if (result.messageKey) {
+                                    let msg = t(result.messageKey);
+                                    if (result.failureReasonKey) {
+                                        msg = msg.replace('{reason}', t(result.failureReasonKey));
+                                    }
+                                    return msg;
+                                }
                                 return result.message || t(fallbackKey);
                             };
                             let message = resolveMsg('msgError');
@@ -416,7 +428,13 @@ export default function Verify() {
                     if (resultItem) {
                         let status = 'failed';
                         const resolveMsg = (fallbackKey) => {
-                            if (result.messageKey) return t(result.messageKey);
+                            if (result.messageKey) {
+                                let msg = t(result.messageKey);
+                                if (result.failureReasonKey) {
+                                    msg = msg.replace('{reason}', t(result.failureReasonKey));
+                                }
+                                return msg;
+                            }
                             return result.message || t(fallbackKey);
                         };
                         let message = resolveMsg('msgError');

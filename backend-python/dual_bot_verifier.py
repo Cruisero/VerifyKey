@@ -183,14 +183,21 @@ class DualBotVerifier:
                 await emit("bypass", "Refreshing link...")
                 logger.info(f"[DualBot] [{account_id}] Step 3: Running bypass for {vid[:8]}...")
                 bypass_ok = await self._run_bypass(vid, account_id)
+                
+                # Build message with specific failure reason
+                reason_key = parsed.get("failureReasonKey", "reasonFailed")
+                reason_zh = {"reasonFraud": "检测到欺诈", "reasonDocRejected": "文档被拒绝", "reasonFailed": "验证失败"}
+                reason = reason_zh.get(reason_key, "验证失败")
+                
                 if bypass_ok:
-                    parsed["message"] = "验证失败，链接已刷新，请获取新链接"
+                    parsed["message"] = f"{reason}，链接已刷新，请重新获取新链接"
                     parsed["messageKey"] = "msgBypassDone"
                     parsed["bypassed"] = "done"
                 else:
-                    parsed["message"] = "验证失败，请刷新页面获取新链接"
-                    parsed["messageKey"] = "msgVerifyFailedRefresh"
+                    parsed["message"] = f"{reason}，请等待几分钟后刷新页面获取新链接"
+                    parsed["messageKey"] = "msgBypassFailed"
                     parsed["bypassed"] = "failed"
+                parsed["failureReasonKey"] = reason_key
 
             return parsed
 
@@ -391,6 +398,7 @@ class DualBotVerifier:
             result["status"] = "failed"
             result["message"] = "检测到欺诈行为，请刷新页面获取新链接"
             result["messageKey"] = "msgFraudDetected"
+            result["failureReasonKey"] = "reasonFraud"
             return result
 
         # 3. Check for Explicit Failure Keywords (Priority over generic success to avoid false positives from bypass instructions)
@@ -416,6 +424,7 @@ class DualBotVerifier:
                 else:
                     result["message"] = f"验证失败: {text[:50]}..."
                     result["messageKey"] = "msgVerifyFailedDetail"
+                    result["failureReasonKey"] = "reasonDocRejected"
                     # Also try to extract quota from failure messages
                     quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
                     if quota_match:
@@ -455,6 +464,7 @@ class DualBotVerifier:
         result["status"] = "failed"
         result["message"] = f"请求失败: {text[:50]}..."
         result["messageKey"] = "msgRequestFailed"
+        result["failureReasonKey"] = "reasonFailed"
         return result
 
     # ---- Bypass (submit empty doc to invalidate link) ----

@@ -1540,11 +1540,7 @@ export default function Admin() {
                         verifyBot: config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot',
                         autoBypass: config?.verification?.dualBot?.autoBypass !== false
                     },
-                    blackBot: {
-                        enabled: config?.verification?.blackBot?.enabled || false,
-                        botUsername: config?.verification?.blackBot?.botUsername || '@Black_Verifier',
-                        autoBypass: config?.verification?.blackBot?.autoBypass !== false
-                    }
+                    singleBots: config?.verification?.singleBots || []
                 }
             };
 
@@ -3192,7 +3188,7 @@ export default function Admin() {
                                                 const isBlack = bot.id === 'blackbot';
                                                 const isLegacy = bot.id === 'oldbot';
                                                 const icon = isBlack ? '🖤' : isLegacy ? '📨' : '🤖';
-                                                
+
                                                 return (
                                                     <div key={bot.id} style={{
                                                         borderRadius: '12px', overflow: 'hidden',
@@ -3200,9 +3196,9 @@ export default function Admin() {
                                                     }}>
                                                         <div style={{
                                                             padding: '14px 18px',
-                                                            background: isBlack ? 'linear-gradient(135deg, rgba(33,33,33,0.08), rgba(33,33,33,0.02))' 
-                                                                        : isLegacy ? 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))'
-                                                                        : 'linear-gradient(135deg, rgba(76,175,80,0.08), rgba(76,175,80,0.02))',
+                                                            background: isBlack ? 'linear-gradient(135deg, rgba(33,33,33,0.08), rgba(33,33,33,0.02))'
+                                                                : isLegacy ? 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))'
+                                                                    : 'linear-gradient(135deg, rgba(76,175,80,0.08), rgba(76,175,80,0.02))',
                                                             borderBottom: '1px solid var(--border)',
                                                             display: 'flex', alignItems: 'center', gap: '8px'
                                                         }}>

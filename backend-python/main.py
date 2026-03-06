@@ -1637,7 +1637,7 @@ def sync_telegram_bot(account_id: str):
 async def telegram_daily():
     """Claim daily free credits from SheerID Bot"""
     if not telegram_bot or not telegram_bot.is_connected:
-        raise HTTPException(status_code=503, detail="Telegram Userbot is not connected")
+        raise HTTPException(status_code=503, detail="Not connected")
     
     result = await telegram_bot.claim_daily()
     return result
@@ -1647,7 +1647,7 @@ async def telegram_daily():
 async def telegram_balance():
     """Check SheerID Bot credit balance"""
     if not telegram_bot or not telegram_bot.is_connected:
-        raise HTTPException(status_code=503, detail="Telegram Userbot is not connected")
+        raise HTTPException(status_code=503, detail="Not connected")
     
     result = await telegram_bot.check_balance()
     return result
@@ -2643,7 +2643,7 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
     if not telegram_bot or not telegram_bot.is_connected:
         raise HTTPException(
             status_code=503, 
-            detail="Telegram Userbot is not connected. Please enable it in settings."
+            detail="Not connected. Please enable it in settings."
         )
     
     if not request.links:

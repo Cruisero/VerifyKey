@@ -55,7 +55,7 @@ class DualBotVerifier:
 
         async with self._get_lock(account_id):
             if not client or not client.is_connected():
-                return {"success": False, "status": "error", "message": "Telegram not connected"}
+                return {"success": False, "status": "error", "message": "程序离线，请联系管理员"}
 
             # Use provided bots or instance defaults
             w_bot = (warmup_bot or self.warmup_bot).lstrip("@")

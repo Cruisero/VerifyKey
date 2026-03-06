@@ -1770,7 +1770,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
     @SatsetHelperbot (warmup) → @AutoGeminiProbot (verify) → auto bypass on failure
     """
     if not tg_manager.is_connected:
-        raise HTTPException(status_code=503, detail="Telegram 未连接，请先在后台激活一个账号")
+        raise HTTPException(status_code=503, detail="程序离线，请联系管理员")
 
     if not request.links:
         raise HTTPException(status_code=400, detail="No verification links provided")

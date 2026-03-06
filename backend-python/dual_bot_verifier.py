@@ -208,8 +208,10 @@ class DualBotVerifier:
 
         try:
             async with httpx.AsyncClient(timeout=30) as http_client:
-                # Wait for pending to clear (up to 2 minutes)
-                for poll in range(40):  # 40 × 3s = 120s max
+                # MUST wait for pending to clear before uploading
+                # Uploading during pending wastes the 10-upload limit
+                pending_cleared = False
+                for poll in range(60):  # 60 × 3s = 180s max
                     check_resp = await http_client.get(f"{base_url}/verification/{vid}")
                     if check_resp.status_code == 200:
                         step = check_resp.json().get("currentStep", "")
@@ -218,15 +220,18 @@ class DualBotVerifier:
 
                     if step != "pending":
                         logger.info(f"[DualBot] [{account_id}] Bypass: Pending cleared -> {step}")
+                        pending_cleared = True
                         break
 
                     if poll % 5 == 0:
                         logger.info(f"[DualBot] [{account_id}] Bypass: Waiting for pending... ({(poll+1)*3}s)")
                     await asyncio.sleep(3)
-                else:
-                    logger.warning(f"[DualBot] [{account_id}] Bypass: Pending timeout 120s, trying anyway...")
 
-            # Run bypass uploads
+                if not pending_cleared:
+                    logger.warning(f"[DualBot] [{account_id}] Bypass: Pending timeout 180s, aborting to avoid wasting uploads")
+                    return False
+
+            # Run bypass uploads (only after pending has cleared)
             bypass_count = 0
             for i in range(10):
                 ok = await self._bypass_link(vid)

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import { useLang } from '../../stores/LanguageContext';
@@ -790,7 +790,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                             </td>
                                         </tr>
                                     )}
-                                </React.Fragment>
+                                </React.Fragment >
                             ))}
                             {filteredList.length === 0 && (
                                 <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无 CDK 数据</td></tr>

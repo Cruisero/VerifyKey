@@ -538,6 +538,9 @@ function TelegramBotTab() {
 // CDK Management Component
 function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkGenerating, setCdkGenerating, cdkGenQuota, setCdkGenQuota, cdkGenCount, setCdkGenCount, cdkGenNote, setCdkGenNote, cdkFilter, setCdkFilter, cdkNewCodes, setCdkNewCodes }) {
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+    const [expandedCdk, setExpandedCdk] = useState(null);
+    const [cdkHistory, setCdkHistory] = useState([]);
+    const [cdkHistoryLoading, setCdkHistoryLoading] = useState(false);
 
     const fetchCDKs = async () => {
         try {
@@ -548,6 +551,20 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                 setCdkStats(data.stats || {});
             }
         } catch (e) { console.error('Failed to fetch CDKs:', e); }
+    };
+
+    const fetchCdkHistory = async (code) => {
+        if (expandedCdk === code) { setExpandedCdk(null); return; }
+        setCdkHistoryLoading(true);
+        setExpandedCdk(code);
+        try {
+            const res = await fetch(`${API_BASE}/api/cdk/history/${encodeURIComponent(code)}`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setCdkHistory(data.records || []);
+            }
+        } catch (e) { console.error('Failed to fetch CDK history:', e); }
+        finally { setCdkHistoryLoading(false); }
     };
 
     useEffect(() => { fetchCDKs(); }, []);
@@ -708,24 +725,72 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                         </thead>
                         <tbody>
                             {filteredList.map(c => (
-                                <tr key={c.code}>
-                                    <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{c.code}</td>
-                                    <td>{c.quota} 次</td>
-                                    <td>{c.used} / {c.quota}</td>
-                                    <td>
-                                        <span className={`badge badge-${c.status === 'unused' ? 'info' : c.status === 'active' ? 'success' : 'error'}`}>
-                                            {c.status === 'unused' ? '未使用' : c.status === 'active' ? '使用中' : '已用完'}
-                                        </span>
-                                    </td>
-                                    <td style={{ color: 'var(--text-muted)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.note || '-'}</td>
-                                    <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{c.createdAt ? new Date(c.createdAt).toLocaleString() : '-'}</td>
-                                    <td>
-                                        <div className="action-btns">
-                                            <button className="btn btn-sm btn-secondary" onClick={() => copyToClipboard(c.code)}>📋</button>
-                                            <button className="btn btn-sm btn-outline" onClick={() => handleDelete(c.code)} style={{ color: 'var(--color-danger)' }}>🗑️</button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                <React.Fragment key={c.code}>
+                                    <tr>
+                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{c.code}</td>
+                                        <td>{c.quota} 次</td>
+                                        <td>{c.used} / {c.quota}</td>
+                                        <td>
+                                            <span className={`badge badge-${c.status === 'unused' ? 'info' : c.status === 'active' ? 'success' : 'error'}`}>
+                                                {c.status === 'unused' ? '未使用' : c.status === 'active' ? '使用中' : '已用完'}
+                                            </span>
+                                        </td>
+                                        <td style={{ color: 'var(--text-muted)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.note || '-'}</td>
+                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{c.createdAt ? new Date(c.createdAt).toLocaleString() : '-'}</td>
+                                        <td>
+                                            <div className="action-btns">
+                                                <button className="btn btn-sm btn-secondary" onClick={() => fetchCdkHistory(c.code)} title="查看验证记录"
+                                                    style={{ background: expandedCdk === c.code ? 'var(--color-primary)' : undefined, color: expandedCdk === c.code ? 'white' : undefined }}
+                                                >👁️</button>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => copyToClipboard(c.code)}>📋</button>
+                                                <button className="btn btn-sm btn-outline" onClick={() => handleDelete(c.code)} style={{ color: 'var(--color-danger)' }}>🗑️</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {expandedCdk === c.code && (
+                                        <tr>
+                                            <td colSpan={7} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
+                                                <div style={{ padding: '12px 20px' }}>
+                                                    <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                                                        📜 验证记录 ({cdkHistory.length})
+                                                    </div>
+                                                    {cdkHistoryLoading ? (
+                                                        <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>⏳ 加载中...</div>
+                                                    ) : cdkHistory.length === 0 ? (
+                                                        <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>暂无验证记录</div>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '240px', overflowY: 'auto' }}>
+                                                            {cdkHistory.map(h => (
+                                                                <div key={h.id} style={{
+                                                                    display: 'flex', alignItems: 'center', gap: '10px',
+                                                                    padding: '6px 10px', borderRadius: '6px',
+                                                                    background: 'var(--bg-primary)', fontSize: '12px'
+                                                                }}>
+                                                                    <span style={{
+                                                                        width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0,
+                                                                        background: h.status === 'pass' ? '#10b981' : h.status === 'failed' ? '#ef4444' : '#f59e0b'
+                                                                    }} />
+                                                                    <span style={{ fontFamily: "'SF Mono', monospace", minWidth: '80px', color: h.status === 'pass' ? '#10b981' : h.status === 'failed' ? '#ef4444' : '#f59e0b', fontWeight: 600 }}>
+                                                                        {h.status === 'pass' ? '✅ 通过' : h.status === 'failed' ? '❌ 失败' : '⏳ ' + h.status}
+                                                                    </span>
+                                                                    <span style={{ fontFamily: "'SF Mono', monospace", color: 'var(--text-secondary)', minWidth: '180px' }}>
+                                                                        {h.verificationId || '-'}
+                                                                    </span>
+                                                                    <span style={{ flex: 1, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {h.message || '-'}
+                                                                    </span>
+                                                                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', flexShrink: 0 }}>
+                                                                        {h.timestamp ? new Date(h.timestamp).toLocaleString() : '-'}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
                             ))}
                             {filteredList.length === 0 && (
                                 <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无 CDK 数据</td></tr>

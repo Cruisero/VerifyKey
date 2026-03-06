@@ -2398,6 +2398,14 @@ async def cdk_stats_endpoint():
     return cdk_manager.get_cdk_stats()
 
 
+@app.get("/api/cdk/history/{code}")
+async def cdk_history_endpoint(code: str, authorization: Optional[str] = Header(None)):
+    """Get verification history for a specific CDK code"""
+    _verify_admin_token(authorization)
+    records = verification_history.get_history_by_cdk(code)
+    return {"code": code, "records": records, "total": len(records)}
+
+
 # ========== Database Backup Endpoints ==========
 
 @app.get("/api/backup/list")

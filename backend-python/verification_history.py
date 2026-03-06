@@ -128,3 +128,23 @@ def clear_history() -> int:
     conn.execute("DELETE FROM verification_history")
     conn.commit()
     return count
+
+
+def get_history_by_cdk(cdk_code: str) -> List[Dict]:
+    """Get verification history for a specific CDK code."""
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT id, status, verification_id, message, cdk, timestamp FROM verification_history WHERE cdk = ? ORDER BY rowid DESC",
+        (cdk_code,)
+    )
+    return [
+        {
+            "id": r["id"],
+            "status": r["status"],
+            "verificationId": r["verification_id"],
+            "message": r["message"],
+            "cdk": r["cdk"],
+            "timestamp": r["timestamp"]
+        }
+        for r in cursor.fetchall()
+    ]

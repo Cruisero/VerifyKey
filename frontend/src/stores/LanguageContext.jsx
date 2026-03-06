@@ -127,7 +127,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         tabUsers: '用户管理',
         tabAiGen: 'AI 文档生成',
         tabVerifyStatus: '验证状态',
-        tabTgBot: 'Telegram Bot',
+        tabTgBot: '验证 Bot',
         tabSettings: '系统设置',
 
         // Admin - overview stats
@@ -281,7 +281,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         tabUsers: 'User Management',
         tabAiGen: 'AI Doc Generator',
         tabVerifyStatus: 'Verify Status',
-        tabTgBot: 'Telegram Bot',
+        tabTgBot: 'Verify Bot',
         tabSettings: 'Settings',
 
         // Admin - overview stats

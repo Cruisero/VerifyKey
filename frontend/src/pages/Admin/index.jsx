@@ -431,7 +431,7 @@ function TelegramBotTab() {
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Telegram ID</th>
+                                    <th>User ID</th>
                                     <th>用户名</th>
                                     <th>积分</th>
                                     <th>验证次数</th>
@@ -1770,7 +1770,7 @@ export default function Admin() {
                                     >
                                         <div className="provider-icon">📨</div>
                                         <div className="provider-info">
-                                            <h4>Telegram Userbot</h4>
+                                            <h4>Userbot</h4>
                                             <p>调用外部 SheerID Bot 自动验证</p>
                                         </div>
                                         <div className="provider-status">
@@ -2572,7 +2572,7 @@ export default function Admin() {
                                     }}>
                                         <div>
                                             <h4 style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 700, color: 'white' }}>
-                                                📱 Telegram 账号管理
+                                                📱 账号管理
                                             </h4>
                                             <p style={{ margin: 0, fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>
                                                 多账号管理 · 所有 Bot 验证共用激活账号
@@ -2603,7 +2603,7 @@ export default function Admin() {
                                                 marginBottom: '16px'
                                             }}>
                                                 <div style={{ fontSize: '40px', marginBottom: '12px', filter: 'grayscale(0.3)' }}>📱</div>
-                                                <p style={{ fontWeight: 600, marginBottom: '4px' }}>暂无 Telegram 账号</p>
+                                                <p style={{ fontWeight: 600, marginBottom: '4px' }}>暂无账号</p>
                                                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>点击下方「添加账号」开始配置</p>
                                             </div>
                                         ) : (
@@ -2842,7 +2842,7 @@ export default function Admin() {
                                             }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                                                     <span style={{ fontSize: '16px' }}>➕</span>
-                                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>添加 Telegram 账号</span>
+                                                    <span style={{ fontWeight: 700, fontSize: '14px' }}>添加账号</span>
                                                 </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                                     <div style={{ gridColumn: '1 / -1' }}>
@@ -2896,7 +2896,7 @@ export default function Admin() {
                                                     fontSize: '13px', fontWeight: 600,
                                                     color: 'var(--text-secondary)', transition: 'all 0.2s'
                                                 }}>
-                                                + 添加 Telegram 账号
+                                                + 添加账号
                                             </button>
                                         )}
 
@@ -3019,7 +3019,7 @@ export default function Admin() {
                                                 </div>
                                                 <div style={{ padding: '16px 18px' }}>
                                                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', margin: '0 0 14px' }}>
-                                                        使用当前激活的 Telegram 账号向 Bot 发送验证请求
+                                                        使用当前激活的账号向 Bot 发送验证请求
                                                     </p>
                                                     <label style={{
                                                         display: 'flex', alignItems: 'center', gap: '10px',
@@ -3735,9 +3735,9 @@ export default function Admin() {
 
                         {aiProvider === 'telegram' && (
                             <div className="settings-section card">
-                                <h3>🤖 Telegram Bot 验证</h3>
+                                <h3>🤖 Bot 验证</h3>
                                 <p className="settings-desc">
-                                    当前使用 Telegram Bot 进行验证，无需选择验证模式。链接将直接发送给 @SheerID_Verification_bot 处理。
+                                    当前使用 Bot 进行验证，无需选择验证模式。链接将直接发送给 Bot 处理。
                                 </p>
                             </div>
                         )}

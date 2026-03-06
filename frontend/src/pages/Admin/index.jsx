@@ -2578,18 +2578,46 @@ export default function Admin() {
                                                 多账号管理 · 所有 Bot 验证共用激活账号
                                             </p>
                                         </div>
-                                        <div style={{
-                                            display: 'flex', alignItems: 'center', gap: '6px',
-                                            background: 'rgba(255,255,255,0.15)',
-                                            padding: '6px 14px', borderRadius: '20px',
-                                            fontSize: '12px', fontWeight: 600, backdropFilter: 'blur(8px)', color: 'white'
-                                        }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            {!tgAccounts.some(a => a.active) && (
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch(`${API_BASE}/api/telegram/reconnect`, { method: 'POST' });
+                                                            const data = await res.json();
+                                                            if (data.success) {
+                                                                alert('✅ 重连成功');
+                                                                fetchTgAccounts();
+                                                            } else {
+                                                                alert('❌ ' + (data.message || '重连失败'));
+                                                            }
+                                                        } catch (e) {
+                                                            alert('❌ 重连请求失败');
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        background: 'rgba(255,255,255,0.2)',
+                                                        border: '1px solid rgba(255,255,255,0.3)',
+                                                        color: 'white', fontSize: '11px', fontWeight: 600,
+                                                        padding: '4px 12px', borderRadius: '14px',
+                                                        cursor: 'pointer', transition: 'all 0.2s',
+                                                        backdropFilter: 'blur(8px)'
+                                                    }}
+                                                >🔄 重连</button>
+                                            )}
                                             <div style={{
-                                                width: '8px', height: '8px', borderRadius: '50%',
-                                                background: tgAccounts.some(a => a.active) ? '#69f0ae' : '#ff5252',
-                                                boxShadow: tgAccounts.some(a => a.active) ? '0 0 8px #69f0ae' : 'none'
-                                            }} />
-                                            {tgAccounts.some(a => a.active) ? '已连接' : '未激活'}
+                                                display: 'flex', alignItems: 'center', gap: '6px',
+                                                background: 'rgba(255,255,255,0.15)',
+                                                padding: '6px 14px', borderRadius: '20px',
+                                                fontSize: '12px', fontWeight: 600, backdropFilter: 'blur(8px)', color: 'white'
+                                            }}>
+                                                <div style={{
+                                                    width: '8px', height: '8px', borderRadius: '50%',
+                                                    background: tgAccounts.some(a => a.active) ? '#69f0ae' : '#ff5252',
+                                                    boxShadow: tgAccounts.some(a => a.active) ? '0 0 8px #69f0ae' : 'none'
+                                                }} />
+                                                {tgAccounts.some(a => a.active) ? '已连接' : '未激活'}
+                                            </div>
                                         </div>
                                     </div>
                                     <div style={{ padding: '20px 24px' }}>

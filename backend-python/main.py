@@ -1675,6 +1675,18 @@ async def telegram_status():
     }
 
 
+@app.post("/api/telegram/reconnect")
+async def telegram_reconnect():
+    """Manually reconnect all enabled Telegram accounts"""
+    result = await tg_manager.auto_connect()
+    return {
+        "success": result.get("success", False),
+        "connected": tg_manager.is_connected,
+        "activeAccountId": tg_manager.active_account_id,
+        "message": "重连成功" if result.get("success") else "重连失败，请检查账号配置"
+    }
+
+
 # ========== Telegram Account Management ==========
 
 class TelegramAccountAddRequest(BaseModel):

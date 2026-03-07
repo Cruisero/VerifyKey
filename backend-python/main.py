@@ -3768,11 +3768,17 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                             error_detail = err.get("detail") or err.get("message") or err.get("error") or str(err)
                         except:
                             error_detail = submit_resp.text[:200]
+                            
+                        # Mask backend CDK/balance errors from the end user
+                        error_detail_lower = error_detail.lower()
+                        if "balance" in error_detail_lower or "cdk" in error_detail_lower or "quota" in error_detail_lower or "余额" in error_detail_lower or "额度" in error_detail_lower:
+                            error_detail = "System is currently busy, please try again later."
+                            
                         all_results.append({
                             "verificationId": vid,
                             "status": "error",
                             "success": False,
-                            "message": f"提交失败 ({submit_resp.status_code}): {error_detail}"
+                            "message": f"Verification failed: {error_detail}"
                         })
                         continue
 

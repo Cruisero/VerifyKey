@@ -68,6 +68,7 @@ DEFAULT_CONFIG = {
         },
         "dualBot": {
             "enabled": False,
+            "costPerVerify": 1.0,
             "warmupBot": "@SatsetHelperbot",
             "verifyBot": "@AutoGeminiProbot",
             "autoBypass": True,
@@ -133,6 +134,7 @@ DEFAULT_CONFIG = {
                 "name": "Black Bot",
                 "username": "@Black_Verifier",
                 "enabled": False,
+                "costPerVerify": 1.0,
                 "autoBypass": True,
                 "sendFormat": "{link}",
                 "autoClickButtons": ["API Key", "API"],
@@ -201,6 +203,7 @@ DEFAULT_CONFIG = {
                 "name": "SheerID Bot",
                 "username": "@SheerID_Verification_bot",
                 "enabled": False,
+                "costPerVerify": 1.0,
                 "autoBypass": False,
                 "sendFormat": "{link}",
                 "autoClickButtons": [],

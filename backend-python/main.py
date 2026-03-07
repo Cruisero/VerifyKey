@@ -31,6 +31,7 @@ from vsid_generator import generate_vsid_document, get_available_document_types 
 import auth
 import cdk_manager
 import verification_history
+from bot_stats import bot_stats_tracker
 import database
 
 # Load environment variables
@@ -2062,6 +2063,8 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         for r in results:
             vid = r.get("verificationId", "")
             msg = r.get("message", r.get("reason", ""))
+            # Record stats for DualBot
+            bot_stats_tracker.record("dualbot", r.get("success", False))
             if r.get("status") == "approved":
                 verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
             elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
@@ -2198,10 +2201,17 @@ async def verify_unified(request: UnifiedVerifyRequest):
     if not enabled_bots:
         raise HTTPException(status_code=400, detail="没有启用任何验证 Bot，请在管理后台启用至少一个")
 
-    # ---- Round-robin assign links to bot types ----
-    link_bot_assignments = {}  # {link: bot_entry}
-    for i, link in enumerate(clean_links):
-        link_bot_assignments[link] = enabled_bots[i % len(enabled_bots)]
+    # ---- Sort bots by expected cost (waterfall priority) ----
+    def _sort_bots_by_cost_efficiency(bots):
+        def _expected_cost(bot):
+            bot_id = bot["type"]
+            rate = bot_stats_tracker.get_success_rate(bot_id)
+            cost = bot["config"].get("costPerVerify", 1.0)
+            return cost / max(rate, 0.01)
+        return sorted(bots, key=_expected_cost)
+
+    sorted_bots = _sort_bots_by_cost_efficiency(enabled_bots)
+    logger.info(f"[Waterfall] Bot priority: {[b['type'] for b in sorted_bots]}")
 
     # Extract VIDs
     def _extract_vid_u(link):
@@ -2265,12 +2275,8 @@ async def verify_unified(request: UnifiedVerifyRequest):
             return min(active) if active else 0
 
         async def process_single_link(link_to_verify):
-            bot_entry = link_bot_assignments[link_to_verify]
-            bot_type = bot_entry["type"]
-            bot_config = bot_entry["config"]
+            """Waterfall: try each bot in priority order. If one fails, try the next."""
             vid = link_vid_map.get(link_to_verify, "")
-            max_retries = bot_config.get("maxRetries", 5)
-            bot_timeout = bot_config.get("verifyTimeout", bot_config.get("timeout", 180))
 
             # VID deduplication
             if vid:
@@ -2279,7 +2285,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 vid_lock = _vid_locks[vid]
 
                 if vid_lock.locked():
-                    logger.info(f"[Unified] VID {vid[:8]}... already being processed, waiting...")
+                    logger.info(f"[Waterfall] VID {vid[:8]}... already being processed, waiting...")
                     async with vid_lock:
                         if vid in _vid_results:
                             cached = _vid_results[vid]
@@ -2288,91 +2294,121 @@ async def verify_unified(request: UnifiedVerifyRequest):
             else:
                 vid_lock = None
 
-            async def on_progress(progress):
-                event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type, **progress}
-                progress_events.append(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
-                broadcast_verify_event(event)
-
-            # Create the verifier for singlebots
-            single_verifier = None
-            if bot_type != "dualbot":
-                single_verifier = GenericSingleBotVerifier(bot_config)
-
             lock_ctx = vid_lock if vid_lock else asyncio.Lock()
-            async with lock_ctx:
-              for attempt in range(max_retries):
-                pool_item = _get_next_client_for_bot(bot_type)
+            last_result = None
 
-                if not pool_item:
-                    wait_time = _get_shortest_cooldown_for_bot(bot_type)
-                    if wait_time > 0:
-                        logger.info(f"[Unified:{bot_type}] All accounts in cooldown, waiting {wait_time:.0f}s...")
-                        on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
-                                         "step": "cooldown_wait", "message": f"等待可用账号 ({int(wait_time)}s)..."}
-                        progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
-                        broadcast_verify_event(on_prog_event)
-                        async with cooldown_wait_lock:
-                            pool_item = _get_next_client_for_bot(bot_type)
-                            if not pool_item:
-                                wait_time = _get_shortest_cooldown_for_bot(bot_type)
-                                if wait_time > 0:
-                                    await asyncio.sleep(wait_time + 2)
-                                pool_item = _get_next_client_for_bot(bot_type)
+            async with lock_ctx:
+              # ---- Waterfall: try bots in priority order ----
+              for bot_idx, bot_entry in enumerate(sorted_bots):
+                bot_type = bot_entry["type"]
+                bot_config = bot_entry["config"]
+                max_retries = bot_config.get("maxRetries", 5)
+                bot_timeout = bot_config.get("verifyTimeout", bot_config.get("timeout", 180))
+
+                async def on_progress(progress, _bt=bot_type):
+                    event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": _bt, **progress}
+                    progress_events.append(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
+                    broadcast_verify_event(event)
+
+                # Create verifier for singlebots
+                single_verifier = None
+                if bot_type != "dualbot":
+                    single_verifier = GenericSingleBotVerifier(bot_config)
+
+                bot_succeeded = False
+                for attempt in range(max_retries):
+                    pool_item = _get_next_client_for_bot(bot_type)
 
                     if not pool_item:
-                        result = {"success": False, "status": "error", "message": f"[{bot_type}] 所有账号冷却中，请稍后重试"}
-                        if vid:
-                            _vid_results[vid] = {"acc_id": None, "result": result}
-                        return None, result
+                        wait_time = _get_shortest_cooldown_for_bot(bot_type)
+                        if wait_time > 0:
+                            logger.info(f"[Waterfall:{bot_type}] All accounts in cooldown, waiting {wait_time:.0f}s...")
+                            on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
+                                             "step": "cooldown_wait", "message": f"[{bot_type}] 等待可用账号 ({int(wait_time)}s)..."}
+                            progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
+                            broadcast_verify_event(on_prog_event)
+                            async with cooldown_wait_lock:
+                                pool_item = _get_next_client_for_bot(bot_type)
+                                if not pool_item:
+                                    wait_time = _get_shortest_cooldown_for_bot(bot_type)
+                                    if wait_time > 0:
+                                        await asyncio.sleep(wait_time + 2)
+                                    pool_item = _get_next_client_for_bot(bot_type)
 
-                acc_id, client = pool_item
+                        if not pool_item:
+                            # This bot has no available accounts, try next bot
+                            logger.info(f"[Waterfall:{bot_type}] No accounts available, trying next bot...")
+                            break
 
-                # ---- Dispatch to the correct verifier ----
-                if bot_type == "dualbot":
-                    result = await dual_bot.verify(
-                        client=client,
-                        link=link_to_verify,
-                        account_id=acc_id,
-                        warmup_bot=bot_config.get("warmupBot"),
-                        verify_bot=bot_config.get("verifyBot"),
-                        auto_bypass=bot_config.get("autoBypass", True),
-                        timeout=bot_timeout,
-                        on_progress=on_progress
-                    )
-                else:
-                    result = await single_verifier.verify(
-                        client=client,
-                        link=link_to_verify,
-                        account_id=acc_id,
-                        timeout=bot_timeout,
-                        on_progress=on_progress
-                    )
+                    acc_id, client = pool_item
 
-                # Handle cooldown → retry with different account
-                if result.get("status") == "cooldown":
-                    cd_seconds = result.get("cooldown_seconds", 90)
-                    logger.info(f"[Unified:{bot_type}] Account {acc_id} in cooldown, retrying...")
+                    # ---- Dispatch to the correct verifier ----
                     if bot_type == "dualbot":
-                        tg_manager.set_cooldown(acc_id, cd_seconds)
+                        result = await dual_bot.verify(
+                            client=client,
+                            link=link_to_verify,
+                            account_id=acc_id,
+                            warmup_bot=bot_config.get("warmupBot"),
+                            verify_bot=bot_config.get("verifyBot"),
+                            auto_bypass=bot_config.get("autoBypass", True),
+                            timeout=bot_timeout,
+                            on_progress=on_progress
+                        )
                     else:
-                        _singlebot_cooldowns[bot_type][acc_id] = _time.time() + cd_seconds
-                    if result.get("remaining_quota") is not None:
-                        tg_manager.update_quota(acc_id, result["remaining_quota"])
-                    continue
+                        result = await single_verifier.verify(
+                            client=client,
+                            link=link_to_verify,
+                            account_id=acc_id,
+                            timeout=bot_timeout,
+                            on_progress=on_progress
+                        )
 
-                # Cache result for deduplication
-                if vid:
-                    _vid_results[vid] = {"acc_id": acc_id, "result": result}
-                    async def cleanup_vid(v):
-                        await asyncio.sleep(60)
-                        _vid_results.pop(v, None)
-                        _vid_locks.pop(v, None)
-                    asyncio.create_task(cleanup_vid(vid))
+                    # Handle cooldown → retry with different account (same bot)
+                    if result.get("status") == "cooldown":
+                        cd_seconds = result.get("cooldown_seconds", 90)
+                        logger.info(f"[Waterfall:{bot_type}] Account {acc_id} in cooldown, retrying...")
+                        if bot_type == "dualbot":
+                            tg_manager.set_cooldown(acc_id, cd_seconds)
+                        else:
+                            _singlebot_cooldowns[bot_type][acc_id] = _time.time() + cd_seconds
+                        if result.get("remaining_quota") is not None:
+                            tg_manager.update_quota(acc_id, result["remaining_quota"])
+                        continue
 
-                return acc_id, result
+                    # Record stats for this bot
+                    bot_stats_tracker.record(bot_type, result.get("success", False))
+                    last_result = (acc_id, result)
 
-              # All retries exhausted
-              result = {"success": False, "status": "error", "message": f"[{bot_type}] 所有账号冷却中，请稍后重试"}
+                    if result.get("success"):
+                        # Success! Cache and return
+                        bot_succeeded = True
+                        break
+
+                    if result.get("status") in ("failed", "rejected", "error"):
+                        # This bot failed for this link, try next bot in waterfall
+                        logger.info(f"[Waterfall] {bot_type} failed (status={result.get('status')}), trying next bot...")
+                        break  # break inner retry loop, continue to next bot
+
+                    # Other statuses (e.g. approved) — return as-is
+                    bot_succeeded = True
+                    break
+
+                if bot_succeeded:
+                    break  # break outer waterfall loop
+
+              # Cache final result for deduplication
+              if last_result and vid:
+                  _vid_results[vid] = {"acc_id": last_result[0], "result": last_result[1]}
+                  async def cleanup_vid(v):
+                      await asyncio.sleep(60)
+                      _vid_results.pop(v, None)
+                      _vid_locks.pop(v, None)
+                  asyncio.create_task(cleanup_vid(vid))
+
+              if last_result:
+                  return last_result
+
+              result = {"success": False, "status": "error", "message": "所有 Bot 均无法完成验证"}
               if vid:
                   _vid_results[vid] = {"acc_id": None, "result": result}
               return None, result
@@ -2442,6 +2478,60 @@ async def verify_unified(request: UnifiedVerifyRequest):
             "Connection": "keep-alive",
         }
     )
+
+
+# ========== Bot Stats API ==========
+
+@app.get("/api/bot-stats")
+async def get_bot_stats():
+    """Get real-time success rate stats for all bots (1-hour sliding window)."""
+    import config_manager as _cm_bs
+    _cfg_bs = _cm_bs.get_config()
+
+    stats = bot_stats_tracker.get_all_stats()
+
+    # Merge with config info (costPerVerify, name)
+    bot_info = []
+
+    dual_config = _cfg_bs.get("verification", {}).get("dualBot", {})
+    if dual_config.get("enabled"):
+        s = stats.get("dualbot", {"total": 0, "success": 0, "failed": 0, "rate": 0.5})
+        cost = dual_config.get("costPerVerify", 1.0)
+        bot_info.append({
+            "id": "dualbot",
+            "name": "DualBot",
+            "costPerVerify": cost,
+            "expectedCost": round(cost / max(s["rate"], 0.01), 2),
+            **s
+        })
+
+    for sb in _cfg_bs.get("verification", {}).get("singleBots", []):
+        if sb.get("enabled"):
+            s = stats.get(sb["id"], {"total": 0, "success": 0, "failed": 0, "rate": 0.5})
+            cost = sb.get("costPerVerify", 1.0)
+            bot_info.append({
+                "id": sb["id"],
+                "name": sb.get("name", sb["id"]),
+                "costPerVerify": cost,
+                "expectedCost": round(cost / max(s["rate"], 0.01), 2),
+                **s
+            })
+
+    # Sort by expectedCost ascending (same order used for waterfall)
+    bot_info.sort(key=lambda b: b["expectedCost"])
+
+    return {"bots": bot_info, "windowMinutes": bot_stats_tracker.window_minutes}
+
+
+class BotStatsWindowRequest(BaseModel):
+    windowMinutes: int
+
+
+@app.post("/api/bot-stats/window")
+async def set_bot_stats_window(request: BotStatsWindowRequest):
+    """Update the sliding window duration for bot stats tracking."""
+    bot_stats_tracker.set_window(request.windowMinutes)
+    return {"windowMinutes": bot_stats_tracker.window_minutes}
 
 
 # ========== Single Bot Verification ==========
@@ -2737,6 +2827,8 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
         for r in results:
             vid = r.get("verificationId", "")
             msg = r.get("message", r.get("reason", ""))
+            # Record stats for this bot type
+            bot_stats_tracker.record(request.botId, r.get("success", False))
             if r.get("status") == "approved":
                 verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
             elif r.get("status") in ("failed", "rejected", "error", "cooldown"):

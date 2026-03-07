@@ -3922,17 +3922,22 @@ async def getgem_status():
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-            # Check health
-            health_resp = await client.get(f"{getgem_url}/api/health")
-            if health_resp.status_code == 200:
-                result["connected"] = True
-                result["health"] = health_resp.json()
-
-            # Check CDK balance if configured
+            # Check CDK balance if configured, this serves as health check
             if getgem_cdk:
                 cdk_resp = await client.get(f"{getgem_url}/api/cdk/status/{getgem_cdk}")
                 if cdk_resp.status_code == 200:
+                    result["connected"] = True
                     result["cdkBalance"] = cdk_resp.json()
+                elif cdk_resp.status_code == 404:
+                    result["error"] = "CDK 不存在或无效"
+                else:
+                    result["error"] = f"API 异常状态码: {cdk_resp.status_code}"
+            else:
+                # If no CDK, just ping the domain base to see if it's alive
+                base_resp = await client.get(f"{getgem_url}")
+                if base_resp.status_code < 500:
+                    result["connected"] = True
+            # Removed old health check fallback
     except Exception as e:
         result["error"] = str(e)
 

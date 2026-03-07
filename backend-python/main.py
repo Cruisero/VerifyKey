@@ -2387,10 +2387,17 @@ async def verify_unified(request: UnifiedVerifyRequest):
                         bot_succeeded = True
                         break
 
-                    if result.get("status") in ("failed", "rejected", "error"):
-                        # This bot failed for this link, try next bot in waterfall
-                        logger.info(f"[Waterfall] {bot_type} failed (status={result.get('status')}), trying next bot...")
+                    if result.get("status") == "no_credits":
+                        # Bot has no credits/quota — try next bot in waterfall
+                        logger.info(f"[Waterfall] {bot_type} has no credits, trying next bot...")
                         break  # break inner retry loop, continue to next bot
+
+                    if result.get("status") in ("failed", "rejected", "error"):
+                        # Verification-level failure — this is a FINAL result, do NOT switch bots
+                        # Same link should NOT be sent to a different bot
+                        logger.info(f"[Waterfall] {bot_type} returned final result: {result.get('status')}")
+                        bot_succeeded = True  # mark as "done" so we don't try next bot
+                        break
 
                     # Other statuses (e.g. approved) — return as-is
                     bot_succeeded = True

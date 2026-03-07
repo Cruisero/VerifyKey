@@ -3777,6 +3777,30 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                         continue
 
                     submit_data = submit_resp.json()
+                    
+                    # Handle immediate rejection (e.g. expired link)
+                    if submit_data.get("status") == "rejected":
+                        msg = submit_data.get("message", "Verification rejected")
+                        error_ids = submit_data.get("errorIds", [])
+                        
+                        if "expiredVerification" in error_ids or "已过期" in msg:
+                            msg = "The link has expired or been rejected, please get a new link."
+                        elif "invalidVerification" in error_ids or "无效" in msg:
+                            msg = "Invalid verification link."
+                        elif any('\u4e00' <= c <= '\u9fff' for c in msg):
+                            msg = "Verification was rejected by the provider."
+
+                        all_results.append({
+                            "verificationId": vid,
+                            "status": "rejected",
+                            "success": False,
+                            "message": msg,
+                            "reason": submit_data.get("reason"),
+                            "messageKey": submit_data.get("messageKey"),
+                            "failureReasonKey": submit_data.get("failureReasonKey")
+                        })
+                        continue
+
                     task_id = submit_data.get("taskId")
 
                     if not task_id:

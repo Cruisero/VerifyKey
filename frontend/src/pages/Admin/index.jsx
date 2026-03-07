@@ -3415,6 +3415,421 @@ export default function Admin() {
                                                                     />
                                                                     验证失败时自动 Bypass（刷新链接）
                                                                 </label>
+
+                                                                {/* ── Send Format ── */}
+                                                                <div style={{ marginTop: '8px' }}>
+                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>发送格式 (sendFormat)</label>
+                                                                    <input type="text" className="input"
+                                                                        value={bot.sendFormat || '{link}'}
+                                                                        onChange={e => setConfig(prev => {
+                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                            newBots[idx] = { ...newBots[idx], sendFormat: e.target.value };
+                                                                            return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                        })}
+                                                                        placeholder="{link}"
+                                                                        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '12px' }}
+                                                                    />
+                                                                    <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                                        使用 <code>{'{link}'}</code> 作为验证链接占位符
+                                                                    </p>
+                                                                </div>
+
+                                                                {/* ── Auto Click Buttons ── */}
+                                                                <div style={{ marginTop: '12px' }}>
+                                                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>自动点击按钮 (autoClickButtons)</label>
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
+                                                                        {(bot.autoClickButtons || []).map((btn, bi) => (
+                                                                            <span key={bi} style={{
+                                                                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                                                padding: '3px 10px', fontSize: '12px', fontWeight: 600,
+                                                                                background: 'rgba(0,136,204,0.1)', color: '#0088cc',
+                                                                                borderRadius: '14px', border: '1px solid rgba(0,136,204,0.2)'
+                                                                            }}>
+                                                                                {btn}
+                                                                                <span style={{ cursor: 'pointer', marginLeft: '2px', fontSize: '14px', lineHeight: 1 }}
+                                                                                    onClick={() => setConfig(prev => {
+                                                                                        const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                        const newBtns = [...(newBots[idx].autoClickButtons || [])];
+                                                                                        newBtns.splice(bi, 1);
+                                                                                        newBots[idx] = { ...newBots[idx], autoClickButtons: newBtns };
+                                                                                        return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                    })}>×</span>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                    <input type="text" className="input"
+                                                                        placeholder="输入按钮文本后按 Enter 添加"
+                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                                const val = e.target.value.trim();
+                                                                                setConfig(prev => {
+                                                                                    const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                    const newBtns = [...(newBots[idx].autoClickButtons || []), val];
+                                                                                    newBots[idx] = { ...newBots[idx], autoClickButtons: newBtns };
+                                                                                    return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                });
+                                                                                e.target.value = '';
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </div>
+
+                                                                {/* ── Response Rules ── */}
+                                                                <div style={{
+                                                                    marginTop: '16px', padding: '14px',
+                                                                    borderRadius: '10px', border: '1px solid var(--border)',
+                                                                    background: 'var(--bg-secondary)'
+                                                                }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                            <span style={{ fontSize: '14px' }}>📋</span>
+                                                                            <span style={{ fontWeight: 700, fontSize: '13px' }}>响应规则 (Response Rules)</span>
+                                                                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 400 }}>
+                                                                                按顺序匹配，优先级从上到下
+                                                                            </span>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => setConfig(prev => {
+                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                const newRules = [...(newBots[idx].responseRules || []), {
+                                                                                    keywords: ['NEW_KEYWORD'],
+                                                                                    status: 'failed',
+                                                                                    success: false,
+                                                                                    message: '新规则',
+                                                                                    messageKey: 'msgNewRule'
+                                                                                }];
+                                                                                newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                            })}
+                                                                            style={{
+                                                                                padding: '4px 12px', fontSize: '12px', fontWeight: 600,
+                                                                                background: 'rgba(76,175,80,0.1)', color: '#4caf50',
+                                                                                border: '1px solid rgba(76,175,80,0.3)', borderRadius: '8px',
+                                                                                cursor: 'pointer'
+                                                                            }}
+                                                                        >+ 添加规则</button>
+                                                                    </div>
+
+                                                                    {(bot.responseRules || []).map((rule, ri) => (
+                                                                        <div key={ri} style={{
+                                                                            padding: '12px', marginBottom: '8px',
+                                                                            borderRadius: '8px', border: '1px solid var(--border)',
+                                                                            background: rule.success ? 'rgba(76,175,80,0.04)' : 'rgba(239,68,68,0.04)'
+                                                                        }}>
+                                                                            {/* Rule header */}
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                    <span style={{
+                                                                                        width: '8px', height: '8px', borderRadius: '50%',
+                                                                                        background: rule.status === 'approved' ? '#4caf50' : rule.status === 'cooldown' ? '#ff9800' : '#ef4444',
+                                                                                        display: 'inline-block'
+                                                                                    }} />
+                                                                                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                                                                        规则 #{ri + 1}
+                                                                                    </span>
+                                                                                    <span style={{
+                                                                                        fontSize: '10px', padding: '1px 8px', borderRadius: '10px', fontWeight: 700,
+                                                                                        background: rule.status === 'approved' ? 'rgba(76,175,80,0.15)' : rule.status === 'cooldown' ? 'rgba(255,152,0,0.15)' : 'rgba(239,68,68,0.15)',
+                                                                                        color: rule.status === 'approved' ? '#4caf50' : rule.status === 'cooldown' ? '#ff9800' : '#ef4444'
+                                                                                    }}>
+                                                                                        {rule.status === 'approved' ? '✓ 成功' : rule.status === 'cooldown' ? '⏳ 冷却' : '✕ 失败'}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <button
+                                                                                    onClick={() => setConfig(prev => {
+                                                                                        const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                        const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                        newRules.splice(ri, 1);
+                                                                                        newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                        return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                    })}
+                                                                                    style={{
+                                                                                        padding: '2px 8px', fontSize: '14px',
+                                                                                        background: 'transparent', color: '#ef4444',
+                                                                                        border: 'none', cursor: 'pointer', borderRadius: '4px'
+                                                                                    }}
+                                                                                    title="删除此规则"
+                                                                                >🗑️</button>
+                                                                            </div>
+
+                                                                            {/* Keywords */}
+                                                                            <div style={{ marginBottom: '8px' }}>
+                                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>关键词 (Keywords)</label>
+                                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                                                    {(rule.keywords || []).map((kw, ki) => (
+                                                                                        <span key={ki} style={{
+                                                                                            display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                                            padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                                            background: 'rgba(102,126,234,0.1)', color: '#667eea',
+                                                                                            borderRadius: '10px', border: '1px solid rgba(102,126,234,0.2)'
+                                                                                        }}>
+                                                                                            {kw}
+                                                                                            <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                                                onClick={() => setConfig(prev => {
+                                                                                                    const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                    const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                                    const newKws = [...(newRules[ri].keywords || [])];
+                                                                                                    newKws.splice(ki, 1);
+                                                                                                    newRules[ri] = { ...newRules[ri], keywords: newKws };
+                                                                                                    newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                                    return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                                })}>×</span>
+                                                                                        </span>
+                                                                                    ))}
+                                                                                </div>
+                                                                                <input type="text" className="input"
+                                                                                    placeholder="输入关键词后按 Enter"
+                                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                                    onKeyDown={e => {
+                                                                                        if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                                            const val = e.target.value.trim();
+                                                                                            setConfig(prev => {
+                                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                                const newKws = [...(newRules[ri].keywords || []), val];
+                                                                                                newRules[ri] = { ...newRules[ri], keywords: newKws };
+                                                                                                newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                                return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                            });
+                                                                                            e.target.value = '';
+                                                                                        }
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+
+                                                                            {/* Status + Success row */}
+                                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                                                                <div>
+                                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>状态 (status)</label>
+                                                                                    <select className="input"
+                                                                                        value={rule.status || 'failed'}
+                                                                                        onChange={e => setConfig(prev => {
+                                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                            const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                            const newStatus = e.target.value;
+                                                                                            newRules[ri] = { ...newRules[ri], status: newStatus, success: newStatus === 'approved' };
+                                                                                            newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                            return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                        })}
+                                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                                    >
+                                                                                        <option value="approved">✅ approved (成功)</option>
+                                                                                        <option value="failed">❌ failed (失败)</option>
+                                                                                        <option value="cooldown">⏳ cooldown (冷却)</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>成功 (success)</label>
+                                                                                    <label style={{
+                                                                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                                                                        padding: '6px 10px', borderRadius: '6px',
+                                                                                        border: '1px solid var(--border)', fontSize: '12px', cursor: 'pointer'
+                                                                                    }}>
+                                                                                        <input type="checkbox"
+                                                                                            checked={rule.success === true}
+                                                                                            onChange={e => setConfig(prev => {
+                                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                                newRules[ri] = { ...newRules[ri], success: e.target.checked };
+                                                                                                newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                                return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                            })}
+                                                                                            style={{ width: '14px', height: '14px' }}
+                                                                                        />
+                                                                                        {rule.success ? '✅ 是' : '❌ 否'}
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Message + Keys */}
+                                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+                                                                                <div>
+                                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息 (message)</label>
+                                                                                    <input type="text" className="input"
+                                                                                        value={rule.message || ''}
+                                                                                        onChange={e => setConfig(prev => {
+                                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                            const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                            newRules[ri] = { ...newRules[ri], message: e.target.value };
+                                                                                            newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                            return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                        })}
+                                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                                    />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息Key (messageKey)</label>
+                                                                                    <input type="text" className="input"
+                                                                                        value={rule.messageKey || ''}
+                                                                                        onChange={e => setConfig(prev => {
+                                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                            const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                            newRules[ri] = { ...newRules[ri], messageKey: e.target.value };
+                                                                                            newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                            return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                        })}
+                                                                                        placeholder="msgApproved"
+                                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Failure Reason Key (only for non-success) */}
+                                                                            {!rule.success && (
+                                                                                <div>
+                                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>失败原因Key (failureReasonKey)</label>
+                                                                                    <input type="text" className="input"
+                                                                                        value={rule.failureReasonKey || ''}
+                                                                                        onChange={e => setConfig(prev => {
+                                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                            const newRules = [...(newBots[idx].responseRules || [])];
+                                                                                            newRules[ri] = { ...newRules[ri], failureReasonKey: e.target.value };
+                                                                                            newBots[idx] = { ...newBots[idx], responseRules: newRules };
+                                                                                            return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                        })}
+                                                                                        placeholder="reasonFraud / reasonFailed / reasonDocRejected"
+                                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                                    />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+
+                                                                    {(bot.responseRules || []).length === 0 && (
+                                                                        <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '12px', padding: '12px 0', margin: 0 }}>
+                                                                            暂无规则，点击「+ 添加规则」开始配置
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* ── Processing Keywords ── */}
+                                                                <div style={{ marginTop: '12px' }}>
+                                                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>处理中关键词 (processingKeywords)</label>
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                                        {(bot.processingKeywords || []).map((pk, pi) => (
+                                                                            <span key={pi} style={{
+                                                                                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                                padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                                background: 'rgba(255,152,0,0.1)', color: '#ff9800',
+                                                                                borderRadius: '10px', border: '1px solid rgba(255,152,0,0.2)'
+                                                                            }}>
+                                                                                {pk}
+                                                                                <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                                    onClick={() => setConfig(prev => {
+                                                                                        const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                        const newPks = [...(newBots[idx].processingKeywords || [])];
+                                                                                        newPks.splice(pi, 1);
+                                                                                        newBots[idx] = { ...newBots[idx], processingKeywords: newPks };
+                                                                                        return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                    })}>×</span>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                    <input type="text" className="input"
+                                                                        placeholder="输入关键词后按 Enter"
+                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                                const val = e.target.value.trim();
+                                                                                setConfig(prev => {
+                                                                                    const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                    const newPks = [...(newBots[idx].processingKeywords || []), val];
+                                                                                    newBots[idx] = { ...newBots[idx], processingKeywords: newPks };
+                                                                                    return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                });
+                                                                                e.target.value = '';
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                    <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                                        匹配到这些关键词时视为「处理中」，会继续等待最终结果
+                                                                    </p>
+                                                                </div>
+
+                                                                {/* ── Quota & Cooldown ── */}
+                                                                <div style={{
+                                                                    marginTop: '12px', padding: '12px',
+                                                                    borderRadius: '8px', border: '1px solid var(--border)',
+                                                                    background: 'var(--bg-secondary)'
+                                                                }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                                                                        <span style={{ fontSize: '13px' }}>⚙️</span>
+                                                                        <span style={{ fontWeight: 700, fontSize: '12px' }}>配额 & 冷却配置</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                                                                        <div>
+                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>配额正则 (quota.remainingPattern)</label>
+                                                                            <input type="text" className="input"
+                                                                                value={bot.quota?.remainingPattern || ''}
+                                                                                onChange={e => setConfig(prev => {
+                                                                                    const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                    newBots[idx] = { ...newBots[idx], quota: { ...newBots[idx].quota, remainingPattern: e.target.value } };
+                                                                                    return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                })}
+                                                                                placeholder="(\\d+)\\s+VERIFICATIONS?\\s+REMAINING"
+                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>冷却关键词 (cooldown.keywords)</label>
+                                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                                                {(bot.cooldown?.keywords || []).map((ck, ci) => (
+                                                                                    <span key={ci} style={{
+                                                                                        display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                                        padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                                        background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                                                                        borderRadius: '10px', border: '1px solid rgba(239,68,68,0.2)'
+                                                                                    }}>
+                                                                                        {ck}
+                                                                                        <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                                            onClick={() => setConfig(prev => {
+                                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                const cd = { ...(newBots[idx].cooldown || {}) };
+                                                                                                const newCks = [...(cd.keywords || [])];
+                                                                                                newCks.splice(ci, 1);
+                                                                                                cd.keywords = newCks;
+                                                                                                newBots[idx] = { ...newBots[idx], cooldown: cd };
+                                                                                                return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                            })}>×</span>
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                            <input type="text" className="input"
+                                                                                placeholder="输入关键词后按 Enter"
+                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                                onKeyDown={e => {
+                                                                                    if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                                        const val = e.target.value.trim();
+                                                                                        setConfig(prev => {
+                                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                            const cd = { ...(newBots[idx].cooldown || {}) };
+                                                                                            cd.keywords = [...(cd.keywords || []), val];
+                                                                                            newBots[idx] = { ...newBots[idx], cooldown: cd };
+                                                                                            return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                        });
+                                                                                        e.target.value = '';
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>冷却时间正则 (cooldown.timePattern)</label>
+                                                                            <input type="text" className="input"
+                                                                                value={bot.cooldown?.timePattern || ''}
+                                                                                onChange={e => setConfig(prev => {
+                                                                                    const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                    const cd = { ...(newBots[idx].cooldown || {}) };
+                                                                                    cd.timePattern = e.target.value;
+                                                                                    newBots[idx] = { ...newBots[idx], cooldown: cd };
+                                                                                    return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                })}
+                                                                                placeholder="(\\d+)\\s*M"
+                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>

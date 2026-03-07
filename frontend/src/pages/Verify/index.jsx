@@ -167,6 +167,15 @@ export default function Verify() {
 
     // 统一验证入口
     const handleVerify = async () => {
+        console.log("[DEBUG] Verify Triggered", {
+            provider,
+            isTelegramMode,
+            isGetgemMode,
+            verifyMethod,
+            cdkValid,
+            cdkRemaining
+        });
+
         if (!cdkValid) {
             alert(t('invalidCdk'));
             return;
@@ -178,6 +187,7 @@ export default function Verify() {
         }
 
         const items = extractItems(input);
+        console.log("[DEBUG] Extracted Items", items);
         if (items.length === 0) {
             alert(isTelegramMode ? 'Please enter valid verification links' : 'Please enter verification IDs or links');
             return;
@@ -186,10 +196,13 @@ export default function Verify() {
         setVerifyStatus('processing');
 
         if (isTelegramMode) {
+            console.log("[DEBUG] Routing to Telegram Verify");
             await handleTelegramVerify(items);
         } else if (isGetgemMode) {
+            console.log("[DEBUG] Routing to GetGem Verify");
             await handleGetgemVerify(items);
         } else {
+            console.log("[DEBUG] Routing to Legacy API Verify");
             await handleApiVerify(items);
         }
 

@@ -2109,6 +2109,9 @@ async def verify_unified(request: UnifiedVerifyRequest):
     Round-robin distributes links across ALL enabled bots (DualBot + SingleBots).
     Each link stays with its assigned bot type for retries (only switches accounts).
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     if not tg_manager.is_connected:
         raise HTTPException(status_code=503, detail="程序离线，请联系管理员")
 
@@ -3811,16 +3814,6 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
 
                     submit_data = submit_resp.json()
                     
-                    # Handle top-level failure status (e.g. system maintenance)
-                    if submit_data.get("status") is False:
-                        all_results.append({
-                            "verificationId": vid,
-                            "status": "error",
-                            "success": False,
-                            "message": submit_data.get("message", "System maintenance or temporary failure")
-                        })
-                        continue
-                        
                     # Handle immediate rejection (e.g. expired link)
                     if submit_data.get("status") == "rejected":
                         msg = submit_data.get("message", "Verification rejected")

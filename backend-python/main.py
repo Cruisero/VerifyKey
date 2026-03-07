@@ -4015,23 +4015,39 @@ async def getgem_status():
                 any_valid = False
                 last_error = ""
                 
+                valid_cdks = []
+                has_removed = False
+                
                 for cdk in cdk_list:
                     cdk_resp = await client.get(f"{getgem_url}/api/cdk/status/{cdk}")
                     if cdk_resp.status_code == 200:
                         data = cdk_resp.json()
-                        total_remaining += data.get("remaining_uses", 0)
-                        total_uses += data.get("total_uses", 0)
-                        any_valid = True
+                        rem = data.get("remaining_uses", 0)
+                        
+                        if rem > 0:
+                            valid_cdks.append(cdk)
+                            total_remaining += rem
+                            total_uses += data.get("total_uses", 0)
+                            any_valid = True
+                        else:
+                            has_removed = True
                     elif cdk_resp.status_code == 404:
+                        has_removed = True
                         last_error = f"CDK {cdk[:8]}... 不存在或无效"
                     else:
+                        valid_cdks.append(cdk) # Retain on transient/unknown errors
                         last_error = f"API 异常状态码对于 {cdk[:8]}...: {cdk_resp.status_code}"
                         
                 if any_valid:
                     result["connected"] = True
                     result["cdkBalance"] = {"remaining_uses": total_remaining, "total_uses": total_uses}
                 else:
-                    result["error"] = last_error or "所有 CDK 均检查失败"
+                    result["error"] = last_error or "所有 CDK 均已耗尽或检查失败"
+                    
+                if has_removed:
+                    config["aiGenerator"]["getgem"]["cdk"] = "\n".join(valid_cdks)
+                    config_manager.save_config(config)
+                    
             else:
                 # If no CDK, just ping the domain base to see if it's alive
                 base_resp = await client.get(f"{getgem_url}")

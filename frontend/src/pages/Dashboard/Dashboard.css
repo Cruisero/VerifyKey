@@ -327,4 +327,10 @@
     .stats-grid {
         grid-template-columns: 1fr;
     }
+
+    .status-legend {
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+    }
 }

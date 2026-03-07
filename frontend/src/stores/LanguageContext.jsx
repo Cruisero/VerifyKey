@@ -45,7 +45,9 @@ https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699
 
 例如：
 699528d723c407520aeadc45
-https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`,
+https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
+
+注意：右键复制链接，不要点击打开！`,
 
         // Verify - CDK
         cdkRemaining: 'CDK 剩余额度',

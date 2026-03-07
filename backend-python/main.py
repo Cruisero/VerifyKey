@@ -3780,11 +3780,18 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                     task_id = submit_data.get("taskId")
 
                     if not task_id:
+                        import logging
+                        logging.error(f"[GetGem DEBUG] Missing taskId in response: {submit_data}")
+                        # Perhaps the API uses a different key?
+                        # Try to handle alternative response formats
+                        task_id = submit_data.get("task_id") or submit_data.get("id") or submit_data.get("verifyId")
+
+                    if not task_id:
                         all_results.append({
                             "verificationId": vid,
                             "status": "error",
                             "success": False,
-                            "message": "提交失败: 未返回任务ID"
+                            "message": f"提交失败: 未返回任务ID (Response: {submit_data})"
                         })
                         continue
 

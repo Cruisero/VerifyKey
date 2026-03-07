@@ -970,8 +970,10 @@ export default function Admin() {
     });
     const [getgemSettings, setGetgemSettings] = useState({
         apiUrl: 'https://getgem.cc',
-        cdk: ''
+        cdk: '',
+        hasStoredCdk: false
     });
+    const [appendGetgemCdk, setAppendGetgemCdk] = useState(true);
     const [getgemStatus, setGetgemStatus] = useState(null);
     const [getgemChecking, setGetgemChecking] = useState(false);
     const [geminiSettings, setGeminiSettings] = useState({
@@ -1601,7 +1603,8 @@ export default function Admin() {
                     getgem: {
                         enabled: aiProvider === 'getgem',
                         apiUrl: getgemSettings.apiUrl,
-                        cdk: getgemSettings.cdk || undefined
+                        cdk: getgemSettings.cdk || undefined,
+                        appendCdk: appendGetgemCdk
                     },
                     gemini: {
                         enabled: aiProvider === 'gemini' || aiProvider === 'puppeteer',
@@ -2176,6 +2179,21 @@ export default function Admin() {
                                                 rows={4}
                                                 style={{ fontFamily: 'monospace' }}
                                             />
+                                            {getgemSettings.hasStoredCdk && (
+                                                <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px', fontSize: '13px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={appendGetgemCdk}
+                                                            onChange={(e) => setAppendGetgemCdk(e.target.checked)}
+                                                            style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#3b82f6' }}
+                                                        />
+                                                        <span>
+                                                            ➕ <strong>追加到现有 CDK 之后</strong> <span style={{ color: '#888', fontSize: '12px' }}>(不勾选将完全覆盖旧 CDK)</span>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            )}
                                             {getgemSettings.hasStoredCdk && (
                                                 <p className="input-hint"><span className="key-stored">✓ CDK 已保存</span></p>
                                             )}

@@ -70,7 +70,7 @@ def validate_cdk(code: str) -> Dict:
     import re
     code = re.sub(r'[^A-Z0-9\-]', '', code.strip().upper())
     conn = database.get_connection()
-    cursor = conn.execute("SELECT quota, used, status FROM cdkeys WHERE code = ?", (code,))
+    cursor = conn.execute("SELECT quota, used, status FROM cdkeys WHERE UPPER(code) = ?", (code,))
     row = cursor.fetchone()
 
     if not row:
@@ -106,7 +106,7 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
     conn = database.get_connection()
 
     with _lock:
-        cursor = conn.execute("SELECT quota, used FROM cdkeys WHERE code = ?", (code,))
+        cursor = conn.execute("SELECT quota, used FROM cdkeys WHERE UPPER(code) = ?", (code,))
         row = cursor.fetchone()
 
         if not row:
@@ -123,7 +123,7 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
         now = datetime.now().isoformat()
 
         conn.execute(
-            "UPDATE cdkeys SET used = ?, status = ?, last_used_at = ? WHERE code = ?",
+            "UPDATE cdkeys SET used = ?, status = ?, last_used_at = ? WHERE UPPER(code) = ?",
             (new_used, new_status, now, code)
         )
         conn.commit()
@@ -157,7 +157,7 @@ def delete_cdk(code: str) -> bool:
     code = code.strip().upper()
     conn = database.get_connection()
     with _lock:
-        cursor = conn.execute("DELETE FROM cdkeys WHERE code = ?", (code,))
+        cursor = conn.execute("DELETE FROM cdkeys WHERE UPPER(code) = ?", (code,))
         conn.commit()
         return cursor.rowcount > 0
 

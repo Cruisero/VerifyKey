@@ -1374,6 +1374,15 @@ async def update_config_endpoint(request: Request, authorization: Optional[str] 
         old_config = config_manager.get_config()
         old_telegram = old_config.get("verification", {}).get("telegram", {})
         
+        # --- Handle GetGem CDK Append Logic ---
+        getgem_update = data.get("aiGenerator", {}).get("getgem", {})
+        if getgem_update.get("appendCdk") and getgem_update.get("cdk"):
+            old_cdk = old_config.get("aiGenerator", {}).get("getgem", {}).get("cdk", "")
+            if old_cdk:
+                # Append the new CDK with a newline
+                data["aiGenerator"]["getgem"]["cdk"] = f"{old_cdk}\n{getgem_update['cdk']}"
+        # --- End GetGem Logic ---
+        
         updated_config = config_manager.update_config(data)
         
         if updated_config:

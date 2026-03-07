@@ -21,9 +21,10 @@ class DualBotVerifier:
     The client is managed by TelegramAccountManager — this class only holds references.
     """
 
-    def __init__(self, warmup_bot: str = "SatsetHelperbot", verify_bot: str = "AutoGeminiProbot"):
+    def __init__(self, warmup_bot: str = "SatsetHelperbot", verify_bot: str = "AutoGeminiProbot", config: dict = None):
         self.warmup_bot = warmup_bot.lstrip("@")
         self.verify_bot = verify_bot.lstrip("@")
+        self.config = config or {}
         # New: Per-account locks to prevent concurrent requests on the same account
         self._locks: Dict[str, asyncio.Lock] = {}
 
@@ -303,10 +304,10 @@ class DualBotVerifier:
             client.remove_event_handler(handler, events.NewMessage)
             client.remove_event_handler(handler, events.MessageEdited)
 
-    # ---- Parse bot response ----
+    # ---- Parse bot response (config-driven) ----
 
     def _parse_response(self, text: str, vid: str, is_warmup: bool = False) -> dict:
-        """Parse bot response with a safe fallback to 'failed' if unknown."""
+        """Parse bot response using configurable rules with fallback to defaults."""
         if not text:
             return {
                 "success": False,
@@ -326,7 +327,6 @@ class DualBotVerifier:
         }
 
         text_upper = text.upper()
-        # Cleaned text for easier matching
         text_clean = " ".join(text_upper.split())
         logger.info(f"[DualBot] Parsing @{vid[:8]} (warmup={is_warmup}) - Cleaned: {text_clean[:80]}...")
 
@@ -335,135 +335,94 @@ class DualBotVerifier:
         if link_match:
             result["claimLink"] = link_match.group(1)
 
-        # 1. Check for processing status FIRST (Priority to avoid false positives)
-        proc_keywords = [
-            "SEDANG MEMPROSES", "SEDANG DI PROSES", "PROCESSING YOUR", "PROCESSING...", 
+        # 1. Config: Processing Keywords
+        proc_keywords = self.config.get("processingKeywords", [
+            "SEDANG MEMPROSES", "SEDANG DI PROSES", "PROCESSING YOUR", "PROCESSING...",
             "WAIT...", "⏳", "LOADING", "MOHON TUNGGU", "TUNGGU SEBENTAR"
-        ]
+        ])
         for kw in proc_keywords:
-            if kw in text_clean:
+            if kw.upper() in text_clean:
                 logger.info(f"[DualBot] Matched processing keyword: {kw}")
                 result["success"] = None
                 result["status"] = "processing"
                 result["message"] = "Processing..."
                 return result
 
-        # 1.5 Check for Cooldown
-        if "COOLDOWN" in text_clean:
+        # 2. Config: Cooldown
+        cooldown_config = self.config.get("cooldown", {"keywords": ["COOLDOWN"], "timePattern": r"(\d+)\s*M"})
+        cooldown_keywords = cooldown_config.get("keywords", ["COOLDOWN"])
+        if any(k.upper() in text_clean for k in cooldown_keywords):
             logger.info(f"[DualBot] Cooldown detected")
-            # Extract time: "1m 22s" or "45s" or "2m 0s"
             minutes = 0
             seconds = 0
-            m_match = re.search(r'(\d+)\s*M', text_clean)
+            time_pattern = cooldown_config.get("timePattern", r"(\d+)\s*M")
+            if time_pattern:
+                m_match = re.search(time_pattern, text_clean, flags=re.IGNORECASE)
+                if m_match:
+                    minutes = int(m_match.group(1))
             s_match = re.search(r'(\d+)\s*S\b', text_clean)
-            if m_match:
-                minutes = int(m_match.group(1))
             if s_match:
                 seconds = int(s_match.group(1))
             total_seconds = minutes * 60 + seconds
             if total_seconds == 0:
-                total_seconds = 90  # Default 90s if can't parse
-            
-            # Also extract remaining quota if present
-            quota_match = re.search(r'REMAINING\s+VERIFICATIONS[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
-            if quota_match:
-                result["remaining_quota"] = int(quota_match.group(1))
-            
+                total_seconds = 90
+
+            # Extract remaining quota
+            quota_config = self.config.get("quota", {})
+            quota_pattern = quota_config.get("remainingPattern", r"REMAINING\s+VERIFICATIONS[:\s]*\*{0,2}(\d+)\*{0,2}")
+            if quota_pattern:
+                quota_match = re.search(quota_pattern, text_clean, flags=re.IGNORECASE)
+                if quota_match:
+                    result["remaining_quota"] = int(quota_match.group(1))
+
             result["success"] = False
             result["status"] = "cooldown"
-            result["message"] = f"程序崩溃，请重试"
+            result["message"] = "程序崩溃，请重试"
             result["messageKey"] = "msgCrashed"
             result["cooldown_seconds"] = total_seconds
             logger.info(f"[DualBot] Cooldown: {total_seconds}s")
             return result
 
-        # 2. Check for DEFINITIVE success first (before failure keywords)
-        # This prevents false failures when success messages contain words like "QUOTA" in their details
-        definitive_success = ["🎉", "VERIFICATION SUCCESSFUL", "SUCCESSFULLY VERIFIED"]
-        for kw in definitive_success:
-            if kw in text_clean:
-                logger.info(f"[DualBot] Definitive success matched: {kw}")
-                result["success"] = True
-                result["status"] = "approved"
-                result["message"] = "验证通过"
-                result["messageKey"] = "msgApproved"
-                
-                # Extract remaining quota from "Total tersedia: X verifikasi" (handles **bold** markdown)
-                quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
-                if quota_match:
-                    result["remaining_quota"] = int(quota_match.group(1))
-                    logger.info(f"[DualBot] Extracted remaining quota: {result['remaining_quota']}")
-                
-                return result
+        # 3. Config: Response Rules (ordered, first match wins)
+        rules = self.config.get("responseRules", [])
+        if rules:
+            for rule in rules:
+                keywords = [k.upper() for k in rule.get("keywords", [])]
+                if any(k in text_clean for k in keywords):
+                    # For general success keywords, skip "UNTIL SUCCESS" false positives
+                    if rule.get("success") and ("UNTIL SUCCESS" in text_clean or "UNTIL BERHASIL" in text_clean):
+                        continue
+                    logger.info(f"[DualBot] Config rule matched: {rule.get('status')} - keywords: {keywords}")
+                    result["success"] = rule.get("success", False)
+                    result["status"] = rule.get("status", "failed")
+                    result["message"] = rule.get("message", "Rule matched")
+                    if "messageKey" in rule:
+                        result["messageKey"] = rule["messageKey"]
+                    if "failureReasonKey" in rule:
+                        result["failureReasonKey"] = rule["failureReasonKey"]
 
-        # 2.5 Check for Fraud Detection (specific message before generic failures)
-        if "FRAUD" in text_clean or "DETECTING FRAUD" in text_clean:
-            logger.info(f"[DualBot] Fraud detection matched")
-            result["success"] = False
-            result["status"] = "failed"
-            result["message"] = "检测到欺诈行为，请刷新页面获取新链接"
-            result["messageKey"] = "msgFraudDetected"
-            result["failureReasonKey"] = "reasonFraud"
-            return result
+                    # Extract quota from result messages
+                    quota_config = self.config.get("quota", {})
+                    quota_pattern = quota_config.get("remainingPattern")
+                    if quota_pattern:
+                        quota_match = re.search(quota_pattern, text_clean, flags=re.IGNORECASE)
+                        if quota_match:
+                            result["remaining_quota"] = int(quota_match.group(1))
 
-        # 3. Check for Explicit Failure Keywords (Priority over generic success to avoid false positives from bypass instructions)
-        # ❌ is often used by robots to indicate definitive failure.
-        fail_keywords = ["FAILED", "❌", "REJECTED", "UNSUCCESSFUL", "HABIS", "TIDAK BISA", "ERROR", "EXPIRED", "SUSAH", "KURANG"]
-        for kw in fail_keywords:
-            if kw in text_clean:
-                # SPECIAL CASE: Sometimes failure messages contain "wait until SUCCESSFUL" as a bypass advice.
-                # We need to ensure we don't accidentally treat this as success. 
-                # Since we check Failure FIRST now, we are safer.
-                logger.info(f"[DualBot] Matched failure keyword: {kw}")
-                result["success"] = False
-                result["status"] = "failed"
-                
-                # Indonesian/English combined failure reason mapping
-                if any(k in text_clean for k in ["HABIS", "KURANG", "TIDAK BISA"]):
-                    result["message"] = "程序崩溃，请重试"
-                    result["messageKey"] = "msgCrashed"
-                    # Extract quota from "Quota: X/Y" format (handles **bold**)
-                    quota_match = re.search(r'QUOTA[:\s]*\*{0,2}(\d+)\*{0,2}/\*{0,2}\d+\*{0,2}', text_clean)
-                    if quota_match:
-                        result["remaining_quota"] = int(quota_match.group(1))
-                else:
-                    result["message"] = f"验证失败: {text[:50]}..."
-                    result["messageKey"] = "msgVerifyFailedDetail"
-                    result["failureReasonKey"] = "reasonDocRejected"
-                    # Also try to extract quota from failure messages
-                    quota_match = re.search(r'TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}', text_clean)
-                    if quota_match:
-                        result["remaining_quota"] = int(quota_match.group(1))
-                return result
+                    return result
 
-        # 3. Check for success (Priority 3)
-        # For Step 1 (Warmup), we only care about 'Finished/Selesai'
+        # 4. Config: Warmup-specific success keywords
         if is_warmup:
-            warmup_success = ["PROSES SELESAI", "PROCESS FINISHED", "SELESAI!"]
-            for kw in warmup_success:
-                if kw in text_clean:
-                    logger.info(f"[DualBot] Stage 1 Success: {kw}")
+            warmup_kws = self.config.get("warmupSuccessKeywords", ["PROSES SELESAI", "PROCESS FINISHED", "SELESAI!"])
+            for kw in warmup_kws:
+                if kw.upper() in text_clean:
+                    logger.info(f"[DualBot] Warmup success: {kw}")
                     result["success"] = True
                     result["status"] = "approved"
                     result["message"] = "Warmup complete"
                     return result
 
-        # General successes
-        success_keywords = ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "🎉", "SETUJU", "BERHASIL"]
-        for kw in success_keywords:
-            if kw in text_clean:
-                # Double check to avoid "wait UNTIL success" bypass advice being treated as success
-                if "UNTIL SUCCESS" in text_clean or "UNTIL BERHASIL" in text_clean:
-                    continue
-                    
-                logger.info(f"[DualBot] Matched success keyword: {kw}")
-                result["success"] = True
-                result["status"] = "approved"
-                result["message"] = "验证通过"
-                result["messageKey"] = "msgApproved"
-                return result
-        
-        # 4. Safe Fallback: Unrecognized -> treated as failure.
+        # 5. Safe Fallback
         logger.info("[DualBot] No status matched, falling back to failed.")
         result["success"] = False
         result["status"] = "failed"

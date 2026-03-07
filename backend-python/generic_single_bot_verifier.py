@@ -24,8 +24,16 @@ class GenericSingleBotVerifier:
         self.bot_id = bot_config.get("id", "unknown")
         self.bot_username = bot_config.get("username", "").lstrip("@")
         self._locks: Dict[str, asyncio.Lock] = {}
+        self._semaphores: Dict[str, asyncio.Semaphore] = {}
+        self._concurrent = bot_config.get("concurrentPerAccount", 1)
+        self._cooldown_map: Dict[str, int] = {}  # vid -> cooldown_seconds
 
-    def _get_lock(self, account_id: str) -> asyncio.Lock:
+    def _get_lock(self, account_id: str):
+        """Return Lock (concurrent=1) or Semaphore (concurrent>1)."""
+        if self._concurrent > 1:
+            if account_id not in self._semaphores:
+                self._semaphores[account_id] = asyncio.Semaphore(self._concurrent)
+            return self._semaphores[account_id]
         if account_id not in self._locks:
             self._locks[account_id] = asyncio.Lock()
         return self._locks[account_id]
@@ -100,17 +108,20 @@ class GenericSingleBotVerifier:
             send_format = self.config.get("sendFormat", "{link}")
             outbound_msg = send_format.replace("{link}", link)
 
-            reply = await self._send_and_wait(client, bot, outbound_msg, wait_for_final=True, timeout=timeout)
+            # When concurrentPerAccount > 1, use VID matching to correlate responses
+            match_vid = vid if self._concurrent > 1 else None
+            reply = await self._send_and_wait(client, bot, outbound_msg, wait_for_final=True, timeout=timeout, match_vid=match_vid)
 
             waiting_task.cancel()
 
-            if getattr(self, '_cooldown_seconds', None) is not None:
+            cd_seconds = self._cooldown_map.pop(vid, None) or self._cooldown_map.pop("_default", None)
+            if cd_seconds is not None:
                 return {
                     "success": False, 
                     "status": "cooldown", 
-                    "cooldown_seconds": self._cooldown_seconds,
+                    "cooldown_seconds": cd_seconds,
                     "verificationId": vid,
-                    "message": f"账号冷却中，请等待 {self._cooldown_seconds} 秒后再试"
+                    "message": f"账号冷却中，请等待 {cd_seconds} 秒后再试"
                 }
 
             if reply is None:
@@ -174,15 +185,18 @@ class GenericSingleBotVerifier:
     # ---- Send message and wait for reply ----
 
     async def _send_and_wait(self, client: TelegramClient, bot_username: str, message: str,
-                              wait_for_final: bool = False, timeout: int = 180) -> Optional[str]:
+                              wait_for_final: bool = False, timeout: int = 180,
+                              match_vid: str = None) -> Optional[str]:
         """
         Send a message to a bot and wait for the reply.
         If wait_for_final is True, skips intermediate/processing messages.
         Supports both NewMessage and MessageEdited events.
+
+        If match_vid is set, only captures messages containing that VID string,
+        allowing multiple concurrent sends on the same account.
         """
         loop = asyncio.get_event_loop()
         future = loop.create_future()
-        self._cooldown_seconds = None
 
         auto_click_buttons = [btn.lower() for btn in self.config.get("autoClickButtons", [])]
 
@@ -196,6 +210,15 @@ class GenericSingleBotVerifier:
 
             if not reply_text:
                 return
+
+            # ---- VID matching: only capture messages for OUR VID ----
+            if match_vid:
+                # Bot may return VID without dashes (e.g. "69aaa4abfd3d62455b7a17ae")
+                # but our VID has dashes (e.g. "69aaa4ab-fd3d-6245-5b7a-17ae")
+                vid_no_dash = match_vid.replace("-", "")
+                if match_vid not in reply_text and vid_no_dash not in reply_text:
+                    logger.debug(f"[GenericBot:{self.bot_id}] Skipping message (VID {match_vid[:8]} not found): {reply_text[:80]}")
+                    return
 
             event_type = "New" if isinstance(event, events.NewMessage.Event) else "Edit"
             logger.info(f"[GenericBot:{self.bot_id}] {event_type} message from @{bot_username}: {reply_text[:120]}...")
@@ -215,14 +238,17 @@ class GenericSingleBotVerifier:
 
             # ---- Parse Status ----
             if wait_for_final:
-                parsed = self._parse_response(reply_text, "temp")
+                parsed = self._parse_response(reply_text, match_vid or "temp")
                 logger.info(f"[GenericBot:{self.bot_id}] Parsed status for @{bot_username}: {parsed['status']}")
 
                 if parsed.get("status") == "processing":
                     logger.info(f"[GenericBot:{self.bot_id}] Skipping processing message...")
                     return
                 elif parsed.get("status") == "cooldown":
-                    self._cooldown_seconds = parsed.get("cooldown_seconds")
+                    if match_vid:
+                        self._cooldown_map[match_vid] = parsed.get("cooldown_seconds")
+                    else:
+                        self._cooldown_map["_default"] = parsed.get("cooldown_seconds")
 
             future.set_result(reply_text)
 

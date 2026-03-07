@@ -1635,6 +1635,7 @@ export default function Admin() {
                         botUsername: config?.verification?.telegram?.botUsername
                     },
                     dualBot: {
+                        ...(config?.verification?.dualBot || {}),
                         enabled: config?.verification?.dualBot?.enabled || false,
                         warmupBot: config?.verification?.dualBot?.warmupBot || '@SatsetHelperbot',
                         verifyBot: config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot',
@@ -3312,6 +3313,457 @@ export default function Admin() {
                                                         />
                                                         验证失败时自动 Bypass（刷新链接）
                                                     </label>
+
+                                                    {/* ── DualBot: Processing Keywords ── */}
+                                                    <div style={{ marginTop: '12px' }}>
+                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>处理中关键词 (processingKeywords)</label>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                            {(config?.verification?.dualBot?.processingKeywords || []).map((pk, pi) => (
+                                                                <span key={pi} style={{
+                                                                    display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                    padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                    background: 'rgba(255,152,0,0.1)', color: '#ff9800',
+                                                                    borderRadius: '10px', border: '1px solid rgba(255,152,0,0.2)'
+                                                                }}>
+                                                                    {pk}
+                                                                    <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                        onClick={() => setConfig(prev => {
+                                                                            const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                            const newPks = [...(dualBot.processingKeywords || [])];
+                                                                            newPks.splice(pi, 1);
+                                                                            dualBot.processingKeywords = newPks;
+                                                                            return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                        })}>×</span>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                        <input type="text" className="input"
+                                                            placeholder="输入关键词后按 Enter"
+                                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                    const val = e.target.value.trim();
+                                                                    setConfig(prev => {
+                                                                        const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                        dualBot.processingKeywords = [...(dualBot.processingKeywords || []), val];
+                                                                        return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                    });
+                                                                    e.target.value = '';
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+
+                                                    {/* ── DualBot: Warmup Success Keywords ── */}
+                                                    <div style={{ marginTop: '12px' }}>
+                                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>预热成功关键词 (warmupSuccessKeywords)</label>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                            {(config?.verification?.dualBot?.warmupSuccessKeywords || []).map((wk, wi) => (
+                                                                <span key={wi} style={{
+                                                                    display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                    padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                    background: 'rgba(76,175,80,0.1)', color: '#4caf50',
+                                                                    borderRadius: '10px', border: '1px solid rgba(76,175,80,0.2)'
+                                                                }}>
+                                                                    {wk}
+                                                                    <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                        onClick={() => setConfig(prev => {
+                                                                            const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                            const newWks = [...(dualBot.warmupSuccessKeywords || [])];
+                                                                            newWks.splice(wi, 1);
+                                                                            dualBot.warmupSuccessKeywords = newWks;
+                                                                            return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                        })}>×</span>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                        <input type="text" className="input"
+                                                            placeholder="输入关键词后按 Enter"
+                                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                    const val = e.target.value.trim();
+                                                                    setConfig(prev => {
+                                                                        const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                        dualBot.warmupSuccessKeywords = [...(dualBot.warmupSuccessKeywords || []), val];
+                                                                        return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                    });
+                                                                    e.target.value = '';
+                                                                }
+                                                            }}
+                                                        />
+                                                        <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                            预热Bot返回这些关键词时视为文档生成成功
+                                                        </p>
+                                                    </div>
+
+                                                    {/* ── DualBot: Response Rules ── */}
+                                                    <div style={{
+                                                        marginTop: '16px', padding: '14px',
+                                                        borderRadius: '10px', border: '1px solid var(--border)',
+                                                        background: 'var(--bg-secondary)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ fontSize: '14px' }}>📋</span>
+                                                                <span style={{ fontWeight: 700, fontSize: '13px' }}>验证Bot 响应规则</span>
+                                                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 400 }}>
+                                                                    按顺序匹配，优先级从上到下
+                                                                </span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setConfig(prev => {
+                                                                    const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                    dualBot.responseRules = [...(dualBot.responseRules || []), {
+                                                                        keywords: ['NEW_KEYWORD'],
+                                                                        status: 'failed',
+                                                                        success: false,
+                                                                        message: '新规则',
+                                                                        messageKey: 'msgNewRule'
+                                                                    }];
+                                                                    return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                })}
+                                                                style={{
+                                                                    padding: '4px 12px', fontSize: '12px', fontWeight: 600,
+                                                                    background: 'rgba(76,175,80,0.1)', color: '#4caf50',
+                                                                    border: '1px solid rgba(76,175,80,0.3)', borderRadius: '8px',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >+ 添加规则</button>
+                                                        </div>
+
+                                                        {(config?.verification?.dualBot?.responseRules || []).map((rule, ri) => (
+                                                            <div key={ri} style={{
+                                                                padding: '12px', marginBottom: '8px',
+                                                                borderRadius: '8px', border: '1px solid var(--border)',
+                                                                background: rule.success ? 'rgba(76,175,80,0.04)' : 'rgba(239,68,68,0.04)'
+                                                            }}>
+                                                                {/* Rule header */}
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <span style={{
+                                                                            width: '8px', height: '8px', borderRadius: '50%',
+                                                                            background: rule.status === 'approved' ? '#4caf50' : rule.status === 'cooldown' ? '#ff9800' : '#ef4444',
+                                                                            display: 'inline-block'
+                                                                        }} />
+                                                                        <span style={{ fontSize: '12px', fontWeight: 700 }}>规则 #{ri + 1}</span>
+                                                                        <span style={{
+                                                                            fontSize: '10px', padding: '1px 8px', borderRadius: '10px', fontWeight: 700,
+                                                                            background: rule.status === 'approved' ? 'rgba(76,175,80,0.15)' : rule.status === 'cooldown' ? 'rgba(255,152,0,0.15)' : 'rgba(239,68,68,0.15)',
+                                                                            color: rule.status === 'approved' ? '#4caf50' : rule.status === 'cooldown' ? '#ff9800' : '#ef4444'
+                                                                        }}>
+                                                                            {rule.status === 'approved' ? '✓ 成功' : rule.status === 'cooldown' ? '⏳ 冷却' : '✕ 失败'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => setConfig(prev => {
+                                                                            const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                            const newRules = [...(dualBot.responseRules || [])];
+                                                                            newRules.splice(ri, 1);
+                                                                            dualBot.responseRules = newRules;
+                                                                            return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                        })}
+                                                                        style={{
+                                                                            padding: '2px 8px', fontSize: '14px',
+                                                                            background: 'transparent', color: '#ef4444',
+                                                                            border: 'none', cursor: 'pointer', borderRadius: '4px'
+                                                                        }}
+                                                                        title="删除此规则"
+                                                                    >🗑️</button>
+                                                                </div>
+
+                                                                {/* Keywords */}
+                                                                <div style={{ marginBottom: '8px' }}>
+                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>关键词 (Keywords)</label>
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                                        {(rule.keywords || []).map((kw, ki) => (
+                                                                            <span key={ki} style={{
+                                                                                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                                padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                                background: 'rgba(102,126,234,0.1)', color: '#667eea',
+                                                                                borderRadius: '10px', border: '1px solid rgba(102,126,234,0.2)'
+                                                                            }}>
+                                                                                {kw}
+                                                                                <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                                    onClick={() => setConfig(prev => {
+                                                                                        const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                        const newRules = [...(dualBot.responseRules || [])];
+                                                                                        const newKws = [...(newRules[ri].keywords || [])];
+                                                                                        newKws.splice(ki, 1);
+                                                                                        newRules[ri] = { ...newRules[ri], keywords: newKws };
+                                                                                        dualBot.responseRules = newRules;
+                                                                                        return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                    })}>×</span>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                    <input type="text" className="input"
+                                                                        placeholder="输入关键词后按 Enter"
+                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                                const val = e.target.value.trim();
+                                                                                setConfig(prev => {
+                                                                                    const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                    const newRules = [...(dualBot.responseRules || [])];
+                                                                                    const newKws = [...(newRules[ri].keywords || []), val];
+                                                                                    newRules[ri] = { ...newRules[ri], keywords: newKws };
+                                                                                    dualBot.responseRules = newRules;
+                                                                                    return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                });
+                                                                                e.target.value = '';
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </div>
+
+                                                                {/* Status + Success row */}
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                                                    <div>
+                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>状态 (status)</label>
+                                                                        <select className="input"
+                                                                            value={rule.status || 'failed'}
+                                                                            onChange={e => setConfig(prev => {
+                                                                                const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                const newRules = [...(dualBot.responseRules || [])];
+                                                                                const newStatus = e.target.value;
+                                                                                newRules[ri] = { ...newRules[ri], status: newStatus, success: newStatus === 'approved' };
+                                                                                dualBot.responseRules = newRules;
+                                                                                return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                            })}
+                                                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                        >
+                                                                            <option value="approved">✅ approved (成功)</option>
+                                                                            <option value="failed">❌ failed (失败)</option>
+                                                                            <option value="cooldown">⏳ cooldown (冷却)</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>成功 (success)</label>
+                                                                        <label style={{
+                                                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                                                            padding: '6px 10px', borderRadius: '6px',
+                                                                            border: '1px solid var(--border)', fontSize: '12px', cursor: 'pointer'
+                                                                        }}>
+                                                                            <input type="checkbox"
+                                                                                checked={rule.success === true}
+                                                                                onChange={e => setConfig(prev => {
+                                                                                    const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                    const newRules = [...(dualBot.responseRules || [])];
+                                                                                    newRules[ri] = { ...newRules[ri], success: e.target.checked };
+                                                                                    dualBot.responseRules = newRules;
+                                                                                    return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                })}
+                                                                                style={{ width: '14px', height: '14px' }}
+                                                                            />
+                                                                            {rule.success ? '✅ 是' : '❌ 否'}
+                                                                        </label>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Message + Keys */}
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+                                                                    <div>
+                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息 (message)</label>
+                                                                        <input type="text" className="input"
+                                                                            value={rule.message || ''}
+                                                                            onChange={e => setConfig(prev => {
+                                                                                const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                const newRules = [...(dualBot.responseRules || [])];
+                                                                                newRules[ri] = { ...newRules[ri], message: e.target.value };
+                                                                                dualBot.responseRules = newRules;
+                                                                                return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                            })}
+                                                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息Key (messageKey)</label>
+                                                                        <input type="text" className="input"
+                                                                            value={rule.messageKey || ''}
+                                                                            onChange={e => setConfig(prev => {
+                                                                                const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                const newRules = [...(dualBot.responseRules || [])];
+                                                                                newRules[ri] = { ...newRules[ri], messageKey: e.target.value };
+                                                                                dualBot.responseRules = newRules;
+                                                                                return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                            })}
+                                                                            placeholder="msgApproved"
+                                                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Failure Reason Key */}
+                                                                {!rule.success && (
+                                                                    <div>
+                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>失败原因Key (failureReasonKey)</label>
+                                                                        <input type="text" className="input"
+                                                                            value={rule.failureReasonKey || ''}
+                                                                            onChange={e => setConfig(prev => {
+                                                                                const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                const newRules = [...(dualBot.responseRules || [])];
+                                                                                newRules[ri] = { ...newRules[ri], failureReasonKey: e.target.value };
+                                                                                dualBot.responseRules = newRules;
+                                                                                return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                            })}
+                                                                            placeholder="reasonFraud / reasonFailed / reasonDocRejected"
+                                                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+
+                                                        {(config?.verification?.dualBot?.responseRules || []).length === 0 && (
+                                                            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '12px', padding: '12px 0', margin: 0 }}>
+                                                                暂无规则，点击「+ 添加规则」开始配置
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* ── DualBot: Cooldown & Quota ── */}
+                                                    <div style={{
+                                                        marginTop: '12px', padding: '12px',
+                                                        borderRadius: '8px', border: '1px solid var(--border)',
+                                                        background: 'var(--bg-secondary)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                                                            <span style={{ fontSize: '13px' }}>⚙️</span>
+                                                            <span style={{ fontWeight: 700, fontSize: '12px' }}>冷却 & 配额配置</span>
+                                                        </div>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>冷却关键词 (cooldown.keywords)</label>
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                                    {(config?.verification?.dualBot?.cooldown?.keywords || []).map((ck, ci) => (
+                                                                        <span key={ci} style={{
+                                                                            display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                            padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                            background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                                                            borderRadius: '10px', border: '1px solid rgba(239,68,68,0.2)'
+                                                                        }}>
+                                                                            {ck}
+                                                                            <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                                onClick={() => setConfig(prev => {
+                                                                                    const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                    const cd = { ...(dualBot.cooldown || {}) };
+                                                                                    const newCks = [...(cd.keywords || [])];
+                                                                                    newCks.splice(ci, 1);
+                                                                                    cd.keywords = newCks;
+                                                                                    dualBot.cooldown = cd;
+                                                                                    return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                })}>×</span>
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                                <input type="text" className="input"
+                                                                    placeholder="输入关键词后按 Enter"
+                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                    onKeyDown={e => {
+                                                                        if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                            const val = e.target.value.trim();
+                                                                            setConfig(prev => {
+                                                                                const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                const cd = { ...(dualBot.cooldown || {}) };
+                                                                                cd.keywords = [...(cd.keywords || []), val];
+                                                                                dualBot.cooldown = cd;
+                                                                                return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                            });
+                                                                            e.target.value = '';
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>冷却时间正则 (cooldown.timePattern)</label>
+                                                                <input type="text" className="input"
+                                                                    value={config?.verification?.dualBot?.cooldown?.timePattern || ''}
+                                                                    onChange={e => setConfig(prev => {
+                                                                        const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                        const cd = { ...(dualBot.cooldown || {}) };
+                                                                        cd.timePattern = e.target.value;
+                                                                        dualBot.cooldown = cd;
+                                                                        return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                    })}
+                                                                    placeholder="(\d+)\s*M"
+                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>配额正则 (quota.remainingPattern)</label>
+                                                                <input type="text" className="input"
+                                                                    value={config?.verification?.dualBot?.quota?.remainingPattern || ''}
+                                                                    onChange={e => setConfig(prev => {
+                                                                        const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                        dualBot.quota = { ...(dualBot.quota || {}), remainingPattern: e.target.value };
+                                                                        return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                    })}
+                                                                    placeholder="TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}"
+                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ── DualBot: Retries & Timeout ── */}
+                                                    <div style={{
+                                                        marginTop: '12px', padding: '12px',
+                                                        borderRadius: '8px', border: '1px solid var(--border)',
+                                                        background: 'var(--bg-secondary)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                                                            <span style={{ fontSize: '13px' }}>🔄</span>
+                                                            <span style={{ fontWeight: 700, fontSize: '12px' }}>重试 & 超时配置</span>
+                                                        </div>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>最大重试 (maxRetries)</label>
+                                                                <input type="number" className="input"
+                                                                    value={config?.verification?.dualBot?.maxRetries ?? 5}
+                                                                    onChange={e => setConfig(prev => {
+                                                                        const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                        dualBot.maxRetries = parseInt(e.target.value) || 5;
+                                                                        return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                    })}
+                                                                    min="1" max="20"
+                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>预热超时 (warmupTimeout)</label>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <input type="number" className="input"
+                                                                        value={config?.verification?.dualBot?.warmupTimeout ?? 90}
+                                                                        onChange={e => setConfig(prev => {
+                                                                            const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                            dualBot.warmupTimeout = parseInt(e.target.value) || 90;
+                                                                            return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                        })}
+                                                                        min="30" max="600"
+                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>秒</span>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>验证超时 (verifyTimeout)</label>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <input type="number" className="input"
+                                                                        value={config?.verification?.dualBot?.verifyTimeout ?? 120}
+                                                                        onChange={e => setConfig(prev => {
+                                                                            const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                            dualBot.verifyTimeout = parseInt(e.target.value) || 120;
+                                                                            return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                        })}
+                                                                        min="30" max="600"
+                                                                        style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>秒</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -3416,6 +3868,27 @@ export default function Admin() {
                                                                     验证失败时自动 Bypass（刷新链接）
                                                                 </label>
 
+                                                                {/* ── Concurrent Per Account ── */}
+                                                                <div style={{ marginTop: '8px' }}>
+                                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>每账号并发数 (concurrentPerAccount)</label>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <input type="number" className="input"
+                                                                            value={bot.concurrentPerAccount ?? 1}
+                                                                            onChange={e => setConfig(prev => {
+                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                newBots[idx] = { ...newBots[idx], concurrentPerAccount: parseInt(e.target.value) || 1 };
+                                                                                return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                            })}
+                                                                            min="1" max="10"
+                                                                            style={{ width: '80px', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                        />
+                                                                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                                            {(bot.concurrentPerAccount ?? 1) > 1
+                                                                                ? '⚡ 同一账号可同时发送多条链接（需Bot回复带VID）'
+                                                                                : '🔒 同一账号同时只处理一条链接'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
                                                                 {/* ── Send Format ── */}
                                                                 <div style={{ marginTop: '8px' }}>
                                                                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>发送格式 (sendFormat)</label>
@@ -3827,6 +4300,49 @@ export default function Admin() {
                                                                                 placeholder="(\\d+)\\s*M"
                                                                                 style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'monospace' }}
                                                                             />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ── SingleBot: Retries & Timeout ── */}
+                                                                <div style={{
+                                                                    marginTop: '12px', padding: '12px',
+                                                                    borderRadius: '8px', border: '1px solid var(--border)',
+                                                                    background: 'var(--bg-secondary)'
+                                                                }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                                                                        <span style={{ fontSize: '13px' }}>🔄</span>
+                                                                        <span style={{ fontWeight: 700, fontSize: '12px' }}>重试 & 超时配置</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                                        <div>
+                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>最大重试 (maxRetries)</label>
+                                                                            <input type="number" className="input"
+                                                                                value={bot.maxRetries ?? 5}
+                                                                                onChange={e => setConfig(prev => {
+                                                                                    const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                    newBots[idx] = { ...newBots[idx], maxRetries: parseInt(e.target.value) || 5 };
+                                                                                    return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                })}
+                                                                                min="1" max="20"
+                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>超时时间 (timeout)</label>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                <input type="number" className="input"
+                                                                                    value={bot.timeout ?? 180}
+                                                                                    onChange={e => setConfig(prev => {
+                                                                                        const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                        newBots[idx] = { ...newBots[idx], timeout: parseInt(e.target.value) || 180 };
+                                                                                        return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                    })}
+                                                                                    min="30" max="600"
+                                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                                                                />
+                                                                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>秒</span>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>

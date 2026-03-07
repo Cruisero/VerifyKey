@@ -1604,6 +1604,8 @@ async def startup_event():
         dual_bot.warmup_bot = dual_config["warmupBot"].lstrip("@")
     if dual_config.get("verifyBot"):
         dual_bot.verify_bot = dual_config["verifyBot"].lstrip("@")
+    # Sync full config for response rules parsing
+    dual_bot.config = dual_config
     
     # Legacy single-account startup (backward compat)
     telegram_config = config.get("verification", {}).get("telegram", {})
@@ -1926,7 +1928,8 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         
         async def process_single_link(link_to_verify):
             vid = link_vid_map.get(link_to_verify, "")
-            max_retries = 5
+            max_retries = dual_config.get("maxRetries", 5)
+            verify_timeout = dual_config.get("verifyTimeout", 120)
             
             # VID deduplication: if this VID is already being processed, wait for it
             if vid:
@@ -1986,6 +1989,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
                     warmup_bot=warmup_bot,
                     verify_bot=verify_bot,
                     auto_bypass=auto_bypass,
+                    timeout=verify_timeout,
                     on_progress=on_progress
                 )
                 
@@ -2265,7 +2269,8 @@ async def verify_unified(request: UnifiedVerifyRequest):
             bot_type = bot_entry["type"]
             bot_config = bot_entry["config"]
             vid = link_vid_map.get(link_to_verify, "")
-            max_retries = 5
+            max_retries = bot_config.get("maxRetries", 5)
+            bot_timeout = bot_config.get("verifyTimeout", bot_config.get("timeout", 180))
 
             # VID deduplication
             if vid:
@@ -2331,6 +2336,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                         warmup_bot=bot_config.get("warmupBot"),
                         verify_bot=bot_config.get("verifyBot"),
                         auto_bypass=bot_config.get("autoBypass", True),
+                        timeout=bot_timeout,
                         on_progress=on_progress
                     )
                 else:
@@ -2338,6 +2344,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                         client=client,
                         link=link_to_verify,
                         account_id=acc_id,
+                        timeout=bot_timeout,
                         on_progress=on_progress
                     )
 
@@ -2614,7 +2621,8 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
 
         async def process_single_link(link_to_verify):
             vid = link_vid_map.get(link_to_verify, "")
-            max_retries = 5
+            max_retries = bot_config.get("maxRetries", 5)
+            bot_timeout = bot_config.get("timeout", 180)
 
             # VID deduplication
             if vid:
@@ -2668,6 +2676,7 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
                     client=client,
                     link=link_to_verify,
                     account_id=acc_id,
+                    timeout=bot_timeout,
                     on_progress=on_progress
                 )
 

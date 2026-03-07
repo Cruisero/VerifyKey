@@ -70,7 +70,62 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "warmupBot": "@SatsetHelperbot",
             "verifyBot": "@AutoGeminiProbot",
-            "autoBypass": True
+            "autoBypass": True,
+            "processingKeywords": [
+                "SEDANG MEMPROSES", "SEDANG DI PROSES", "PROCESSING YOUR", "PROCESSING...",
+                "WAIT...", "⏳", "LOADING", "MOHON TUNGGU", "TUNGGU SEBENTAR"
+            ],
+            "responseRules": [
+                {
+                    "keywords": ["🎉", "VERIFICATION SUCCESSFUL", "SUCCESSFULLY VERIFIED"],
+                    "status": "approved",
+                    "success": True,
+                    "message": "验证通过",
+                    "messageKey": "msgApproved"
+                },
+                {
+                    "keywords": ["FRAUD", "DETECTING FRAUD"],
+                    "status": "failed",
+                    "success": False,
+                    "message": "检测到欺诈行为，请刷新页面获取新链接",
+                    "messageKey": "msgFraudDetected",
+                    "failureReasonKey": "reasonFraud"
+                },
+                {
+                    "keywords": ["HABIS", "KURANG", "TIDAK BISA"],
+                    "status": "failed",
+                    "success": False,
+                    "message": "程序崩溃，请重试",
+                    "messageKey": "msgCrashed",
+                    "failureReasonKey": "reasonNoBotCredits"
+                },
+                {
+                    "keywords": ["FAILED", "❌", "REJECTED", "UNSUCCESSFUL", "ERROR", "EXPIRED", "SUSAH"],
+                    "status": "failed",
+                    "success": False,
+                    "message": "验证失败",
+                    "messageKey": "msgVerifyFailedDetail",
+                    "failureReasonKey": "reasonDocRejected"
+                },
+                {
+                    "keywords": ["CONGRATULATIONS", "APPROVED", "VERIFIED", "SUCCESS", "✅", "SETUJU", "BERHASIL"],
+                    "status": "approved",
+                    "success": True,
+                    "message": "验证通过",
+                    "messageKey": "msgApproved"
+                }
+            ],
+            "warmupSuccessKeywords": ["PROSES SELESAI", "PROCESS FINISHED", "SELESAI!"],
+            "cooldown": {
+                "keywords": ["COOLDOWN"],
+                "timePattern": r"(\d+)\s*M"
+            },
+            "quota": {
+                "remainingPattern": r"TOTAL\s+TERSEDIA[:\s]*\*{0,2}(\d+)\*{0,2}"
+            },
+            "maxRetries": 5,
+            "warmupTimeout": 90,
+            "verifyTimeout": 120
         },
         "singleBots": [
             {
@@ -131,9 +186,15 @@ DEFAULT_CONFIG = {
                     }
                 ],
                 "processingKeywords": ["PROCESSING", "⏳", "WAIT", "LOADING"],
+                "cooldown": {
+                    "keywords": ["COOLDOWN", "RATE LIMIT", "TOO MANY"],
+                    "timePattern": r"(\d+)\s*M"
+                },
                 "quota": {
                     "remainingPattern": r"(\d+)\s+VERIFICATIONS?\s+REMAINING"
-                }
+                },
+                "maxRetries": 5,
+                "timeout": 180
             },
             {
                 "id": "oldbot",
@@ -143,6 +204,7 @@ DEFAULT_CONFIG = {
                 "autoBypass": False,
                 "sendFormat": "{link}",
                 "autoClickButtons": [],
+                "concurrentPerAccount": 3,
                 "responseRules": [
                     {
                         "keywords": ["YOUR LINK HAS BEEN VERIFIED SUCCESSFULLY", "SUCCESSFULLY"],
@@ -164,7 +226,9 @@ DEFAULT_CONFIG = {
                 "cooldown": {
                     "keywords": ["COOLDOWN", "WAIT"],
                     "timePattern": r"(\d+)\s*M"
-                }
+                },
+                "maxRetries": 5,
+                "timeout": 120
             }
         ],
         "maxConcurrent": 2,

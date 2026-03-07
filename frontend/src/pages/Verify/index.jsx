@@ -19,7 +19,7 @@ export default function Verify() {
     const [botStatus, setBotStatus] = useState(null);
     const [provider, setProvider] = useState('telegram');
     const [browserMode, setBrowserMode] = useState(false);
-    const [program, setProgram] = useState('google-student');
+    const [program, setProgram] = useState('gemini');
     const [verifyMethod, setVerifyMethod] = useState('standard'); // 'standard' | 'dualbot' | 'blackbot'
     const [dualBotEnabled, setDualBotEnabled] = useState(false);
 
@@ -36,12 +36,7 @@ export default function Verify() {
     const { t } = useLang();
 
     const programs = [
-        { value: 'google-student', label: 'Google Student' },
-        { value: 'gemini-advanced', label: 'Gemini Advanced' },
-        { value: 'youtube-premium', label: 'YouTube Premium' },
-        { value: 'apple-unidays', label: 'Apple UNiDAYS' },
-        { value: 'github-education', label: 'GitHub Education' },
-        { value: 'notion-education', label: 'Notion Education' },
+        { value: 'gemini', label: 'Gemini' },
     ];
 
     // Fetch verification history from API
@@ -75,16 +70,14 @@ export default function Verify() {
                     setProvider(data.aiGenerator?.provider || 'telegram');
                     setBrowserMode(data.verification?.browserMode === true);
 
-                    // Auto-select verify method based on admin config
+                    // Auto-select verify method: unified (any bot enabled) vs standard
                     const singleBots = data.verification?.singleBots || [];
-                    const activeSingleBot = singleBots.find(b => b.enabled);
+                    const hasActiveSingleBot = singleBots.some(b => b.enabled);
                     const isDualBotEnabled = !!data.verification?.dualBot?.enabled;
                     setDualBotEnabled(isDualBotEnabled);
 
-                    if (activeSingleBot) {
-                        setVerifyMethod(activeSingleBot.id);
-                    } else if (isDualBotEnabled) {
-                        setVerifyMethod('dualbot');
+                    if (isDualBotEnabled || hasActiveSingleBot) {
+                        setVerifyMethod('unified');
                     } else {
                         setVerifyMethod('standard');
                     }
@@ -125,6 +118,7 @@ export default function Verify() {
         const validateCdk = async () => {
             setCdkChecking(true);
             try {
+                console.log(`Sending validation request to: ${API_BASE}/api/cdk/validate with code:`, cdkCode);
                 const res = await fetch(`${API_BASE}/api/cdk/validate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -143,7 +137,7 @@ export default function Verify() {
                     setCdkRemaining(0);
                 }
             } catch (e) {
-                console.warn('CDK validation failed:', e);
+                console.error('CDK validation failed explicitly! URL:', `${API_BASE}/api/cdk/validate`, 'Error:', e);
             } finally {
                 setCdkChecking(false);
             }
@@ -220,16 +214,15 @@ export default function Verify() {
         setResults(prev => [...resultItems, ...prev]);
 
         try {
-            const apiEndpoint = verifyMethod === 'dualbot' ? '/api/verify/dualbot'
-                : verifyMethod === 'standard' ? '/api/verify/telegram'
-                    : '/api/verify/singlebot';
+            const apiEndpoint = verifyMethod === 'standard' ? '/api/verify/telegram'
+                : '/api/verify/unified';
 
             if (verifyMethod !== 'standard') {
-                // SSE streaming mode for dualbot and singlebot
+                // SSE streaming mode - unified multi-bot endpoint
                 const response = await fetch(`${API_BASE}${apiEndpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ links, cdk: cdkCode, botId: verifyMethod })
+                    body: JSON.stringify({ links, cdk: cdkCode })
                 });
 
                 if (!response.ok) {
@@ -742,7 +735,10 @@ export default function Verify() {
                                             className={`input cdk-input ${cdkCode.trim() ? 'invalid' : ''}`}
                                             placeholder="VK-XXXX-XXXX-XXXX"
                                             value={cdkCode}
-                                            onChange={(e) => setCdkCode(e.target.value.toUpperCase())}
+                                            onChange={(e) => {
+                                                const val = e.target.value.toUpperCase().replace(/O/g, '0').replace(/I/g, '1');
+                                                setCdkCode(val);
+                                            }}
                                         />
                                         {cdkChecking && <span className="cdk-checking">{t('verifying')}</span>}
                                         {!cdkChecking && cdkCode.trim() && !cdkValid && <span className="cdk-invalid">{t('invalidCdk')}</span>}

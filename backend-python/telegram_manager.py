@@ -238,6 +238,57 @@ class TelegramAccountManager:
                     return True
         return False
 
+    # ------ Connection Check ------
+
+    async def check_connection(self, account_id: str) -> dict:
+        """Actively check if a specific account is still connected to Telegram."""
+        acc = self._find_account(account_id)
+        if not acc:
+            return {"id": account_id, "online": False, "error": "账号不存在"}
+
+        if not acc.get("sessionString"):
+            return {"id": account_id, "online": False, "error": "未登录"}
+
+        client = self._clients.get(account_id)
+
+        # If client exists, try get_me() to verify it's truly alive
+        if client and client.is_connected():
+            try:
+                me = await client.get_me()
+                username = me.username or me.first_name or "Unknown"
+                return {"id": account_id, "online": True, "username": username}
+            except Exception as e:
+                logger.warning(f"[TGManager] Connection check failed for {account_id}: {e}")
+                # Fall through to reconnect attempt
+
+        # Try to reconnect
+        logger.info(f"[TGManager] Attempting reconnect for {account_id}...")
+        try:
+            result = await self.activate(account_id, set_as_primary=False)
+            if result.get("success"):
+                return {"id": account_id, "online": True, "username": result.get("username", ""), "reconnected": True}
+            else:
+                return {"id": account_id, "online": False, "error": result.get("error", "重连失败")}
+        except Exception as e:
+            logger.error(f"[TGManager] Reconnect failed for {account_id}: {e}")
+            return {"id": account_id, "online": False, "error": str(e)}
+
+    async def check_all_connections(self) -> list:
+        """Check connection status of all enabled accounts."""
+        config = config_manager.get_config()
+        accounts = config.get("telegramAccounts", [])
+        results = []
+
+        for acc in accounts:
+            if not acc.get("sessionString"):
+                results.append({"id": acc["id"], "label": acc.get("label", ""), "online": False, "error": "未登录"})
+                continue
+            result = await self.check_connection(acc["id"])
+            result["label"] = acc.get("label", "")
+            results.append(result)
+
+        return results
+
     # ------ Login Flow ------
 
     async def login_request(self, account_id: str, phone: str) -> dict:

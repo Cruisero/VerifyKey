@@ -76,6 +76,88 @@ function TelegramBotTab() {
         return () => clearInterval(interval);
     }, []);
 
+    // SSE Real-time log updates
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const sseUrl = `${API_BASE}/api/admin/verify-stream?authorization=Bearer ${token}`;
+        const es = new EventSource(sseUrl);
+
+        es.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'progress') {
+                    setBotVerifyLog(prev => {
+                        const existingIdx = prev.findIndex(l => l.vid === data.vid || l.link === data.link);
+                        const newEntry = {
+                            id: existingIdx >= 0 ? prev[existingIdx].id : Date.now() + Math.random(),
+                            link: data.link || '',
+                            username: existingIdx >= 0 ? prev[existingIdx].username : 'SSE Update',
+                            user_id: existingIdx >= 0 ? prev[existingIdx].user_id : '---',
+                            status: data.step === 'failed' ? 'failed' : 'processing',
+                            message: data.message || '',
+                            vid: data.vid || '',
+                            timestamp: new Date().toISOString()
+                        };
+
+                        if (existingIdx >= 0) {
+                            const newLog = [...prev];
+                            newLog[existingIdx] = { ...newLog[existingIdx], ...newEntry };
+                            return newLog;
+                        } else {
+                            return [newEntry, ...prev].slice(0, 300);
+                        }
+                    });
+                } else if (data.type === 'done') {
+                    setBotVerifyLog(prev => {
+                        let newLog = [...prev];
+                        for (const res of data.results || []) {
+                            const vid = res.verificationId || res.vid || '';
+                            const link = res.link || '';
+                            const status = res.success ? 'success' : (res.status === 'error' ? 'error' : (res.status === 'cooldown' ? 'processing' : 'failed'));
+                            let msg = res.message || res.reason || '';
+                            if (res.status === 'cooldown') msg = 'Cooldown - Waiting';
+
+                            const existingIdx = newLog.findIndex(l => (vid && l.vid === vid) || (link && l.link === link));
+                            if (existingIdx >= 0) {
+                                newLog[existingIdx] = {
+                                    ...newLog[existingIdx],
+                                    status: status,
+                                    message: msg,
+                                    timestamp: new Date().toISOString()
+                                };
+                            } else {
+                                newLog.unshift({
+                                    id: Date.now() + Math.random(),
+                                    link: link,
+                                    username: 'System',
+                                    user_id: '---',
+                                    status: status,
+                                    message: msg,
+                                    vid: vid,
+                                    timestamp: new Date().toISOString()
+                                });
+                            }
+                        }
+                        return newLog.slice(0, 300);
+                    });
+                }
+            } catch (err) {
+                console.error("SSE parse error", err);
+            }
+        };
+
+        es.onerror = (error) => {
+            console.error("SSE connection error", error);
+            // Will auto-reconnect
+        };
+
+        return () => {
+            es.close();
+        };
+    }, []);
+
     const saveBotConfig = async () => {
         setSaving(true);
         try {
@@ -969,6 +1051,8 @@ export default function Admin() {
     const [tgLoginStep, setTgLoginStep] = useState('idle'); // idle | phone | code | password | done
     const [tgLoginMsg, setTgLoginMsg] = useState('');
     const [tgLoading, setTgLoading] = useState(false);
+    const [tgCheckResults, setTgCheckResults] = useState(null);
+    const [tgChecking, setTgChecking] = useState(false);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -1297,6 +1381,22 @@ export default function Admin() {
                 fetchTgAccounts();
             }
         } catch (e) { console.error('Bot assign failed:', e); }
+    };
+
+    const handleTgCheckConnections = async () => {
+        setTgChecking(true);
+        setTgCheckResults(null);
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/check-connections`, { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                const map = {};
+                (data.results || []).forEach(r => { map[r.id] = r; });
+                setTgCheckResults(map);
+                fetchTgAccounts();
+            }
+        } catch (e) { console.error('Check connections failed:', e); }
+        setTgChecking(false);
     };
 
     const fetchConfig = async () => {
@@ -2796,6 +2896,23 @@ export default function Admin() {
                                                                             {acc.enabled ? '已启用并行' : '已下架'}
                                                                         </span>
                                                                     )}
+                                                                    {/* Connection check result badge */}
+                                                                    {tgCheckResults && tgCheckResults[acc.id] && (
+                                                                        <span style={{
+                                                                            fontSize: '10px',
+                                                                            padding: '1px 6px',
+                                                                            borderRadius: '4px',
+                                                                            background: tgCheckResults[acc.id].online ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+                                                                            color: tgCheckResults[acc.id].online ? '#4caf50' : '#f44336',
+                                                                            border: tgCheckResults[acc.id].online ? '1px solid rgba(76, 175, 80, 0.2)' : '1px solid rgba(244, 67, 54, 0.2)',
+                                                                            fontWeight: 600
+                                                                        }}>
+                                                                            {tgCheckResults[acc.id].online
+                                                                                ? (tgCheckResults[acc.id].reconnected ? '🔄 已重连' : '✓ 在线')
+                                                                                : `✕ 掉线${tgCheckResults[acc.id].error ? ': ' + tgCheckResults[acc.id].error : ''}`
+                                                                            }
+                                                                        </span>
+                                                                    )}
                                                                     {acc.quota !== undefined && acc.quota !== null && (
                                                                         <span style={{
                                                                             fontSize: '10px',
@@ -3072,16 +3189,31 @@ export default function Admin() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button onClick={() => setTgShowAdd(true)}
-                                                style={{
-                                                    width: '100%', padding: '12px', marginBottom: '20px',
-                                                    background: 'transparent', border: '2px dashed var(--border)',
-                                                    borderRadius: '10px', cursor: 'pointer',
-                                                    fontSize: '13px', fontWeight: 600,
-                                                    color: 'var(--text-secondary)', transition: 'all 0.2s'
-                                                }}>
-                                                + 添加账号
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                                                <button onClick={() => setTgShowAdd(true)}
+                                                    style={{
+                                                        flex: 1, padding: '12px',
+                                                        background: 'transparent', border: '2px dashed var(--border)',
+                                                        borderRadius: '10px', cursor: 'pointer',
+                                                        fontSize: '13px', fontWeight: 600,
+                                                        color: 'var(--text-secondary)', transition: 'all 0.2s'
+                                                    }}>
+                                                    + 添加账号
+                                                </button>
+                                                <button onClick={handleTgCheckConnections}
+                                                    disabled={tgChecking}
+                                                    style={{
+                                                        padding: '12px 20px',
+                                                        background: tgChecking ? 'var(--bg-secondary)' : 'linear-gradient(135deg, #0088cc, #00bcd4)',
+                                                        color: tgChecking ? 'var(--text-secondary)' : 'white',
+                                                        border: 'none', borderRadius: '10px', cursor: tgChecking ? 'default' : 'pointer',
+                                                        fontSize: '13px', fontWeight: 600,
+                                                        transition: 'all 0.2s', whiteSpace: 'nowrap',
+                                                        boxShadow: tgChecking ? 'none' : '0 2px 8px rgba(0,136,204,0.3)'
+                                                    }}>
+                                                    {tgChecking ? '🔄 检测中...' : '📡 检测连接'}
+                                                </button>
+                                            </div>
                                         )}
 
                                         {/* ── Dual Bot Config ── */}

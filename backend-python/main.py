@@ -15,7 +15,7 @@ import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -63,6 +63,18 @@ dual_bot = DualBotVerifier()
 # VID deduplication: prevent the same VID from being processed simultaneously
 _vid_locks: dict = {}  # vid -> asyncio.Lock
 _vid_results: dict = {}  # vid -> result dict (cached for 60s)
+
+# ========== Admin SSE Event Bus ==========
+_admin_sse_subscribers: list = []  # list of asyncio.Queue for connected admin clients
+
+def broadcast_verify_event(event: dict):
+    """Broadcast a verification event to all connected admin SSE subscribers."""
+    import json as _json_bc
+    for q in _admin_sse_subscribers:
+        try:
+            q.put_nowait(event)
+        except Exception:
+            pass
 
 app = FastAPI(
     title="OnePass Python Backend",
@@ -1724,6 +1736,13 @@ async def list_telegram_accounts():
     return {"accounts": tg_manager.get_accounts()}
 
 
+@app.post("/api/telegram/accounts/check-connections")
+async def check_telegram_connections():
+    """Actively check connection status of all Telegram accounts."""
+    results = await tg_manager.check_all_connections()
+    return {"results": results}
+
+
 @app.post("/api/telegram/accounts")
 async def add_telegram_account(request: TelegramAccountAddRequest):
     """Add a new Telegram account"""
@@ -1789,6 +1808,7 @@ async def activate_telegram_account(account_id: str):
     elif not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Activation failed"))
     return result
+
 
 
 # ========== Dual Bot Verification ==========
@@ -1872,7 +1892,8 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             except HTTPException:
                 raise  # Re-raise HTTP exceptions
             except Exception as _pre_err:
-                logger.warning(f"VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
+                import logging
+                logging.warning(f"VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
 
     if not is_bot_internal:
         if cdk_check["remaining"] < len(clean_links):
@@ -1930,6 +1951,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
                 event = {"type": "progress", "link": link_to_verify, "vid": vid, **progress}
                 yield_data = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                 progress_events.append(yield_data)
+                broadcast_verify_event(event)
 
             lock_ctx = vid_lock if vid_lock else asyncio.Lock()  # fallback
             async with lock_ctx:
@@ -2008,8 +2030,15 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         while progress_events:
             yield progress_events.pop(0)
 
-        # Gather results
-        paired_results = [t.result() for t in tasks]
+        # Gather results safely so SSE stream doesn't perish on network exceptions
+        paired_results = []
+        for t in tasks:
+            try:
+                paired_results.append(t.result())
+            except Exception as e:
+                import traceback
+                logging.error(f"DualBot Task failed with exception: {traceback.format_exc()}")
+                paired_results.append((None, {"success": False, "status": "error", "message": f"系统内部异常: {str(e)}"}))
         
         # Extract results and update quotas
         results = []
@@ -2045,6 +2074,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             },
             "cdkRemaining": cdk_remaining
         }
+        broadcast_verify_event(done_event)
         yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
@@ -2053,6 +2083,355 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # Disable Nginx proxy buffering
+            "Connection": "keep-alive",
+        }
+    )
+
+
+# ========== Unified Multi-Bot Verification ==========
+
+class UnifiedVerifyRequest(BaseModel):
+    links: List[str]
+    cdk: Optional[str] = None
+
+
+@app.post("/api/verify/unified")
+async def verify_unified(request: UnifiedVerifyRequest):
+    """
+    Unified multi-bot verification endpoint.
+    Round-robin distributes links across ALL enabled bots (DualBot + SingleBots).
+    Each link stays with its assigned bot type for retries (only switches accounts).
+    """
+    if not tg_manager.is_connected:
+        raise HTTPException(status_code=503, detail="程序离线，请联系管理员")
+
+    if not request.links:
+        raise HTTPException(status_code=400, detail="No verification links provided")
+
+    if len(request.links) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 links per request")
+
+    # Validate CDK
+    is_bot_internal = request.cdk == "__BOT_INTERNAL__"
+    cdk_check = {"valid": True, "remaining": 999}
+
+    if not is_bot_internal:
+        if not request.cdk:
+            raise HTTPException(status_code=400, detail="请提供 CDK 激活码")
+        cdk_check = cdk_manager.validate_cdk(request.cdk)
+        if not cdk_check["valid"]:
+            raise HTTPException(status_code=403, detail=cdk_check["message"])
+
+    clean_links = [link.strip() for link in request.links if link.strip()]
+    if not clean_links:
+        raise HTTPException(status_code=400, detail="No valid links provided")
+
+    # Validate link format
+    import re as _re_u
+    clean_url_pattern = r'^https://services\.sheerid\.com/verify/[a-fA-F0-9]+/\?verificationId=[a-fA-F0-9]+$'
+    for link in clean_links:
+        if not _re_u.match(clean_url_pattern, link):
+            raise HTTPException(
+                status_code=400,
+                detail=f"链接格式错误，请刷新页面获取重新获取链接。注意右击按钮获取！"
+            )
+
+    # Pre-check VID status
+    import httpx as _httpx_u
+    for link in clean_links:
+        _vid_m = _re_u.search(r'verificationId=([a-fA-F0-9]+)', link)
+        if _vid_m:
+            _pre_vid = _vid_m.group(1)
+            try:
+                async with _httpx_u.AsyncClient(timeout=10) as _pc:
+                    _pr = await _pc.get(f"https://services.sheerid.com/rest/v2/verification/{_pre_vid}")
+                    if _pr.status_code == 200:
+                        _pd = _pr.json()
+                        _ps = _pd.get("currentStep", "")
+                        _pe = _pd.get("errorIds", [])
+                        _prj = _pd.get("rejectionReasons", [])
+                        if _ps == "error":
+                            raise HTTPException(status_code=400, detail=f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接")
+                        if _ps == "success":
+                            raise HTTPException(status_code=400, detail="该链接已验证成功，无需重复提交")
+                        if _ps == "docUpload" and _prj:
+                            raise HTTPException(status_code=400, detail=f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接")
+            except HTTPException:
+                raise
+            except Exception as _pre_err:
+                logging.warning(f"VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
+
+    if not is_bot_internal:
+        if cdk_check["remaining"] < len(clean_links):
+            raise HTTPException(
+                status_code=403,
+                detail=f"CDK 额度不足，需要 {len(clean_links)} 次，剩余 {cdk_check['remaining']} 次"
+            )
+
+    # ---- Collect all enabled bots ----
+    import config_manager as _cm_u
+    _cfg_u = _cm_u.get_config()
+
+    enabled_bots = []  # list of {"type": "dualbot"|bot_id, "config": {...}}
+
+    # Check DualBot
+    dual_config = _cfg_u.get("verification", {}).get("dualBot", {})
+    if dual_config.get("enabled"):
+        enabled_bots.append({
+            "type": "dualbot",
+            "config": dual_config
+        })
+
+    # Check SingleBots
+    single_bots_cfg = _cfg_u.get("verification", {}).get("singleBots", [])
+    for sb in single_bots_cfg:
+        if sb.get("enabled"):
+            enabled_bots.append({
+                "type": sb["id"],
+                "config": sb
+            })
+
+    if not enabled_bots:
+        raise HTTPException(status_code=400, detail="没有启用任何验证 Bot，请在管理后台启用至少一个")
+
+    # ---- Round-robin assign links to bot types ----
+    link_bot_assignments = {}  # {link: bot_entry}
+    for i, link in enumerate(clean_links):
+        link_bot_assignments[link] = enabled_bots[i % len(enabled_bots)]
+
+    # Extract VIDs
+    def _extract_vid_u(link):
+        m = _re_u.search(r'verificationId=([A-Za-z0-9-]+)', link)
+        return m.group(1) if m else link[-12:]
+
+    link_vid_map = {link: _extract_vid_u(link) for link in clean_links}
+
+    async def event_stream():
+        import json
+        import time as _time
+
+        cooldown_wait_lock = asyncio.Lock()
+
+        # ---- Client getters for singlebot types (with local cooldown tracking) ----
+        def _get_next_client_for_bot(bot_id):
+            """Get next available client assigned to a specific bot type, skipping cooldowns."""
+            now = _time.time()
+            config = _cm_u.get_config()
+            accounts = config.get("telegramAccounts", [])
+
+            if bot_id == "dualbot":
+                return tg_manager.get_next_client(bot_type="dualbot")
+
+            # SingleBot: use local cooldown tracking
+            if bot_id not in _singlebot_cooldowns:
+                _singlebot_cooldowns[bot_id] = {}
+
+            valid_ids = []
+            for acc in accounts:
+                if not acc.get("enabled", True):
+                    continue
+                assigned = acc.get("assignedBots", [])
+                if bot_id not in assigned:
+                    continue
+                if _singlebot_cooldowns[bot_id].get(acc["id"], 0) > now:
+                    continue
+                valid_ids.append(acc["id"])
+
+            all_clients = tg_manager.get_all_clients()
+            available = [(aid, all_clients[aid]) for aid in valid_ids
+                         if aid in all_clients and all_clients[aid].is_connected()]
+
+            if not available:
+                return None
+
+            if not hasattr(_get_next_client_for_bot, '_idx'):
+                _get_next_client_for_bot._idx = {}
+            if bot_id not in _get_next_client_for_bot._idx:
+                _get_next_client_for_bot._idx[bot_id] = 0
+            _get_next_client_for_bot._idx[bot_id] = (_get_next_client_for_bot._idx[bot_id] + 1) % len(available)
+            return available[_get_next_client_for_bot._idx[bot_id]]
+
+        def _get_shortest_cooldown_for_bot(bot_id):
+            if bot_id == "dualbot":
+                return tg_manager.get_shortest_cooldown_wait()
+            now = _time.time()
+            if bot_id not in _singlebot_cooldowns:
+                return 0
+            active = [exp - now for exp in _singlebot_cooldowns[bot_id].values() if exp > now]
+            return min(active) if active else 0
+
+        async def process_single_link(link_to_verify):
+            bot_entry = link_bot_assignments[link_to_verify]
+            bot_type = bot_entry["type"]
+            bot_config = bot_entry["config"]
+            vid = link_vid_map.get(link_to_verify, "")
+            max_retries = 5
+
+            # VID deduplication
+            if vid:
+                if vid not in _vid_locks:
+                    _vid_locks[vid] = asyncio.Lock()
+                vid_lock = _vid_locks[vid]
+
+                if vid_lock.locked():
+                    logger.info(f"[Unified] VID {vid[:8]}... already being processed, waiting...")
+                    async with vid_lock:
+                        if vid in _vid_results:
+                            cached = _vid_results[vid]
+                            return cached.get('acc_id'), cached.get('result', cached)
+                        return None, {"success": False, "status": "error", "message": "Duplicate VID, no result cached"}
+            else:
+                vid_lock = None
+
+            async def on_progress(progress):
+                event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type, **progress}
+                progress_events.append(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
+                broadcast_verify_event(event)
+
+            # Create the verifier for singlebots
+            single_verifier = None
+            if bot_type != "dualbot":
+                single_verifier = GenericSingleBotVerifier(bot_config)
+
+            lock_ctx = vid_lock if vid_lock else asyncio.Lock()
+            async with lock_ctx:
+              for attempt in range(max_retries):
+                pool_item = _get_next_client_for_bot(bot_type)
+
+                if not pool_item:
+                    wait_time = _get_shortest_cooldown_for_bot(bot_type)
+                    if wait_time > 0:
+                        logger.info(f"[Unified:{bot_type}] All accounts in cooldown, waiting {wait_time:.0f}s...")
+                        on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
+                                         "step": "cooldown_wait", "message": f"等待可用账号 ({int(wait_time)}s)..."}
+                        progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
+                        broadcast_verify_event(on_prog_event)
+                        async with cooldown_wait_lock:
+                            pool_item = _get_next_client_for_bot(bot_type)
+                            if not pool_item:
+                                wait_time = _get_shortest_cooldown_for_bot(bot_type)
+                                if wait_time > 0:
+                                    await asyncio.sleep(wait_time + 2)
+                                pool_item = _get_next_client_for_bot(bot_type)
+
+                    if not pool_item:
+                        result = {"success": False, "status": "error", "message": f"[{bot_type}] 所有账号冷却中，请稍后重试"}
+                        if vid:
+                            _vid_results[vid] = {"acc_id": None, "result": result}
+                        return None, result
+
+                acc_id, client = pool_item
+
+                # ---- Dispatch to the correct verifier ----
+                if bot_type == "dualbot":
+                    result = await dual_bot.verify(
+                        client=client,
+                        link=link_to_verify,
+                        account_id=acc_id,
+                        warmup_bot=bot_config.get("warmupBot"),
+                        verify_bot=bot_config.get("verifyBot"),
+                        auto_bypass=bot_config.get("autoBypass", True),
+                        on_progress=on_progress
+                    )
+                else:
+                    result = await single_verifier.verify(
+                        client=client,
+                        link=link_to_verify,
+                        account_id=acc_id,
+                        on_progress=on_progress
+                    )
+
+                # Handle cooldown → retry with different account
+                if result.get("status") == "cooldown":
+                    cd_seconds = result.get("cooldown_seconds", 90)
+                    logger.info(f"[Unified:{bot_type}] Account {acc_id} in cooldown, retrying...")
+                    if bot_type == "dualbot":
+                        tg_manager.set_cooldown(acc_id, cd_seconds)
+                    else:
+                        _singlebot_cooldowns[bot_type][acc_id] = _time.time() + cd_seconds
+                    if result.get("remaining_quota") is not None:
+                        tg_manager.update_quota(acc_id, result["remaining_quota"])
+                    continue
+
+                # Cache result for deduplication
+                if vid:
+                    _vid_results[vid] = {"acc_id": acc_id, "result": result}
+                    async def cleanup_vid(v):
+                        await asyncio.sleep(60)
+                        _vid_results.pop(v, None)
+                        _vid_locks.pop(v, None)
+                    asyncio.create_task(cleanup_vid(vid))
+
+                return acc_id, result
+
+              # All retries exhausted
+              result = {"success": False, "status": "error", "message": f"[{bot_type}] 所有账号冷却中，请稍后重试"}
+              if vid:
+                  _vid_results[vid] = {"acc_id": None, "result": result}
+              return None, result
+
+        progress_events = []
+        tasks = [asyncio.create_task(process_single_link(link)) for link in clean_links]
+
+        while not all(t.done() for t in tasks):
+            while progress_events:
+                yield progress_events.pop(0)
+            await asyncio.sleep(0.3)
+
+        while progress_events:
+            yield progress_events.pop(0)
+
+        # Collect results safely
+        paired_results = []
+        for t in tasks:
+            try:
+                paired_results.append(t.result())
+            except Exception as e:
+                import traceback
+                logging.error(f"Unified task failed: {traceback.format_exc()}")
+                paired_results.append((None, {"success": False, "status": "error", "message": f"系统内部异常: {str(e)}"}))
+
+        results = []
+        for acc_id, r in paired_results:
+            results.append(r)
+            if acc_id and r.get("remaining_quota") is not None:
+                tg_manager.update_quota(acc_id, r["remaining_quota"])
+
+        # Log and deduct CDK
+        successful = sum(1 for r in results if r.get("success"))
+        cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
+        if successful > 0 and not is_bot_internal:
+            deduct = cdk_manager.use_cdk(request.cdk, successful)
+            cdk_remaining = deduct.get("remaining", cdk_remaining)
+
+        cdk_label = request.cdk if not is_bot_internal else "BOT"
+        for r in results:
+            vid = r.get("verificationId", "")
+            msg = r.get("message", r.get("reason", ""))
+            if r.get("status") == "approved":
+                verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
+            elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
+                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label)
+
+        done_event = {
+            "type": "done",
+            "results": results,
+            "stats": {
+                "total": len(results),
+                "approved": successful,
+                "failed": sum(1 for r in results if not r.get("success"))
+            },
+            "cdkRemaining": cdk_remaining
+        }
+        broadcast_verify_event(done_event)
+        yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
         }
     )
@@ -2151,7 +2530,8 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
             except HTTPException:
                 raise
             except Exception as _pre_err:
-                logger.warning(f"[SingleBot] VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
+                import logging
+                logging.warning(f"[SingleBot] VID pre-check failed for {_pre_vid[:8]}: {_pre_err}")
 
     if not is_bot_internal:
         if cdk_check["remaining"] < len(clean_links):
@@ -2255,6 +2635,7 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
             async def on_progress(progress):
                 event = {"type": "progress", "link": link_to_verify, "vid": vid, **progress}
                 progress_events.append(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
+                broadcast_verify_event(event)
 
             lock_ctx = vid_lock if vid_lock else asyncio.Lock()
             async with lock_ctx:
@@ -2267,6 +2648,7 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
                         logger.info(f"[SingleBot] All accounts in cooldown, waiting {wait_time:.0f}s...")
                         on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "step": "cooldown_wait", "message": f"等待可用账号 ({int(wait_time)}s)..."}
                         progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
+                        broadcast_verify_event(on_prog_event)
                         async with cooldown_wait_lock:
                             pool_item = _get_next_singlebot_client()
                             if not pool_item:
@@ -2321,7 +2703,15 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
         while progress_events:
             yield progress_events.pop(0)
 
-        paired_results = [t.result() for t in tasks]
+        # Collect results and handle exceptions gracefully so SSE doesn't perish
+        paired_results = []
+        for t in tasks:
+            try:
+                paired_results.append(t.result())
+            except Exception as e:
+                import traceback
+                logging.error(f"Task failed with exception: {traceback.format_exc()}")
+                paired_results.append((None, {"success": False, "status": "error", "message": f"系统内部异常: {str(e)}"}))
 
         results = []
         for acc_id, r in paired_results:
@@ -2353,6 +2743,7 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
             },
             "cdkRemaining": cdk_remaining
         }
+        broadcast_verify_event(done_event)
         yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
@@ -2475,6 +2866,47 @@ async def get_bot_verify_log(authorization: Optional[str] = Header(None)):
     _verify_admin_token(authorization)
     import bot_verify_log
     return {"log": bot_verify_log.get_recent(50)}
+
+
+@app.get("/api/admin/verify-stream")
+async def admin_verify_stream(request: Request, authorization: Optional[str] = Query(None)):
+    """SSE endpoint for real-time verification progress in Admin dashboard."""
+    # Verify admin token from query param (EventSource can't set headers)
+    if authorization:
+        token = authorization.replace("Bearer ", "")
+        user = auth.verify_token(token)
+        if not user or user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+    import json as _json_sse
+
+    queue = asyncio.Queue()
+    _admin_sse_subscribers.append(queue)
+
+    async def event_generator():
+        try:
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"data: {_json_sse.dumps(event, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    # Send keepalive ping
+                    yield f": keepalive\n\n"
+        finally:
+            _admin_sse_subscribers.remove(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
 
 @app.get("/api/admin/bot-users")
 async def get_bot_users(authorization: Optional[str] = Header(None)):
@@ -3150,7 +3582,8 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
         deduct = cdk_manager.use_cdk(request.cdk, successful)
         cdk_remaining = deduct.get("remaining", cdk_remaining)
     
-    return {
+    done_event = {
+        "type": "done",
         "results": results,
         "stats": {
             "total": len(results),
@@ -3159,6 +3592,9 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
         },
         "cdkRemaining": cdk_remaining
     }
+    broadcast_verify_event(done_event)
+
+    return done_event
 
 
 # ========== GetGem.cc API Verification ==========
@@ -3208,6 +3644,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
         import json as _json
 
         def fmt(data):
+            broadcast_verify_event(data)
             return f"data: {_json.dumps(data, ensure_ascii=False)}\n\n"
 
         all_results = []

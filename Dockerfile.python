@@ -37,7 +37,8 @@ COPY backend-python/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers for LionPATH generator
-RUN python -m playwright install chromium --with-deps
+# Use || true to avoid build failure when apt repos are unreachable (e.g. behind proxy/VPN)
+RUN python -m playwright install chromium --with-deps || python -m playwright install chromium || true
 
 # Copy application code
 COPY backend-python/ ./

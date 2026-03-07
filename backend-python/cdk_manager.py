@@ -17,7 +17,7 @@ _lock = threading.Lock()
 
 def _generate_code() -> str:
     """Generate a CDK code like VK-XXXX-XXXX-XXXX"""
-    chars = string.ascii_uppercase + string.digits
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789"
     parts = [''.join(random.choices(chars, k=4)) for _ in range(3)]
     return f"VK-{parts[0]}-{parts[1]}-{parts[2]}"
 
@@ -67,7 +67,8 @@ def validate_cdk(code: str) -> Dict:
     Returns:
         Dict with: valid (bool), remaining (int), quota (int), used (int), message (str)
     """
-    code = code.strip().upper()
+    import re
+    code = re.sub(r'[^A-Z0-9\-]', '', code.strip().upper())
     conn = database.get_connection()
     cursor = conn.execute("SELECT quota, used, status FROM cdkeys WHERE code = ?", (code,))
     row = cursor.fetchone()
@@ -100,7 +101,8 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
     Returns:
         Dict with: success (bool), remaining (int), message (str)
     """
-    code = code.strip().upper()
+    import re
+    code = re.sub(r'[^A-Z0-9\-]', '', code.strip().upper())
     conn = database.get_connection()
 
     with _lock:

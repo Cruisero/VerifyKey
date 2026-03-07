@@ -2168,12 +2168,13 @@ export default function Admin() {
                                         </div>
                                         <div className="input-group">
                                             <label className="input-label">GetGem CDK</label>
-                                            <input
-                                                type="password"
-                                                className="input"
+                                            <textarea
+                                                className="input textarea"
                                                 value={getgemSettings.cdk}
                                                 onChange={(e) => setGetgemSettings(s => ({ ...s, cdk: e.target.value, hasStoredCdk: false }))}
-                                                placeholder={getgemSettings.hasStoredCdk ? "••••••••••（已保存，留空保持不变）" : "CDK-XXXXXXXXXXXXXXXX"}
+                                                placeholder={getgemSettings.hasStoredCdk ? "••••••••••\n••••••••••\n（已保存，留空保持不变）" : "请输入一个或多个 API CDK（每行一个，系统将自动轮询并处理额度耗尽的情况）"}
+                                                rows={4}
+                                                style={{ fontFamily: 'monospace' }}
                                             />
                                             {getgemSettings.hasStoredCdk && (
                                                 <p className="input-hint"><span className="key-stored">✓ CDK 已保存</span></p>

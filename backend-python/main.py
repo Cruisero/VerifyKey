@@ -3756,22 +3756,49 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                     # Step 1: warmup — submitting
                     yield fmt({"type": "progress", "vid": vid, "step": "warmup", "message": "文档生成中..."})
 
-                    submit_resp = await client.post(
-                        f"{getgem_url}/api/verify",
-                        json={"verificationId": vid, "cdk": getgem_cdk}
-                    )
+                    # Parse multiple CDKs (can be separated by newline or comma)
+                    cdk_list = [c.strip() for c in getgem_cdk.replace(',', '\n').split('\n') if c.strip()]
+                    if not cdk_list:
+                        all_results.append({
+                            "verificationId": vid,
+                            "status": "error",
+                            "success": False,
+                            "message": "Error: No valid API CDKs found in configuration."
+                        })
+                        continue
 
-                    if submit_resp.status_code != 200:
-                        error_detail = ""
+                    submit_resp = None
+                    error_detail = ""
+                    
+                    for current_cdk in cdk_list:
+                        submit_resp = await client.post(
+                            f"{getgem_url}/api/verify",
+                            json={"verificationId": vid, "cdk": current_cdk}
+                        )
+                        
+                        if submit_resp.status_code == 200:
+                            break # Success, break out of the fallback loop
+                            
+                        # If failed, check if it's a balance/auth issue to determine if we should fallback
                         try:
                             err = submit_resp.json()
                             error_detail = err.get("detail") or err.get("message") or err.get("error") or str(err)
                         except:
                             error_detail = submit_resp.text[:200]
                             
-                        # Mask backend CDK/balance errors from the end user
                         error_detail_lower = error_detail.lower()
-                        if "balance" in error_detail_lower or "cdk" in error_detail_lower or "quota" in error_detail_lower or "余额" in error_detail_lower or "额度" in error_detail_lower:
+                        is_balance_error = submit_resp.status_code in (400, 403) and ("balance" in error_detail_lower or "cdk" in error_detail_lower or "quota" in error_detail_lower or "余额" in error_detail_lower or "额度" in error_detail_lower)
+                        
+                        if is_balance_error:
+                            import logging
+                            logging.warning(f"[GetGem] CDK {current_cdk[:8]}... failed with balance/auth error, trying next if available.")
+                            continue # Try next CDK
+                        else:
+                            break # Non-balance error, stop trying other CDKs and report this error
+
+                    if submit_resp and submit_resp.status_code != 200:
+                        # Mask backend CDK/balance errors from the end user (in case all CDKs failed)
+                        if "balance" in error_detail.lower() or "cdk" in error_detail.lower() or "quota" in error_detail.lower() or "余额" in error_detail.lower() or "额度" in error_detail.lower():
                             error_detail = "System is currently busy, please try again later."
                             
                         all_results.append({
@@ -3959,16 +3986,33 @@ async def getgem_status():
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            # Parse multiple CDKs (can be separated by newline or comma)
+            cdk_list = [c.strip() for c in getgem_cdk.replace(',', '\n').split('\n') if c.strip()]
+            
             # Check CDK balance if configured, this serves as health check
-            if getgem_cdk:
-                cdk_resp = await client.get(f"{getgem_url}/api/cdk/status/{getgem_cdk}")
-                if cdk_resp.status_code == 200:
+            if cdk_list:
+                total_remaining = 0
+                total_uses = 0
+                any_valid = False
+                last_error = ""
+                
+                for cdk in cdk_list:
+                    cdk_resp = await client.get(f"{getgem_url}/api/cdk/status/{cdk}")
+                    if cdk_resp.status_code == 200:
+                        data = cdk_resp.json()
+                        total_remaining += data.get("remaining_uses", 0)
+                        total_uses += data.get("total_uses", 0)
+                        any_valid = True
+                    elif cdk_resp.status_code == 404:
+                        last_error = f"CDK {cdk[:8]}... 不存在或无效"
+                    else:
+                        last_error = f"API 异常状态码对于 {cdk[:8]}...: {cdk_resp.status_code}"
+                        
+                if any_valid:
                     result["connected"] = True
-                    result["cdkBalance"] = cdk_resp.json()
-                elif cdk_resp.status_code == 404:
-                    result["error"] = "CDK 不存在或无效"
+                    result["cdkBalance"] = {"remaining_uses": total_remaining, "total_uses": total_uses}
                 else:
-                    result["error"] = f"API 异常状态码: {cdk_resp.status_code}"
+                    result["error"] = last_error or "所有 CDK 均检查失败"
             else:
                 # If no CDK, just ping the domain base to see if it's alive
                 base_resp = await client.get(f"{getgem_url}")

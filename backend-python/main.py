@@ -2062,7 +2062,7 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
                 tg_manager.update_quota(acc_id, r["remaining_quota"])
 
         # Log and deduct (skip for bot-internal requests)
-        successful = sum(1 for r in results if r.get("success"))
+        successful = sum(1 for r in results if r.get("success") and not r.get("alreadyVerified"))
         cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
         if successful > 0 and not is_bot_internal:
             deduct = cdk_manager.use_cdk(request.cdk, successful)
@@ -2375,16 +2375,25 @@ async def verify_unified(request: UnifiedVerifyRequest):
                             on_progress=on_progress
                         )
 
-                    # Handle cooldown → retry with different account (same bot)
+                    # Handle cooldown → retry ONLY if warmup-stage cooldown (link NOT consumed)
                     if result.get("status") == "cooldown":
                         cd_seconds = result.get("cooldown_seconds", 90)
-                        logger.info(f"[Waterfall:{bot_type}] Account {acc_id} in cooldown, retrying...")
                         if bot_type == "dualbot":
                             tg_manager.set_cooldown(acc_id, cd_seconds)
                         else:
                             _singlebot_cooldowns[bot_type][acc_id] = _time.time() + cd_seconds
                         if result.get("remaining_quota") is not None:
                             tg_manager.update_quota(acc_id, result["remaining_quota"])
+
+                        # If cooldown came from verify stage, the link was already consumed
+                        # Do NOT retry — treat as terminal failure
+                        if result.get("cooldown_stage") == "verify":
+                            logger.warning(f"[Waterfall:{bot_type}] Account {acc_id} cooldown at VERIFY stage — link consumed, stopping retry")
+                            last_result = (acc_id, result)
+                            bot_succeeded = True
+                            break
+
+                        logger.info(f"[Waterfall:{bot_type}] Account {acc_id} cooldown at warmup stage, retrying with another account...")
                         continue
 
                     # Record stats for this bot
@@ -2460,7 +2469,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 tg_manager.update_quota(acc_id, r["remaining_quota"])
 
         # Log and deduct CDK
-        successful = sum(1 for r in results if r.get("success"))
+        successful = sum(1 for r in results if r.get("success") and not r.get("alreadyVerified"))
         cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
         if successful > 0 and not is_bot_internal:
             deduct = cdk_manager.use_cdk(request.cdk, successful)
@@ -2836,7 +2845,7 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
             results.append(r)
 
         # Log and deduct
-        successful = sum(1 for r in results if r.get("success"))
+        successful = sum(1 for r in results if r.get("success") and not r.get("alreadyVerified"))
         cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
         if successful > 0 and not is_bot_internal:
             deduct = cdk_manager.use_cdk(request.cdk, successful)
@@ -3696,7 +3705,7 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
             verification_history.log_verification("failed", vid, cdk=request.cdk)
     
     # Deduct CDK quota for successful verifications
-    successful = sum(1 for r in results if r["status"] == "approved")
+    successful = sum(1 for r in results if r["status"] == "approved" and not r.get("alreadyVerified"))
     cdk_remaining = cdk_check["remaining"]
     if successful > 0:
         deduct = cdk_manager.use_cdk(request.cdk, successful)
@@ -4144,20 +4153,168 @@ async def _dispatch_verification(vid: str, cdk_code: str) -> dict:
         except Exception as e:
             return {"status": "error", "success": False, "message": str(e)}
 
-    # Telegram provider
+    # Telegram provider — use unified multi-bot pool (DualBot + SingleBots)
     elif provider == "telegram":
-        if not telegram_bot or not telegram_bot.is_connected:
-            return {"status": "error", "success": False, "message": "Telegram Userbot not connected"}
+        if not tg_manager.is_connected:
+            return {"status": "error", "success": False, "message": "Not connected"}
         try:
+            import re as _re_dp
+            import time as _time_dp
+
             # Build verification link
-            link = f"https://services.sheerid.com/verify/{vid}/"
-            result = await telegram_bot.verify(link)
-            return {
-                "status": result.get("status", "unknown"),
-                "success": result.get("success", False),
-                "message": result.get("message", ""),
-                "redirectUrl": result.get("claimLink")
-            }
+            link = f"https://services.sheerid.com/verify/{vid}/?verificationId={vid}"
+
+            # Collect all enabled bots (same logic as /api/verify/unified)
+            dual_config = config.get("verification", {}).get("dualBot", {})
+            single_bots_cfg = config.get("verification", {}).get("singleBots", [])
+
+            enabled_bots = []
+            if dual_config.get("enabled"):
+                enabled_bots.append({"type": "dualbot", "config": dual_config})
+            for sb in single_bots_cfg:
+                if sb.get("enabled"):
+                    enabled_bots.append({"type": sb["id"], "config": sb})
+
+            if not enabled_bots:
+                return {"status": "error", "success": False, "message": "系统错误，请联系管理员"}
+
+            # Sort bots by cost efficiency (same as unified endpoint)
+            def _expected_cost_dp(bot):
+                rate = bot_stats_tracker.get_success_rate(bot["type"])
+                cost = bot["config"].get("costPerVerify", 1.0)
+                return cost / max(rate, 0.01)
+            sorted_bots = sorted(enabled_bots, key=_expected_cost_dp)
+
+            # Helper: get next client for a bot type
+            def _get_client_dp(bot_id):
+                now = _time_dp.time()
+                if bot_id == "dualbot":
+                    return tg_manager.get_next_client(bot_type="dualbot")
+                if bot_id not in _singlebot_cooldowns:
+                    _singlebot_cooldowns[bot_id] = {}
+                accounts = config.get("telegramAccounts", [])
+                valid_ids = []
+                for acc in accounts:
+                    if not acc.get("enabled", True):
+                        continue
+                    if bot_id not in acc.get("assignedBots", []):
+                        continue
+                    if _singlebot_cooldowns[bot_id].get(acc["id"], 0) > now:
+                        continue
+                    valid_ids.append(acc["id"])
+                all_clients = tg_manager.get_all_clients()
+                available = [(aid, all_clients[aid]) for aid in valid_ids
+                             if aid in all_clients and all_clients[aid].is_connected()]
+                if not available:
+                    return None
+                if not hasattr(_get_client_dp, '_idx'):
+                    _get_client_dp._idx = {}
+                if bot_id not in _get_client_dp._idx:
+                    _get_client_dp._idx[bot_id] = 0
+                _get_client_dp._idx[bot_id] = (_get_client_dp._idx[bot_id] + 1) % len(available)
+                return available[_get_client_dp._idx[bot_id]]
+
+            def _get_cooldown_dp(bot_id):
+                if bot_id == "dualbot":
+                    return tg_manager.get_shortest_cooldown_wait()
+                now = _time_dp.time()
+                if bot_id not in _singlebot_cooldowns:
+                    return 0
+                active = [exp - now for exp in _singlebot_cooldowns[bot_id].values() if exp > now]
+                return min(active) if active else 0
+
+            # Waterfall: try each bot in priority order
+            last_result = None
+            for bot_entry in sorted_bots:
+                bot_type = bot_entry["type"]
+                bot_config = bot_entry["config"]
+                max_retries = bot_config.get("maxRetries", 5)
+                bot_timeout = bot_config.get("verifyTimeout", bot_config.get("timeout", 180))
+
+                single_verifier = None
+                if bot_type != "dualbot":
+                    single_verifier = GenericSingleBotVerifier(bot_config)
+
+                async def noop_progress(progress):
+                    pass  # Public API doesn't support SSE streaming
+
+                bot_succeeded = False
+                for attempt in range(max_retries):
+                    pool_item = _get_client_dp(bot_type)
+
+                    if not pool_item:
+                        wait_time = _get_cooldown_dp(bot_type)
+                        if wait_time > 0:
+                            await asyncio.sleep(wait_time + 2)
+                            pool_item = _get_client_dp(bot_type)
+                        if not pool_item:
+                            break  # No accounts for this bot, try next
+
+                    acc_id, client = pool_item
+
+                    if bot_type == "dualbot":
+                        result = await dual_bot.verify(
+                            client=client,
+                            link=link,
+                            account_id=acc_id,
+                            warmup_bot=bot_config.get("warmupBot"),
+                            verify_bot=bot_config.get("verifyBot"),
+                            auto_bypass=bot_config.get("autoBypass", True),
+                            timeout=bot_timeout,
+                            on_progress=noop_progress
+                        )
+                    else:
+                        result = await single_verifier.verify(
+                            client=client,
+                            link=link,
+                            account_id=acc_id,
+                            timeout=bot_timeout,
+                            on_progress=noop_progress
+                        )
+
+                    if result.get("status") == "cooldown":
+                        cd_seconds = result.get("cooldown_seconds", 90)
+                        if bot_type == "dualbot":
+                            tg_manager.set_cooldown(acc_id, cd_seconds)
+                        else:
+                            _singlebot_cooldowns[bot_type][acc_id] = _time_dp.time() + cd_seconds
+                        if result.get("remaining_quota") is not None:
+                            tg_manager.update_quota(acc_id, result["remaining_quota"])
+
+                        # Verify-stage cooldown = link already consumed, do NOT retry
+                        if result.get("cooldown_stage") == "verify":
+                            last_result = result
+                            bot_succeeded = True
+                            break
+
+                        continue
+
+                    bot_stats_tracker.record(bot_type, result.get("success", False))
+                    last_result = result
+
+                    if result.get("success") or result.get("status") in ("failed", "rejected", "error"):
+                        bot_succeeded = True
+                        break
+
+                    if result.get("status") == "no_credits":
+                        break  # Try next bot
+
+                    bot_succeeded = True
+                    break
+
+                if bot_succeeded:
+                    break
+
+            if last_result:
+                return {
+                    "status": last_result.get("status", "unknown"),
+                    "success": last_result.get("success", False),
+                    "message": last_result.get("message", ""),
+                    "redirectUrl": last_result.get("claimLink") or last_result.get("redirectUrl")
+                }
+
+            return {"status": "error", "success": False, "message": "所有 Bot 均无法完成验证，请稍后重试"}
+
         except Exception as e:
             return {"status": "error", "success": False, "message": str(e)}
 

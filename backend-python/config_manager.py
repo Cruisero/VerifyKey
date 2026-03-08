@@ -210,7 +210,7 @@ DEFAULT_CONFIG = {
                 "concurrentPerAccount": 3,
                 "responseRules": [
                     {
-                        "keywords": ["YOUR LINK HAS BEEN VERIFIED SUCCESSFULLY", "SUCCESSFULLY"],
+                        "keywords": ["YOUR LINK HAS BEEN VERIFIED SUCCESSFULLY", "SUCCESSFULLY", "CONGRATULATIONS", "VERIFICATION APPROVED", "STATUS: VERIFIED"],
                         "status": "approved",
                         "success": True,
                         "message": "验证成功",
@@ -225,10 +225,10 @@ DEFAULT_CONFIG = {
                         "messageKey": "msgVerifyFailedDetail"
                     }
                 ],
-                "processingKeywords": ["PROCESSING", "⏳", "PLEASE WAIT"],
+                "processingKeywords": ["PROCESSING YOUR VERIFICATION", "⏳"],
                 "cooldown": {
-                    "keywords": ["COOLDOWN", "WAIT"],
-                    "timePattern": r"(\d+)\s*M"
+                    "keywords": ["COOLDOWN", "RATE LIMIT"],
+                    "timePattern": "(\\d+)\\s*M"
                 },
                 "maxRetries": 5,
                 "timeout": 120

@@ -81,9 +81,10 @@ class GenericSingleBotVerifier:
                             }
                         if initial_step == "success":
                             return {
-                                "success": False, "status": "failed", "verificationId": vid,
-                                "message": "该链接已验证成功，无需重复提交",
-                                "messageKey": "msgAlreadyVerified"
+                                "success": True, "status": "approved", "verificationId": vid,
+                                "message": "该链接已验证成功",
+                                "messageKey": "msgAlreadyVerified",
+                                "alreadyVerified": True
                             }
                         if initial_step == "docUpload" and rejection_reasons:
                             return {
@@ -310,7 +311,21 @@ class GenericSingleBotVerifier:
             if quota_match:
                 result["remaining_quota"] = int(quota_match.group(1))
 
-        # Config: Cooldown Parsing
+        # 1. Config: Evaluate Response Rules FIRST (definitive results take priority)
+        rules = self.config.get("responseRules", [])
+        for rule in rules:
+            keywords = [k.upper() for k in rule.get("keywords", [])]
+            if any(k in text_clean for k in keywords):
+                result["success"] = rule.get("success", False)
+                result["status"] = rule.get("status", "failed")
+                result["message"] = rule.get("message", "Rule matched")
+                if "failureReasonKey" in rule:
+                    result["failureReasonKey"] = rule["failureReasonKey"]
+                if "messageKey" in rule:
+                    result["messageKey"] = rule["messageKey"]
+                return result
+
+        # 2. Config: Cooldown Parsing (only if no definitive rule matched)
         cooldown_config = self.config.get("cooldown", {})
         if cooldown_config and cooldown_config.get("keywords"):
             if any(k.upper() in text_clean for k in cooldown_config.get("keywords", [])):
@@ -328,41 +343,17 @@ class GenericSingleBotVerifier:
                             pass
                 return result
 
-        # Config: Processing Keywords
+        # 3. Config: Processing Keywords (skip if no match)
         processing_kws = self.config.get("processingKeywords", [])
         if processing_kws:
-            # Check if this is exclusively a processing message (no definitive rules match)
-            is_definitive = False
-            for rule in self.config.get("responseRules", []):
-                if any(kw.upper() in text_clean for kw in rule.get("keywords", [])):
-                    is_definitive = True
-                    break
-            
-            if not is_definitive:
-                for kw in processing_kws:
-                    if kw.upper() in text_clean:
-                        result["success"] = None
-                        result["status"] = "processing"
-                        result["message"] = "Processing..."
-                        return result
+            for kw in processing_kws:
+                if kw.upper() in text_clean:
+                    result["success"] = None
+                    result["status"] = "processing"
+                    result["message"] = "Processing..."
+                    return result
 
-        # Config: Evaluate Response Rules
-        rules = self.config.get("responseRules", [])
-        for rule in rules:
-            keywords = [k.upper() for k in rule.get("keywords", [])]
-            if any(k in text_clean for k in keywords):
-                result["success"] = rule.get("success", False)
-                result["status"] = rule.get("status", "failed")
-                result["message"] = rule.get("message", "Rule matched")
-                if "failureReasonKey" in rule:
-                    result["failureReasonKey"] = rule["failureReasonKey"]
-                if "messageKey" in rule:
-                    result["messageKey"] = rule["messageKey"]
-                return result
-
-        # Safe fallback: unknown → processing or failure? 
-        # Since it's generic, if no rules match and wait_for_final is checked later,
-        # we mark as unknown. For generic failures we fall back to failed.
+        # 4. Safe fallback
         logger.info(f"[GenericBot:{self.bot_id}] No status matched, falling back.")
         result["success"] = False
         result["status"] = "failed"

@@ -87,9 +87,10 @@ class BlackBotVerifier:
                             }
                         if initial_step == "success":
                             return {
-                                "success": False, "status": "failed", "verificationId": vid,
-                                "message": "该链接已验证成功，无需重复提交",
-                                "messageKey": "msgAlreadyVerified"
+                                "success": True, "status": "approved", "verificationId": vid,
+                                "message": "该链接已验证成功",
+                                "messageKey": "msgAlreadyVerified",
+                                "alreadyVerified": True
                             }
                         if initial_step == "docUpload" and rejection_reasons:
                             return {

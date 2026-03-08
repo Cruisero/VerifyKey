@@ -86,9 +86,10 @@ class DualBotVerifier:
                             }
                         if initial_step == "success":
                             return {
-                                "success": False, "status": "failed", "verificationId": vid,
-                                "message": "该链接已验证成功，无需重复提交",
-                                "messageKey": "msgAlreadyVerified"
+                                "success": True, "status": "approved", "verificationId": vid,
+                                "message": "该链接已验证成功",
+                                "messageKey": "msgAlreadyVerified",
+                                "alreadyVerified": True
                             }
                         if initial_step == "docUpload" and rejection_reasons:
                             return {
@@ -121,8 +122,12 @@ class DualBotVerifier:
             
             if not warmup_parsed.get("success"):
                 logger.warning(f"[DualBot] [{account_id}] Warmup failed/rejected by @{w_bot}: {warmup_parsed['message']}")
-                warmup_parsed["message"] = f"文档生成失败: {warmup_parsed['message']}"
-                warmup_parsed["messageKey"] = "msgWarmupFailed"
+                # Tag cooldown with stage so waterfall knows link was NOT yet consumed
+                if warmup_parsed.get("status") == "cooldown":
+                    warmup_parsed["cooldown_stage"] = "warmup"
+                else:
+                    warmup_parsed["message"] = f"文档生成失败: {warmup_parsed['message']}"
+                    warmup_parsed["messageKey"] = "msgWarmupFailed"
                 return warmup_parsed
 
             logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
@@ -154,6 +159,9 @@ class DualBotVerifier:
 
             # Parse result
             parsed = self._parse_response(verify_result, vid, is_warmup=False)
+            # Tag verify-stage cooldown so waterfall knows link was already consumed
+            if parsed.get("status") == "cooldown":
+                parsed["cooldown_stage"] = "verify"
 
             # ---- Race condition check ----
             # If bot says "failed" but another account already succeeded,

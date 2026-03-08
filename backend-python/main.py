@@ -3453,7 +3453,8 @@ async def _auto_rule_loop(rule_id: str):
                     break
             
             status = rule.get("status", "pass")
-            verification_history.log_verification(status, f"auto-{rule_id[:6]}")
+            unique_vid = f"auto-{rule_id[:6]}-{int(datetime.now(timezone.utc).timestamp())}"
+            verification_history.log_verification(status, unique_vid)
             interval_sec = rule.get("intervalMinutes", 5) * 60
             await asyncio.sleep(interval_sec)
         except asyncio.CancelledError:

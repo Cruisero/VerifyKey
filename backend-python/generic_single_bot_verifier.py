@@ -218,20 +218,8 @@ class GenericSingleBotVerifier:
                 # but our VID has dashes (e.g. "69aaa4ab-fd3d-6245-5b7a-17ae")
                 vid_no_dash = match_vid.replace("-", "")
                 if match_vid not in reply_text and vid_no_dash not in reply_text:
-                    # Message doesn't contain our VID — but check if it matches a
-                    # response rule (e.g. "Service Update", "COOLDOWN") since some
-                    # bot messages are global and don't include the VID.
-                    if wait_for_final:
-                        probe = self._parse_response(reply_text, match_vid)
-                        if probe.get("status") not in ("unknown", "processing"):
-                            logger.info(f"[GenericBot:{self.bot_id}] Non-VID message matched rule: {probe['status']} — {reply_text[:80]}")
-                            # Accept this message as the result
-                        else:
-                            logger.debug(f"[GenericBot:{self.bot_id}] Skipping message (VID {match_vid[:8]} not found): {reply_text[:80]}")
-                            return
-                    else:
-                        logger.debug(f"[GenericBot:{self.bot_id}] Skipping message (VID {match_vid[:8]} not found): {reply_text[:80]}")
-                        return
+                    logger.debug(f"[GenericBot:{self.bot_id}] Skipping message (VID {match_vid[:8]} not found): {reply_text[:80]}")
+                    return
 
             event_type = "New" if isinstance(event, events.NewMessage.Event) else "Edit"
             logger.info(f"[GenericBot:{self.bot_id}] {event_type} message from @{bot_username}: {reply_text[:120]}...")

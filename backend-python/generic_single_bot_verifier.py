@@ -343,7 +343,7 @@ class GenericSingleBotVerifier:
                 cd_pattern = cooldown_config.get("timePattern")
                 result["status"] = "cooldown"
                 result["success"] = False
-                result["cooldown_seconds"] = 90  # Default
+                result["cooldown_seconds"] = 30  # Default
                 
                 if cd_pattern:
                     min_match = re.search(cd_pattern, text_clean, flags=re.IGNORECASE)

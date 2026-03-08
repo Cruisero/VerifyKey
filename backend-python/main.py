@@ -2336,7 +2336,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                         if wait_time > 0:
                             logger.info(f"[Waterfall:{bot_type}] All accounts in cooldown, waiting {wait_time:.0f}s...")
                             on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
-                                             "step": "cooldown_wait", "message": f"[{bot_type}] 等待可用账号 ({int(wait_time)}s)..."}
+                                             "step": "cooldown_wait", "message": f"排队中..."}
                             progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
                             broadcast_verify_event(on_prog_event)
                             async with cooldown_wait_lock:

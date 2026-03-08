@@ -60,6 +60,31 @@ def generate_cdks(count: int, quota: int, note: str = "") -> List[str]:
     return generated
 
 
+def _normalize_code(code: str) -> str:
+    """Normalize CDK code: uppercase, strip invalid chars, O→0, I→1."""
+    import re
+    code = re.sub(r'[^A-Z0-9\-]', '', code.strip().upper())
+    return code.replace('O', '0').replace('I', '1')
+
+
+def normalize_existing_cdks():
+    """Fix any CDKs in the database that contain O or I (one-time migration)."""
+    conn = database.get_connection()
+    with _lock:
+        cursor = conn.execute("SELECT code FROM cdkeys WHERE code LIKE '%O%' OR code LIKE '%I%'")
+        rows = cursor.fetchall()
+        fixed = 0
+        for row in rows:
+            old_code = row["code"]
+            new_code = old_code.replace('O', '0').replace('I', '1')
+            if old_code != new_code:
+                conn.execute("UPDATE cdkeys SET code = ? WHERE code = ?", (new_code, old_code))
+                fixed += 1
+        if fixed:
+            conn.commit()
+            print(f"[CDK] Normalized {fixed} CDK codes (O→0, I→1)")
+
+
 def validate_cdk(code: str) -> Dict:
     """
     Validate a CDK code and return its status.
@@ -67,17 +92,9 @@ def validate_cdk(code: str) -> Dict:
     Returns:
         Dict with: valid (bool), remaining (int), quota (int), used (int), message (str)
     """
-    import re
-    code = re.sub(r'[^A-Z0-9\-]', '', code.strip().upper())
+    code = _normalize_code(code)
     conn = database.get_connection()
-    # Try exact match first, then try with O↔0 and I↔1 normalization
-    # (frontend auto-converts O→0, I→1, but DB may store either form)
-    code_normalized = code.replace('O', '0').replace('I', '1')
-    code_reverse = code.replace('0', 'O').replace('1', 'I')
-    cursor = conn.execute(
-        "SELECT quota, used, status FROM cdkeys WHERE UPPER(code) = ? OR UPPER(code) = ? OR UPPER(code) = ?",
-        (code, code_normalized, code_reverse)
-    )
+    cursor = conn.execute("SELECT quota, used, status FROM cdkeys WHERE code = ?", (code,))
     row = cursor.fetchone()
 
     if not row:
@@ -108,17 +125,11 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
     Returns:
         Dict with: success (bool), remaining (int), message (str)
     """
-    import re
-    code = re.sub(r'[^A-Z0-9\-]', '', code.strip().upper())
+    code = _normalize_code(code)
     conn = database.get_connection()
 
     with _lock:
-        code_normalized = code.replace('O', '0').replace('I', '1')
-        code_reverse = code.replace('0', 'O').replace('1', 'I')
-        cursor = conn.execute(
-            "SELECT code, quota, used FROM cdkeys WHERE UPPER(code) = ? OR UPPER(code) = ? OR UPPER(code) = ?",
-            (code, code_normalized, code_reverse)
-        )
+        cursor = conn.execute("SELECT quota, used FROM cdkeys WHERE code = ?", (code,))
         row = cursor.fetchone()
 
         if not row:
@@ -136,7 +147,7 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
 
         conn.execute(
             "UPDATE cdkeys SET used = ?, status = ?, last_used_at = ? WHERE code = ?",
-            (new_used, new_status, now, row["code"])
+            (new_used, new_status, now, code)
         )
         conn.commit()
 

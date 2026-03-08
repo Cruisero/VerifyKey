@@ -40,6 +40,7 @@ load_dotenv()
 # Initialize database
 auth.init_database()
 database.init_db()
+cdk_manager.normalize_existing_cdks()
 database.start_auto_backup()
 
 # Configuration

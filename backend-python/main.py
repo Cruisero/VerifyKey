@@ -1887,20 +1887,19 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
                         _prj = _pd.get("rejectionReasons", [])
 
                         if _ps == "error":
-                            raise HTTPException(
-                                status_code=400,
-                                detail=f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
-                            )
+                            _msg = f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=getattr(request, 'cdk', '') or '')
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "failed", "message": _msg}]})
+                            raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "success":
-                            raise HTTPException(
-                                status_code=400,
-                                detail="该链接已验证成功，无需重复提交"
-                            )
+                            _msg = "该链接已验证成功，无需重复提交"
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": True, "status": "approved", "message": _msg, "alreadyVerified": True}]})
+                            raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "docUpload" and _prj:
-                            raise HTTPException(
-                                status_code=400,
-                                detail=f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
-                            )
+                            _msg = f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=getattr(request, 'cdk', '') or '')
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "rejected", "message": _msg}]})
+                            raise HTTPException(status_code=400, detail=_msg)
             except HTTPException:
                 raise  # Re-raise HTTP exceptions
             except Exception as _pre_err:
@@ -2170,11 +2169,19 @@ async def verify_unified(request: UnifiedVerifyRequest):
                         _pe = _pd.get("errorIds", [])
                         _prj = _pd.get("rejectionReasons", [])
                         if _ps == "error":
-                            raise HTTPException(status_code=400, detail=f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接")
+                            _msg = f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=getattr(request, 'cdk', '') or '')
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "failed", "message": _msg}]})
+                            raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "success":
-                            raise HTTPException(status_code=400, detail="该链接已验证成功，无需重复提交")
+                            _msg = "该链接已验证成功，无需重复提交"
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": True, "status": "approved", "message": _msg, "alreadyVerified": True}]})
+                            raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "docUpload" and _prj:
-                            raise HTTPException(status_code=400, detail=f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接")
+                            _msg = f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=getattr(request, 'cdk', '') or '')
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "rejected", "message": _msg}]})
+                            raise HTTPException(status_code=400, detail=_msg)
             except HTTPException:
                 raise
             except Exception as _pre_err:
@@ -2638,20 +2645,19 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
                         _prj = _pd.get("rejectionReasons", [])
 
                         if _ps == "error":
-                            raise HTTPException(
-                                status_code=400,
-                                detail=f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
-                            )
+                            _msg = f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=getattr(request, 'cdk', '') or '')
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "failed", "message": _msg}]})
+                            raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "success":
-                            raise HTTPException(
-                                status_code=400,
-                                detail="该链接已验证成功，无需重复提交"
-                            )
+                            _msg = "该链接已验证成功，无需重复提交"
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": True, "status": "approved", "message": _msg, "alreadyVerified": True}]})
+                            raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "docUpload" and _prj:
-                            raise HTTPException(
-                                status_code=400,
-                                detail=f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
-                            )
+                            _msg = f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=getattr(request, 'cdk', '') or '')
+                            broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "rejected", "message": _msg}]})
+                            raise HTTPException(status_code=400, detail=_msg)
             except HTTPException:
                 raise
             except Exception as _pre_err:

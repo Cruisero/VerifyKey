@@ -78,10 +78,10 @@ function TelegramBotTab() {
 
     // SSE Real-time log updates
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+        const sseToken = user?.token || localStorage.getItem('verifykey-token');
+        if (!sseToken) return;
 
-        const sseUrl = `${API_BASE}/api/admin/verify-stream?authorization=Bearer ${token}`;
+        const sseUrl = `${API_BASE}/api/admin/verify-stream?authorization=Bearer ${sseToken}`;
         const es = new EventSource(sseUrl);
 
         es.onmessage = (event) => {

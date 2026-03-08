@@ -325,7 +325,18 @@ class GenericSingleBotVerifier:
                     result["messageKey"] = rule["messageKey"]
                 return result
 
-        # 2. Config: Cooldown Parsing (only if no definitive rule matched)
+        # 2. Config: Processing Keywords (check BEFORE cooldown to avoid false positives)
+        #    e.g. "Please wait while we..." contains "WAIT" which could match cooldown keywords
+        processing_kws = self.config.get("processingKeywords", [])
+        if processing_kws:
+            for kw in processing_kws:
+                if kw.upper() in text_clean:
+                    result["success"] = None
+                    result["status"] = "processing"
+                    result["message"] = "Processing..."
+                    return result
+
+        # 3. Config: Cooldown Parsing (only if no definitive rule or processing matched)
         cooldown_config = self.config.get("cooldown", {})
         if cooldown_config and cooldown_config.get("keywords"):
             if any(k.upper() in text_clean for k in cooldown_config.get("keywords", [])):
@@ -342,16 +353,6 @@ class GenericSingleBotVerifier:
                         except Exception:
                             pass
                 return result
-
-        # 3. Config: Processing Keywords (skip if no match)
-        processing_kws = self.config.get("processingKeywords", [])
-        if processing_kws:
-            for kw in processing_kws:
-                if kw.upper() in text_clean:
-                    result["success"] = None
-                    result["status"] = "processing"
-                    result["message"] = "Processing..."
-                    return result
 
         # 4. Safe fallback
         logger.info(f"[GenericBot:{self.bot_id}] No status matched, falling back.")

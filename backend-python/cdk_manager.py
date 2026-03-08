@@ -70,7 +70,14 @@ def validate_cdk(code: str) -> Dict:
     import re
     code = re.sub(r'[^A-Z0-9\-]', '', code.strip().upper())
     conn = database.get_connection()
-    cursor = conn.execute("SELECT quota, used, status FROM cdkeys WHERE UPPER(code) = ?", (code,))
+    # Try exact match first, then try with O↔0 and I↔1 normalization
+    # (frontend auto-converts O→0, I→1, but DB may store either form)
+    code_normalized = code.replace('O', '0').replace('I', '1')
+    code_reverse = code.replace('0', 'O').replace('1', 'I')
+    cursor = conn.execute(
+        "SELECT quota, used, status FROM cdkeys WHERE UPPER(code) = ? OR UPPER(code) = ? OR UPPER(code) = ?",
+        (code, code_normalized, code_reverse)
+    )
     row = cursor.fetchone()
 
     if not row:
@@ -106,7 +113,12 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
     conn = database.get_connection()
 
     with _lock:
-        cursor = conn.execute("SELECT quota, used FROM cdkeys WHERE UPPER(code) = ?", (code,))
+        code_normalized = code.replace('O', '0').replace('I', '1')
+        code_reverse = code.replace('0', 'O').replace('1', 'I')
+        cursor = conn.execute(
+            "SELECT code, quota, used FROM cdkeys WHERE UPPER(code) = ? OR UPPER(code) = ? OR UPPER(code) = ?",
+            (code, code_normalized, code_reverse)
+        )
         row = cursor.fetchone()
 
         if not row:
@@ -123,8 +135,8 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
         now = datetime.now().isoformat()
 
         conn.execute(
-            "UPDATE cdkeys SET used = ?, status = ?, last_used_at = ? WHERE UPPER(code) = ?",
-            (new_used, new_status, now, code)
+            "UPDATE cdkeys SET used = ?, status = ?, last_used_at = ? WHERE code = ?",
+            (new_used, new_status, now, row["code"])
         )
         conn.commit()
 

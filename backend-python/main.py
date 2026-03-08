@@ -1929,6 +1929,11 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
 
     link_vid_map = {link: extract_vid(link) for link in clean_links}
 
+    # Broadcast initial 'submitted' event so Admin page shows immediately
+    for link in clean_links:
+        vid = link_vid_map.get(link, '')
+        broadcast_verify_event({"type": "progress", "link": link, "vid": vid, "step": "submitted", "message": "等待验证..."})
+
     async def event_stream():
         import json
         
@@ -2238,6 +2243,11 @@ async def verify_unified(request: UnifiedVerifyRequest):
         return m.group(1) if m else link[-12:]
 
     link_vid_map = {link: _extract_vid_u(link) for link in clean_links}
+
+    # Broadcast initial 'submitted' event so Admin page shows immediately
+    for link in clean_links:
+        vid = link_vid_map.get(link, '')
+        broadcast_verify_event({"type": "progress", "link": link, "vid": vid, "step": "submitted", "message": "等待验证..."})
 
     async def event_stream():
         import json
@@ -3696,6 +3706,13 @@ async def verify_via_telegram(request: TelegramVerifyRequest):
             "message": "所有账号冷却中，请稍后重试"
         }
     
+    # Broadcast initial 'submitted' event so Admin page shows immediately
+    import re as _re_sub
+    for link in clean_links:
+        _vm = _re_sub.search(r'verificationId=([a-zA-Z0-9]+)', link)
+        _sv = _vm.group(1) if _vm else link[:30]
+        broadcast_verify_event({"type": "progress", "link": link, "vid": _sv, "step": "submitted", "message": "等待验证..."})
+
     results = await asyncio.gather(*[process_link(link) for link in clean_links])
     results = list(results)
     
@@ -3783,6 +3800,10 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
             return f"data: {_json.dumps(data, ensure_ascii=False)}\n\n"
 
         all_results = []
+
+        # Broadcast initial 'submitted' event so Admin page shows immediately
+        for _sv in request.verificationIds:
+            broadcast_verify_event({"type": "progress", "vid": _sv, "step": "submitted", "message": "等待验证..."})
 
         for vid in request.verificationIds:
             try:

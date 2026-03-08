@@ -67,7 +67,12 @@ function TelegramBotTab() {
                 const res = await fetch(`${API_BASE}/api/admin/bot-verify-log`, { headers: authHeaders });
                 if (res.ok) {
                     const data = await res.json();
-                    setBotVerifyLog(data.log || []);
+                    const apiLog = data.log || [];
+                    // Merge: preserve SSE "processing"/"submitted" entries that aren't in API data yet
+                    setBotVerifyLog(prev => {
+                        const sseProcessing = prev.filter(e => (e.status === 'processing' || e.status === 'submitted') && !apiLog.some(a => a.vid === e.vid || a.link === e.link));
+                        return sseProcessing.length > 0 ? [...sseProcessing, ...apiLog].slice(0, 300) : apiLog;
+                    });
                 }
             } catch (e) { console.error('Failed to fetch bot verify log:', e); }
         };
@@ -95,7 +100,7 @@ function TelegramBotTab() {
                             link: data.link || '',
                             username: existingIdx >= 0 ? prev[existingIdx].username : 'SSE Update',
                             user_id: existingIdx >= 0 ? prev[existingIdx].user_id : '---',
-                            status: data.step === 'failed' ? 'failed' : 'processing',
+                            status: data.step === 'failed' ? 'failed' : (data.step === 'submitted' ? 'submitted' : 'processing'),
                             message: data.message || '',
                             vid: data.vid || '',
                             timestamp: new Date().toISOString()
@@ -1097,7 +1102,12 @@ export default function Admin() {
                 if (logRes.ok) {
                     const logData = await logRes.json();
                     const all = (logData.history || []).filter(r => r.verificationId?.trim() && !r.verificationId.startsWith('auto-'));
-                    setVerifyLog(all.slice(-50).reverse());
+                    const apiLog = all.slice(-50).reverse();
+                    // Merge: preserve SSE "processing" entries that aren't in API data yet
+                    setVerifyLog(prev => {
+                        const sseProcessing = prev.filter(e => (e.status === 'processing' || e.status === 'submitted') && !apiLog.some(a => a.verificationId === e.verificationId));
+                        return sseProcessing.length > 0 ? [...sseProcessing, ...apiLog].slice(0, 300) : apiLog;
+                    });
                 }
             } catch (e) { console.error('Failed to fetch site data:', e); }
         };
@@ -1125,7 +1135,7 @@ export default function Admin() {
                         const newEntry = {
                             id: existingIdx >= 0 ? prev[existingIdx].id : `sse-${Date.now()}-${Math.random()}`,
                             verificationId: vid,
-                            status: 'processing',
+                            status: data.step === 'submitted' ? 'processing' : 'processing',
                             message: data.message || '处理中...',
                             timestamp: new Date().toISOString(),
                             cdk: existingIdx >= 0 ? prev[existingIdx].cdk : '',

@@ -446,11 +446,20 @@ class TelegramAccountManager:
                 # Always set the first successful one as primary
                 is_first = (connected_count == 0)
                 logger.info(f"[TGManager] Startup: connecting account {acc.get('label', acc['id'])}...")
-                result = await self.activate(acc["id"], set_as_primary=is_first)
-                if result.get("success"):
-                    connected_count += 1
-                else:
-                    logger.warning(f"[TGManager] Startup connect failed for {acc['id']}: {result.get('error')}")
+                try:
+                    result = await asyncio.wait_for(
+                        self.activate(acc["id"], set_as_primary=is_first),
+                        timeout=10
+                    )
+                    if result.get("success"):
+                        connected_count += 1
+                        logger.info(f"[TGManager] ✅ Connected: {acc.get('label', acc['id'])}")
+                    else:
+                        logger.warning(f"[TGManager] Startup connect failed for {acc['id']}: {result.get('error')}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"[TGManager] Startup connect timed out for {acc.get('label', acc['id'])}")
+                except Exception as e:
+                    logger.warning(f"[TGManager] Startup connect error for {acc.get('label', acc['id'])}: {e}")
 
         # Fallback: try legacy single-account config (migrate if exists)
         if connected_count == 0:

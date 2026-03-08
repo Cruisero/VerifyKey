@@ -1601,13 +1601,18 @@ async def startup_event():
     config = config_manager.get_config()
     
     # Multi-account auto-connect (new system)
-    async def _startup_connect():
-        await tg_manager.auto_connect()
+    try:
+        print("[Startup] Connecting Telegram accounts...")
+        result = await asyncio.wait_for(tg_manager.auto_connect(), timeout=30)
+        print(f"[Startup] Telegram auto-connect result: {result}")
         # Register old bot (SheerIDUserbot) handler on all pool clients
         if telegram_bot:
             for _acc_id, _client in tg_manager.get_all_clients().items():
                 telegram_bot.register_handler(_client)
-    asyncio.create_task(_startup_connect())
+    except asyncio.TimeoutError:
+        print("[Startup] WARNING: Telegram auto-connect timed out after 30s, will continue without it")
+    except Exception as e:
+        print(f"[Startup] WARNING: Telegram auto-connect failed: {e}")
     
     # Update dual bot config
     dual_config = config.get("verification", {}).get("dualBot", {})

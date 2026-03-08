@@ -22,8 +22,28 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
         cdk: Optional CDK code used for this verification
     
     Returns:
-        The logged record
+        The logged record (or existing record if duplicate)
     """
+    conn = database.get_connection()
+
+    # Deduplication: if same VID already has a final result (pass/failed), skip
+    if verification_id and status in ("pass", "failed"):
+        cursor = conn.execute(
+            "SELECT id, status FROM verification_history WHERE verification_id = ? AND status IN ('pass', 'failed') LIMIT 1",
+            (verification_id,)
+        )
+        existing = cursor.fetchone()
+        if existing:
+            return {
+                "id": existing["id"],
+                "status": existing["status"],
+                "verificationId": verification_id,
+                "message": "duplicate",
+                "cdk": cdk,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "deduplicated": True
+            }
+
     record = {
         "id": str(uuid.uuid4())[:8],
         "status": status,
@@ -33,7 +53,6 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
-    conn = database.get_connection()
     conn.execute(
         "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
         (record["id"], record["status"], record["verificationId"], record["message"], record["cdk"], record["timestamp"])

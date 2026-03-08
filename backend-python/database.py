@@ -81,6 +81,7 @@ def init_db():
 
             CREATE INDEX IF NOT EXISTS idx_vh_status ON verification_history(status);
             CREATE INDEX IF NOT EXISTS idx_vh_timestamp ON verification_history(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_vh_vid ON verification_history(verification_id);
             CREATE INDEX IF NOT EXISTS idx_bvl_timestamp ON bot_verify_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_cdk_status ON cdkeys(status);
         """)

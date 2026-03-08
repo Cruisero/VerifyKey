@@ -1106,6 +1106,80 @@ export default function Admin() {
         return () => clearInterval(interval);
     }, []);
 
+    // SSE Real-time updates for overview verification log
+    useEffect(() => {
+        const token = user?.token || localStorage.getItem('verifykey-token');
+        if (!token) return;
+
+        const sseUrl = `${API_BASE}/api/admin/verify-stream?authorization=Bearer ${token}`;
+        const es = new EventSource(sseUrl);
+
+        es.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'progress') {
+                    const vid = data.vid || '';
+                    if (!vid) return;
+                    setVerifyLog(prev => {
+                        const existingIdx = prev.findIndex(l => l.verificationId === vid);
+                        const newEntry = {
+                            id: existingIdx >= 0 ? prev[existingIdx].id : `sse-${Date.now()}-${Math.random()}`,
+                            verificationId: vid,
+                            status: 'processing',
+                            message: data.message || '处理中...',
+                            timestamp: new Date().toISOString(),
+                            cdk: existingIdx >= 0 ? prev[existingIdx].cdk : '',
+                        };
+                        if (existingIdx >= 0) {
+                            const newLog = [...prev];
+                            newLog[existingIdx] = { ...newLog[existingIdx], ...newEntry };
+                            return newLog;
+                        } else {
+                            return [newEntry, ...prev].slice(0, 300);
+                        }
+                    });
+                } else if (data.type === 'done') {
+                    setVerifyLog(prev => {
+                        let newLog = [...prev];
+                        for (const res of data.results || []) {
+                            const vid = res.verificationId || res.vid || '';
+                            if (!vid) continue;
+                            const status = res.success ? 'pass' : 'failed';
+                            const msg = res.message || res.reason || '';
+                            const existingIdx = newLog.findIndex(l => l.verificationId === vid);
+                            if (existingIdx >= 0) {
+                                newLog[existingIdx] = {
+                                    ...newLog[existingIdx],
+                                    status,
+                                    message: msg,
+                                    timestamp: new Date().toISOString(),
+                                };
+                            } else {
+                                newLog.unshift({
+                                    id: `sse-done-${Date.now()}-${Math.random()}`,
+                                    verificationId: vid,
+                                    status,
+                                    message: msg,
+                                    timestamp: new Date().toISOString(),
+                                    cdk: data.cdkRemaining != null ? '' : '',
+                                });
+                            }
+                        }
+                        return newLog.slice(0, 300);
+                    });
+                }
+            } catch (err) {
+                console.error('Overview SSE parse error', err);
+            }
+        };
+
+        es.onerror = () => {
+            // Will auto-reconnect
+        };
+
+        return () => es.close();
+    }, []);
+
     // Fetch verification history when tab is activated
     useEffect(() => {
         if (activeTab === 'verify-status') {
@@ -1842,9 +1916,12 @@ export default function Admin() {
 
                         {/* Verification Log */}
                         <div className="card" style={{ marginTop: 'var(--spacing-lg)', padding: 'var(--spacing-lg)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px', flexWrap: 'wrap' }}>
                                 <span>{t('logTotal')} <strong>{verifyLog.length}</strong> {t('logEntries')}</span>
                                 <span>|</span>
+                                {verifyLog.filter(r => r.status === 'processing').length > 0 && (
+                                    <span style={{ color: '#f59e0b', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'processing').length} 处理中</span>
+                                )}
                                 <span style={{ color: '#16a34a', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'pass').length} {t('logSuccess')}</span>
                                 <span style={{ color: '#dc2626', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'failed').length} {t('logFailed')}</span>
                             </div>
@@ -1852,9 +1929,15 @@ export default function Admin() {
                                 {verifyLog.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '24px' }}>{t('logNoRecords')}</div>}
                                 {verifyLog.map(r => {
                                     const isPass = r.status === 'pass';
+                                    const isProcessing = r.status === 'processing';
                                     const vid = r.verificationId || '';
                                     const shortVid = vid.length > 20 ? `${vid.slice(0, 8)}...${vid.slice(-8)}` : vid;
                                     const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
+                                    const bgColor = isProcessing ? 'rgba(245, 158, 11, 0.06)' : isPass ? 'rgba(22, 163, 74, 0.06)' : 'rgba(220, 38, 38, 0.06)';
+                                    const borderColor = isProcessing ? 'rgba(245, 158, 11, 0.15)' : isPass ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)';
+                                    const iconBg = isProcessing ? '#f59e0b' : isPass ? '#16a34a' : '#dc2626';
+                                    const icon = isProcessing ? '◎' : isPass ? '✓' : '✕';
+                                    const msgColor = isProcessing ? '#f59e0b' : isPass ? '#16a34a' : '#dc2626';
                                     return (
                                         <div key={r.id} style={{
                                             display: 'flex',
@@ -1862,18 +1945,27 @@ export default function Admin() {
                                             gap: '14px',
                                             padding: '14px 18px',
                                             borderRadius: '10px',
-                                            background: isPass ? 'rgba(22, 163, 74, 0.06)' : 'rgba(220, 38, 38, 0.06)',
-                                            border: `1px solid ${isPass ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)'}`,
+                                            background: bgColor,
+                                            border: `1px solid ${borderColor}`,
                                         }}>
                                             <div style={{
                                                 width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                                                background: isPass ? '#16a34a' : '#dc2626',
+                                                background: iconBg,
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px'
-                                            }}>{isPass ? '✓' : '✕'}</div>
+                                                color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px',
+                                                ...(isProcessing ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
+                                            }}>{icon}</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>VID: {shortVid}</div>
-                                                {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: isPass ? '#16a34a' : '#dc2626', marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>VID: {shortVid}</span>
+                                                    {isProcessing && (
+                                                        <span style={{
+                                                            fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
+                                                            background: '#f59e0b', color: '#fff', fontWeight: 600,
+                                                        }}>处理中</span>
+                                                    )}
+                                                </div>
+                                                {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <span>{ts}</span>
                                                     {r.cdk && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.cdk}</span>}

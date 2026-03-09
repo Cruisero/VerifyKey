@@ -109,8 +109,9 @@ class GenericSingleBotVerifier:
             send_format = self.config.get("sendFormat", "{link}")
             outbound_msg = send_format.replace("{link}", link)
 
-            # When concurrentPerAccount > 1, use VID matching to correlate responses
-            match_vid = vid if self._concurrent > 1 else None
+            # Always use VID matching to correlate responses — critical when
+            # multiple links are processed concurrently from the same account
+            match_vid = vid
             reply = await self._send_and_wait(client, bot, outbound_msg, wait_for_final=True, timeout=timeout, match_vid=match_vid)
 
             waiting_task.cancel()

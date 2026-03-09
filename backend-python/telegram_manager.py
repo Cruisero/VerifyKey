@@ -512,7 +512,7 @@ class TelegramAccountManager:
                     return
                 
                 text_upper = text.upper()
-                logger.debug(f"[TGNotif] Message from @{notif_channel}: {text[:80]}")
+                logger.info(f"[TGNotif] Message from @{notif_channel}: {text[:100]}")
                 
                 # Only process final verification results
                 if "VERIFICATION SUCCESSFUL" in text_upper or "SUCCESSFULLY VERIFIED" in text_upper:
@@ -526,7 +526,7 @@ class TelegramAccountManager:
             except Exception as e:
                 logger.warning(f"[TGNotif] Handler error: {e}")
 
-        client.add_event_handler(_on_notification, events.NewMessage(chats=channel_id))
+        client.add_event_handler(_on_notification, events.NewMessage(chats=entity))
         self._notif_registered = True
         logger.info(f"[TGManager] ✅ Registered notification listener for @{notif_channel} (id={channel_id}) on account {account_id}")
 

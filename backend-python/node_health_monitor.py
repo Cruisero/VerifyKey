@@ -267,9 +267,11 @@ class NodeHealthMonitor:
             
             account_id, client = result
 
-            # Send a fake link
-            fake_vid = str(uuid.uuid4())
-            fake_link = f"https://services.sheerid.com/verify/{fake_vid}/"
+            # Send a fake link (must match real SheerID format)
+            import secrets
+            fake_program_id = "67c8c14f5f17a83b745e3f82"  # use a real-looking program ID
+            fake_vid = secrets.token_hex(12)  # 24-char hex like real verificationId
+            fake_link = f"https://services.sheerid.com/verify/{fake_program_id}/?verificationId={fake_vid}"
 
             # Get bot username from config
             import config_manager

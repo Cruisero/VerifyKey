@@ -2402,6 +2402,10 @@ async def verify_unified(request: UnifiedVerifyRequest):
         import json
         import time as _time
 
+        # Track which VIDs have received final results (for safety-net in finally)
+        _completed_vids = set()
+        _all_vids = set(link_vid_map.values())
+
         cooldown_wait_lock = asyncio.Lock()
 
         # ---- Client getters for singlebot types (with local cooldown tracking) ----
@@ -2669,6 +2673,10 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 r = {"success": False, "status": "error", "message": f"验证出错: {str(exc)}"}
                 result = (acc_id, r)
 
+            # Mark this VID as completed
+            if vid:
+                _completed_vids.add(vid)
+
             # Emit per-link result event immediately (always, including errors)
             link_result_event = {
                 "type": "progress", "link": link, "vid": vid,
@@ -2683,96 +2691,121 @@ async def verify_unified(request: UnifiedVerifyRequest):
             broadcast_verify_event(link_result_event)
             return result
 
-        tasks = [asyncio.create_task(process_and_emit(link)) for link in clean_links]
+        try:
+            tasks = [asyncio.create_task(process_and_emit(link)) for link in clean_links]
 
-        while not all(t.done() for t in tasks):
+            while not all(t.done() for t in tasks):
+                while progress_events:
+                    yield progress_events.pop(0)
+                await asyncio.sleep(0.3)
+
             while progress_events:
                 yield progress_events.pop(0)
-            await asyncio.sleep(0.3)
 
-        while progress_events:
-            yield progress_events.pop(0)
+            # Collect results safely
+            paired_results = []
+            for t in tasks:
+                try:
+                    paired_results.append(t.result())
+                except Exception as e:
+                    import traceback
+                    logging.error(f"Unified task failed: {traceback.format_exc()}")
+                    paired_results.append((None, {"success": False, "status": "error", "message": f"系统内部异常: {str(e)}"}))
 
-        # Collect results safely
-        paired_results = []
-        for t in tasks:
-            try:
-                paired_results.append(t.result())
-            except Exception as e:
-                import traceback
-                logging.error(f"Unified task failed: {traceback.format_exc()}")
-                paired_results.append((None, {"success": False, "status": "error", "message": f"系统内部异常: {str(e)}"}))
+            results = []
+            for acc_id, r in paired_results:
+                results.append(r)
+                if acc_id and r.get("remaining_quota") is not None:
+                    tg_manager.update_quota(acc_id, r["remaining_quota"])
 
-        results = []
-        for acc_id, r in paired_results:
-            results.append(r)
-            if acc_id and r.get("remaining_quota") is not None:
-                tg_manager.update_quota(acc_id, r["remaining_quota"])
+            # Log and deduct CDK
+            successful = sum(1 for r in results if r.get("success") and not r.get("alreadyVerified"))
+            cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
+            if successful > 0 and not is_bot_internal:
+                deduct = cdk_manager.use_cdk(request.cdk, successful)
+                cdk_remaining = deduct.get("remaining", cdk_remaining)
 
-        # Log and deduct CDK
-        successful = sum(1 for r in results if r.get("success") and not r.get("alreadyVerified"))
-        cdk_remaining = cdk_check["remaining"] if not is_bot_internal else -1
-        if successful > 0 and not is_bot_internal:
-            deduct = cdk_manager.use_cdk(request.cdk, successful)
-            cdk_remaining = deduct.get("remaining", cdk_remaining)
+            cdk_label = request.cdk if not is_bot_internal else "BOT"
+            for r in results:
+                vid = r.get("verificationId", "")
+                msg = r.get("message", r.get("reason", ""))
+                via_label = r.get("botType", "bot")
+                if r.get("status") == "approved":
+                    verification_history.log_verification("pass", vid, msg, cdk=cdk_label, via=f"bot:{via_label}")
+                elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
+                    verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label, via=f"bot:{via_label}")
 
-        cdk_label = request.cdk if not is_bot_internal else "BOT"
-        for r in results:
-            vid = r.get("verificationId", "")
-            msg = r.get("message", r.get("reason", ""))
-            via_label = r.get("botType", "bot")
-            if r.get("status") == "approved":
-                verification_history.log_verification("pass", vid, msg, cdk=cdk_label, via=f"bot:{via_label}")
-            elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
-                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label, via=f"bot:{via_label}")
-
-        # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----
-        failed_vids = [r.get("verificationId") for r in results 
-                       if not r.get("success") and r.get("verificationId") 
-                       and r.get("status") in ("timeout", "error")
-                       and not r.get("alreadyVerified")]
-        
-        if failed_vids and not is_bot_internal:
-            async def _delayed_recheck(_vids, _cdk_code, _cdk_label):
-                await asyncio.sleep(120)  # Wait 2 minutes
-                import httpx
-                recheck_success = 0
-                for vid in _vids:
-                    try:
-                        async with httpx.AsyncClient(timeout=10) as http_client:
-                            resp = await http_client.get(f"https://services.sheerid.com/rest/v2/verification/{vid}")
-                            if resp.status_code == 200:
-                                step = resp.json().get("currentStep", "")
-                                if step == "success":
-                                    recheck_success += 1
-                                    logger.info(f"[DelayedRecheck] VID {vid[:12]} actually SUCCEEDED! Deducting CDK.")
-                                    verification_history.log_verification("pass", vid, "延迟复查：验证实际已通过", cdk=_cdk_label)
-                                    broadcast_verify_event({
-                                        "type": "recheck_success",
-                                        "vid": vid,
-                                        "message": "延迟复查发现验证已通过"
-                                    })
-                    except Exception as e:
-                        logger.warning(f"[DelayedRecheck] Error checking {vid[:12]}: {e}")
-                
-                if recheck_success > 0:
-                    deduct = cdk_manager.use_cdk(_cdk_code, recheck_success)
-                    logger.info(f"[DelayedRecheck] Deducted {recheck_success} CDK credits. Remaining: {deduct.get('remaining', '?')}")
+            # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----
+            failed_vids = [r.get("verificationId") for r in results 
+                           if not r.get("success") and r.get("verificationId") 
+                           and r.get("status") in ("timeout", "error")
+                           and not r.get("alreadyVerified")]
             
-            asyncio.create_task(_delayed_recheck(failed_vids, request.cdk, cdk_label))
+            if failed_vids and not is_bot_internal:
+                async def _delayed_recheck(_vids, _cdk_code, _cdk_label):
+                    await asyncio.sleep(120)  # Wait 2 minutes
+                    import httpx
+                    recheck_success = 0
+                    for vid in _vids:
+                        try:
+                            async with httpx.AsyncClient(timeout=10) as http_client:
+                                resp = await http_client.get(f"https://services.sheerid.com/rest/v2/verification/{vid}")
+                                if resp.status_code == 200:
+                                    step = resp.json().get("currentStep", "")
+                                    if step == "success":
+                                        recheck_success += 1
+                                        logger.info(f"[DelayedRecheck] VID {vid[:12]} actually SUCCEEDED! Deducting CDK.")
+                                        verification_history.log_verification("pass", vid, "延迟复查：验证实际已通过", cdk=_cdk_label)
+                                        broadcast_verify_event({
+                                            "type": "recheck_success",
+                                            "vid": vid,
+                                            "message": "延迟复查发现验证已通过"
+                                        })
+                        except Exception as e:
+                            logger.warning(f"[DelayedRecheck] Error checking {vid[:12]}: {e}")
+                    
+                    if recheck_success > 0:
+                        deduct = cdk_manager.use_cdk(_cdk_code, recheck_success)
+                        logger.info(f"[DelayedRecheck] Deducted {recheck_success} CDK credits. Remaining: {deduct.get('remaining', '?')}")
+                
+                asyncio.create_task(_delayed_recheck(failed_vids, request.cdk, cdk_label))
 
-        done_event = {
-            "type": "done",
-            "results": results,
-            "stats": {
-                "total": len(results),
-                "approved": successful,
-                "failed": sum(1 for r in results if not r.get("success"))
-            },
-            "cdkRemaining": cdk_remaining
-        }
-        broadcast_verify_event(done_event)
-        yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
+            done_event = {
+                "type": "done",
+                "results": results,
+                "stats": {
+                    "total": len(results),
+                    "approved": successful,
+                    "failed": sum(1 for r in results if not r.get("success"))
+                },
+                "cdkRemaining": cdk_remaining
+            }
+            broadcast_verify_event(done_event)
+            yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
+
+        except Exception as gen_err:
+            logging.error(f"[Unified] event_stream generator crashed: {gen_err}")
+            raise
+        finally:
+            # ---- Safety net: broadcast failure for any VIDs that got 'submitted' but never got a result ----
+            orphaned_vids = _all_vids - _completed_vids
+            if orphaned_vids:
+                logging.warning(f"[Unified] Safety net: {len(orphaned_vids)} orphaned VIDs, broadcasting failure events")
+                for vid in orphaned_vids:
+                    fail_event = {
+                        "type": "progress", "vid": vid,
+                        "step": "result",
+                        "success": False,
+                        "status": "error",
+                        "message": "验证异常终止",
+                    }
+                    broadcast_verify_event(fail_event)
+                # Also broadcast a done event for orphaned VIDs
+                broadcast_verify_event({
+                    "type": "done",
+                    "results": [{"verificationId": vid, "success": False, "status": "error", "message": "验证异常终止"} for vid in orphaned_vids],
+                    "stats": {"total": len(orphaned_vids), "approved": 0, "failed": len(orphaned_vids)}
+                })
 
     return StreamingResponse(
         event_stream(),

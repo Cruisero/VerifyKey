@@ -270,7 +270,15 @@ class NodeHealthMonitor:
             # Send a fake link
             fake_vid = str(uuid.uuid4())
             fake_link = f"https://services.sheerid.com/verify/{fake_vid}/"
-            bot_username = "Black_Verifier"
+
+            # Get bot username from config
+            import config_manager
+            cfg = config_manager.get_config()
+            bot_username = "black_verifier_bot"  # default
+            for bot in cfg.get("verification", {}).get("singleBots", []):
+                if bot.get("id") == "blackbot":
+                    bot_username = bot.get("username", "@black_verifier_bot").lstrip("@")
+                    break
 
             logger.info("[NodeHealth] BlackBot health check: sending fake link...")
 

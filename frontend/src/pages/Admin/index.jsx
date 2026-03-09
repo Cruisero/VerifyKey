@@ -1260,9 +1260,7 @@ export default function Admin() {
             (async () => {
                 try {
                     const token = user?.token || localStorage.getItem('verifykey-token');
-                    const res = await fetch(`${API_BASE}/api/admin/verify-history`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const res = await fetch(`${API_BASE}/api/verify/history`);
                     if (res.ok) {
                         const data = await res.json();
                         setHistoryData(data.history || []);

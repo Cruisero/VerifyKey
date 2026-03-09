@@ -4735,10 +4735,11 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                     else:
                         # SingleBot client retrieval
                         accounts = _cfg.get("telegramAccounts", [])
+                        all_clients = tg_manager.get_all_clients()
                         for acc in accounts:
                             if bot_type in acc.get("assignedBots", []) and acc.get("enabled"):
-                                ci = tg_manager.get_client(acc["id"])
-                                if ci:
+                                ci = all_clients.get(acc["id"])
+                                if ci and ci.is_connected():
                                     pool_item = (acc["id"], ci)
                                     break
 
@@ -4810,9 +4811,21 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             yield progress_events.pop(0)
 
         if getgem_task:
-            all_results.extend(await getgem_task)
+            try:
+                all_results.extend(await getgem_task)
+            except Exception as e:
+                logging.error(f"[MixedMode] GetGem task crashed: {e}")
+                for vid in getgem_vids:
+                    all_results.append({"verificationId": vid, "status": "error", "success": False, "message": f"GetGem 错误: {str(e)}", "via": "getgem"})
+                    broadcast_verify_event({"type": "progress", "vid": vid, "step": "result", "success": False, "status": "error", "message": f"GetGem 错误: {str(e)}"})
         if bot_task:
-            all_results.extend(await bot_task)
+            try:
+                all_results.extend(await bot_task)
+            except Exception as e:
+                logging.error(f"[MixedMode] Bot task crashed: {e}")
+                for vid in bot_vids:
+                    all_results.append({"verificationId": vid, "status": "error", "success": False, "message": f"Bot 错误: {str(e)}", "via": "bot"})
+                    broadcast_verify_event({"type": "progress", "vid": vid, "step": "result", "success": False, "status": "error", "message": f"Bot 错误: {str(e)}"})
 
         # ---- Fallback: retry failed items with the other node ----
         if fallback_enabled:

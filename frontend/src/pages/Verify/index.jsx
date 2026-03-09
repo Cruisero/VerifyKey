@@ -261,6 +261,37 @@ export default function Verify() {
                             const event = JSON.parse(line.slice(6));
 
                             if (event.type === 'progress') {
+                                // Handle per-link result event (immediate update)
+                                if (event.step === 'result') {
+                                    setResults(prev => prev.map(r => {
+                                        const matchVid = r.verificationId === event.vid || r.fullLink === event.link;
+                                        if (!matchVid) return r;
+
+                                        let status = 'failed';
+                                        let message = event.message;
+
+                                        // Use translated messageKey if available
+                                        if (event.messageKey && t(event.messageKey) !== event.messageKey) {
+                                            message = t(event.messageKey);
+                                            if (event.failureReasonKey) {
+                                                message = message.replace('{reason}', t(event.failureReasonKey));
+                                            }
+                                        }
+
+                                        if (event.status === 'approved') {
+                                            status = 'success';
+                                            if (!message) message = t('msgApproved');
+                                            setLastSuccess(new Date().toISOString());
+                                            fetchHistory();
+                                        } else if (event.success) {
+                                            status = 'success';
+                                        }
+
+                                        return { ...r, status, message, claimLink: event.claimLink || r.claimLink };
+                                    }));
+                                    return;
+                                }
+
                                 // Update the specific link's progress message
                                 const stepMessages = {
                                     warmup: t('stepWarmup'),

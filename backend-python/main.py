@@ -2469,7 +2469,27 @@ async def verify_unified(request: UnifiedVerifyRequest):
               return None, result
 
         progress_events = []
-        tasks = [asyncio.create_task(process_single_link(link)) for link in clean_links]
+
+        async def process_and_emit(link):
+            """Wrapper: run process_single_link and emit per-link result immediately."""
+            result = await process_single_link(link)
+            acc_id, r = result if result else (None, {"success": False, "status": "error", "message": "系统内部异常"})
+            vid = link_vid_map.get(link, "")
+            # Emit per-link result event immediately
+            link_result_event = {
+                "type": "progress", "link": link, "vid": vid,
+                "step": "result",
+                "success": r.get("success", False),
+                "status": r.get("status", "error"),
+                "message": r.get("message", ""),
+                "messageKey": r.get("messageKey", ""),
+                "claimLink": r.get("claimLink"),
+            }
+            progress_events.append(f"data: {json.dumps(link_result_event, ensure_ascii=False)}\n\n")
+            broadcast_verify_event(link_result_event)
+            return result
+
+        tasks = [asyncio.create_task(process_and_emit(link)) for link in clean_links]
 
         while not all(t.done() for t in tasks):
             while progress_events:

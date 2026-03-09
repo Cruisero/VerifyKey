@@ -2351,9 +2351,18 @@ async def verify_unified(request: UnifiedVerifyRequest):
                     pool_item = _get_next_client_for_bot(bot_type)
 
                     if not pool_item:
+                        # If there are more bots in the waterfall, skip immediately
+                        # Only wait for cooldown on the LAST bot
+                        is_last_bot = (bot_idx >= len(sorted_bots) - 1)
+                        
+                        if not is_last_bot:
+                            logger.info(f"[Waterfall:{bot_type}] No accounts available, skipping to next bot...")
+                            break  # break inner retry loop → continue to next bot
+                        
+                        # Last bot: wait for cooldown
                         wait_time = _get_shortest_cooldown_for_bot(bot_type)
                         if wait_time > 0:
-                            logger.info(f"[Waterfall:{bot_type}] All accounts in cooldown, waiting {wait_time:.0f}s...")
+                            logger.info(f"[Waterfall:{bot_type}] Last bot, waiting {wait_time:.0f}s for cooldown...")
                             on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
                                              "step": "cooldown_wait", "message": f"排队中..."}
                             progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
@@ -2367,7 +2376,6 @@ async def verify_unified(request: UnifiedVerifyRequest):
                                     pool_item = _get_next_client_for_bot(bot_type)
 
                         if not pool_item:
-                            # This bot has no available accounts, try next bot
                             logger.info(f"[Waterfall:{bot_type}] No accounts available, trying next bot...")
                             break
 

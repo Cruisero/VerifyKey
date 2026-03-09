@@ -3890,10 +3890,10 @@ export default function Admin() {
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Message + Keys */}
+                                                                        {/* Message (Chinese) + InterMsg (International) */}
                                                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
                                                                             <div>
-                                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息 (message)</label>
+                                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息 (message) - 中文</label>
                                                                                 <input type="text" className="input"
                                                                                     value={rule.message || ''}
                                                                                     onChange={e => setConfig(prev => {
@@ -3903,44 +3903,26 @@ export default function Admin() {
                                                                                         dualBot.responseRules = newRules;
                                                                                         return { ...prev, verification: { ...prev.verification, dualBot } };
                                                                                     })}
+                                                                                    placeholder="验证成功 / 文档可能失效..."
                                                                                     style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
                                                                                 />
                                                                             </div>
                                                                             <div>
-                                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息Key (messageKey)</label>
+                                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>国际消息 (interMsg) - English</label>
                                                                                 <input type="text" className="input"
-                                                                                    value={rule.messageKey || ''}
+                                                                                    value={rule.interMsg || ''}
                                                                                     onChange={e => setConfig(prev => {
                                                                                         const dualBot = { ...(prev.verification?.dualBot || {}) };
                                                                                         const newRules = [...(dualBot.responseRules || [])];
-                                                                                        newRules[ri] = { ...newRules[ri], messageKey: e.target.value };
+                                                                                        newRules[ri] = { ...newRules[ri], interMsg: e.target.value };
                                                                                         dualBot.responseRules = newRules;
                                                                                         return { ...prev, verification: { ...prev.verification, dualBot } };
                                                                                     })}
-                                                                                    placeholder="msgApproved"
-                                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                                    placeholder="Verified successfully / Doc may be invalid..."
+                                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
                                                                                 />
                                                                             </div>
                                                                         </div>
-
-                                                                        {/* Failure Reason Key */}
-                                                                        {!rule.success && (
-                                                                            <div>
-                                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>失败原因Key (failureReasonKey)</label>
-                                                                                <input type="text" className="input"
-                                                                                    value={rule.failureReasonKey || ''}
-                                                                                    onChange={e => setConfig(prev => {
-                                                                                        const dualBot = { ...(prev.verification?.dualBot || {}) };
-                                                                                        const newRules = [...(dualBot.responseRules || [])];
-                                                                                        newRules[ri] = { ...newRules[ri], failureReasonKey: e.target.value };
-                                                                                        dualBot.responseRules = newRules;
-                                                                                        return { ...prev, verification: { ...prev.verification, dualBot } };
-                                                                                    })}
-                                                                                    placeholder="reasonFraud / reasonFailed / reasonDocRejected"
-                                                                                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
-                                                                                />
-                                                                            </div>
-                                                                        )}
                                                                     </div>
                                                                 ))}
 
@@ -4574,10 +4556,10 @@ export default function Admin() {
                                                                                         </div>
                                                                                     </div>
 
-                                                                                    {/* Message + Keys */}
+                                                                                    {/* Message (Chinese) + InterMsg (International) */}
                                                                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
                                                                                         <div>
-                                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息 (message)</label>
+                                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息 (message) - 中文</label>
                                                                                             <input type="text" className="input"
                                                                                                 value={rule.message || ''}
                                                                                                 onChange={e => setConfig(prev => {
@@ -4587,44 +4569,26 @@ export default function Admin() {
                                                                                                     newBots[idx] = { ...newBots[idx], responseRules: newRules };
                                                                                                     return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
                                                                                                 })}
+                                                                                                placeholder="验证成功 / 文档可能失效..."
                                                                                                 style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
                                                                                             />
                                                                                         </div>
                                                                                         <div>
-                                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>消息Key (messageKey)</label>
+                                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>国际消息 (interMsg) - English</label>
                                                                                             <input type="text" className="input"
-                                                                                                value={rule.messageKey || ''}
+                                                                                                value={rule.interMsg || ''}
                                                                                                 onChange={e => setConfig(prev => {
                                                                                                     const newBots = [...(prev.verification?.singleBots || [])];
                                                                                                     const newRules = [...(newBots[idx].responseRules || [])];
-                                                                                                    newRules[ri] = { ...newRules[ri], messageKey: e.target.value };
+                                                                                                    newRules[ri] = { ...newRules[ri], interMsg: e.target.value };
                                                                                                     newBots[idx] = { ...newBots[idx], responseRules: newRules };
                                                                                                     return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
                                                                                                 })}
-                                                                                                placeholder="msgApproved"
-                                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                                                placeholder="Verified successfully / Doc may be invalid..."
+                                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
                                                                                             />
                                                                                         </div>
                                                                                     </div>
-
-                                                                                    {/* Failure Reason Key (only for non-success) */}
-                                                                                    {!rule.success && (
-                                                                                        <div>
-                                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>失败原因Key (failureReasonKey)</label>
-                                                                                            <input type="text" className="input"
-                                                                                                value={rule.failureReasonKey || ''}
-                                                                                                onChange={e => setConfig(prev => {
-                                                                                                    const newBots = [...(prev.verification?.singleBots || [])];
-                                                                                                    const newRules = [...(newBots[idx].responseRules || [])];
-                                                                                                    newRules[ri] = { ...newRules[ri], failureReasonKey: e.target.value };
-                                                                                                    newBots[idx] = { ...newBots[idx], responseRules: newRules };
-                                                                                                    return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
-                                                                                                })}
-                                                                                                placeholder="reasonFraud / reasonFailed / reasonDocRejected"
-                                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
-                                                                                            />
-                                                                                        </div>
-                                                                                    )}
                                                                                 </div>
                                                                             ))}
 

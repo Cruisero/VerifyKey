@@ -333,10 +333,8 @@ class GenericSingleBotVerifier:
                 result["success"] = rule.get("success", False)
                 result["status"] = rule.get("status", "failed")
                 result["message"] = rule.get("message", "Rule matched")
-                if "failureReasonKey" in rule:
-                    result["failureReasonKey"] = rule["failureReasonKey"]
-                if "messageKey" in rule:
-                    result["messageKey"] = rule["messageKey"]
+                if "interMsg" in rule:
+                    result["interMsg"] = rule["interMsg"]
                 return result
 
         # 2. Config: Processing Keywords (check BEFORE cooldown to avoid false positives)
@@ -373,8 +371,7 @@ class GenericSingleBotVerifier:
         result["success"] = False
         result["status"] = "failed"
         result["message"] = f"请求失败: {text[:60]}..."
-        result["messageKey"] = "msgRequestFailed"
-        result["failureReasonKey"] = "reasonFailed"
+        result["interMsg"] = f"Request failed: {text[:60]}..."
         return result
 
     # ---- Bypass (reuse logic) ----

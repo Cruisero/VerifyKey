@@ -2442,16 +2442,12 @@ async def verify_unified(request: UnifiedVerifyRequest):
 
                     # ---- Check suspension rules BEFORE returning result ----
                     suspension_rules = bot_config.get("suspensionRules", [])
-                    result_msg_key = result.get("messageKey", "")
                     result_raw = result.get("raw_response", result.get("message", ""))
                     for srule in suspension_rules:
-                        srule_keywords = [k.lower() for k in srule.get("keywords", [])]
                         suspend_seconds = srule.get("duration", 300)
-                        # Match against messageKey or raw_response
+                        # Match against message or raw_response
                         should_suspend = False
-                        if result_msg_key and any(k.lower() == result_msg_key.lower() for k in srule.get("keywords", [])):
-                            should_suspend = True
-                        elif result_raw and any(k.lower() in result_raw.lower() for k in srule.get("keywords", [])):
+                        if result_raw and any(k.lower() in result_raw.lower() for k in srule.get("keywords", [])):
                             should_suspend = True
                         
                         if should_suspend:
@@ -2527,7 +2523,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 "success": r.get("success", False),
                 "status": r.get("status", "error"),
                 "message": r.get("message", ""),
-                "messageKey": r.get("messageKey", ""),
+                "interMsg": r.get("interMsg", ""),
                 "claimLink": r.get("claimLink"),
             }
             progress_events.append(f"data: {json.dumps(link_result_event, ensure_ascii=False)}\n\n")
@@ -3993,8 +3989,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                             "success": False,
                             "message": msg,
                             "reason": submit_data.get("reason"),
-                            "messageKey": submit_data.get("messageKey"),
-                            "failureReasonKey": submit_data.get("failureReasonKey")
+                            "interMsg": submit_data.get("interMsg")
                         })
                         continue
 

@@ -82,20 +82,20 @@ class DualBotVerifier:
                             return {
                                 "success": False, "status": "failed", "verificationId": vid,
                                 "message": f"该链接已失败 ({', '.join(error_ids) if error_ids else '未知错误'})，请刷新页面获取新链接",
-                                "messageKey": "msgLinkFailed"
+                                "interMsg": f"Link has failed ({', '.join(error_ids) if error_ids else 'unknown error'}), please refresh to get a new link"
                             }
                         if initial_step == "success":
                             return {
                                 "success": True, "status": "approved", "verificationId": vid,
                                 "message": "该链接已验证成功",
-                                "messageKey": "msgAlreadyVerified",
+                                "interMsg": "This link has already been verified",
                                 "alreadyVerified": True
                             }
                         if initial_step == "docUpload" and rejection_reasons:
                             return {
                                 "success": False, "status": "failed", "verificationId": vid,
                                 "message": f"该链接已被拒绝 ({', '.join(rejection_reasons)})，请刷新页面获取新链接",
-                                "messageKey": "msgLinkRejected"
+                                "interMsg": f"Link rejected ({', '.join(rejection_reasons)}), please refresh to get a new link"
                             }
             except Exception as e:
                 logger.warning(f"[DualBot] [{account_id}] Pre-check failed: {e}")
@@ -112,7 +112,7 @@ class DualBotVerifier:
                     "status": "warmup_timeout",
                     "verificationId": vid,
                     "message": f"文档生成超时，请重试",
-                    "messageKey": "msgWarmupTimeout"
+                    "interMsg": "Document generation timed out, please retry"
                 }
 
             logger.info(f"[DualBot] [{account_id}] Warmup response: {warmup_result[:100]}...")
@@ -127,7 +127,7 @@ class DualBotVerifier:
                     warmup_parsed["cooldown_stage"] = "warmup"
                 else:
                     warmup_parsed["message"] = f"文档生成失败: {warmup_parsed['message']}"
-                    warmup_parsed["messageKey"] = "msgWarmupFailed"
+                    warmup_parsed["interMsg"] = f"Document generation failed: {warmup_parsed.get('interMsg', warmup_parsed['message'])}"
                 return warmup_parsed
 
             logger.info(f"[DualBot] [{account_id}] Warmup stage SUCCEEDED. Proceeding to Step 2...")
@@ -154,7 +154,7 @@ class DualBotVerifier:
                     "status": "timeout",
                     "verificationId": vid,
                     "message": f"验证超时，请重试",
-                    "messageKey": "msgVerifyTimeout"
+                    "interMsg": "Verification timed out, please retry"
                 }
 
             # Parse result
@@ -179,7 +179,7 @@ class DualBotVerifier:
                                 parsed["success"] = True
                                 parsed["status"] = "approved"
                                 parsed["message"] = "验证通过"
-                                parsed["messageKey"] = "msgApproved"
+                                parsed["interMsg"] = "Verification approved"
                 except Exception as e:
                     logger.warning(f"[DualBot] [{account_id}] Race check failed: {e}")
 
@@ -187,15 +187,9 @@ class DualBotVerifier:
             # Skip bypass if bot quota exhausted (nothing to bypass on SheerID side)
             skip_bypass = "程序崩溃" in parsed.get("message", "")
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
-                # Build message with specific failure reason
-                reason_key = parsed.get("failureReasonKey", "reasonFailed")
-                reason_zh = {"reasonFraud": "检测到欺诈", "reasonDocRejected": "文档被拒绝", "reasonFailed": "验证失败"}
-                reason = reason_zh.get(reason_key, "验证失败")
-                
-                parsed["message"] = f"{reason}，链接正在刷新中..."
-                parsed["messageKey"] = "msgBypassStarted"
+                parsed["message"] = f"验证失败，链接正在刷新中..."
+                parsed["interMsg"] = "Verification failed, refreshing link..."
                 parsed["bypassed"] = "started"
-                parsed["failureReasonKey"] = reason_key
                 
                 # Fire-and-forget bypass (runs in background, doesn't block account)
                 async def _bg_bypass(_vid, _acc_id, _emit):
@@ -408,7 +402,7 @@ class DualBotVerifier:
             result["success"] = False
             result["status"] = "cooldown"
             result["message"] = "程序崩溃，请重试"
-            result["messageKey"] = "msgCrashed"
+            result["interMsg"] = "Program crashed, please retry"
             result["cooldown_seconds"] = total_seconds
             logger.info(f"[DualBot] Cooldown: {total_seconds}s")
             return result
@@ -426,10 +420,8 @@ class DualBotVerifier:
                     result["success"] = rule.get("success", False)
                     result["status"] = rule.get("status", "failed")
                     result["message"] = rule.get("message", "Rule matched")
-                    if "messageKey" in rule:
-                        result["messageKey"] = rule["messageKey"]
-                    if "failureReasonKey" in rule:
-                        result["failureReasonKey"] = rule["failureReasonKey"]
+                    if "interMsg" in rule:
+                        result["interMsg"] = rule["interMsg"]
 
                     # Extract quota from result messages
                     quota_config = self.config.get("quota", {})
@@ -457,8 +449,7 @@ class DualBotVerifier:
         result["success"] = False
         result["status"] = "failed"
         result["message"] = f"请求失败: {text[:50]}..."
-        result["messageKey"] = "msgRequestFailed"
-        result["failureReasonKey"] = "reasonFailed"
+        result["interMsg"] = f"Request failed: {text[:50]}..."
         return result
 
     # ---- Bypass (submit empty doc to invalidate link) ----

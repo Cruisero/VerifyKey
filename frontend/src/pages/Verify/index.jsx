@@ -33,7 +33,7 @@ export default function Verify() {
     const [cdkQuota, setCdkQuota] = useState(0);
     const [cdkChecking, setCdkChecking] = useState(false);
 
-    const { t } = useLang();
+    const { t, lang } = useLang();
 
     const programs = [
         { value: 'gemini', label: 'Gemini' },
@@ -268,15 +268,7 @@ export default function Verify() {
                                         if (!matchVid) return r;
 
                                         let status = 'failed';
-                                        let message = event.message;
-
-                                        // Use translated messageKey if available
-                                        if (event.messageKey && t(event.messageKey) !== event.messageKey) {
-                                            message = t(event.messageKey);
-                                            if (event.failureReasonKey) {
-                                                message = message.replace('{reason}', t(event.failureReasonKey));
-                                            }
-                                        }
+                                        let message = (lang === 'en' && event.interMsg) ? event.interMsg : (event.message || '');
 
                                         if (event.status === 'approved') {
                                             status = 'success';
@@ -318,15 +310,8 @@ export default function Verify() {
                                         );
                                         if (resultItem) {
                                             let status = 'failed';
-                                            // Prefer translated messageKey over raw backend message
                                             const resolveMsg = (fallbackKey) => {
-                                                if (result.messageKey) {
-                                                    let msg = t(result.messageKey);
-                                                    if (result.failureReasonKey) {
-                                                        msg = msg.replace('{reason}', t(result.failureReasonKey));
-                                                    }
-                                                    return msg;
-                                                }
+                                                if (lang === 'en' && result.interMsg) return result.interMsg;
                                                 return result.message || t(fallbackKey);
                                             };
                                             let message = resolveMsg('msgError');
@@ -386,13 +371,7 @@ export default function Verify() {
                         if (resultItem) {
                             let status = 'failed';
                             const resolveMsg = (fallbackKey) => {
-                                if (result.messageKey) {
-                                    let msg = t(result.messageKey);
-                                    if (result.failureReasonKey) {
-                                        msg = msg.replace('{reason}', t(result.failureReasonKey));
-                                    }
-                                    return msg;
-                                }
+                                if (lang === 'en' && result.interMsg) return result.interMsg;
                                 return result.message || t(fallbackKey);
                             };
                             let message = resolveMsg('msgError');
@@ -504,13 +483,7 @@ export default function Verify() {
                                     if (resultItem) {
                                         let status = 'failed';
                                         const resolveMsg = (fallbackKey) => {
-                                            if (result.messageKey) {
-                                                let msg = t(result.messageKey);
-                                                if (result.failureReasonKey) {
-                                                    msg = msg.replace('{reason}', t(result.failureReasonKey));
-                                                }
-                                                return msg;
-                                            }
+                                            if (lang === 'en' && result.interMsg) return result.interMsg;
                                             return result.message || t(fallbackKey);
                                         };
                                         let message = resolveMsg('msgError');

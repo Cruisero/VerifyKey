@@ -149,6 +149,7 @@ export default function Verify() {
 
     const isTelegramMode = provider === 'telegram';
     const isGetgemMode = provider === 'getgem';
+    const isMixedMode = provider === 'mixed';
 
     // 提取输入内容（链接或ID）— 过滤无效行
     const extractItems = (text) => {
@@ -159,7 +160,7 @@ export default function Verify() {
                 // Telegram mode: only accept SheerID verification links
                 return line.includes('sheerid.com/verify') || line.includes('verificationId=');
             } else {
-                // API mode: accept URLs with verificationId or plain hex IDs (24+ chars)
+                // API/GetGem/Mixed mode: accept URLs with verificationId or plain hex IDs (24+ chars)
                 return line.includes('verificationId=') || /^[a-f0-9]{24,}$/i.test(line);
             }
         });
@@ -200,7 +201,10 @@ export default function Verify() {
             await handleTelegramVerify(items);
         } else if (isGetgemMode) {
             console.log("[DEBUG] Routing to GetGem Verify");
-            await handleGetgemVerify(items);
+            await handleGetgemVerify(items, '/api/verify/getgem');
+        } else if (isMixedMode) {
+            console.log("[DEBUG] Routing to Mixed Mode Verify");
+            await handleGetgemVerify(items, '/api/verify/mixed');
         } else {
             console.log("[DEBUG] Routing to Legacy API Verify");
             await handleApiVerify(items);
@@ -414,8 +418,8 @@ export default function Verify() {
         }
     };
 
-    // GetGem API 验证 (SSE streaming, same as DualBot)
-    const handleGetgemVerify = async (items) => {
+    // GetGem / Mixed Mode API 验证 (SSE streaming)
+    const handleGetgemVerify = async (items, endpoint = '/api/verify/getgem') => {
         // Extract verificationIds from URLs or plain IDs
         const verificationIds = items.map(item => {
             const urlMatch = item.match(/verificationId=([a-zA-Z0-9-]+)/);
@@ -432,7 +436,7 @@ export default function Verify() {
         setResults(prev => [...resultItems, ...prev]);
 
         try {
-            const response = await fetch(`${API_BASE}/api/verify/getgem`, {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ verificationIds, cdk: cdkCode })
@@ -461,19 +465,21 @@ export default function Verify() {
                         const event = JSON.parse(line.slice(6));
 
                         if (event.type === 'progress') {
+                            const viaTag = event.via ? `[${event.via}] ` : '';
                             const stepMessages = {
                                 warmup: t('stepWarmup'),
                                 verify: t('stepVerify'),
                                 waiting: t('stepWaiting'),
                                 failed: t('stepFailed'),
                                 bypass: t('stepBypass'),
+                                fallback: '🔄 切换备用节点...',
                             };
-                            const progressMsg = stepMessages[event.step] || event.message;
+                            const progressMsg = viaTag + (stepMessages[event.step] || event.message);
 
                             setResults(prev => prev.map(r => {
                                 const matchVid = r.verificationId === event.vid;
                                 return matchVid && r.status === 'processing'
-                                    ? { ...r, message: progressMsg }
+                                    ? { ...r, message: progressMsg, via: event.via }
                                     : r;
                             }));
                         } else if (event.type === 'done') {
@@ -501,7 +507,7 @@ export default function Verify() {
                                         }
                                         setResults(prev => prev.map(r =>
                                             r.id === resultItem.id
-                                                ? { ...r, status, message, verificationId: result.verificationId, redirectUrl: result.redirectUrl }
+                                                ? { ...r, status, message, verificationId: result.verificationId, redirectUrl: result.redirectUrl, via: result.via }
                                                 : r
                                         ));
                                     }
@@ -839,7 +845,18 @@ export default function Verify() {
                                                 {result.status === 'failed' && <span className="status-icon failed">✕</span>}
                                             </div>
                                             <div className="result-info">
-                                                <span className="result-id">{result.verificationId}</span>
+                                                <span className="result-id">
+                                                    {result.verificationId}
+                                                    {result.via && (
+                                                        <span style={{
+                                                            fontSize: '10px', padding: '1px 6px', borderRadius: '4px', marginLeft: '6px',
+                                                            background: result.via.includes('getgem') ? '#6366F1' : result.via.includes('fallback') ? '#f59e0b' : '#0088cc',
+                                                            color: 'white', fontWeight: 500, verticalAlign: 'middle'
+                                                        }}>
+                                                            {result.via.includes('fallback') ? '🔄 ' : ''}{result.via.replace('fallback:', '').replace('bot:', '')}
+                                                        </span>
+                                                    )}
+                                                </span>
                                                 <span className="result-message">{(result.message || t('resultProcessing')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, '')}</span>
                                             </div>
                                             <span className="result-time">{formatTime(result.timestamp)}</span>

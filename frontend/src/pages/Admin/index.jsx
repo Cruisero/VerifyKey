@@ -115,6 +115,7 @@ function TelegramBotTab() {
                             status: entryStatus,
                             message: data.message || '',
                             vid: data.vid || '',
+                            via: data.via || data.botType || '',
                             timestamp: new Date().toISOString()
                         };
 
@@ -1002,6 +1003,14 @@ export default function Admin() {
 
     // AI Generator form state
     const [aiProvider, setAiProvider] = useState('gemini');
+    const [routingStrategy, setRoutingStrategy] = useState({
+        mode: 'mixed',
+        allocation: { getgem: 50, bot: 50 },
+        fallbackEnabled: true,
+        fallbackErrors: ['timeout', 'internalError', 'rateLimited', 'cooldown', 'error'],
+        autoDegradeThreshold: 30
+    });
+    const [routingStats, setRoutingStats] = useState(null);
     const [batchApiSettings, setBatchApiSettings] = useState({
         apiUrl: 'https://batch.1key.me/api/batch',
         apiKey: ''
@@ -1136,10 +1145,13 @@ export default function Admin() {
                     const logData = await logRes.json();
                     const all = (logData.history || []).filter(r => r.verificationId?.trim() && !r.verificationId.startsWith('auto-'));
                     const apiLog = all.slice(-50).reverse();
-                    // Merge: preserve SSE "processing" entries that aren't in API data yet
+                    // Merge: preserve SSE-originated entries that aren't in API data yet
                     setVerifyLog(prev => {
-                        const sseProcessing = prev.filter(e => (e.status === 'processing' || e.status === 'submitted') && !apiLog.some(a => a.verificationId === e.verificationId));
-                        return sseProcessing.length > 0 ? [...sseProcessing, ...apiLog].slice(0, 300) : apiLog;
+                        const sseOnly = prev.filter(e =>
+                            typeof e.id === 'string' && e.id.startsWith('sse-') &&
+                            !apiLog.some(a => a.verificationId === e.verificationId)
+                        );
+                        return sseOnly.length > 0 ? [...sseOnly, ...apiLog].slice(0, 300) : apiLog;
                     });
                 }
             } catch (e) { console.error('Failed to fetch site data:', e); }
@@ -1163,13 +1175,22 @@ export default function Admin() {
                 if (data.type === 'progress') {
                     const vid = data.vid || '';
                     if (!vid) return;
+
+                    // Determine status: per-link result events carry final status
+                    let entryStatus = 'processing';
+                    if (data.step === 'result') {
+                        entryStatus = data.success ? 'pass' : 'failed';
+                    } else if (data.step === 'submitted') {
+                        entryStatus = 'processing';
+                    }
+
                     setVerifyLog(prev => {
                         const existingIdx = prev.findIndex(l => l.verificationId === vid);
                         const newEntry = {
                             id: existingIdx >= 0 ? prev[existingIdx].id : `sse-${Date.now()}-${Math.random()}`,
                             verificationId: vid,
-                            status: data.step === 'submitted' ? 'processing' : 'processing',
-                            message: data.message || '处理中...',
+                            status: entryStatus,
+                            message: data.message || (entryStatus === 'processing' ? '处理中...' : ''),
                             timestamp: new Date().toISOString(),
                             cdk: existingIdx >= 0 ? prev[existingIdx].cdk : '',
                         };
@@ -1195,6 +1216,7 @@ export default function Admin() {
                                     ...newLog[existingIdx],
                                     status,
                                     message: msg,
+                                    via: res.via || res.botType || newLog[existingIdx].via || '',
                                     timestamp: new Date().toISOString(),
                                 };
                             } else {
@@ -1203,6 +1225,7 @@ export default function Admin() {
                                     verificationId: vid,
                                     status,
                                     message: msg,
+                                    via: res.via || res.botType || '',
                                     timestamp: new Date().toISOString(),
                                     cdk: data.cdkRemaining != null ? '' : '',
                                 });
@@ -1543,6 +1566,15 @@ export default function Admin() {
                 const data = await res.json();
                 setConfig(data);
                 setAiProvider(data.aiGenerator?.provider || 'gemini');
+                if (data.aiGenerator?.routingStrategy) {
+                    setRoutingStrategy(prev => ({ ...prev, ...data.aiGenerator.routingStrategy }));
+                }
+                // Fetch routing stats if mixed mode
+                if (data.aiGenerator?.provider === 'mixed') {
+                    fetch(`${API_BASE}/api/routing/stats`).then(r => r.ok ? r.json() : null).then(stats => {
+                        if (stats) setRoutingStats(stats);
+                    }).catch(() => { });
+                }
                 if (data.aiGenerator?.batchApi) {
                     setBatchApiSettings(prev => ({
                         ...prev,
@@ -1718,11 +1750,12 @@ export default function Admin() {
                         apiKey: batchApiSettings.apiKey || undefined
                     },
                     getgem: {
-                        enabled: aiProvider === 'getgem',
+                        enabled: aiProvider === 'getgem' || aiProvider === 'mixed',
                         apiUrl: getgemSettings.apiUrl,
                         cdk: getgemSettings.cdk || undefined,
                         appendCdk: appendGetgemCdk
                     },
+                    routingStrategy: aiProvider === 'mixed' ? routingStrategy : undefined,
                     gemini: {
                         enabled: aiProvider === 'gemini' || aiProvider === 'puppeteer',
                         apiKey: geminiSettings.apiKey || undefined,
@@ -2007,6 +2040,15 @@ export default function Admin() {
                                                             background: '#f59e0b', color: '#fff', fontWeight: 600,
                                                         }}>处理中</span>
                                                     )}
+                                                    {r.via && (
+                                                        <span style={{
+                                                            fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
+                                                            background: r.via.includes('getgem') ? '#6366F1' : r.via.includes('fallback') ? '#f59e0b' : '#0088cc',
+                                                            color: '#fff', fontWeight: 500,
+                                                        }}>
+                                                            {r.via.includes('fallback') ? '🔄 ' : ''}{r.via}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -2203,6 +2245,25 @@ export default function Admin() {
                                             <span className="badge badge-warning">需配置</span>
                                         </div>
                                     </div>
+
+                                    <div
+                                        className={`provider-card ${aiProvider === 'mixed' ? 'active' : ''}`}
+                                        onClick={() => {
+                                            setAiProvider('mixed');
+                                            fetch(`${API_BASE}/api/routing/stats`).then(r => r.ok ? r.json() : null).then(stats => {
+                                                if (stats) setRoutingStats(stats);
+                                            }).catch(() => { });
+                                        }}
+                                    >
+                                        <div className="provider-icon">🔀</div>
+                                        <div className="provider-info">
+                                            <h4>混合模式</h4>
+                                            <p>API + Bot 统一调度，自动分配</p>
+                                        </div>
+                                        <div className="provider-status">
+                                            <span className="badge badge-info">新</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2324,8 +2385,133 @@ export default function Admin() {
                                 </div>
                             </div>
 
+                            {/* Mixed Mode Routing Config */}
+                            {aiProvider === 'mixed' && (
+                                <div className="provider-settings">
+                                    <h4>🔀 混合模式 路由策略</h4>
+                                    <div className="settings-form">
+                                        <div style={{
+                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                            color: 'white', padding: '16px 20px', borderRadius: '8px', marginBottom: '16px'
+                                        }}>
+                                            <p style={{ margin: 0, fontSize: '14px' }}>
+                                                <strong>混合模式</strong> 将 GetGem API 与 Telegram Bot 统一为一个验证池。
+                                                根据分配比例自动分配链接，失败时自动 Fallback 到另一个节点。
+                                            </p>
+                                        </div>
+
+                                        {/* Real-time Stats */}
+                                        {routingStats && (
+                                            <div style={{
+                                                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px'
+                                            }}>
+                                                <div style={{
+                                                    background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: '8px',
+                                                    border: '1px solid var(--border-color)'
+                                                }}>
+                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>💎 GetGem 成功率</div>
+                                                    <div style={{ fontSize: '20px', fontWeight: 700, color: routingStats.getgem.rate >= 0.5 ? '#4caf50' : '#f44336' }}>
+                                                        {(routingStats.getgem.rate * 100).toFixed(0)}%
+                                                    </div>
+                                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                        {routingStats.getgem.success}/{routingStats.getgem.total} 成功
+                                                    </div>
+                                                </div>
+                                                <div style={{
+                                                    background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: '8px',
+                                                    border: '1px solid var(--border-color)'
+                                                }}>
+                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>🤖 Bot 成功率</div>
+                                                    <div style={{ fontSize: '20px', fontWeight: 700, color: routingStats.bot.rate >= 0.5 ? '#4caf50' : '#f44336' }}>
+                                                        {(routingStats.bot.rate * 100).toFixed(0)}%
+                                                    </div>
+                                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                        {routingStats.bot.success}/{routingStats.bot.total} 成功
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Allocation Slider */}
+                                        <div className="input-group">
+                                            <label className="input-label">分配比例</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '80px' }}>💎 GetGem {routingStrategy.allocation.getgem}%</span>
+                                                <input
+                                                    type="range" min="0" max="100" step="10"
+                                                    value={routingStrategy.allocation.getgem}
+                                                    onChange={(e) => {
+                                                        const v = parseInt(e.target.value);
+                                                        setRoutingStrategy(prev => ({
+                                                            ...prev,
+                                                            allocation: { getgem: v, bot: 100 - v }
+                                                        }));
+                                                    }}
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '70px', textAlign: 'right' }}>🤖 Bot {routingStrategy.allocation.bot}%</span>
+                                            </div>
+                                            {routingStats && (
+                                                <button
+                                                    style={{
+                                                        marginTop: '8px', fontSize: '12px', padding: '4px 12px',
+                                                        borderRadius: '6px', border: '1px solid var(--border-color)',
+                                                        background: 'var(--bg-tertiary)', cursor: 'pointer', color: 'var(--text-primary)'
+                                                    }}
+                                                    onClick={() => setRoutingStrategy(prev => ({
+                                                        ...prev,
+                                                        allocation: { getgem: routingStats.recommended.getgem, bot: routingStats.recommended.bot }
+                                                    }))}
+                                                >
+                                                    📊 使用推荐比例 ({routingStats.recommended.getgem}/{routingStats.recommended.bot})
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Fallback Toggle */}
+                                        <div className="input-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <div>
+                                                <label className="input-label" style={{ marginBottom: 0 }}>失败自动 Fallback</label>
+                                                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                                                    仅对超时/限流/系统错误生效，验证被拒绝不会 Fallback
+                                                </p>
+                                            </div>
+                                            <label className="toggle-switch">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={routingStrategy.fallbackEnabled}
+                                                    onChange={(e) => setRoutingStrategy(prev => ({
+                                                        ...prev, fallbackEnabled: e.target.checked
+                                                    }))}
+                                                />
+                                                <span className="toggle-slider"></span>
+                                            </label>
+                                        </div>
+
+                                        {/* Auto Degrade Threshold */}
+                                        <div className="input-group">
+                                            <label className="input-label">自动降级阈值</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ fontSize: '13px' }}>成功率低于</span>
+                                                <input
+                                                    type="number" min="0" max="100" step="5"
+                                                    className="input"
+                                                    style={{ width: '70px', textAlign: 'center' }}
+                                                    value={routingStrategy.autoDegradeThreshold}
+                                                    onChange={(e) => setRoutingStrategy(prev => ({
+                                                        ...prev,
+                                                        autoDegradeThreshold: parseInt(e.target.value) || 0
+                                                    }))}
+                                                />
+                                                <span style={{ fontSize: '13px' }}>% 时自动将该节点流量切到另一方</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* GetGem.cc API Settings */}
-                            {aiProvider === 'getgem' && (
+                            {(aiProvider === 'getgem' || aiProvider === 'mixed') && (
                                 <div className="provider-settings">
                                     <h4>💎 GetGem API 配置</h4>
                                     <div className="settings-form">

@@ -93,6 +93,7 @@ def init_db():
 
         # Schema migrations for existing databases
         _add_vid_column_to_bot_verify_log(conn)
+        _add_via_column_to_verification_history(conn)
 
         conn.commit()
         _initialized = True
@@ -205,6 +206,18 @@ def _add_vid_column_to_bot_verify_log(conn: sqlite3.Connection):
             print("[DB] Added 'vid' column to bot_verify_log table")
     except Exception as e:
         print(f"[DB] Error adding vid column: {e}")
+
+
+def _add_via_column_to_verification_history(conn: sqlite3.Connection):
+    """Add via column to verification_history if it doesn't exist yet."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(verification_history)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "via" not in columns:
+            conn.execute("ALTER TABLE verification_history ADD COLUMN via TEXT DEFAULT ''")
+            print("[DB] Added 'via' column to verification_history table")
+    except Exception as e:
+        print(f"[DB] Error adding via column: {e}")
 
 
 # ========== Backup Functions ==========

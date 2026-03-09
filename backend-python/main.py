@@ -2712,10 +2712,11 @@ async def verify_unified(request: UnifiedVerifyRequest):
         for r in results:
             vid = r.get("verificationId", "")
             msg = r.get("message", r.get("reason", ""))
+            via_label = r.get("botType", "bot")
             if r.get("status") == "approved":
-                verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
+                verification_history.log_verification("pass", vid, msg, cdk=cdk_label, via=f"bot:{via_label}")
             elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
-                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label)
+                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label, via=f"bot:{via_label}")
 
         # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----
         failed_vids = [r.get("verificationId") for r in results 
@@ -4329,9 +4330,11 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
             vid_log = r.get("verificationId", "")
             msg = r.get("message", "")
             if r["status"] == "approved":
-                verification_history.log_verification("pass", vid_log, message=msg, cdk=request.cdk or "")
+                bot_stats_tracker.record("getgem", True)
+                verification_history.log_verification("pass", vid_log, message=msg, cdk=request.cdk or "", via="getgem")
             elif r["status"] in ("rejected", "error", "timeout"):
-                verification_history.log_verification("failed", vid_log, message=msg, cdk=request.cdk or "")
+                bot_stats_tracker.record("getgem", False)
+                verification_history.log_verification("failed", vid_log, message=msg, cdk=request.cdk or "", via="getgem")
 
         # Deduct local CDK quota
         nonlocal cdk_remaining
@@ -4424,6 +4427,458 @@ async def getgem_status():
         result["error"] = str(e)
 
     return result
+
+
+# ========== Mixed-Mode Unified Verification ==========
+
+class MixedVerifyRequest(BaseModel):
+    verificationIds: List[str]
+    cdk: Optional[str] = None
+
+
+@app.post("/api/verify/mixed")
+async def verify_mixed_mode(request: MixedVerifyRequest):
+    """
+    Unified mixed-mode verification: splits links between GetGem API and Telegram Bot
+    based on configurable allocation, with automatic fallback.
+    Uses SSE streaming for real-time progress.
+    """
+    import config_manager
+    import httpx
+
+    config = config_manager.get_config()
+    ai_config = config.get("aiGenerator", {})
+    routing = ai_config.get("routingStrategy", {})
+
+    mode = routing.get("mode", "mixed")
+    allocation = routing.get("allocation", {"getgem": 50, "bot": 50})
+    fallback_enabled = routing.get("fallbackEnabled", True)
+    fallback_errors = routing.get("fallbackErrors", ["timeout", "internalError", "rateLimited", "cooldown", "error"])
+    auto_degrade_threshold = routing.get("autoDegradeThreshold", 30)
+
+    # GetGem config
+    getgem_config = ai_config.get("getgem", {})
+    getgem_cdk = getgem_config.get("cdk", "")
+    getgem_url = getgem_config.get("apiUrl", "https://getgem.cc")
+
+    # Check what's available
+    getgem_available = bool(getgem_cdk)
+    
+    # Check Bot availability
+    dual_config = config.get("verification", {}).get("dualBot", {})
+    single_bots_cfg = config.get("verification", {}).get("singleBots", [])
+    bot_available = dual_config.get("enabled", False) or any(sb.get("enabled") for sb in single_bots_cfg)
+
+    if not getgem_available and not bot_available:
+        raise HTTPException(status_code=400, detail="没有可用的验证节点，请在管理面板中配置 GetGem API 或 Telegram Bot")
+
+    if not request.verificationIds:
+        raise HTTPException(status_code=400, detail="No verification IDs provided")
+    if len(request.verificationIds) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 IDs per request")
+
+    # Validate local CDK
+    cdk_remaining = None
+    if request.cdk:
+        cdk_check = cdk_manager.validate_cdk(request.cdk)
+        if not cdk_check["valid"]:
+            raise HTTPException(status_code=403, detail=cdk_check["message"])
+        if cdk_check["remaining"] < len(request.verificationIds):
+            raise HTTPException(
+                status_code=403,
+                detail=f"CDK 额度不足，需要 {len(request.verificationIds)} 次，剩余 {cdk_check['remaining']} 次"
+            )
+        cdk_remaining = cdk_check["remaining"]
+
+    # ---- Determine actual allocation ----
+    getgem_rate = bot_stats_tracker.get_success_rate("getgem")
+    bot_rate = bot_stats_tracker.get_success_rate("dualbot")  # Use dualbot as representative
+
+    # Auto-degrade: if success rate below threshold, route everything to the other node
+    effective_getgem_pct = allocation.get("getgem", 50)
+    effective_bot_pct = allocation.get("bot", 50)
+
+    if mode == "api_only" or not bot_available:
+        effective_getgem_pct, effective_bot_pct = 100, 0
+    elif mode == "bot_only" or not getgem_available:
+        effective_getgem_pct, effective_bot_pct = 0, 100
+    else:
+        # Auto-degrade based on success rate
+        if getgem_rate * 100 < auto_degrade_threshold and bot_rate * 100 >= auto_degrade_threshold:
+            effective_getgem_pct, effective_bot_pct = 0, 100
+            logger.info(f"[MixedMode] GetGem auto-degraded (rate={getgem_rate:.0%} < {auto_degrade_threshold}%)")
+        elif bot_rate * 100 < auto_degrade_threshold and getgem_rate * 100 >= auto_degrade_threshold:
+            effective_getgem_pct, effective_bot_pct = 100, 0
+            logger.info(f"[MixedMode] Bot auto-degraded (rate={bot_rate:.0%} < {auto_degrade_threshold}%)")
+
+    # Split VIDs by allocation
+    total = len(request.verificationIds)
+    getgem_count = round(total * effective_getgem_pct / 100) if effective_getgem_pct > 0 else 0
+    getgem_count = min(getgem_count, total)
+    bot_count = total - getgem_count
+
+    getgem_vids = request.verificationIds[:getgem_count]
+    bot_vids = request.verificationIds[getgem_count:]
+
+    logger.info(f"[MixedMode] Routing {len(getgem_vids)} to GetGem, {len(bot_vids)} to Bot (allocation: {effective_getgem_pct}/{effective_bot_pct})")
+
+    async def event_stream():
+        import json as _json
+
+        progress_events = []
+
+        def fmt(data):
+            broadcast_verify_event(data)
+            progress_events.append(f"data: {_json.dumps(data, ensure_ascii=False)}\n\n")
+
+        # Broadcast initial events
+        for vid in request.verificationIds:
+            via_label = "getgem" if vid in getgem_vids else "bot"
+            fmt({"type": "progress", "vid": vid, "step": "submitted", "via": via_label, "message": f"等待验证 ({via_label})..."})
+
+        all_results = []
+
+        # ---- GetGem group (async) ----
+        async def process_getgem_batch(vids):
+            results = []
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                cdk_list = [c.strip() for c in getgem_cdk.replace(',', '\n').split('\n') if c.strip()]
+                if not cdk_list:
+                    for vid in vids:
+                        results.append({"verificationId": vid, "status": "error", "success": False,
+                                        "message": "GetGem API CDK 未配置", "via": "getgem"})
+                    return results
+
+                for vid in vids:
+                    try:
+                        fmt({"type": "progress", "vid": vid, "step": "warmup", "via": "getgem", "message": "GetGem: 文档生成中..."})
+
+                        submit_resp = None
+                        error_detail = ""
+                        for current_cdk in cdk_list:
+                            submit_resp = await client.post(
+                                f"{getgem_url}/api/verify",
+                                json={"verificationId": vid, "cdk": current_cdk}
+                            )
+                            if submit_resp.status_code == 200:
+                                error_detail = ""
+                                break
+                            error_detail = submit_resp.json().get("error", submit_resp.text[:100]) if submit_resp else "No response"
+                            if "balance" in error_detail.lower() or "cdk" in error_detail.lower():
+                                continue
+                            else:
+                                break
+
+                        if submit_resp and submit_resp.status_code != 200:
+                            results.append({"verificationId": vid, "status": "error", "success": False,
+                                            "message": _translate_getgem_error(error_detail), "via": "getgem"})
+                            continue
+
+                        submit_data = submit_resp.json()
+
+                        # Handle immediate rejection
+                        if submit_data.get("status") == "rejected":
+                            error_ids = submit_data.get("errorIds", [])
+                            msg = submit_data.get("message", "Verification rejected")
+                            if "expiredVerification" in error_ids:
+                                msg = "验证链接已过期，请刷新页面获取新链接"
+                            elif "invalidVerification" in error_ids:
+                                msg = "无效的验证链接"
+                            else:
+                                msg = _translate_getgem_error(msg)
+                            results.append({"verificationId": vid, "status": "rejected", "success": False,
+                                            "message": msg, "via": "getgem"})
+                            continue
+
+                        task_id = submit_data.get("taskId")
+                        if not task_id:
+                            results.append({"verificationId": vid, "status": "error", "success": False,
+                                            "message": "未获取到 taskId", "via": "getgem"})
+                            continue
+
+                        # Poll for result
+                        fmt({"type": "progress", "vid": vid, "step": "waiting", "via": "getgem", "message": "GetGem: 等待验证结果..."})
+                        result_found = False
+                        for _ in range(60):
+                            await asyncio.sleep(5)
+                            status_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
+                            if status_resp.status_code != 200:
+                                continue
+                            status_data = status_resp.json()
+                            if not status_data.get("completed"):
+                                continue
+                            if status_data.get("success"):
+                                results.append({"verificationId": vid, "status": "approved", "success": True,
+                                                "message": "验证成功", "via": "getgem", "taskId": task_id})
+                            else:
+                                last_error = status_data.get("error", "Unknown error")
+                                results.append({"verificationId": vid, "status": "rejected", "success": False,
+                                                "message": f"验证失败: {_translate_getgem_error(last_error)}",
+                                                "via": "getgem", "taskId": task_id})
+                            result_found = True
+                            break
+
+                        if not result_found:
+                            results.append({"verificationId": vid, "status": "timeout", "success": False,
+                                            "message": "轮询超时（5分钟）", "via": "getgem", "taskId": task_id})
+
+                    except Exception as e:
+                        results.append({"verificationId": vid, "status": "error", "success": False,
+                                        "message": f"错误: {str(e)}", "via": "getgem"})
+            return results
+
+        # ---- Bot group (reuse unified bot pool logic) ----
+        async def process_bot_batch(vids):
+            results = []
+            if not vids:
+                return results
+
+            # Build links from VIDs for bot verification
+            links = [f"https://services.sheerid.com/verify/{vid}" for vid in vids]
+
+            import config_manager as _cm
+            _cfg = _cm.get_config()
+            enabled_bots = []
+            d_cfg = _cfg.get("verification", {}).get("dualBot", {})
+            if d_cfg.get("enabled"):
+                enabled_bots.append({"type": "dualbot", "config": d_cfg})
+            for sb in _cfg.get("verification", {}).get("singleBots", []):
+                if sb.get("enabled"):
+                    enabled_bots.append({"type": sb["id"], "config": sb})
+
+            if not enabled_bots:
+                for vid in vids:
+                    results.append({"verificationId": vid, "status": "error", "success": False,
+                                    "message": "没有可用的 Telegram Bot", "via": "bot"})
+                return results
+
+            # Sort bots by expected cost
+            def _sort(bots):
+                def _ec(bot):
+                    rate = bot_stats_tracker.get_success_rate(bot["type"])
+                    cost = bot["config"].get("costPerVerify", 1.0)
+                    return cost / max(rate, 0.01)
+                return sorted(bots, key=_ec)
+            sorted_bots = _sort(enabled_bots)
+
+            for i, vid in enumerate(vids):
+                link = links[i]
+                fmt({"type": "progress", "vid": vid, "step": "warmup", "via": "bot", "message": "Bot: 提交验证中..."})
+
+                last_result = None
+                for bot_entry in sorted_bots:
+                    bot_type = bot_entry["type"]
+                    bot_config = bot_entry["config"]
+                    bot_timeout = bot_config.get("timeout", 120)
+
+                    pool_item = None
+                    if bot_type == "dualbot":
+                        pool_item = tg_manager.get_next_client(bot_type="dualbot")
+                    else:
+                        # SingleBot client retrieval
+                        accounts = _cfg.get("telegramAccounts", [])
+                        for acc in accounts:
+                            if bot_type in acc.get("assignedBots", []) and acc.get("enabled"):
+                                ci = tg_manager.get_client(acc["id"])
+                                if ci:
+                                    pool_item = (acc["id"], ci)
+                                    break
+
+                    if not pool_item:
+                        continue
+
+                    acc_id, client = pool_item
+                    try:
+                        async def on_progress(progress, _bt=bot_type):
+                            fmt({"type": "progress", "vid": vid, "via": f"bot:{_bt}", **progress})
+
+                        if bot_type == "dualbot":
+                            result = await dual_bot.verify(
+                                client=client, link=link, account_id=acc_id,
+                                warmup_bot=bot_config.get("warmupBot"),
+                                verify_bot=bot_config.get("verifyBot"),
+                                auto_bypass=bot_config.get("autoBypass", True),
+                                timeout=bot_timeout, on_progress=on_progress
+                            )
+                        else:
+                            single_verifier = GenericSingleBotVerifier(bot_config)
+                            result = await single_verifier.verify(
+                                client=client, link=link, account_id=acc_id,
+                                timeout=bot_timeout, on_progress=on_progress
+                            )
+
+                        bot_stats_tracker.record(bot_type, result.get("success", False))
+
+                        via_label = f"bot:{bot_type}"
+                        if result.get("success"):
+                            results.append({"verificationId": vid, "status": "approved", "success": True,
+                                            "message": result.get("message", "验证成功"), "via": via_label,
+                                            "claimLink": result.get("claimLink")})
+                            last_result = None
+                            break
+                        else:
+                            last_result = {"verificationId": vid, "status": result.get("status", "failed"),
+                                           "success": False, "message": result.get("message", "验证失败"),
+                                           "via": via_label}
+                            # If verified-stage failure, don't try next bot
+                            if result.get("status") in ("failed", "rejected"):
+                                break
+                            # Cooldown at warmup → try next bot
+                            if result.get("status") == "cooldown" and result.get("cooldown_stage") != "verify":
+                                continue
+                            break
+
+                    except Exception as e:
+                        last_result = {"verificationId": vid, "status": "error", "success": False,
+                                       "message": f"Bot 错误: {str(e)}", "via": f"bot:{bot_type}"}
+                        break
+
+                if last_result:
+                    results.append(last_result)
+
+            return results
+
+        # ---- Run both groups in parallel ----
+        getgem_task = asyncio.create_task(process_getgem_batch(getgem_vids)) if getgem_vids else None
+        bot_task = asyncio.create_task(process_bot_batch(bot_vids)) if bot_vids else None
+
+        # Stream progress while waiting
+        pending = [t for t in [getgem_task, bot_task] if t]
+        while pending and not all(t.done() for t in pending):
+            while progress_events:
+                yield progress_events.pop(0)
+            await asyncio.sleep(0.3)
+        while progress_events:
+            yield progress_events.pop(0)
+
+        if getgem_task:
+            all_results.extend(await getgem_task)
+        if bot_task:
+            all_results.extend(await bot_task)
+
+        # ---- Fallback: retry failed items with the other node ----
+        if fallback_enabled:
+            fallback_items = []
+            for r in all_results:
+                if r.get("success"):
+                    continue
+                # Check if error type is in the fallback whitelist
+                error_msg = r.get("message", "")
+                status = r.get("status", "")
+                should_fallback = status in fallback_errors
+                if not should_fallback:
+                    for err_key in fallback_errors:
+                        if err_key.lower() in error_msg.lower():
+                            should_fallback = True
+                            break
+                if should_fallback:
+                    fallback_items.append(r)
+
+            if fallback_items:
+                logger.info(f"[MixedMode] Fallback: {len(fallback_items)} items to retry")
+                for fb in fallback_items:
+                    vid = fb["verificationId"]
+                    original_via = fb.get("via", "")
+                    fmt({"type": "progress", "vid": vid, "step": "fallback",
+                         "message": f"正在切换备用节点重试...", "via": "fallback"})
+
+                # Determine fallback target
+                fallback_getgem_vids = []
+                fallback_bot_vids = []
+                for fb in fallback_items:
+                    if fb.get("via", "").startswith("bot") and getgem_available:
+                        fallback_getgem_vids.append(fb["verificationId"])
+                    elif fb.get("via") == "getgem" and bot_available:
+                        fallback_bot_vids.append(fb["verificationId"])
+
+                fb_getgem_task = asyncio.create_task(process_getgem_batch(fallback_getgem_vids)) if fallback_getgem_vids else None
+                fb_bot_task = asyncio.create_task(process_bot_batch(fallback_bot_vids)) if fallback_bot_vids else None
+
+                fb_pending = [t for t in [fb_getgem_task, fb_bot_task] if t]
+                while fb_pending and not all(t.done() for t in fb_pending):
+                    while progress_events:
+                        yield progress_events.pop(0)
+                    await asyncio.sleep(0.3)
+                while progress_events:
+                    yield progress_events.pop(0)
+
+                fb_results = []
+                if fb_getgem_task:
+                    fb_results.extend(await fb_getgem_task)
+                if fb_bot_task:
+                    fb_results.extend(await fb_bot_task)
+
+                # Replace original failed results with fallback results
+                fb_map = {r["verificationId"]: r for r in fb_results}
+                for i, r in enumerate(all_results):
+                    vid = r["verificationId"]
+                    if vid in fb_map:
+                        fb_r = fb_map[vid]
+                        fb_r["via"] = f"fallback:{fb_r.get('via', '')}"
+                        all_results[i] = fb_r
+
+        # ---- Log results and deduct CDK ----
+        for r in all_results:
+            vid_log = r.get("verificationId", "")
+            msg = r.get("message", "")
+            via = r.get("via", "")
+            if r.get("status") == "approved":
+                bot_stats_tracker.record("getgem" if "getgem" in via else "bot", True)
+                verification_history.log_verification("pass", vid_log, message=msg, cdk=request.cdk or "", via=via)
+            elif r.get("status") in ("rejected", "error", "timeout"):
+                bot_stats_tracker.record("getgem" if "getgem" in via else "bot", False)
+                verification_history.log_verification("failed", vid_log, message=msg, cdk=request.cdk or "", via=via)
+
+        nonlocal cdk_remaining
+        successful = sum(1 for r in all_results if r.get("status") == "approved")
+        if request.cdk and successful > 0:
+            deduct = cdk_manager.use_cdk(request.cdk, successful)
+            cdk_remaining = deduct.get("remaining", cdk_remaining)
+
+        yield f"data: {_json.dumps({'type': 'done', 'results': all_results, 'stats': {'total': len(all_results), 'approved': successful, 'rejected': sum(1 for r in all_results if not r.get('success'))}, 'cdkRemaining': cdk_remaining}, ensure_ascii=False)}\n\n"
+
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ========== Routing Stats API ==========
+
+@app.get("/api/routing/stats")
+async def get_routing_stats():
+    """Get real-time success rates and recommended allocation for all verification nodes."""
+    import config_manager
+    config = config_manager.get_config()
+    routing = config.get("aiGenerator", {}).get("routingStrategy", {})
+
+    stats = bot_stats_tracker.get_all_stats()
+    getgem_stats = stats.get("getgem", {"total": 0, "success": 0, "failed": 0, "rate": 0.5})
+    
+    # Aggregate bot stats
+    bot_total = 0
+    bot_success = 0
+    bot_nodes = []
+    for bot_id, s in stats.items():
+        if bot_id == "getgem":
+            continue
+        bot_total += s["total"]
+        bot_success += s["success"]
+        bot_nodes.append({"id": bot_id, **s})
+    
+    bot_rate = bot_success / bot_total if bot_total > 0 else 0.5
+
+    # Calculate recommended allocation
+    total_rate = max(getgem_stats["rate"] + bot_rate, 0.01)
+    rec_getgem = round(getgem_stats["rate"] / total_rate * 100)
+    rec_bot = 100 - rec_getgem
+
+    return {
+        "getgem": getgem_stats,
+        "bot": {"total": bot_total, "success": bot_success, "failed": bot_total - bot_success, "rate": round(bot_rate, 4)},
+        "botNodes": bot_nodes,
+        "recommended": {"getgem": rec_getgem, "bot": rec_bot},
+        "current": routing.get("allocation", {"getgem": 50, "bot": 50}),
+        "windowMinutes": bot_stats_tracker.window_minutes
+    }
 
 
 # ========== PUBLIC API v1 ==========

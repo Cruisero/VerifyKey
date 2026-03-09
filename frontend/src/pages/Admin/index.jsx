@@ -95,12 +95,24 @@ function TelegramBotTab() {
                 if (data.type === 'progress') {
                     setBotVerifyLog(prev => {
                         const existingIdx = prev.findIndex(l => l.vid === data.vid || l.link === data.link);
+
+                        // Determine status from the event
+                        let entryStatus = 'processing';
+                        if (data.step === 'result') {
+                            // Per-link result: use actual status
+                            entryStatus = data.success ? 'success' : (data.status === 'error' ? 'error' : 'failed');
+                        } else if (data.step === 'failed') {
+                            entryStatus = 'failed';
+                        } else if (data.step === 'submitted') {
+                            entryStatus = 'submitted';
+                        }
+
                         const newEntry = {
                             id: existingIdx >= 0 ? prev[existingIdx].id : Date.now() + Math.random(),
                             link: data.link || '',
                             username: existingIdx >= 0 ? prev[existingIdx].username : 'SSE Update',
                             user_id: existingIdx >= 0 ? prev[existingIdx].user_id : '---',
-                            status: data.step === 'failed' ? 'failed' : (data.step === 'submitted' ? 'submitted' : 'processing'),
+                            status: entryStatus,
                             message: data.message || '',
                             vid: data.vid || '',
                             timestamp: new Date().toISOString()

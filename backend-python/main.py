@@ -60,6 +60,8 @@ telegram_bot: Optional[SheerIDUserbot] = None
 _oldbot_cooldowns: Dict[str, float] = {}
 # Single bots per-account cooldown tracking {bot_id: {account_id: expiry_timestamp}}
 _singlebot_cooldowns: Dict[str, Dict[str, float]] = {}
+# Bot suspension tracking {bot_id: expiry_timestamp}
+_bot_suspensions: Dict[str, float] = {}
 tg_manager = TelegramAccountManager()
 dual_bot = DualBotVerifier()
 # VID deduplication: prevent the same VID from being processed simultaneously
@@ -2336,6 +2338,17 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 max_retries = bot_config.get("maxRetries", 5)
                 bot_timeout = bot_config.get("verifyTimeout", bot_config.get("timeout", 180))
 
+                # ---- Check if this bot is suspended ----
+                suspension_expiry = _bot_suspensions.get(bot_type, 0)
+                if suspension_expiry > _time.time():
+                    remaining = int(suspension_expiry - _time.time())
+                    logger.info(f"[Waterfall:{bot_type}] Bot is SUSPENDED for {remaining}s more, skipping...")
+                    on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
+                                     "step": "suspended", "message": f"Bot {bot_type} 已暂停 ({remaining}s)，切换下一个..."}
+                    progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
+                    broadcast_verify_event(on_prog_event)
+                    continue  # Skip to next bot in waterfall
+
                 async def on_progress(progress, _bt=bot_type):
                     event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": _bt, **progress}
                     progress_events.append(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
@@ -2426,6 +2439,38 @@ async def verify_unified(request: UnifiedVerifyRequest):
                     # Record stats for this bot
                     bot_stats_tracker.record(bot_type, result.get("success", False))
                     last_result = (acc_id, result)
+
+                    # ---- Check suspension rules BEFORE returning result ----
+                    suspension_rules = bot_config.get("suspensionRules", [])
+                    result_msg_key = result.get("messageKey", "")
+                    result_raw = result.get("raw_response", result.get("message", ""))
+                    for srule in suspension_rules:
+                        srule_keywords = [k.lower() for k in srule.get("keywords", [])]
+                        suspend_seconds = srule.get("duration", 300)
+                        # Match against messageKey or raw_response
+                        should_suspend = False
+                        if result_msg_key and any(k.lower() == result_msg_key.lower() for k in srule.get("keywords", [])):
+                            should_suspend = True
+                        elif result_raw and any(k.lower() in result_raw.lower() for k in srule.get("keywords", [])):
+                            should_suspend = True
+                        
+                        if should_suspend:
+                            _bot_suspensions[bot_type] = _time.time() + suspend_seconds
+                            logger.warning(f"[Waterfall:{bot_type}] SUSPENDED for {suspend_seconds}s! Rule matched: {srule.get('keywords')}")
+                            broadcast_verify_event({
+                                "type": "bot_suspended",
+                                "botType": bot_type,
+                                "duration": suspend_seconds,
+                                "reason": f"Rule matched: {srule.get('keywords')}",
+                                "message": result_raw[:100] if result_raw else ""
+                            })
+                            # Treat as non-final: fallback to next bot
+                            bot_succeeded = False
+                            break
+                    
+                    # If suspension triggered, skip to next bot
+                    if _bot_suspensions.get(bot_type, 0) > _time.time():
+                        break  # break inner retry → continue to next bot in waterfall
 
                     if result.get("success"):
                         # Success! Cache and return

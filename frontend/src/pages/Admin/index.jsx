@@ -3951,6 +3951,99 @@ export default function Admin() {
                                                                 )}
                                                             </div>
 
+                                                            {/* ── DualBot: Suspension Rules ── */}
+                                                            <div style={{ marginTop: '12px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                                                    <label style={{ fontSize: '13px', fontWeight: 700 }}>🚫 停用规则 (suspensionRules)</label>
+                                                                    <button className="btn" style={{ fontSize: '11px', padding: '3px 10px' }}
+                                                                        onClick={() => setConfig(prev => {
+                                                                            const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                            dualBot.suspensionRules = [...(dualBot.suspensionRules || []), { keywords: [], duration: 300 }];
+                                                                            return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                        })}>+ 添加停用规则</button>
+                                                                </div>
+                                                                {(config?.verification?.dualBot?.suspensionRules || []).map((srule, sri) => (
+                                                                    <div key={sri} style={{
+                                                                        padding: '10px', marginBottom: '8px', borderRadius: '8px',
+                                                                        border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)'
+                                                                    }}>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#ef4444' }}>🚫 停用规则 #{sri + 1}</span>
+                                                                            <button className="btn" style={{ fontSize: '10px', padding: '2px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
+                                                                                onClick={() => setConfig(prev => {
+                                                                                    const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                    const newRules = [...(dualBot.suspensionRules || [])];
+                                                                                    newRules.splice(sri, 1);
+                                                                                    dualBot.suspensionRules = newRules;
+                                                                                    return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                })}>🗑️</button>
+                                                                        </div>
+                                                                        <div style={{ marginBottom: '6px' }}>
+                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>关键词 (匹配 messageKey 或 raw_response)</label>
+                                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                                                {(srule.keywords || []).map((kw, kwi) => (
+                                                                                    <span key={kwi} style={{
+                                                                                        display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                                        padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                                        background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                                                                        borderRadius: '10px', border: '1px solid rgba(239,68,68,0.2)'
+                                                                                    }}>
+                                                                                        {kw}
+                                                                                        <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                                            onClick={() => setConfig(prev => {
+                                                                                                const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                                const newRules = [...(dualBot.suspensionRules || [])];
+                                                                                                const newKws = [...(newRules[sri].keywords || [])];
+                                                                                                newKws.splice(kwi, 1);
+                                                                                                newRules[sri] = { ...newRules[sri], keywords: newKws };
+                                                                                                dualBot.suspensionRules = newRules;
+                                                                                                return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                            })}>×</span>
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                            <input type="text" className="input"
+                                                                                placeholder="输入关键词后按 Enter"
+                                                                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                                onKeyDown={e => {
+                                                                                    if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                                        const val = e.target.value.trim();
+                                                                                        setConfig(prev => {
+                                                                                            const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                            const newRules = [...(dualBot.suspensionRules || [])];
+                                                                                            const newKws = [...(newRules[sri].keywords || []), val];
+                                                                                            newRules[sri] = { ...newRules[sri], keywords: newKws };
+                                                                                            dualBot.suspensionRules = newRules;
+                                                                                            return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                        });
+                                                                                        e.target.value = '';
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>停用时长 (秒)</label>
+                                                                            <input type="number" className="input"
+                                                                                value={srule.duration || 300}
+                                                                                onChange={e => setConfig(prev => {
+                                                                                    const dualBot = { ...(prev.verification?.dualBot || {}) };
+                                                                                    const newRules = [...(dualBot.suspensionRules || [])];
+                                                                                    newRules[sri] = { ...newRules[sri], duration: parseInt(e.target.value) || 300 };
+                                                                                    dualBot.suspensionRules = newRules;
+                                                                                    return { ...prev, verification: { ...prev.verification, dualBot } };
+                                                                                })}
+                                                                                style={{ width: '120px', fontSize: '12px' }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                                {(config?.verification?.dualBot?.suspensionRules || []).length === 0 && (
+                                                                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '11px', padding: '8px 0', margin: 0 }}>
+                                                                        暂无停用规则。当 bot 返回匹配关键词的消息时，bot 将暂停指定时间
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
                                                             {/* ── DualBot: Cooldown & Quota ── */}
                                                             <div style={{
                                                                 marginTop: '12px', padding: '12px',
@@ -4586,7 +4679,101 @@ export default function Admin() {
                                                                             </p>
                                                                         </div>
 
-                                                                        {/* ── Quota & Cooldown ── */}
+                                                                        {/* ── Suspension Rules ── */}
+                                                                        <div style={{ marginTop: '12px' }}>
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                                                                <label style={{ fontSize: '13px', fontWeight: 700 }}>🚫 停用规则 (suspensionRules)</label>
+                                                                                <button className="btn" style={{ fontSize: '11px', padding: '3px 10px' }}
+                                                                                    onClick={() => setConfig(prev => {
+                                                                                        const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                        const newRules = [...(newBots[idx].suspensionRules || []), {
+                                                                                            keywords: [], duration: 300
+                                                                                        }];
+                                                                                        newBots[idx] = { ...newBots[idx], suspensionRules: newRules };
+                                                                                        return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                    })}>+ 添加停用规则</button>
+                                                                            </div>
+                                                                            {(bot.suspensionRules || []).map((srule, sri) => (
+                                                                                <div key={sri} style={{
+                                                                                    padding: '10px', marginBottom: '8px', borderRadius: '8px',
+                                                                                    border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)'
+                                                                                }}>
+                                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                                                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#ef4444' }}>🚫 停用规则 #{sri + 1}</span>
+                                                                                        <button className="btn" style={{ fontSize: '10px', padding: '2px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
+                                                                                            onClick={() => setConfig(prev => {
+                                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                const newRules = [...(newBots[idx].suspensionRules || [])];
+                                                                                                newRules.splice(sri, 1);
+                                                                                                newBots[idx] = { ...newBots[idx], suspensionRules: newRules };
+                                                                                                return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                            })}>🗑️</button>
+                                                                                    </div>
+                                                                                    <div style={{ marginBottom: '6px' }}>
+                                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>关键词 (匹配 messageKey 或 raw_response)</label>
+                                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                                                            {(srule.keywords || []).map((kw, kwi) => (
+                                                                                                <span key={kwi} style={{
+                                                                                                    display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                                                                                    padding: '2px 8px', fontSize: '11px', fontWeight: 600, fontFamily: 'monospace',
+                                                                                                    background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                                                                                    borderRadius: '10px', border: '1px solid rgba(239,68,68,0.2)'
+                                                                                                }}>
+                                                                                                    {kw}
+                                                                                                    <span style={{ cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                                                                                                        onClick={() => setConfig(prev => {
+                                                                                                            const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                            const newRules = [...(newBots[idx].suspensionRules || [])];
+                                                                                                            const newKws = [...(newRules[sri].keywords || [])];
+                                                                                                            newKws.splice(kwi, 1);
+                                                                                                            newRules[sri] = { ...newRules[sri], keywords: newKws };
+                                                                                                            newBots[idx] = { ...newBots[idx], suspensionRules: newRules };
+                                                                                                            return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                                        })}>×</span>
+                                                                                                </span>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                        <input type="text" className="input"
+                                                                                            placeholder="输入关键词后按 Enter"
+                                                                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                                                                            onKeyDown={e => {
+                                                                                                if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                                                    const val = e.target.value.trim();
+                                                                                                    setConfig(prev => {
+                                                                                                        const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                        const newRules = [...(newBots[idx].suspensionRules || [])];
+                                                                                                        const newKws = [...(newRules[sri].keywords || []), val];
+                                                                                                        newRules[sri] = { ...newRules[sri], keywords: newKws };
+                                                                                                        newBots[idx] = { ...newBots[idx], suspensionRules: newRules };
+                                                                                                        return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                                    });
+                                                                                                    e.target.value = '';
+                                                                                                }
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>停用时长 (秒)</label>
+                                                                                        <input type="number" className="input"
+                                                                                            value={srule.duration || 300}
+                                                                                            onChange={e => setConfig(prev => {
+                                                                                                const newBots = [...(prev.verification?.singleBots || [])];
+                                                                                                const newRules = [...(newBots[idx].suspensionRules || [])];
+                                                                                                newRules[sri] = { ...newRules[sri], duration: parseInt(e.target.value) || 300 };
+                                                                                                newBots[idx] = { ...newBots[idx], suspensionRules: newRules };
+                                                                                                return { ...prev, verification: { ...prev.verification, singleBots: newBots } };
+                                                                                            })}
+                                                                                            style={{ width: '120px', fontSize: '12px' }}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                            {(bot.suspensionRules || []).length === 0 && (
+                                                                                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '11px', padding: '8px 0', margin: 0 }}>
+                                                                                    暂无停用规则。当 bot 返回匹配关键词的消息时，bot 将暂停指定时间
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
                                                                         <div style={{
                                                                             marginTop: '12px', padding: '12px',
                                                                             borderRadius: '8px', border: '1px solid var(--border)',

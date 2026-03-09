@@ -516,7 +516,7 @@ class TelegramAccountManager:
             except Exception as e:
                 logger.warning(f"[TGNotif] Handler error: {e}")
 
-        client.add_event_handler(_on_notification, events.NewMessage(from_users=notif_channel))
+        client.add_event_handler(_on_notification, events.NewMessage(chats=notif_channel))
         self._notif_registered = True
         logger.info(f"[TGManager] Registered notification listener for @{notif_channel} on account {account_id} (single listener)")
 

@@ -23,7 +23,7 @@ BOT_WINDOW_OVERRIDES = {
 # Per-bot default success rate overrides (when no data)
 # prior_rate: assumed success rate, prior_count: virtual sample size for smoothing
 BOT_PRIOR_CONFIG = {
-    "blackbot": {"prior_rate": 0.7, "prior_count": 10},
+    "blackbot": {"prior_rate": 0.5, "prior_count": 10},
     # BlackBot: starts at 70% with 10 virtual records (7 success, 3 fail)
     # Real data blends in gradually: 1 real success → (7+1)/(10+1) = 72.7%
 }

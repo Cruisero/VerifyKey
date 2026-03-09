@@ -752,7 +752,8 @@ class NodeHealthMonitor:
             logger.warning("[NodeHealth] Could not load config: %s", e)
 
     async def force_refresh(self):
-        """Force an immediate re-poll of all external APIs."""
+        """Force an immediate re-poll of all external APIs (including BlackBot health check)."""
+        self._blackbot_last_check = 0  # force BlackBot health check to run
         await self._poll_all()
         return self.get_all_statuses()
 

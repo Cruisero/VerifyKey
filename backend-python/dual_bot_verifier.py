@@ -215,7 +215,7 @@ class DualBotVerifier:
             return parsed
 
     async def _run_bypass(self, vid: str, account_id: str) -> bool:
-        """Run the full bypass sequence synchronously. Returns True if at least 1 upload succeeded."""
+        """Run the full bypass sequence asynchronously. Returns True if at least 1 upload succeeded."""
         import httpx
         base_url = "https://services.sheerid.com/rest/v2"
 
@@ -224,7 +224,7 @@ class DualBotVerifier:
                 # MUST wait for pending to clear before uploading
                 # Uploading during pending wastes the 10-upload limit
                 pending_cleared = False
-                for poll in range(60):  # 60 × 3s = 180s max
+                for poll in range(100):  # 100 × 3s = 300s max
                     check_resp = await http_client.get(f"{base_url}/verification/{vid}")
                     if check_resp.status_code == 200:
                         step = check_resp.json().get("currentStep", "")
@@ -241,20 +241,38 @@ class DualBotVerifier:
                     await asyncio.sleep(3)
 
                 if not pending_cleared:
-                    logger.warning(f"[DualBot] [{account_id}] Bypass: Pending timeout 180s, aborting to avoid wasting uploads")
+                    logger.warning(f"[DualBot] [{account_id}] Bypass: Pending timeout 300s, aborting to avoid wasting uploads")
                     return False
 
             # Run bypass uploads (only after pending has cleared)
+            # Retry loop: if uploads stop for non-429 reasons, wait and retry
             bypass_count = 0
-            for i in range(10):
-                ok = await self._bypass_link(vid)
-                if ok:
-                    bypass_count += 1
-                    await asyncio.sleep(1.5)
-                else:
+            got_rate_limited = False
+            max_rounds = 3  # Up to 3 rounds of retries
+
+            for round_num in range(max_rounds):
+                if got_rate_limited:
                     break
 
-            logger.info(f"[DualBot] [{account_id}] Bypass: Done. {bypass_count} uploads for {vid[:8]}")
+                for i in range(10):
+                    ok, status_code = await self._bypass_link_with_status(vid)
+                    if ok:
+                        bypass_count += 1
+                        await asyncio.sleep(1.5)
+                    else:
+                        if status_code == 429:
+                            logger.info(f"[DualBot] [{account_id}] Bypass: Got 429 rate limit, stopping")
+                            got_rate_limited = True
+                        else:
+                            logger.info(f"[DualBot] [{account_id}] Bypass: Upload failed (HTTP {status_code}), will retry after delay")
+                        break
+
+                if not got_rate_limited and round_num < max_rounds - 1:
+                    # Wait before retrying (the link might need time to transition)
+                    logger.info(f"[DualBot] [{account_id}] Bypass: Round {round_num+1} done ({bypass_count} uploads), retrying in 5s...")
+                    await asyncio.sleep(5)
+
+            logger.info(f"[DualBot] [{account_id}] Bypass: Done. {bypass_count} total uploads for {vid[:8]}")
             return bypass_count > 0
 
         except Exception as e:
@@ -446,9 +464,14 @@ class DualBotVerifier:
     # ---- Bypass (submit empty doc to invalidate link) ----
 
     async def _bypass_link(self, vid: str) -> bool:
+        """Wrapper for backwards compatibility."""
+        ok, _ = await self._bypass_link_with_status(vid)
+        return ok
+
+    async def _bypass_link_with_status(self, vid: str) -> tuple:
         """
         Submit an empty/minimal document to SheerID to invalidate the verification link.
-        Uses the SheerID REST API directly (same as verifier.py docUpload flow).
+        Returns (success: bool, http_status_code: int).
         """
         import httpx
 
@@ -460,7 +483,7 @@ class DualBotVerifier:
                 check_resp = await client.get(f"{base_url}/verification/{vid}")
                 if check_resp.status_code != 200:
                     logger.warning(f"[Bypass] Check failed: {check_resp.status_code}")
-                    return False
+                    return False, check_resp.status_code
 
                 step = check_resp.json().get("currentStep", "")
                 logger.info(f"[Bypass] Current step for {vid[:8]}: {step}")
@@ -473,12 +496,12 @@ class DualBotVerifier:
                     step = check_resp.json().get("currentStep", "")
                     if step == "pending":
                         logger.warning(f"[Bypass] Still pending after grace wait.")
-                        return False
+                        return False, 0
                 
                 # If already succeeded, no bypass needed
                 if step == "success":
                     logger.info(f"[Bypass] Link is already successful, no bypass needed.")
-                    return False
+                    return False, 0
 
                 # Skip SSO if needed
                 if step in ("sso", "collectStudentPersonalInfo"):
@@ -494,12 +517,12 @@ class DualBotVerifier:
 
                 if upload_resp.status_code != 200:
                     logger.warning(f"[Bypass] Upload request failed: {upload_resp.status_code}")
-                    return False
+                    return False, upload_resp.status_code
 
                 docs = upload_resp.json().get("documents", [])
                 if not docs or not docs[0].get("uploadUrl"):
                     logger.warning("[Bypass] No upload URL returned")
-                    return False
+                    return False, 0
 
                 # Step C: Upload a minimal valid PNG (1x1 transparent pixel)
                 # 68-byte minimal PNG
@@ -512,17 +535,17 @@ class DualBotVerifier:
                 s3_resp = await client.put(upload_url, content=tiny_png, headers={"Content-Type": "image/png"})
                 if not (200 <= s3_resp.status_code < 300):
                     logger.warning(f"[Bypass] S3 upload failed: {s3_resp.status_code}")
-                    return False
+                    return False, s3_resp.status_code
 
                 # Step D: Complete upload
                 complete_resp = await client.post(f"{base_url}/verification/{vid}/step/completeDocUpload")
                 logger.info(f"[Bypass] Complete response: {complete_resp.status_code}")
 
-                return True
+                return True, complete_resp.status_code
 
         except Exception as e:
             logger.error(f"[Bypass] Error: {e}")
-            return False
+            return False, 0
 
     # ---- Helpers ----
 

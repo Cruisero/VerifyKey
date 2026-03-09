@@ -2022,7 +2022,7 @@ export default function Admin() {
                                                         style={{
                                                             background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px',
                                                             padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                                            lineHeight: '20px', whiteSpace: 'nowrap',
+                                                            lineHeight: '20px', whiteSpace: 'nowrap', minWidth: '70px', textAlign: 'center',
                                                         }}
                                                         onClick={async (e) => {
                                                             e.stopPropagation();
@@ -2044,7 +2044,7 @@ export default function Admin() {
                                                         style={{
                                                             background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px',
                                                             padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                                            lineHeight: '20px', whiteSpace: 'nowrap',
+                                                            lineHeight: '20px', whiteSpace: 'nowrap', minWidth: '70px', textAlign: 'center',
                                                         }}
                                                         onClick={async (e) => {
                                                             e.stopPropagation();
@@ -2067,7 +2067,7 @@ export default function Admin() {
                                                             style={{
                                                                 background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px',
                                                                 padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                                                lineHeight: '20px', whiteSpace: 'nowrap',
+                                                                lineHeight: '20px', whiteSpace: 'nowrap', minWidth: '70px', textAlign: 'center',
                                                             }}
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
@@ -2087,7 +2087,7 @@ export default function Admin() {
                                                             style={{
                                                                 background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px',
                                                                 padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                                                lineHeight: '20px', whiteSpace: 'nowrap',
+                                                                lineHeight: '20px', whiteSpace: 'nowrap', minWidth: '70px', textAlign: 'center',
                                                             }}
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();

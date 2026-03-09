@@ -68,6 +68,109 @@ dual_bot = DualBotVerifier()
 _vid_locks: dict = {}  # vid -> asyncio.Lock
 _vid_results: dict = {}  # vid -> result dict (cached for 60s)
 
+# ---- Pending GetGem task persistence (survives container restarts) ----
+import time as _time
+PENDING_GETGEM_FILE = os.path.join(os.path.dirname(__file__), "data", "pending_getgem_tasks.json")
+
+def _save_pending_getgem_task(vid: str, task_id: str, cdk: str):
+    """Save a pending GetGem task so it can be resumed after restart."""
+    try:
+        os.makedirs(os.path.dirname(PENDING_GETGEM_FILE), exist_ok=True)
+        tasks = {}
+        if os.path.exists(PENDING_GETGEM_FILE):
+            with open(PENDING_GETGEM_FILE, "r") as f:
+                tasks = json.load(f)
+        tasks[vid] = {"taskId": task_id, "cdk": cdk, "timestamp": _time.time()}
+        with open(PENDING_GETGEM_FILE, "w") as f:
+            json.dump(tasks, f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"[GetGem] Failed to save pending task {vid[:8]}: {e}")
+
+def _remove_pending_getgem_task(vid: str):
+    """Remove a completed GetGem task from pending file."""
+    try:
+        if not os.path.exists(PENDING_GETGEM_FILE):
+            return
+        with open(PENDING_GETGEM_FILE, "r") as f:
+            tasks = json.load(f)
+        if vid in tasks:
+            del tasks[vid]
+            with open(PENDING_GETGEM_FILE, "w") as f:
+                json.dump(tasks, f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"[GetGem] Failed to remove pending task {vid[:8]}: {e}")
+
+def _load_pending_getgem_tasks() -> dict:
+    """Load all pending GetGem tasks."""
+    try:
+        if os.path.exists(PENDING_GETGEM_FILE):
+            with open(PENDING_GETGEM_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.warning(f"[GetGem] Failed to load pending tasks: {e}")
+    return {}
+
+async def _resume_getgem_poll(vid: str, task_id: str, cdk: str):
+    """Resume polling a GetGem task after container restart."""
+    import httpx
+    import config_manager
+    config = config_manager.get_config()
+    getgem_url = config.get("verification", {}).get("getgemApiUrl", "https://getgem.cc")
+
+    logger.info(f"[GetGem Recovery] Resuming poll for VID {vid[:8]}... taskId={task_id[:8]}...")
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            for attempt in range(60):
+                await asyncio.sleep(5)
+                try:
+                    status_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
+                    if status_resp.status_code != 200:
+                        continue
+                    status_data = status_resp.json()
+
+                    if status_data.get("completed"):
+                        if status_data.get("success"):
+                            logger.info(f"[GetGem Recovery] VID {vid[:8]} APPROVED!")
+                            verification_history.log_verification("pass", vid, cdk=cdk)
+                            # Deduct CDK
+                            if cdk:
+                                cdk_manager.use_cdk(cdk, 1)
+                            broadcast_verify_event({
+                                "type": "progress", "vid": vid, "step": "result",
+                                "success": True, "status": "approved",
+                                "message": "验证成功（重启恢复）",
+                                "interMsg": "Verification approved (recovered after restart)",
+                            })
+                        else:
+                            error = status_data.get("error", "Unknown error")
+                            logger.info(f"[GetGem Recovery] VID {vid[:8]} FAILED: {error}")
+                            verification_history.log_verification("failed", vid, cdk=cdk)
+                            broadcast_verify_event({
+                                "type": "progress", "vid": vid, "step": "result",
+                                "success": False, "status": "failed",
+                                "message": f"验证失败: {error}",
+                                "interMsg": f"Verification failed: {error}",
+                            })
+                        _remove_pending_getgem_task(vid)
+                        return
+                except Exception as poll_err:
+                    logger.warning(f"[GetGem Recovery] Poll error for {vid[:8]}: {poll_err}")
+
+            # Timeout after 5 minutes of polling
+            logger.warning(f"[GetGem Recovery] VID {vid[:8]} poll timed out")
+            verification_history.log_verification("failed", vid, cdk=cdk)
+            broadcast_verify_event({
+                "type": "progress", "vid": vid, "step": "result",
+                "success": False, "status": "timeout",
+                "message": "轮询超时（重启恢复）",
+                "interMsg": "Poll timed out (recovered after restart)",
+            })
+            _remove_pending_getgem_task(vid)
+    except Exception as e:
+        logger.error(f"[GetGem Recovery] Fatal error for {vid[:8]}: {e}")
+        _remove_pending_getgem_task(vid)
+
 # ========== Admin SSE Event Bus ==========
 _admin_sse_subscribers: list = []  # list of asyncio.Queue for connected admin clients
 
@@ -1641,6 +1744,22 @@ async def startup_event():
                 print("[Telegram] Missing API ID/Hash, skipping startup")
         except Exception as e:
             print(f"[Telegram] Startup failed: {e}")
+
+    # ---- Resume pending GetGem tasks ----
+    pending = _load_pending_getgem_tasks()
+    if pending:
+        # Filter out tasks older than 10 minutes (they've definitely timed out on GetGem side)
+        now = _time.time()
+        stale_vids = [v for v, t in pending.items() if now - t.get("timestamp", 0) > 600]
+        for sv in stale_vids:
+            logger.info(f"[GetGem Recovery] Skipping stale task {sv[:8]}... (age > 10min)")
+            _remove_pending_getgem_task(sv)
+        
+        active = {v: t for v, t in pending.items() if v not in stale_vids}
+        if active:
+            print(f"[Startup] Resuming {len(active)} pending GetGem tasks...")
+            for vid, info in active.items():
+                asyncio.create_task(_resume_getgem_poll(vid, info["taskId"], info.get("cdk", "")))
 
 
 @app.on_event("shutdown")
@@ -4028,6 +4147,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                         continue
 
                     # Step 2: verify — submitted
+                    _save_pending_getgem_task(vid, task_id, request.cdk or "")
                     yield fmt({"type": "progress", "vid": vid, "step": "verify", "message": "提交文档中..."})
 
                     await asyncio.sleep(2)
@@ -4107,7 +4227,11 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                             "taskId": task_id
                         })
 
+                    # Remove from pending file (polling complete)
+                    _remove_pending_getgem_task(vid)
+
             except Exception as e:
+                _remove_pending_getgem_task(vid)
                 all_results.append({
                     "verificationId": vid,
                     "status": "error",

@@ -4506,10 +4506,10 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
         # Auto-degrade based on success rate
         if getgem_rate * 100 < auto_degrade_threshold and bot_rate * 100 >= auto_degrade_threshold:
             effective_getgem_pct, effective_bot_pct = 0, 100
-            logger.info(f"[MixedMode] GetGem auto-degraded (rate={getgem_rate:.0%} < {auto_degrade_threshold}%)")
+            print(f"[MixedMode] GetGem auto-degraded (rate={getgem_rate:.0%} < {auto_degrade_threshold}%)")
         elif bot_rate * 100 < auto_degrade_threshold and getgem_rate * 100 >= auto_degrade_threshold:
             effective_getgem_pct, effective_bot_pct = 100, 0
-            logger.info(f"[MixedMode] Bot auto-degraded (rate={bot_rate:.0%} < {auto_degrade_threshold}%)")
+            print(f"[MixedMode] Bot auto-degraded (rate={bot_rate:.0%} < {auto_degrade_threshold}%)")
 
     # Split VIDs by allocation
     total = len(request.verificationIds)
@@ -4520,7 +4520,7 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
     getgem_vids = request.verificationIds[:getgem_count]
     bot_vids = request.verificationIds[getgem_count:]
 
-    logger.info(f"[MixedMode] Routing {len(getgem_vids)} to GetGem, {len(bot_vids)} to Bot (allocation: {effective_getgem_pct}/{effective_bot_pct})")
+    print(f"[MixedMode] Routing {len(getgem_vids)} to GetGem, {len(bot_vids)} to Bot (allocation: {effective_getgem_pct}/{effective_bot_pct})")
 
     async def event_stream():
         import json as _json
@@ -4775,7 +4775,7 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                     fallback_items.append(r)
 
             if fallback_items:
-                logger.info(f"[MixedMode] Fallback: {len(fallback_items)} items to retry")
+                print(f"[MixedMode] Fallback: {len(fallback_items)} items to retry")
                 for fb in fallback_items:
                     vid = fb["verificationId"]
                     original_via = fb.get("via", "")

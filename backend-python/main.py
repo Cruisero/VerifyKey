@@ -1778,7 +1778,7 @@ async def startup_event():
         now = _time.time()
         stale_vids = [v for v, t in pending.items() if now - t.get("timestamp", 0) > 600]
         for sv in stale_vids:
-            logger.info(f"[GetGem Recovery] Skipping stale task {sv[:8]}... (age > 10min)")
+            print(f"[GetGem Recovery] Skipping stale task {sv[:8]}... (age > 10min)")
             _remove_pending_getgem_task(sv)
         
         active = {v: t for v, t in pending.items() if v not in stale_vids}

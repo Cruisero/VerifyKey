@@ -5001,6 +5001,36 @@ async def toggle_auto_maintenance(request: dict):
     return {"ok": True, "autoMaintenance": enabled}
 
 
+@app.get("/api/admin/notif-check")
+async def check_notification_listener():
+    """Admin: Diagnose DualBot notification listener status."""
+    from telegram_manager import tg_manager
+    diag = {
+        "handlerRegistered": tg_manager._notif_registered,
+        "channel": "NotifSuccess",
+        "connectedClients": len(tg_manager.get_all_clients()),
+        "canResolveChannel": False,
+        "recentMessages": [],
+        "error": None,
+    }
+    try:
+        # Try to resolve the channel entity via any connected client
+        result = tg_manager.get_next_client()
+        if not result:
+            diag["error"] = "No connected Telegram client"
+            return diag
+        account_id, client = result
+        entity = await client.get_entity("NotifSuccess")
+        diag["canResolveChannel"] = True
+        diag["channelInfo"] = f"{getattr(entity, 'title', '')} (id={entity.id})"
+        # Fetch last 3 messages
+        msgs = await client.get_messages(entity, limit=3)
+        diag["recentMessages"] = [
+            {"text": (m.text or "")[:120], "date": str(m.date)} for m in msgs
+        ]
+    except Exception as e:
+        diag["error"] = str(e)
+    return diag
 # ========== Routing Stats API ==========
 
 @app.get("/api/routing/stats")

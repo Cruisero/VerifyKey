@@ -213,14 +213,27 @@ class GenericSingleBotVerifier:
             if not reply_text:
                 return
 
-            # ---- VID matching: only capture messages for OUR VID ----
+            # ---- VID matching: prefer messages containing OUR VID ----
+            vid_matched = True
             if match_vid:
                 # Bot may return VID without dashes (e.g. "69aaa4abfd3d62455b7a17ae")
                 # but our VID has dashes (e.g. "69aaa4ab-fd3d-6245-5b7a-17ae")
                 vid_no_dash = match_vid.replace("-", "")
                 if match_vid not in reply_text and vid_no_dash not in reply_text:
-                    logger.debug(f"[GenericBot:{self.bot_id}] Skipping message (VID {match_vid[:8]} not found): {reply_text[:80]}")
-                    return
+                    vid_matched = False
+                    # Don't skip yet — check if it matches a definitive response rule
+                    # (e.g. "Service Update" announcements that don't include VID)
+                    if wait_for_final:
+                        parsed_check = self._parse_response(reply_text, "check")
+                        if parsed_check.get("status") in ("processing", "unknown"):
+                            # Not a definitive result, safe to skip
+                            logger.debug(f"[GenericBot:{self.bot_id}] Skipping non-VID message ({parsed_check['status']}): {reply_text[:80]}")
+                            return
+                        else:
+                            logger.info(f"[GenericBot:{self.bot_id}] No VID match but definitive rule hit ({parsed_check['status']}): {reply_text[:80]}")
+                    else:
+                        logger.debug(f"[GenericBot:{self.bot_id}] Skipping message (VID {match_vid[:8]} not found): {reply_text[:80]}")
+                        return
 
             event_type = "New" if isinstance(event, events.NewMessage.Event) else "Edit"
             logger.info(f"[GenericBot:{self.bot_id}] {event_type} message from @{bot_username}: {reply_text[:120]}...")

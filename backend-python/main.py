@@ -2528,14 +2528,18 @@ async def verify_unified(request: UnifiedVerifyRequest):
                     remaining = int(suspension_expiry - _time.time())
                     logger.info(f"[Waterfall:{bot_type}] Bot is SUSPENDED for {remaining}s more, skipping...")
                     on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
-                                     "step": "suspended", "message": f"Bot {bot_type} 已暂停 ({remaining}s)，切换下一个..."}
-                    progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
+                                     "step": "suspended", "message": f"节点暂停中，切换下一个..."}
+                    # User SSE: strip botType; Admin broadcast: keep it
+                    user_event = {k: v for k, v in on_prog_event.items() if k != "botType"}
+                    progress_events.append(f"data: {json.dumps(user_event, ensure_ascii=False)}\n\n")
                     broadcast_verify_event(on_prog_event)
                     continue  # Skip to next bot in waterfall
 
                 async def on_progress(progress, _bt=bot_type):
                     event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": _bt, **progress}
-                    progress_events.append(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
+                    # User SSE: strip botType; Admin broadcast: keep it
+                    user_event = {k: v for k, v in event.items() if k != "botType"}
+                    progress_events.append(f"data: {json.dumps(user_event, ensure_ascii=False)}\n\n")
                     broadcast_verify_event(event)
 
                 # Create verifier for singlebots
@@ -2818,7 +2822,10 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 "cdkRemaining": cdk_remaining
             }
             broadcast_verify_event(done_event)
-            yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
+            # Strip botType from user-facing SSE stream
+            user_results = [{k: v for k, v in r.items() if k != "botType"} for r in results]
+            user_done = {**done_event, "results": user_results}
+            yield f"data: {json.dumps(user_done, ensure_ascii=False)}\n\n"
 
         except Exception as gen_err:
             logging.error(f"[Unified] event_stream generator crashed: {gen_err}")

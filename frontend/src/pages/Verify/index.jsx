@@ -35,14 +35,20 @@ export default function Verify() {
 
     const { t, lang } = useLang();
 
-    // Sanitize SSE messages: strip internal routing info (getgem, bot, fallback, etc.)
+    // Sanitize SSE messages: strip internal routing info (getgem, bot names, fallback, etc.)
     const sanitizeMessage = (msg) => {
         if (!msg) return msg;
-        // Replace provider/routing references with generic terms
         let s = msg;
-        s = s.replace(/getgem/gi, '').replace(/fallback/gi, '').replace(/bot[:\s]?[a-zA-Z0-9_@]*/gi, '');
+        // Strip all known internal bot/provider names
+        s = s.replace(/\b(getgem|oldbot|blackbot|dualbot|singlebot|sheeridbot|black_verifier_bot)\b/gi, '');
+        s = s.replace(/bot[:\s]?[a-zA-Z0-9_@]*/gi, '');
+        s = s.replace(/fallback/gi, '');
+        s = s.replace(/waterfall/gi, '');
         s = s.replace(/network\s*error/gi, t('msgError') || '验证失败');
         s = s.replace(/切换备用节点/g, t('processing') || '处理中');
+        // Clean up leftover artifacts: empty parens, brackets, extra spaces
+        s = s.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '');
+        s = s.replace(/[,;]\s*$/g, '');
         s = s.replace(/\s{2,}/g, ' ').trim();
         return s || (t('msgError') || '验证失败');
     };

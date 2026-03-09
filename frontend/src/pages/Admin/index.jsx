@@ -2673,13 +2673,14 @@ export default function Admin() {
                                         <div className="settings-form">
 
                                             {/* Node Cards */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                                            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
                                                 {nodeOrder.map(nid => {
                                                     const n = nodes[nid] || { nodeId: nid, status: 'healthy', successRate: 50, enabled: true, sparkline: [], extra: {} };
                                                     const color = statusColors[n.status] || '#6b7280';
                                                     const label = statusLabels[n.status] || n.status;
                                                     return (
                                                         <div key={nid} style={{
+                                                            flex: '1 1 0', minWidth: '140px',
                                                             background: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px 16px',
                                                             border: `1px solid ${n.enabled ? color + '30' : 'var(--border-color)'}`,
                                                             opacity: n.enabled ? 1 : 0.5, transition: 'all .2s'

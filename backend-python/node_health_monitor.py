@@ -391,7 +391,9 @@ class NodeHealthMonitor:
                     if node.recover_streak >= 3:
                         node.status = "healthy"
                         node.recover_streak = 0
-                        logger.info("[NodeHealth] %s recovered → healthy (rate=%.0f%%)", node.node_id, rate * 100)
+                        # Reset stats on recovery — start fresh with Bayesian prior
+                        bot_stats_tracker.clear(node.node_id)
+                        logger.info("[NodeHealth] %s recovered → healthy (rate=%.0f%%), stats reset", node.node_id, rate * 100)
                 else:
                     node.recover_streak = 0
             elif node.status == "degraded":
@@ -400,7 +402,9 @@ class NodeHealthMonitor:
                     if node.recover_streak >= 2:
                         node.status = "healthy"
                         node.recover_streak = 0
-                        logger.info("[NodeHealth] %s recovered → healthy (rate=%.0f%%)", node.node_id, rate * 100)
+                        # Reset stats on recovery — start fresh with Bayesian prior
+                        bot_stats_tracker.clear(node.node_id)
+                        logger.info("[NodeHealth] %s recovered → healthy (rate=%.0f%%), stats reset", node.node_id, rate * 100)
                 elif rate < circuit:
                     node.status = "circuit_broken"
                     node.recover_streak = 0

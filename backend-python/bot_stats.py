@@ -183,6 +183,21 @@ class BotStatsTracker:
             result[bot_id] = self.get_stats(bot_id)
         return result
 
+    def clear(self, bot_id: str):
+        """Clear all stats for a bot (used on circuit breaker recovery)."""
+        self._load_from_db()
+        if bot_id in self._records:
+            self._records[bot_id].clear()
+        # Also clear from DB
+        try:
+            import database
+            conn = database.get_connection()
+            conn.execute("DELETE FROM bot_stats WHERE bot_id = ?", (bot_id,))
+            conn.commit()
+            logger.info(f"[BotStats] Cleared stats for {bot_id} (circuit breaker recovery)")
+        except Exception as e:
+            logger.warning(f"[BotStats] Failed to clear DB for {bot_id}: {e}")
+
     def get_expected_cost(self, bot_id: str, cost_per_verify: float = 1.0) -> float:
         """
         Calculate expected cost per successful verification.

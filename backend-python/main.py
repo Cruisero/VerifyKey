@@ -3717,7 +3717,7 @@ async def get_verification_history_endpoint():
 async def get_admin_verification_history(authorization: Optional[str] = Header(None)):
     """Get full verification history with all fields (admin only)"""
     _verify_admin_token(authorization)
-    history = verification_history.get_recent_history(200)
+    history = verification_history.get_recent_history(200, ignore_reset=True)
     stats = verification_history.get_history_stats()
     return {
         "history": history,

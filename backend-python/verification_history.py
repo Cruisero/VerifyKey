@@ -89,20 +89,21 @@ def update_verification(record_id: str, status: str) -> bool:
     return cursor.rowcount > 0
 
 
-def get_recent_history(limit: int = 200) -> List[Dict]:
+def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dict]:
     """
     Get recent verification history.
-    Only returns records after _display_reset_at if set.
+    Only returns records after _display_reset_at if set (unless ignore_reset=True).
     
     Args:
         limit: Max number of records to return
+        ignore_reset: If True, ignore the display reset point (for admin views)
     
     Returns:
         List of verification records, newest last
     """
     global _display_reset_at
     conn = database.get_connection()
-    if _display_reset_at:
+    if _display_reset_at and not ignore_reset:
         cursor = conn.execute(
             "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history WHERE timestamp > ? ORDER BY rowid DESC LIMIT ?",
             (_display_reset_at, limit)

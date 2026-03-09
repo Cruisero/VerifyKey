@@ -2015,7 +2015,7 @@ export default function Admin() {
                                                 </div>
                                             </div>
                                             {/* Manual override buttons - rightmost */}
-                                            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', marginLeft: '8px' }}>
+                                            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', marginLeft: 'auto', alignSelf: 'center' }}>
                                                 {!isPass && (
                                                     <button
                                                         title="手动标记为通过"

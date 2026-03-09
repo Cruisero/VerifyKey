@@ -2528,6 +2528,11 @@ export default function Admin() {
                                                                 {(nid === 'blackbot' || nid === 'dualbot') && n.extra?.total !== undefined && (
                                                                     <span>{n.extra.total} verified</span>
                                                                 )}
+                                                                {n.extra?.decayed && (
+                                                                    <span style={{ color: '#f59e0b', marginLeft: '4px' }} title={n.extra.idleMinutes ? `空闲 ${n.extra.idleMinutes} 分钟` : '无历史数据'}>
+                                                                        ⏳ {n.extra.idleMinutes ? `空闲${Math.round(n.extra.idleMinutes)}m` : '无数据'}
+                                                                    </span>
+                                                                )}
                                                                 {n.extra?.maintenance && <span style={{ color: '#ef4444', marginLeft: '6px' }}>⚠️ Maintenance</span>}
                                                                 {n.source === 'external' && <span style={{ marginLeft: '6px' }}>🌐</span>}
                                                             </div>
@@ -2553,9 +2558,9 @@ export default function Admin() {
                                             </div>
 
                                             {/* ── Traffic Allocation Bar ── */}
-                                            <div style={{ marginBottom: '20px' }}>
+                                            <div style={{ marginBottom: '24px' }}>
                                                 <label className="input-label">📊 流量分配</label>
-                                                <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', height: '32px', marginBottom: '8px' }}>
+                                                <div style={{ display: 'flex', borderRadius: '10px', overflow: 'hidden', height: '36px', marginBottom: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
                                                     {nodeOrder.map(nid => {
                                                         const pct = allocation[nid] || 0;
                                                         if (pct <= 0) return null;
@@ -2563,70 +2568,79 @@ export default function Admin() {
                                                             <div key={nid} style={{
                                                                 width: `${pct}%`, background: nodeColors[nid],
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                color: '#fff', fontSize: '12px', fontWeight: 700, transition: 'width .3s',
-                                                                minWidth: pct > 0 ? '30px' : '0',
+                                                                color: '#fff', fontSize: '13px', fontWeight: 700, transition: 'width .3s',
+                                                                minWidth: pct > 0 ? '40px' : '0',
                                                             }}>
                                                                 {pct}%
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
                                                     {nodeOrder.map(nid => (
-                                                        <span key={nid} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-                                                            <span style={{ width: 8, height: 8, borderRadius: '2px', background: nodeColors[nid] }} />
-                                                            {nodeLabels[nid]} {allocation[nid] || 0}%
+                                                        <span key={nid} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                                                            <span style={{ width: 10, height: 10, borderRadius: '3px', background: nodeColors[nid] }} />
+                                                            {nodeLabels[nid]} <strong>{allocation[nid] || 0}%</strong>
                                                         </span>
                                                     ))}
                                                 </div>
                                             </div>
 
                                             {/* ── Threshold Sliders ── */}
-                                            <div style={{ marginBottom: '20px' }}>
+                                            <div style={{ marginBottom: '24px' }}>
                                                 <label className="input-label">⚙️ 阈值配置</label>
-                                                {[
-                                                    { key: 'degradeThreshold', label: '降级阈值', color: '#f59e0b', desc: '低于此值 → 分配减半' },
-                                                    { key: 'circuitBreakThreshold', label: '熔断阈值', color: '#ef4444', desc: '低于此值 → 停用' },
-                                                    { key: 'recoverThreshold', label: '恢复阈值', color: '#10b981', desc: '高于此值连续3次 → 恢复' },
-                                                ].map(({ key, label, color, desc }) => (
-                                                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                                                        <span style={{ fontSize: '12px', minWidth: '70px', color }}>{label}</span>
-                                                        <input type="range" min="0" max="100" step="5"
-                                                            value={thresholds[key] || 50}
-                                                            onChange={(e) => {
-                                                                const val = parseInt(e.target.value);
-                                                                setNodeHealth(prev => ({
-                                                                    ...prev, config: { ...prev.config, thresholds: { ...prev.config.thresholds, [key]: val } }
-                                                                }));
-                                                            }}
-                                                            onMouseUp={(e) => saveConfig({ thresholds: { [key]: parseInt(e.target.value) } })}
-                                                            style={{ flex: 1, accentColor: color }}
-                                                        />
-                                                        <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '40px', color }}>{thresholds[key] || 50}%</span>
-                                                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{desc}</span>
-                                                    </div>
-                                                ))}
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                                                    {[
+                                                        { key: 'degradeThreshold', label: '降级阈值', color: '#f59e0b', desc: '成功率低于此值时，该节点流量分配减半' },
+                                                        { key: 'circuitBreakThreshold', label: '熔断阈值', color: '#ef4444', desc: '成功率低于此值时，停止分配流量' },
+                                                        { key: 'recoverThreshold', label: '恢复阈值', color: '#10b981', desc: '成功率连续3次高于此值后恢复' },
+                                                    ].map(({ key, label, color, desc }) => (
+                                                        <div key={key} style={{
+                                                            background: 'var(--bg-secondary)', borderRadius: '10px', padding: '14px 18px',
+                                                            border: `1px solid ${color}20`
+                                                        }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                                <span style={{ fontSize: '13px', fontWeight: 600, color }}>{label}</span>
+                                                                <span style={{ fontSize: '18px', fontWeight: 800, color }}>{thresholds[key] || 50}%</span>
+                                                            </div>
+                                                            <input type="range" min="0" max="100" step="5"
+                                                                value={thresholds[key] || 50}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value);
+                                                                    setNodeHealth(prev => ({
+                                                                        ...prev, config: { ...prev.config, thresholds: { ...prev.config.thresholds, [key]: val } }
+                                                                    }));
+                                                                }}
+                                                                onMouseUp={(e) => saveConfig({ thresholds: { [key]: parseInt(e.target.value) } })}
+                                                                style={{ width: '100%', accentColor: color }}
+                                                            />
+                                                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px' }}>{desc}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
 
                                             {/* ── Mode Buttons ── */}
-                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
+                                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px', justifyContent: 'center' }}>
                                                 <button className="btn btn-sm"
-                                                    style={{ background: 'var(--bg-tertiary)', padding: '6px 16px', fontSize: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}
+                                                    style={{ background: 'var(--bg-tertiary)', padding: '8px 20px', fontSize: '13px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}
                                                     onClick={forceRefresh}
                                                 >🔄 手动刷新</button>
                                                 <button className="btn btn-sm"
                                                     style={{
-                                                        background: config.mode === 'auto' ? '#3b82f6' : 'var(--bg-tertiary)',
+                                                        background: config.mode === 'auto' ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'var(--bg-tertiary)',
                                                         color: config.mode === 'auto' ? '#fff' : 'inherit',
-                                                        padding: '6px 16px', fontSize: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer'
+                                                        padding: '8px 20px', fontSize: '13px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer',
+                                                        boxShadow: config.mode === 'auto' ? '0 2px 8px rgba(59,130,246,0.3)' : 'none'
                                                     }}
                                                     onClick={() => saveConfig({ mode: 'auto' })}
                                                 >⚡ 自动路由</button>
                                                 <button className="btn btn-sm"
                                                     style={{
-                                                        background: config.mode === 'locked' ? '#f59e0b' : 'var(--bg-tertiary)',
+                                                        background: config.mode === 'locked' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--bg-tertiary)',
                                                         color: config.mode === 'locked' ? '#fff' : 'inherit',
-                                                        padding: '6px 16px', fontSize: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer'
+                                                        padding: '8px 20px', fontSize: '13px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer',
+                                                        boxShadow: config.mode === 'locked' ? '0 2px 8px rgba(245,158,11,0.3)' : 'none'
                                                     }}
                                                     onClick={() => saveConfig({ mode: 'locked', lockedAllocation: allocation })}
                                                 >📌 锁定分配</button>
@@ -3856,146 +3870,7 @@ export default function Admin() {
                                             </div>
                                         )}
 
-                                        {/* ── Bot Priority Dashboard ── */}
-                                        {(() => {
-                                            const bots = botStats.bots || [];
-                                            return (
-                                                <div style={{
-                                                    borderRadius: '12px', overflow: 'hidden',
-                                                    border: '1px solid var(--border)', marginBottom: '12px'
-                                                }}>
-                                                    <div style={{
-                                                        padding: '14px 18px',
-                                                        background: 'linear-gradient(135deg, rgba(255,152,0,0.08), rgba(255,152,0,0.02))',
-                                                        borderBottom: '1px solid var(--border)',
-                                                        display: 'flex', alignItems: 'center', gap: '8px'
-                                                    }}>
-                                                        <span style={{ fontSize: '16px' }}>📊</span>
-                                                        <span style={{ fontWeight: 700, fontSize: '14px' }}>Bot 优先级 & 实时统计</span>
-                                                        <span style={{
-                                                            fontSize: '10px', padding: '2px 8px',
-                                                            background: 'rgba(255,152,0,0.15)', color: '#ff9800',
-                                                            borderRadius: '10px', fontWeight: 700, marginLeft: 'auto'
-                                                        }}>瀑布模式</span>
-                                                    </div>
-                                                    <div style={{ padding: '16px 18px' }}>
-                                                        {/* Time window slider */}
-                                                        <div style={{ marginBottom: '16px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                                <label style={{ fontSize: '13px', fontWeight: 600 }}>统计时间窗口</label>
-                                                                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary)' }}>
-                                                                    {botStats.windowMinutes} 分钟
-                                                                </span>
-                                                            </div>
-                                                            <input
-                                                                type="range" min="5" max="120" step="5"
-                                                                value={botStats.windowMinutes}
-                                                                onChange={async (e) => {
-                                                                    const val = parseInt(e.target.value);
-                                                                    setBotStats(prev => ({ ...prev, windowMinutes: val }));
-                                                                    try {
-                                                                        await fetch(`${API}/api/bot-stats/window`, {
-                                                                            method: 'POST',
-                                                                            headers: { 'Content-Type': 'application/json' },
-                                                                            body: JSON.stringify({ windowMinutes: val })
-                                                                        });
-                                                                        fetchBotStats();
-                                                                    } catch (e) { /* ignore */ }
-                                                                }}
-                                                                style={{ width: '100%', cursor: 'pointer' }}
-                                                            />
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                                                <span>5分钟</span>
-                                                                <span>30分钟</span>
-                                                                <span>60分钟</span>
-                                                                <span>120分钟</span>
-                                                            </div>
-                                                        </div>
 
-                                                        {/* Bot priority table */}
-                                                        {bots.length === 0 ? (
-                                                            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                                                                暂无数据。请确保后端已重启并启用了至少一个 Bot，验证后将自动显示统计。
-                                                            </div>
-                                                        ) : (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                {bots.map((bot, i) => {
-                                                                    const ratePercent = Math.round(bot.rate * 100);
-                                                                    const barColor = ratePercent >= 70 ? '#4caf50' : ratePercent >= 40 ? '#ff9800' : '#f44336';
-                                                                    return (
-                                                                        <div key={bot.id} style={{
-                                                                            padding: '12px 14px', borderRadius: '10px',
-                                                                            border: '1px solid var(--border)',
-                                                                            background: i === 0 ? 'rgba(76,175,80,0.04)' : 'var(--bg-secondary)',
-                                                                            display: 'flex', alignItems: 'center', gap: '12px'
-                                                                        }}>
-                                                                            {/* Rank badge */}
-                                                                            <div style={{
-                                                                                width: '28px', height: '28px', borderRadius: '50%',
-                                                                                background: i === 0 ? '#4caf50' : i === 1 ? '#ff9800' : '#9e9e9e',
-                                                                                color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                                fontWeight: 800, fontSize: '13px', flexShrink: 0
-                                                                            }}>
-                                                                                {i + 1}
-                                                                            </div>
-
-                                                                            {/* Bot info */}
-                                                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                                                                    <span style={{ fontWeight: 700, fontSize: '13px' }}>{bot.name}</span>
-                                                                                    {i === 0 && (
-                                                                                        <span style={{ fontSize: '10px', padding: '1px 6px', background: 'rgba(76,175,80,0.15)', color: '#4caf50', borderRadius: '8px', fontWeight: 700 }}>
-                                                                                            优先
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                                {/* Success rate bar */}
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                    <div style={{ flex: 1, height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-                                                                                        <div style={{ width: `${ratePercent}%`, height: '100%', background: barColor, borderRadius: '3px', transition: 'width 0.3s' }} />
-                                                                                    </div>
-                                                                                    <span style={{ fontSize: '12px', fontWeight: 700, color: barColor, minWidth: '36px', textAlign: 'right' }}>
-                                                                                        {ratePercent}%
-                                                                                    </span>
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* Stats */}
-                                                                            <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                                                                                <div style={{ textAlign: 'center' }}>
-                                                                                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{bot.total}</div>
-                                                                                    <div>总数</div>
-                                                                                </div>
-                                                                                <div style={{ textAlign: 'center' }}>
-                                                                                    <div style={{ fontWeight: 700, fontSize: '14px', color: '#4caf50' }}>{bot.success}</div>
-                                                                                    <div>成功</div>
-                                                                                </div>
-                                                                                <div style={{ textAlign: 'center' }}>
-                                                                                    <div style={{ fontWeight: 700, fontSize: '14px', color: '#f44336' }}>{bot.failed}</div>
-                                                                                    <div>失败</div>
-                                                                                </div>
-                                                                                <div style={{ textAlign: 'center' }}>
-                                                                                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>¥{bot.costPerVerify}</div>
-                                                                                    <div>单价</div>
-                                                                                </div>
-                                                                                <div style={{ textAlign: 'center' }}>
-                                                                                    <div style={{ fontWeight: 700, fontSize: '14px', color: '#ff9800' }}>¥{bot.expectedCost}</div>
-                                                                                    <div>期望</div>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-
-                                                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '10px 0 0', lineHeight: 1.4 }}>
-                                                            💡 系统按「期望成本 = 单价 ÷ 成功率」升序排列，优先使用排名第一的 Bot。失败后自动尝试下一个。
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
 
                                         {/* ── Dual Bot Config ── */}
                                         <div style={{
@@ -5644,711 +5519,718 @@ export default function Admin() {
                             </div>
                         </div>
                     </div>
-                )}
+                )
+                }
 
                 {/* Verify Status Tab */}
-                {activeTab === 'verify-status' && (
-                    <div className="tab-content">
-                        {/* Live Grid Preview */}
-                        <div className="settings-section card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                <h3 style={{ margin: 0 }}>📋 实时验证状态</h3>
-                                <div style={{ display: 'flex', gap: '14px', fontSize: '13px' }}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
-                                        {historyStats.pass} Pass
-                                    </span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}></span>
-                                        {historyStats.failed} Failed
-                                    </span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
-                                        {historyStats.cancel} Cancel
-                                    </span>
+                {
+                    activeTab === 'verify-status' && (
+                        <div className="tab-content">
+                            {/* Live Grid Preview */}
+                            <div className="settings-section card">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                    <h3 style={{ margin: 0 }}>📋 实时验证状态</h3>
+                                    <div style={{ display: 'flex', gap: '14px', fontSize: '13px' }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                                            {historyStats.pass} Pass
+                                        </span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}></span>
+                                            {historyStats.failed} Failed
+                                        </span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
+                                            {historyStats.cancel} Cancel
+                                        </span>
+                                    </div>
                                 </div>
+                                <div className="status-grid-container">
+                                    <div className="status-grid three-rows">
+                                        {historyData.slice(-60).map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className={`status-block ${item.status}`}
+                                                onMouseEnter={() => setHoveredStatusItem(item)}
+                                                onMouseLeave={() => setHoveredStatusItem(null)}
+                                            >
+                                                {hoveredStatusItem?.id === item.id && (
+                                                    <div className="status-tooltip">
+                                                        <span className="tooltip-status">
+                                                            {item.status === 'pass' ? '✓ Pass' :
+                                                                item.status === 'failed' ? '✕ Failed' :
+                                                                    item.status === 'processing' ? '⏳ Processing' : '◷ Cancel'}
+                                                        </span>
+                                                        <span className="tooltip-time">{item.timestamp?.split('T')[1]?.slice(0, 8) || ''}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {historyData.length === 0 && (
+                                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px', padding: '20px 0' }}>暂无验证记录</p>
+                                )}
                             </div>
-                            <div className="status-grid-container">
-                                <div className="status-grid three-rows">
-                                    {historyData.slice(-60).map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className={`status-block ${item.status}`}
-                                            onMouseEnter={() => setHoveredStatusItem(item)}
-                                            onMouseLeave={() => setHoveredStatusItem(null)}
+
+                            {/* Controls */}
+                            <div className="settings-section card">
+                                <h3>➕ 添加记录</h3>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '12px' }}>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="50"
+                                        value={addCount}
+                                        onChange={(e) => setAddCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                                        className="input"
+                                        style={{ width: '70px', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条</span>
+                                    {[
+                                        { status: 'pass', label: '✅ Pass', color: '#10b981' },
+                                        { status: 'failed', label: '❌ Failed', color: '#ef4444' },
+                                        { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
+                                    ].map(item => (
+                                        <button
+                                            key={item.status}
+                                            disabled={addingStatus !== null}
+                                            className="btn btn-sm"
+                                            style={{
+                                                background: addingStatus === item.status ? '#999' : item.color,
+                                                color: '#fff',
+                                                border: 'none',
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                cursor: addingStatus !== null ? 'not-allowed' : 'pointer',
+                                                opacity: addingStatus !== null && addingStatus !== item.status ? 0.5 : 1
+                                            }}
+                                            onClick={async () => {
+                                                if (addingStatus !== null) return;
+                                                setAddingStatus(item.status);
+                                                try {
+                                                    const res = await fetch(`${API_BASE}/api/verify/history`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ status: item.status, count: addCount })
+                                                    });
+                                                    if (res.ok) {
+                                                        const data = await res.json();
+                                                        // Re-fetch to get accurate grid
+                                                        const hRes = await fetch(`${API_BASE}/api/verify/history`);
+                                                        if (hRes.ok) {
+                                                            const hData = await hRes.json();
+                                                            setHistoryData(hData.history || []);
+                                                            setHistoryStats(hData.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                                        }
+                                                    }
+                                                } catch (e) {
+                                                    alert('添加失败: ' + e.message);
+                                                } finally {
+                                                    setAddingStatus(null);
+                                                }
+                                            }}
                                         >
-                                            {hoveredStatusItem?.id === item.id && (
-                                                <div className="status-tooltip">
-                                                    <span className="tooltip-status">
-                                                        {item.status === 'pass' ? '✓ Pass' :
-                                                            item.status === 'failed' ? '✕ Failed' :
-                                                                item.status === 'processing' ? '⏳ Processing' : '◷ Cancel'}
-                                                    </span>
-                                                    <span className="tooltip-time">{item.timestamp?.split('T')[1]?.slice(0, 8) || ''}</span>
-                                                </div>
-                                            )}
-                                        </div>
+                                            {addingStatus === item.status ? '...' : item.label}
+                                        </button>
                                     ))}
                                 </div>
-                            </div>
-                            {historyData.length === 0 && (
-                                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px', padding: '20px 0' }}>暂无验证记录</p>
-                            )}
-                        </div>
 
-                        {/* Controls */}
-                        <div className="settings-section card">
-                            <h3>➕ 添加记录</h3>
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '12px' }}>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max="50"
-                                    value={addCount}
-                                    onChange={(e) => setAddCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
-                                    className="input"
-                                    style={{ width: '70px', textAlign: 'center' }}
-                                />
-                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条</span>
-                                {[
-                                    { status: 'pass', label: '✅ Pass', color: '#10b981' },
-                                    { status: 'failed', label: '❌ Failed', color: '#ef4444' },
-                                    { status: 'cancel', label: '◷ Cancel', color: '#94a3b8' },
-                                ].map(item => (
+                                {/* Clear All */}
+                                <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border, #e2ddd8)' }}>
                                     <button
-                                        key={item.status}
-                                        disabled={addingStatus !== null}
                                         className="btn btn-sm"
+                                        disabled={addingStatus !== null}
                                         style={{
-                                            background: addingStatus === item.status ? '#999' : item.color,
-                                            color: '#fff',
-                                            border: 'none',
-                                            padding: '6px 14px',
+                                            background: 'transparent',
+                                            color: '#ef4444',
+                                            border: '1px solid #ef4444',
+                                            padding: '6px 16px',
                                             borderRadius: '6px',
                                             fontSize: '12px',
                                             fontWeight: 600,
-                                            cursor: addingStatus !== null ? 'not-allowed' : 'pointer',
-                                            opacity: addingStatus !== null && addingStatus !== item.status ? 0.5 : 1
+                                            cursor: 'pointer'
                                         }}
                                         onClick={async () => {
-                                            if (addingStatus !== null) return;
-                                            setAddingStatus(item.status);
+                                            if (!confirm('确定要重置验证状态显示吗？（不会删除数据库记录）')) return;
                                             try {
-                                                const res = await fetch(`${API_BASE}/api/verify/history`, {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ status: item.status, count: addCount })
-                                                });
+                                                const res = await fetch(`${API_BASE}/api/verify/history`);
                                                 if (res.ok) {
                                                     const data = await res.json();
-                                                    // Re-fetch to get accurate grid
-                                                    const hRes = await fetch(`${API_BASE}/api/verify/history`);
-                                                    if (hRes.ok) {
-                                                        const hData = await hRes.json();
-                                                        setHistoryData(hData.history || []);
-                                                        setHistoryStats(hData.stats || { pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
-                                                    }
+                                                    setHistoryData(data.history || []);
+                                                    const h = data.history || [];
+                                                    setHistoryStats({
+                                                        pass: h.filter(r => r.status === 'pass').length,
+                                                        failed: h.filter(r => r.status === 'failed').length,
+                                                        processing: h.filter(r => r.status === 'processing').length,
+                                                        cancel: h.filter(r => r.status === 'cancel').length,
+                                                        total: h.length,
+                                                    });
+                                                }
+                                            } catch (e) {
+                                                alert('重置失败: ' + e.message);
+                                            }
+                                        }}
+                                    >
+                                        🔄 重新计算
+                                    </button>
+                                    <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                        共 {historyStats.total || 0} 条记录
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Auto Record Rules */}
+                            <div className="settings-section card">
+                                <h3>⏱️ 自动添加记录</h3>
+                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 16px' }}>
+                                    配置自动添加规则，规则持久化保存，重启后自动恢复
+                                </p>
+
+                                {/* Existing rules list */}
+                                {autoRules.length > 0 && (
+                                    <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {autoRules.map(rule => (
+                                            <div key={rule.id} style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                padding: '10px 14px',
+                                                background: rule.enabled ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-secondary)',
+                                                border: `1px solid ${rule.enabled ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-primary)'}`,
+                                                borderRadius: '8px'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <span style={{
+                                                        width: 8, height: 8, borderRadius: '50%',
+                                                        background: rule.running ? '#10b981' : '#94a3b8',
+                                                        display: 'inline-block'
+                                                    }}></span>
+                                                    <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                                                        每 {rule.intervalMinutes || Math.round((rule.intervalSeconds || 60) / 60)} 分钟 → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
+                                                    </span>
+                                                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                                                        {rule.running ? '运行中' : '已停止'}
+                                                        {rule.durationHours > 0 && (
+                                                            rule.running && rule.remainingHours != null
+                                                                ? ` · 剩余 ${rule.remainingHours}h`
+                                                                : ` · 时效 ${rule.durationHours}h`
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                                    <button
+                                                        className="btn btn-sm"
+                                                        style={{
+                                                            background: rule.enabled ? '#f59e0b' : '#10b981',
+                                                            color: '#fff',
+                                                            border: 'none',
+                                                            padding: '4px 12px',
+                                                            borderRadius: '5px',
+                                                            fontSize: '11px',
+                                                            fontWeight: 600,
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={async () => {
+                                                            try {
+                                                                const res = await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, {
+                                                                    method: 'PUT',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ enabled: !rule.enabled })
+                                                                });
+                                                                if (res.ok) {
+                                                                    const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                                    if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
+                                                                }
+                                                            } catch (e) { alert(e.message); }
+                                                        }}
+                                                    >
+                                                        {rule.enabled ? '⏸ 停止' : '▶ 启动'}
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-sm"
+                                                        style={{
+                                                            background: 'transparent',
+                                                            color: '#ef4444',
+                                                            border: '1px solid #ef4444',
+                                                            padding: '4px 10px',
+                                                            borderRadius: '5px',
+                                                            fontSize: '11px',
+                                                            fontWeight: 600,
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={async () => {
+                                                            if (!confirm('删除此规则？')) return;
+                                                            try {
+                                                                await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, { method: 'DELETE' });
+                                                                const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                                if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
+                                                            } catch (e) { alert(e.message); }
+                                                        }}
+                                                    >
+                                                        🗑
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Add new rule */}
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', paddingTop: autoRules.length > 0 ? '12px' : 0, borderTop: autoRules.length > 0 ? '1px solid var(--border-primary)' : 'none' }}>
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>新规则：每</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="60"
+                                        value={newRule.intervalMinutes}
+                                        onChange={(e) => setNewRule(prev => ({ ...prev, intervalMinutes: Math.max(1, parseInt(e.target.value) || 5) }))}
+                                        className="input"
+                                        style={{ width: '65px', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟 添加</span>
+                                    <select
+                                        className="input"
+                                        value={newRule.status}
+                                        onChange={(e) => setNewRule(prev => ({ ...prev, status: e.target.value }))}
+                                        style={{ width: '110px', cursor: 'pointer' }}
+                                    >
+                                        <option value="pass">✅ Pass</option>
+                                        <option value="failed">❌ Failed</option>
+                                        <option value="cancel">◷ Cancel</option>
+                                    </select>
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>时效</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="72"
+                                        step="1"
+                                        value={newRule.durationHours}
+                                        onChange={(e) => setNewRule(prev => ({ ...prev, durationHours: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                                        className="input"
+                                        style={{ width: '65px', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>小时</span>
+                                    <button
+                                        className="btn btn-sm"
+                                        disabled={savingRule}
+                                        style={{
+                                            background: '#10b981',
+                                            color: '#fff',
+                                            border: 'none',
+                                            padding: '6px 16px',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                        onClick={async () => {
+                                            setSavingRule(true);
+                                            try {
+                                                const res = await fetch(`${API_BASE}/api/verify/auto-record`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify(newRule)
+                                                });
+                                                if (res.ok) {
+                                                    const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
+                                                    if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
                                                 }
                                             } catch (e) {
                                                 alert('添加失败: ' + e.message);
                                             } finally {
-                                                setAddingStatus(null);
+                                                setSavingRule(false);
                                             }
                                         }}
                                     >
-                                        {addingStatus === item.status ? '...' : item.label}
+                                        {savingRule ? '...' : '➕ 添加规则'}
                                     </button>
-                                ))}
-                            </div>
-
-                            {/* Clear All */}
-                            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border, #e2ddd8)' }}>
-                                <button
-                                    className="btn btn-sm"
-                                    disabled={addingStatus !== null}
-                                    style={{
-                                        background: 'transparent',
-                                        color: '#ef4444',
-                                        border: '1px solid #ef4444',
-                                        padding: '6px 16px',
-                                        borderRadius: '6px',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                    onClick={async () => {
-                                        if (!confirm('确定要重置验证状态显示吗？（不会删除数据库记录）')) return;
-                                        try {
-                                            const res = await fetch(`${API_BASE}/api/verify/history`);
-                                            if (res.ok) {
-                                                const data = await res.json();
-                                                setHistoryData(data.history || []);
-                                                const h = data.history || [];
-                                                setHistoryStats({
-                                                    pass: h.filter(r => r.status === 'pass').length,
-                                                    failed: h.filter(r => r.status === 'failed').length,
-                                                    processing: h.filter(r => r.status === 'processing').length,
-                                                    cancel: h.filter(r => r.status === 'cancel').length,
-                                                    total: h.length,
-                                                });
-                                            }
-                                        } catch (e) {
-                                            alert('重置失败: ' + e.message);
-                                        }
-                                    }}
-                                >
-                                    🔄 重新计算
-                                </button>
-                                <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                    共 {historyStats.total || 0} 条记录
-                                </span>
+                                </div>
                             </div>
                         </div>
+                    )
+                }
 
-                        {/* Auto Record Rules */}
-                        <div className="settings-section card">
-                            <h3>⏱️ 自动添加记录</h3>
-                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 16px' }}>
-                                配置自动添加规则，规则持久化保存，重启后自动恢复
-                            </p>
+                {/* Telegram Bot Tab */}
+                {
+                    activeTab === 'telegram-bot' && (
+                        <TelegramBotTab />
+                    )
+                }
 
-                            {/* Existing rules list */}
-                            {autoRules.length > 0 && (
-                                <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {autoRules.map(rule => (
-                                        <div key={rule.id} style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            padding: '10px 14px',
-                                            background: rule.enabled ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-secondary)',
-                                            border: `1px solid ${rule.enabled ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-primary)'}`,
-                                            borderRadius: '8px'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                <span style={{
-                                                    width: 8, height: 8, borderRadius: '50%',
-                                                    background: rule.running ? '#10b981' : '#94a3b8',
-                                                    display: 'inline-block'
-                                                }}></span>
-                                                <span style={{ fontSize: '13px', fontWeight: 500 }}>
-                                                    每 {rule.intervalMinutes || Math.round((rule.intervalSeconds || 60) / 60)} 分钟 → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
-                                                </span>
-                                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                                                    {rule.running ? '运行中' : '已停止'}
-                                                    {rule.durationHours > 0 && (
-                                                        rule.running && rule.remainingHours != null
-                                                            ? ` · 剩余 ${rule.remainingHours}h`
-                                                            : ` · 时效 ${rule.durationHours}h`
-                                                    )}
-                                                </span>
+                {/* Settings Tab */}
+                {
+                    activeTab === 'settings' && (
+                        <div className="tab-content">
+
+                            {/* Browser Mode - only shown when provider is not telegram */}
+                            {aiProvider !== 'telegram' && (
+                                <div className="settings-section card">
+                                    <h3>⚡ 验证模式</h3>
+                                    <p className="settings-desc">
+                                        选择验证请求的发送方式。API 模式速度快，浏览器模式使用 Chromium 模拟真实浏览器，更不容易被检测。
+                                    </p>
+                                    <div className="settings-form">
+                                        <div className="mode-selector" style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                                            <div
+                                                onClick={() => setBrowserMode(false)}
+                                                style={{
+                                                    flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
+                                                    border: !browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
+                                                    background: !browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                            >
+                                                <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚡</div>
+                                                <div style={{ fontWeight: 600, marginBottom: '4px' }}>API 模式</div>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>标准 HTTP 请求，速度快</div>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '6px' }}>
-                                                <button
-                                                    className="btn btn-sm"
-                                                    style={{
-                                                        background: rule.enabled ? '#f59e0b' : '#10b981',
-                                                        color: '#fff',
-                                                        border: 'none',
-                                                        padding: '4px 12px',
-                                                        borderRadius: '5px',
-                                                        fontSize: '11px',
-                                                        fontWeight: 600,
-                                                        cursor: 'pointer'
-                                                    }}
-                                                    onClick={async () => {
-                                                        try {
-                                                            const res = await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, {
-                                                                method: 'PUT',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ enabled: !rule.enabled })
-                                                            });
-                                                            if (res.ok) {
-                                                                const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
-                                                                if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
-                                                            }
-                                                        } catch (e) { alert(e.message); }
-                                                    }}
-                                                >
-                                                    {rule.enabled ? '⏸ 停止' : '▶ 启动'}
-                                                </button>
-                                                <button
-                                                    className="btn btn-sm"
-                                                    style={{
-                                                        background: 'transparent',
-                                                        color: '#ef4444',
-                                                        border: '1px solid #ef4444',
-                                                        padding: '4px 10px',
-                                                        borderRadius: '5px',
-                                                        fontSize: '11px',
-                                                        fontWeight: 600,
-                                                        cursor: 'pointer'
-                                                    }}
-                                                    onClick={async () => {
-                                                        if (!confirm('删除此规则？')) return;
-                                                        try {
-                                                            await fetch(`${API_BASE}/api/verify/auto-record/${rule.id}`, { method: 'DELETE' });
-                                                            const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
-                                                            if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
-                                                        } catch (e) { alert(e.message); }
-                                                    }}
-                                                >
-                                                    🗑
-                                                </button>
+                                            <div
+                                                onClick={() => setBrowserMode(true)}
+                                                style={{
+                                                    flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
+                                                    border: browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
+                                                    background: browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                            >
+                                                <div style={{ fontSize: '24px', marginBottom: '8px' }}>🌐</div>
+                                                <div style={{ fontWeight: 600, marginBottom: '4px' }}>浏览器模式</div>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>Chromium 模拟真实浏览器</div>
                                             </div>
                                         </div>
-                                    ))}
+                                        <button className="btn btn-primary" onClick={handleSaveAiConfig} disabled={saving}>
+                                            {saving ? '保存中...' : '保存'}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Add new rule */}
-                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', paddingTop: autoRules.length > 0 ? '12px' : 0, borderTop: autoRules.length > 0 ? '1px solid var(--border-primary)' : 'none' }}>
-                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>新规则：每</span>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max="60"
-                                    value={newRule.intervalMinutes}
-                                    onChange={(e) => setNewRule(prev => ({ ...prev, intervalMinutes: Math.max(1, parseInt(e.target.value) || 5) }))}
-                                    className="input"
-                                    style={{ width: '65px', textAlign: 'center' }}
-                                />
-                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟 添加</span>
-                                <select
-                                    className="input"
-                                    value={newRule.status}
-                                    onChange={(e) => setNewRule(prev => ({ ...prev, status: e.target.value }))}
-                                    style={{ width: '110px', cursor: 'pointer' }}
-                                >
-                                    <option value="pass">✅ Pass</option>
-                                    <option value="failed">❌ Failed</option>
-                                    <option value="cancel">◷ Cancel</option>
-                                </select>
-                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>时效</span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="72"
-                                    step="1"
-                                    value={newRule.durationHours}
-                                    onChange={(e) => setNewRule(prev => ({ ...prev, durationHours: Math.max(0, parseFloat(e.target.value) || 0) }))}
-                                    className="input"
-                                    style={{ width: '65px', textAlign: 'center' }}
-                                />
-                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>小时</span>
-                                <button
-                                    className="btn btn-sm"
-                                    disabled={savingRule}
-                                    style={{
-                                        background: '#10b981',
-                                        color: '#fff',
-                                        border: 'none',
-                                        padding: '6px 16px',
-                                        borderRadius: '6px',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                    onClick={async () => {
-                                        setSavingRule(true);
-                                        try {
-                                            const res = await fetch(`${API_BASE}/api/verify/auto-record`, {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify(newRule)
-                                            });
-                                            if (res.ok) {
-                                                const listRes = await fetch(`${API_BASE}/api/verify/auto-record`);
-                                                if (listRes.ok) setAutoRules((await listRes.json()).rules || []);
-                                            }
-                                        } catch (e) {
-                                            alert('添加失败: ' + e.message);
-                                        } finally {
-                                            setSavingRule(false);
-                                        }
-                                    }}
-                                >
-                                    {savingRule ? '...' : '➕ 添加规则'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                            {aiProvider === 'telegram' && (
+                                <div className="settings-section card">
+                                    <h3>🤖 Bot 验证</h3>
+                                    <p className="settings-desc">
+                                        当前使用 Bot 进行验证，无需选择验证模式。链接将直接发送给 Bot 处理。
+                                    </p>
+                                </div>
+                            )}
 
-                {/* Telegram Bot Tab */}
-                {activeTab === 'telegram-bot' && (
-                    <TelegramBotTab />
-                )}
+                            {/* Maintenance Mode Card */}
+                            <div className="settings-section card" style={{
+                                border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent',
+                                transition: 'all 0.3s ease',
+                                overflow: 'hidden',
+                                padding: 0
+                            }}>
+                                {/* Status Banner */}
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: maintenanceEnabled
+                                        ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
+                                        : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                                    borderBottom: '1px solid',
+                                    borderColor: maintenanceEnabled ? '#fecaca' : '#bbf7d0',
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    transition: 'all 0.3s ease'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{
+                                            width: '10px', height: '10px', borderRadius: '50%',
+                                            background: maintenanceEnabled ? '#ef4444' : '#22c55e',
+                                            boxShadow: maintenanceEnabled ? '0 0 8px rgba(239,68,68,0.5)' : '0 0 8px rgba(34,197,94,0.5)',
+                                            animation: maintenanceEnabled ? 'pulse 2s infinite' : 'none'
+                                        }} />
+                                        <span style={{
+                                            fontSize: '14px', fontWeight: 600,
+                                            color: maintenanceEnabled ? '#dc2626' : '#16a34a'
+                                        }}>
+                                            {maintenanceEnabled ? '维护模式已开启' : '网站运行正常'}
+                                        </span>
+                                    </div>
+                                    {/* Toggle Switch */}
+                                    <div
+                                        onClick={() => setMaintenanceEnabled(!maintenanceEnabled)}
+                                        style={{
+                                            width: '52px', height: '28px', borderRadius: '14px', cursor: 'pointer',
+                                            background: maintenanceEnabled ? 'linear-gradient(135deg, #ef4444, #dc2626)' : '#d1d5db',
+                                            position: 'relative', transition: 'all 0.3s ease',
+                                            boxShadow: maintenanceEnabled ? '0 0 12px rgba(239,68,68,0.3)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                                            flexShrink: 0
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: '22px', height: '22px', borderRadius: '50%',
+                                            background: '#fff', position: 'absolute', top: '3px',
+                                            left: maintenanceEnabled ? '27px' : '3px',
+                                            transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                                        }} />
+                                    </div>
+                                </div>
 
-                {/* Settings Tab */}
-                {activeTab === 'settings' && (
-                    <div className="tab-content">
+                                {/* Card Body */}
+                                <div style={{ padding: '20px 20px 0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                        <span style={{ fontSize: '20px' }}>🚧</span>
+                                        <h3 style={{ margin: 0, fontSize: '16px' }}>维护模式设置</h3>
+                                    </div>
 
-                        {/* Browser Mode - only shown when provider is not telegram */}
-                        {aiProvider !== 'telegram' && (
-                            <div className="settings-section card">
-                                <h3>⚡ 验证模式</h3>
-                                <p className="settings-desc">
-                                    选择验证请求的发送方式。API 模式速度快，浏览器模式使用 Chromium 模拟真实浏览器，更不容易被检测。
-                                </p>
-                                <div className="settings-form">
-                                    <div className="mode-selector" style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                                        <div
-                                            onClick={() => setBrowserMode(false)}
-                                            style={{
-                                                flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
-                                                border: !browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
-                                                background: !browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
-                                                transition: 'all 0.2s ease'
-                                            }}
-                                        >
-                                            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚡</div>
-                                            <div style={{ fontWeight: 600, marginBottom: '4px' }}>API 模式</div>
-                                            <div style={{ fontSize: '12px', color: '#64748b' }}>标准 HTTP 请求，速度快</div>
+                                    {/* Form Fields */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                        {/* Message Field */}
+                                        <div>
+                                            <label style={{
+                                                display: 'block', fontSize: '13px', fontWeight: 500,
+                                                color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                            }}>
+                                                📝 维护公告内容
+                                            </label>
+                                            <textarea
+                                                className="input textarea"
+                                                placeholder="输入将向用户显示的维护公告..."
+                                                rows={3}
+                                                value={maintenanceMessage}
+                                                onChange={(e) => setMaintenanceMessage(e.target.value)}
+                                                style={{
+                                                    resize: 'vertical', minHeight: '72px',
+                                                    fontSize: '14px', lineHeight: '1.5',
+                                                    width: '100%', boxSizing: 'border-box'
+                                                }}
+                                            />
                                         </div>
-                                        <div
-                                            onClick={() => setBrowserMode(true)}
-                                            style={{
-                                                flex: 1, padding: '16px', borderRadius: '12px', cursor: 'pointer',
-                                                border: browserMode ? '2px solid #7c5cfc' : '2px solid #e2e8f0',
-                                                background: browserMode ? 'linear-gradient(135deg, #f0ecff 0%, #e8e0ff 100%)' : '#f8fafc',
-                                                transition: 'all 0.2s ease'
-                                            }}
-                                        >
-                                            <div style={{ fontSize: '24px', marginBottom: '8px' }}>🌐</div>
-                                            <div style={{ fontWeight: 600, marginBottom: '4px' }}>浏览器模式</div>
-                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Chromium 模拟真实浏览器</div>
+
+                                        {/* Estimated End Time */}
+                                        <div>
+                                            <label style={{
+                                                display: 'block', fontSize: '13px', fontWeight: 500,
+                                                color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                            }}>
+                                                🕐 预计恢复时间 <span style={{ fontWeight: 400, color: '#94a3b8' }}>（可选）</span>
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <input
+                                                    type="datetime-local"
+                                                    className="input"
+                                                    value={maintenanceEstEnd ? maintenanceEstEnd.slice(0, 16) : ''}
+                                                    onChange={(e) => setMaintenanceEstEnd(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                                                    style={{ flex: 1, fontSize: '14px' }}
+                                                />
+                                                {maintenanceEstEnd && (
+                                                    <button
+                                                        onClick={() => setMaintenanceEstEnd('')}
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer',
+                                                            color: '#94a3b8', fontSize: '18px', padding: '4px',
+                                                            lineHeight: 1
+                                                        }}
+                                                        title="清除时间"
+                                                    >✕</button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                    <button className="btn btn-primary" onClick={handleSaveAiConfig} disabled={saving}>
-                                        {saving ? '保存中...' : '保存'}
+                                </div>
+
+                                {/* Action Bar */}
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                    padding: '16px 20px',
+                                    marginTop: '20px',
+                                    borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)'
+                                }}>
+                                    {maintenanceSaved && (
+                                        <span style={{
+                                            color: '#10b981', fontSize: '13px', fontWeight: 500,
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                            animation: 'fadeIn 0.3s ease'
+                                        }}>
+                                            <span>✓</span> 已保存
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={handleSaveMaintenance}
+                                        disabled={maintenanceSaving}
+                                        style={{
+                                            padding: '8px 24px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            cursor: maintenanceSaving ? 'not-allowed' : 'pointer',
+                                            fontSize: '14px',
+                                            fontWeight: 600,
+                                            color: '#fff',
+                                            background: maintenanceEnabled
+                                                ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+                                                : 'linear-gradient(135deg, #7c5cfc, #6d4fe8)',
+                                            boxShadow: maintenanceEnabled
+                                                ? '0 2px 8px rgba(239,68,68,0.3)'
+                                                : '0 2px 8px rgba(124,92,252,0.3)',
+                                            transition: 'all 0.2s ease',
+                                            opacity: maintenanceSaving ? 0.7 : 1,
+                                            display: 'flex', alignItems: 'center', gap: '6px'
+                                        }}
+                                    >
+                                        {maintenanceSaving ? (
+                                            <><span className="loading-spinner small" /> 保存中...</>
+                                        ) : maintenanceEnabled ? (
+                                            '保存并启用维护'
+                                        ) : (
+                                            '保存设置'
+                                        )}
                                     </button>
                                 </div>
                             </div>
-                        )}
 
-                        {aiProvider === 'telegram' && (
-                            <div className="settings-section card">
-                                <h3>🤖 Bot 验证</h3>
-                                <p className="settings-desc">
-                                    当前使用 Bot 进行验证，无需选择验证模式。链接将直接发送给 Bot 处理。
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Maintenance Mode Card */}
-                        <div className="settings-section card" style={{
-                            border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent',
-                            transition: 'all 0.3s ease',
-                            overflow: 'hidden',
-                            padding: 0
-                        }}>
-                            {/* Status Banner */}
-                            <div style={{
-                                padding: '14px 20px',
-                                background: maintenanceEnabled
-                                    ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
-                                    : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                                borderBottom: '1px solid',
-                                borderColor: maintenanceEnabled ? '#fecaca' : '#bbf7d0',
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                transition: 'all 0.3s ease'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{
-                                        width: '10px', height: '10px', borderRadius: '50%',
-                                        background: maintenanceEnabled ? '#ef4444' : '#22c55e',
-                                        boxShadow: maintenanceEnabled ? '0 0 8px rgba(239,68,68,0.5)' : '0 0 8px rgba(34,197,94,0.5)',
-                                        animation: maintenanceEnabled ? 'pulse 2s infinite' : 'none'
-                                    }} />
-                                    <span style={{
-                                        fontSize: '14px', fontWeight: 600,
-                                        color: maintenanceEnabled ? '#dc2626' : '#16a34a'
-                                    }}>
-                                        {maintenanceEnabled ? '维护模式已开启' : '网站运行正常'}
-                                    </span>
-                                </div>
-                                {/* Toggle Switch */}
-                                <div
-                                    onClick={() => setMaintenanceEnabled(!maintenanceEnabled)}
-                                    style={{
-                                        width: '52px', height: '28px', borderRadius: '14px', cursor: 'pointer',
-                                        background: maintenanceEnabled ? 'linear-gradient(135deg, #ef4444, #dc2626)' : '#d1d5db',
-                                        position: 'relative', transition: 'all 0.3s ease',
-                                        boxShadow: maintenanceEnabled ? '0 0 12px rgba(239,68,68,0.3)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
-                                        flexShrink: 0
-                                    }}
-                                >
-                                    <div style={{
-                                        width: '22px', height: '22px', borderRadius: '50%',
-                                        background: '#fff', position: 'absolute', top: '3px',
-                                        left: maintenanceEnabled ? '27px' : '3px',
-                                        transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
-                                    }} />
-                                </div>
-                            </div>
-
-                            {/* Card Body */}
-                            <div style={{ padding: '20px 20px 0' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                                    <span style={{ fontSize: '20px' }}>🚧</span>
-                                    <h3 style={{ margin: 0, fontSize: '16px' }}>维护模式设置</h3>
+                            {/* Tips Inline Config Card */}
+                            <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                                    borderBottom: '1px solid #bfdbfe',
+                                    display: 'flex', alignItems: 'center', gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '20px' }}>💡</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: '#1e40af' }}>页面提示文案配置</h3>
+                                    <span style={{ fontSize: '12px', color: '#60a5fa', marginLeft: 'auto' }}>显示在验证页面底部</span>
                                 </div>
 
-                                {/* Form Fields */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    {/* Message Field */}
-                                    <div>
-                                        <label style={{
-                                            display: 'block', fontSize: '13px', fontWeight: 500,
-                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
+                                <div style={{ padding: '20px' }}>
+                                    <textarea
+                                        className="input textarea"
+                                        value={tipsContent}
+                                        onChange={(e) => setTipsContent(e.target.value)}
+                                        rows={4}
+                                        style={{
+                                            width: '100%', fontSize: '14px', boxSizing: 'border-box',
+                                            resize: 'vertical', minHeight: '80px', lineHeight: '1.6'
+                                        }}
+                                        placeholder="输入提示内容，每行一条..."
+                                    />
+                                </div>
+
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                    padding: '16px 20px',
+                                    borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)'
+                                }}>
+                                    {tipsSaved && (
+                                        <span style={{
+                                            color: '#10b981', fontSize: '13px', fontWeight: 500,
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                            animation: 'fadeIn 0.3s ease'
                                         }}>
-                                            📝 维护公告内容
-                                        </label>
-                                        <textarea
-                                            className="input textarea"
-                                            placeholder="输入将向用户显示的维护公告..."
-                                            rows={3}
-                                            value={maintenanceMessage}
-                                            onChange={(e) => setMaintenanceMessage(e.target.value)}
-                                            style={{
-                                                resize: 'vertical', minHeight: '72px',
-                                                fontSize: '14px', lineHeight: '1.5',
-                                                width: '100%', boxSizing: 'border-box'
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* Estimated End Time */}
-                                    <div>
-                                        <label style={{
-                                            display: 'block', fontSize: '13px', fontWeight: 500,
-                                            color: 'var(--text-secondary, #64748b)', marginBottom: '6px'
-                                        }}>
-                                            🕐 预计恢复时间 <span style={{ fontWeight: 400, color: '#94a3b8' }}>（可选）</span>
-                                        </label>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <input
-                                                type="datetime-local"
-                                                className="input"
-                                                value={maintenanceEstEnd ? maintenanceEstEnd.slice(0, 16) : ''}
-                                                onChange={(e) => setMaintenanceEstEnd(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                                                style={{ flex: 1, fontSize: '14px' }}
-                                            />
-                                            {maintenanceEstEnd && (
-                                                <button
-                                                    onClick={() => setMaintenanceEstEnd('')}
-                                                    style={{
-                                                        background: 'none', border: 'none', cursor: 'pointer',
-                                                        color: '#94a3b8', fontSize: '18px', padding: '4px',
-                                                        lineHeight: 1
-                                                    }}
-                                                    title="清除时间"
-                                                >✕</button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Action Bar */}
-                            <div style={{
-                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
-                                padding: '16px 20px',
-                                marginTop: '20px',
-                                borderTop: '1px solid var(--border-color, #e2e8f0)',
-                                background: 'var(--bg-secondary, #f8fafc)'
-                            }}>
-                                {maintenanceSaved && (
-                                    <span style={{
-                                        color: '#10b981', fontSize: '13px', fontWeight: 500,
-                                        display: 'flex', alignItems: 'center', gap: '4px',
-                                        animation: 'fadeIn 0.3s ease'
-                                    }}>
-                                        <span>✓</span> 已保存
-                                    </span>
-                                )}
-                                <button
-                                    onClick={handleSaveMaintenance}
-                                    disabled={maintenanceSaving}
-                                    style={{
-                                        padding: '8px 24px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        cursor: maintenanceSaving ? 'not-allowed' : 'pointer',
-                                        fontSize: '14px',
-                                        fontWeight: 600,
-                                        color: '#fff',
-                                        background: maintenanceEnabled
-                                            ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-                                            : 'linear-gradient(135deg, #7c5cfc, #6d4fe8)',
-                                        boxShadow: maintenanceEnabled
-                                            ? '0 2px 8px rgba(239,68,68,0.3)'
-                                            : '0 2px 8px rgba(124,92,252,0.3)',
-                                        transition: 'all 0.2s ease',
-                                        opacity: maintenanceSaving ? 0.7 : 1,
-                                        display: 'flex', alignItems: 'center', gap: '6px'
-                                    }}
-                                >
-                                    {maintenanceSaving ? (
-                                        <><span className="loading-spinner small" /> 保存中...</>
-                                    ) : maintenanceEnabled ? (
-                                        '保存并启用维护'
-                                    ) : (
-                                        '保存设置'
+                                            <span>✓</span> 已保存
+                                        </span>
                                     )}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Tips Inline Config Card */}
-                        <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
-                            <div style={{
-                                padding: '14px 20px',
-                                background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                                borderBottom: '1px solid #bfdbfe',
-                                display: 'flex', alignItems: 'center', gap: '10px'
-                            }}>
-                                <span style={{ fontSize: '20px' }}>💡</span>
-                                <h3 style={{ margin: 0, fontSize: '16px', color: '#1e40af' }}>页面提示文案配置</h3>
-                                <span style={{ fontSize: '12px', color: '#60a5fa', marginLeft: 'auto' }}>显示在验证页面底部</span>
-                            </div>
-
-                            <div style={{ padding: '20px' }}>
-                                <textarea
-                                    className="input textarea"
-                                    value={tipsContent}
-                                    onChange={(e) => setTipsContent(e.target.value)}
-                                    rows={4}
-                                    style={{
-                                        width: '100%', fontSize: '14px', boxSizing: 'border-box',
-                                        resize: 'vertical', minHeight: '80px', lineHeight: '1.6'
-                                    }}
-                                    placeholder="输入提示内容，每行一条..."
-                                />
+                                    <button
+                                        onClick={handleSaveTips}
+                                        disabled={tipsSaving}
+                                        style={{
+                                            padding: '8px 24px', borderRadius: '8px', border: 'none',
+                                            cursor: tipsSaving ? 'not-allowed' : 'pointer',
+                                            fontSize: '14px', fontWeight: 600, color: '#fff',
+                                            background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                                            boxShadow: '0 2px 8px rgba(59,130,246,0.3)',
+                                            transition: 'all 0.2s ease',
+                                            opacity: tipsSaving ? 0.7 : 1,
+                                            display: 'flex', alignItems: 'center', gap: '6px'
+                                        }}
+                                    >
+                                        {tipsSaving ? (
+                                            <><span className="loading-spinner small" /> 保存中...</>
+                                        ) : '保存提示文案'}
+                                    </button>
+                                </div>
                             </div>
 
-                            <div style={{
-                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
-                                padding: '16px 20px',
-                                borderTop: '1px solid var(--border-color, #e2e8f0)',
-                                background: 'var(--bg-secondary, #f8fafc)'
-                            }}>
-                                {tipsSaved && (
-                                    <span style={{
-                                        color: '#10b981', fontSize: '13px', fontWeight: 500,
-                                        display: 'flex', alignItems: 'center', gap: '4px',
-                                        animation: 'fadeIn 0.3s ease'
-                                    }}>
-                                        <span>✓</span> 已保存
-                                    </span>
-                                )}
-                                <button
-                                    onClick={handleSaveTips}
-                                    disabled={tipsSaving}
-                                    style={{
-                                        padding: '8px 24px', borderRadius: '8px', border: 'none',
-                                        cursor: tipsSaving ? 'not-allowed' : 'pointer',
-                                        fontSize: '14px', fontWeight: 600, color: '#fff',
-                                        background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                                        boxShadow: '0 2px 8px rgba(59,130,246,0.3)',
-                                        transition: 'all 0.2s ease',
-                                        opacity: tipsSaving ? 0.7 : 1,
-                                        display: 'flex', alignItems: 'center', gap: '6px'
-                                    }}
-                                >
-                                    {tipsSaving ? (
-                                        <><span className="loading-spinner small" /> 保存中...</>
-                                    ) : '保存提示文案'}
-                                </button>
-                            </div>
-                        </div>
+                            {/* Database Backup Card */}
+                            <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                                    borderBottom: '1px solid #bbf7d0',
+                                    display: 'flex', alignItems: 'center', gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '20px' }}>🗄️</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: '#166534' }}>数据库备份</h3>
+                                    <span style={{ fontSize: '12px', color: '#4ade80', marginLeft: 'auto' }}>自动每日备份 · 保留最近 7 份</span>
+                                </div>
 
-                        {/* Database Backup Card */}
-                        <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
-                            <div style={{
-                                padding: '14px 20px',
-                                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                                borderBottom: '1px solid #bbf7d0',
-                                display: 'flex', alignItems: 'center', gap: '10px'
-                            }}>
-                                <span style={{ fontSize: '20px' }}>🗄️</span>
-                                <h3 style={{ margin: 0, fontSize: '16px', color: '#166534' }}>数据库备份</h3>
-                                <span style={{ fontSize: '12px', color: '#4ade80', marginLeft: 'auto' }}>自动每日备份 · 保留最近 7 份</span>
-                            </div>
-
-                            <div style={{ padding: '20px' }}>
-                                {backupList.length > 0 ? (
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-                                            <thead>
-                                                <tr style={{ borderBottom: '1px solid var(--border-color, #e2e8f0)' }}>
-                                                    <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>文件名</th>
-                                                    <th style={{ textAlign: 'right', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>大小</th>
-                                                    <th style={{ textAlign: 'right', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>创建时间</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {backupList.map((b, i) => (
-                                                    <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #f1f5f9)' }}>
-                                                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: '12px' }}>{b.filename}</td>
-                                                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{b.sizeMB} MB</td>
-                                                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{new Date(b.createdAt).toLocaleString('zh-CN')}</td>
+                                <div style={{ padding: '20px' }}>
+                                    {backupList.length > 0 ? (
+                                        <div style={{ marginBottom: '16px' }}>
+                                            <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                                                <thead>
+                                                    <tr style={{ borderBottom: '1px solid var(--border-color, #e2e8f0)' }}>
+                                                        <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>文件名</th>
+                                                        <th style={{ textAlign: 'right', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>大小</th>
+                                                        <th style={{ textAlign: 'right', padding: '8px 12px', color: 'var(--text-secondary, #64748b)' }}>创建时间</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                ) : (
-                                    <p style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '14px', margin: '0 0 16px' }}>暂无备份记录，首次自动备份将在启动后 1 分钟内创建。</p>
-                                )}
-                            </div>
+                                                </thead>
+                                                <tbody>
+                                                    {backupList.map((b, i) => (
+                                                        <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #f1f5f9)' }}>
+                                                            <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: '12px' }}>{b.filename}</td>
+                                                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{b.sizeMB} MB</td>
+                                                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{new Date(b.createdAt).toLocaleString('zh-CN')}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <p style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '14px', margin: '0 0 16px' }}>暂无备份记录，首次自动备份将在启动后 1 分钟内创建。</p>
+                                    )}
+                                </div>
 
-                            <div style={{
-                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px',
-                                padding: '16px 20px',
-                                borderTop: '1px solid var(--border-color, #e2e8f0)',
-                                background: 'var(--bg-secondary, #f8fafc)'
-                            }}>
-                                <button
-                                    onClick={handleCreateBackup}
-                                    disabled={backupCreating}
-                                    style={{
-                                        padding: '8px 20px', borderRadius: '8px', border: '1px solid var(--border-color, #d1d5db)',
-                                        cursor: backupCreating ? 'not-allowed' : 'pointer',
-                                        fontSize: '13px', fontWeight: 500, color: 'var(--text-primary, #334155)',
-                                        background: 'var(--bg-primary, #fff)',
-                                        opacity: backupCreating ? 0.7 : 1,
-                                        display: 'flex', alignItems: 'center', gap: '6px'
-                                    }}
-                                >
-                                    {backupCreating ? (
-                                        <><span className="loading-spinner small" /> 备份中...</>
-                                    ) : '📋 手动备份'}
-                                </button>
-                                <button
-                                    onClick={handleDownloadBackup}
-                                    disabled={backupDownloading}
-                                    style={{
-                                        padding: '8px 20px', borderRadius: '8px', border: 'none',
-                                        cursor: backupDownloading ? 'not-allowed' : 'pointer',
-                                        fontSize: '13px', fontWeight: 600, color: '#fff',
-                                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                                        boxShadow: '0 2px 8px rgba(34,197,94,0.3)',
-                                        opacity: backupDownloading ? 0.7 : 1,
-                                        display: 'flex', alignItems: 'center', gap: '6px'
-                                    }}
-                                >
-                                    {backupDownloading ? (
-                                        <><span className="loading-spinner small" /> 下载中...</>
-                                    ) : '⬇️ 下载备份'}
-                                </button>
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px',
+                                    padding: '16px 20px',
+                                    borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)'
+                                }}>
+                                    <button
+                                        onClick={handleCreateBackup}
+                                        disabled={backupCreating}
+                                        style={{
+                                            padding: '8px 20px', borderRadius: '8px', border: '1px solid var(--border-color, #d1d5db)',
+                                            cursor: backupCreating ? 'not-allowed' : 'pointer',
+                                            fontSize: '13px', fontWeight: 500, color: 'var(--text-primary, #334155)',
+                                            background: 'var(--bg-primary, #fff)',
+                                            opacity: backupCreating ? 0.7 : 1,
+                                            display: 'flex', alignItems: 'center', gap: '6px'
+                                        }}
+                                    >
+                                        {backupCreating ? (
+                                            <><span className="loading-spinner small" /> 备份中...</>
+                                        ) : '📋 手动备份'}
+                                    </button>
+                                    <button
+                                        onClick={handleDownloadBackup}
+                                        disabled={backupDownloading}
+                                        style={{
+                                            padding: '8px 20px', borderRadius: '8px', border: 'none',
+                                            cursor: backupDownloading ? 'not-allowed' : 'pointer',
+                                            fontSize: '13px', fontWeight: 600, color: '#fff',
+                                            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                                            boxShadow: '0 2px 8px rgba(34,197,94,0.3)',
+                                            opacity: backupDownloading ? 0.7 : 1,
+                                            display: 'flex', alignItems: 'center', gap: '6px'
+                                        }}
+                                    >
+                                        {backupDownloading ? (
+                                            <><span className="loading-spinner small" /> 下载中...</>
+                                        ) : '⬇️ 下载备份'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )
+                }
+            </div >
         </div >
     );
 }

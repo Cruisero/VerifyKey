@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 # ─── Constants ───────────────────────────────────────────────────────
 POLL_INTERVAL = 30  # seconds
 SPARKLINE_SIZE = 20  # recent results to show in sparkline
+CANARY_MIN_PCT = 5   # minimum % allocation per enabled node (canary probing)
+DECAY_START_SECS = 600   # 10 minutes — start decaying rate after this idle time
+DECAY_FLOOR = 0.30       # decay target (30%)
+DECAY_DEFAULT = 0.50     # default rate when no data at all
 
 EXTERNAL_APIS = {
     "getgem": "https://getgem.cc/api/stats",
@@ -213,23 +217,47 @@ class NodeHealthMonitor:
             node.extra["pollError"] = str(e)
 
     def _update_internal_node(self, bot_id: str):
-        """Update a node using only internal bot_stats_tracker data."""
+        """Update a node using only internal bot_stats_tracker data.
+        
+        Applies data decay: if no recent data for >DECAY_START_SECS,
+        the success rate decays linearly toward DECAY_FLOOR.
+        """
         node = self._ensure_node(bot_id)
         stats = bot_stats_tracker.get_stats(bot_id)
-        node.success_rate = stats.get("rate", 0.5)
+        total = stats.get("total", 0)
+        raw_rate = stats.get("rate", DECAY_DEFAULT)
+
+        # ── Data Decay ──
+        # If no records at all, or records are stale, decay toward DECAY_FLOOR
+        records = bot_stats_tracker._records.get(bot_id)
+        if records:
+            last_ts = records[-1][0]  # timestamp of most recent record
+            age = time.time() - last_ts
+            if age > DECAY_START_SECS:
+                # Linear decay: at DECAY_START_SECS → raw_rate, at 2x → DECAY_FLOOR
+                decay_progress = min((age - DECAY_START_SECS) / DECAY_START_SECS, 1.0)
+                raw_rate = raw_rate + (DECAY_FLOOR - raw_rate) * decay_progress
+                node.extra["decayed"] = True
+                node.extra["idleMinutes"] = round(age / 60, 1)
+        elif total == 0:
+            # No data at all — use decay floor
+            raw_rate = DECAY_FLOOR
+            node.extra["decayed"] = True
+            node.extra["idleMinutes"] = None  # no data ever
+
+        node.success_rate = max(raw_rate, 0.0)
         node.source = "internal"
         node.last_updated = time.time()
 
         # Build sparkline from internal records
-        records = bot_stats_tracker._records.get(bot_id)
         if records:
             node.sparkline = [0 if s else 1 for _, s in list(records)[-SPARKLINE_SIZE:]]
 
-        node.extra = {
-            "total": stats.get("total", 0),
+        node.extra.update({
+            "total": total,
             "success": stats.get("success", 0),
             "failed": stats.get("failed", 0),
-        }
+        })
 
     # ─── Status Computation ──────────────────────────────────────────
 
@@ -348,6 +376,17 @@ class NodeHealthMonitor:
             else:
                 allocation[nid] = 0
 
+        # ── Canary minimum: ensure each enabled non-broken node gets at least CANARY_MIN_PCT ──
+        canary_nodes = [nid for nid in available_nodes if nid in weights and allocation.get(nid, 0) < CANARY_MIN_PCT]
+        if canary_nodes and len(weights) > 1:
+            for nid in canary_nodes:
+                deficit = CANARY_MIN_PCT - allocation.get(nid, 0)
+                allocation[nid] = CANARY_MIN_PCT
+                # Take from the highest-allocation node
+                top = max(allocation, key=allocation.get)
+                if top != nid:
+                    allocation[top] = max(allocation[top] - deficit, CANARY_MIN_PCT)
+
         # Ensure sum = 100
         diff = 100 - sum(allocation.values())
         if diff != 0 and allocation:
@@ -356,6 +395,44 @@ class NodeHealthMonitor:
             allocation[top] += diff
 
         return allocation
+
+    def select_node(self, available_nodes: List[str] = None) -> str:
+        """Select a single node probabilistically based on allocation weights.
+        
+        Used for routing individual verification requests.
+        Returns the node_id of the selected node, or None if no nodes available.
+        """
+        import random
+        alloc = self.get_allocation(available_nodes)
+        # Filter out zero-allocation nodes
+        candidates = [(nid, pct) for nid, pct in alloc.items() if pct > 0]
+        if not candidates:
+            return None
+        # Weighted random selection
+        total = sum(pct for _, pct in candidates)
+        r = random.uniform(0, total)
+        cumulative = 0
+        for nid, pct in candidates:
+            cumulative += pct
+            if r <= cumulative:
+                return nid
+        return candidates[-1][0]
+
+    def get_ordered_nodes(self, available_nodes: List[str] = None) -> List[str]:
+        """Return nodes ordered by allocation weight (highest first).
+        
+        Used for waterfall fallback: try the highest-weight node first,
+        then fall back to the next one, etc.
+        Excludes circuit_broken and disabled nodes.
+        """
+        alloc = self.get_allocation(available_nodes)
+        # Sort by allocation descending, exclude 0%
+        ordered = sorted(
+            [(nid, pct) for nid, pct in alloc.items() if pct > 0],
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        return [nid for nid, _ in ordered]
 
     # ─── Configuration ───────────────────────────────────────────────
 

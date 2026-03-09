@@ -2413,17 +2413,13 @@ async def verify_unified(request: UnifiedVerifyRequest):
     if not enabled_bots:
         raise HTTPException(status_code=400, detail="没有启用任何验证 Bot，请在管理后台启用至少一个")
 
-    # ---- Sort bots by expected cost (waterfall priority) ----
-    def _sort_bots_by_cost_efficiency(bots):
-        def _expected_cost(bot):
-            bot_id = bot["type"]
-            rate = bot_stats_tracker.get_success_rate(bot_id)
-            cost = bot["config"].get("costPerVerify", 1.0)
-            return cost / max(rate, 0.01)
-        return sorted(bots, key=_expected_cost)
-
-    sorted_bots = _sort_bots_by_cost_efficiency(enabled_bots)
-    logger.info(f"[Waterfall] Bot priority: {[b['type'] for b in sorted_bots]}")
+    # ---- Sort bots by node_health_monitor allocation weight ----
+    from node_health_monitor import node_health_monitor as _nhm
+    _bot_type_ids = [b["type"] for b in enabled_bots]
+    ordered_ids = _nhm.get_ordered_nodes(_bot_type_ids)
+    _order_map = {nid: i for i, nid in enumerate(ordered_ids)}
+    sorted_bots = sorted(enabled_bots, key=lambda b: _order_map.get(b["type"], 999))
+    logger.info(f"[Waterfall] Bot priority (nhm): {[b['type'] for b in sorted_bots]}")
 
     # Extract VIDs
     def _extract_vid_u(link):
@@ -4620,26 +4616,34 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             )
         cdk_remaining = cdk_check["remaining"]
 
-    # ---- Determine actual allocation ----
-    getgem_rate = bot_stats_tracker.get_success_rate("getgem")
-    bot_rate = bot_stats_tracker.get_success_rate("dualbot")  # Use dualbot as representative
+    # ---- Determine actual allocation via node_health_monitor ----
+    from node_health_monitor import node_health_monitor as _nhm
+    alloc = _nhm.get_allocation()  # e.g. {"getgem": 50, "oldbot": 25, "blackbot": 15, "dualbot": 10}
 
-    # Auto-degrade: if success rate below threshold, route everything to the other node
-    effective_getgem_pct = allocation.get("getgem", 50)
-    effective_bot_pct = allocation.get("bot", 50)
+    # If getgem CDK is not configured, force its allocation to 0 and redistribute
+    if not getgem_available:
+        alloc["getgem"] = 0
+    # If no bots available, force all bot allocations to 0
+    if not bot_available:
+        for k in ("oldbot", "blackbot", "dualbot"):
+            alloc[k] = k in alloc and 0
 
-    if mode == "api_only" or not bot_available:
-        effective_getgem_pct, effective_bot_pct = 100, 0
-    elif mode == "bot_only" or not getgem_available:
-        effective_getgem_pct, effective_bot_pct = 0, 100
+    # Normalize: redistribute removed allocation proportionally
+    active = {k: v for k, v in alloc.items() if v > 0}
+    if active:
+        total_w = sum(active.values())
+        alloc = {k: round(v / total_w * 100) for k, v in active.items()}
+        # Fix rounding to exactly 100
+        diff = 100 - sum(alloc.values())
+        if diff and alloc:
+            top = max(alloc, key=alloc.get)
+            alloc[top] += diff
     else:
-        # Auto-degrade based on success rate
-        if getgem_rate * 100 < auto_degrade_threshold and bot_rate * 100 >= auto_degrade_threshold:
-            effective_getgem_pct, effective_bot_pct = 0, 100
-            print(f"[MixedMode] GetGem auto-degraded (rate={getgem_rate:.0%} < {auto_degrade_threshold}%)")
-        elif bot_rate * 100 < auto_degrade_threshold and getgem_rate * 100 >= auto_degrade_threshold:
-            effective_getgem_pct, effective_bot_pct = 100, 0
-            print(f"[MixedMode] Bot auto-degraded (rate={bot_rate:.0%} < {auto_degrade_threshold}%)")
+        # Fallback: everything to getgem if available, else error
+        if getgem_available:
+            alloc = {"getgem": 100}
+        else:
+            raise HTTPException(status_code=400, detail="没有任何可用的验证节点")
 
     # Build VID → original link mapping (for bot path to use correct program ID in URL)
     _vid_to_link = {}
@@ -4650,16 +4654,31 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             if m:
                 _vid_to_link[m.group(1)] = link
 
-    # Split VIDs by allocation
+    # Split VIDs by allocation into node groups
     total = len(request.verificationIds)
-    getgem_count = round(total * effective_getgem_pct / 100) if effective_getgem_pct > 0 else 0
-    getgem_count = min(getgem_count, total)
-    bot_count = total - getgem_count
+    node_vids = {}  # node_id -> [vid, ...]
+    idx = 0
+    for nid, pct in alloc.items():
+        count = round(total * pct / 100)
+        node_vids[nid] = request.verificationIds[idx:idx + count]
+        idx += count
+    # Assign any remaining VIDs (from rounding) to the highest-allocation node
+    if idx < total:
+        top_node = max(alloc, key=alloc.get)
+        node_vids[top_node] = node_vids.get(top_node, []) + request.verificationIds[idx:]
 
-    getgem_vids = request.verificationIds[:getgem_count]
-    bot_vids = request.verificationIds[getgem_count:]
+    # Separate into getgem group and bot groups
+    getgem_vids = node_vids.get("getgem", [])
+    bot_vids = []
+    bot_node_order = []  # track which bot nodes have VIDs
+    for nid in ("oldbot", "blackbot", "dualbot"):
+        vids_for_node = node_vids.get(nid, [])
+        if vids_for_node:
+            bot_vids.extend(vids_for_node)
+            bot_node_order.append(nid)
 
-    print(f"[MixedMode] Routing {len(getgem_vids)} to GetGem, {len(bot_vids)} to Bot (allocation: {effective_getgem_pct}/{effective_bot_pct})")
+    alloc_log = ", ".join(f"{k}={len(node_vids.get(k, []))}" for k in alloc)
+    print(f"[MixedMode] Smart routing: {alloc_log} (allocation: {alloc})")
 
     async def event_stream():
         import json as _json
@@ -4798,14 +4817,11 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                                     "message": "没有可用的 Telegram Bot", "via": "bot"})
                 return results
 
-            # Sort bots by expected cost
-            def _sort(bots):
-                def _ec(bot):
-                    rate = bot_stats_tracker.get_success_rate(bot["type"])
-                    cost = bot["config"].get("costPerVerify", 1.0)
-                    return cost / max(rate, 0.01)
-                return sorted(bots, key=_ec)
-            sorted_bots = _sort(enabled_bots)
+            # Sort bots by node_health_monitor allocation weight
+            from node_health_monitor import node_health_monitor as _nhm
+            ordered = _nhm.get_ordered_nodes([b["type"] for b in enabled_bots])
+            bot_order_map = {nid: i for i, nid in enumerate(ordered)}
+            sorted_bots = sorted(enabled_bots, key=lambda b: bot_order_map.get(b["type"], 999))
 
             for i, vid in enumerate(vids):
                 link = links[i]
@@ -5210,12 +5226,11 @@ async def _dispatch_verification(vid: str, cdk_code: str) -> dict:
             if not enabled_bots:
                 return {"status": "error", "success": False, "message": "系统错误，请联系管理员"}
 
-            # Sort bots by cost efficiency (same as unified endpoint)
-            def _expected_cost_dp(bot):
-                rate = bot_stats_tracker.get_success_rate(bot["type"])
-                cost = bot["config"].get("costPerVerify", 1.0)
-                return cost / max(rate, 0.01)
-            sorted_bots = sorted(enabled_bots, key=_expected_cost_dp)
+            # Sort bots by node_health_monitor allocation weight
+            from node_health_monitor import node_health_monitor as _nhm_dp
+            _dp_ordered = _nhm_dp.get_ordered_nodes([b["type"] for b in enabled_bots])
+            _dp_order_map = {nid: i for i, nid in enumerate(_dp_ordered)}
+            sorted_bots = sorted(enabled_bots, key=lambda b: _dp_order_map.get(b["type"], 999))
 
             # Helper: get next client for a bot type
             def _get_client_dp(bot_id):

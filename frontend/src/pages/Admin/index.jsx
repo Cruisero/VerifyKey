@@ -2218,19 +2218,6 @@ export default function Admin() {
                                         </div>
                                     </div>
 
-                                    <div
-                                        className={`provider-card ${aiProvider === 'batch_api' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('batch_api')}
-                                    >
-                                        <div className="provider-icon">🔗</div>
-                                        <div className="provider-info">
-                                            <h4>batch.1key.me API</h4>
-                                            <p>使用第三方批量验证 API</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-warning">需配置</span>
-                                        </div>
-                                    </div>
 
                                     <div
                                         className={`provider-card ${aiProvider === 'telegram' ? 'active' : ''}`}

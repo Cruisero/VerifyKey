@@ -2767,7 +2767,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 via_label = r.get("botType", "bot")
                 if r.get("status") == "approved":
                     verification_history.log_verification("pass", vid, msg, cdk=cdk_label, via=f"bot:{via_label}")
-                elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
+                elif not r.get("success") and not r.get("alreadyVerified"):
                     verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label, via=f"bot:{via_label}")
 
             # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----

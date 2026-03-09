@@ -5647,10 +5647,33 @@ export default function Admin() {
                                             fontWeight: 600,
                                             cursor: 'pointer'
                                         }}
-                                        onClick={() => {
+                                        onClick={async (e) => {
                                             if (!confirm('确定要重置验证状态显示吗？（不会删除数据库记录）')) return;
-                                            setHistoryData([]);
-                                            setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                            const btn = e.currentTarget;
+                                            btn.textContent = '⏳ 计算中...';
+                                            btn.disabled = true;
+                                            try {
+                                                const res = await fetch(`${API_BASE}/api/verify/history`);
+                                                if (res.ok) {
+                                                    const data = await res.json();
+                                                    setHistoryData(data.history || []);
+                                                    const h = data.history || [];
+                                                    setHistoryStats({
+                                                        pass: h.filter(r => r.status === 'pass').length,
+                                                        failed: h.filter(r => r.status === 'failed').length,
+                                                        processing: h.filter(r => r.status === 'processing').length,
+                                                        cancel: h.filter(r => r.status === 'cancel').length,
+                                                        total: h.length,
+                                                    });
+                                                    btn.textContent = '✅ 已更新';
+                                                } else {
+                                                    btn.textContent = '❌ 失败';
+                                                }
+                                            } catch (err) {
+                                                btn.textContent = '❌ 错误';
+                                                console.error(err);
+                                            }
+                                            setTimeout(() => { btn.textContent = '🔄 重新计算'; btn.disabled = false; }, 1500);
                                         }}
                                     >
                                         🔄 重新计算

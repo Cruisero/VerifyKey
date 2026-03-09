@@ -341,6 +341,7 @@ class NodeHealthMonitor:
         node.last_updated = time.time()
 
         # Build sparkline from internal records
+        records = bot_stats_tracker._records.get(bot_id)
         if records:
             node.sparkline = [0 if s else 1 for _, s in list(records)[-SPARKLINE_SIZE:]]
 

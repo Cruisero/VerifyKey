@@ -23,6 +23,8 @@ POLL_INTERVAL = 30  # seconds
 SPARKLINE_SIZE = 20  # recent results to show in sparkline
 CANARY_MIN_PCT = 5   # minimum % allocation per enabled node (canary probing)
 DECAY_START_SECS = 600   # 10 minutes — start decaying rate after this idle time
+BLACKBOT_HEALTH_INTERVAL = 1800  # 30 minutes — interval for BlackBot health check
+BLACKBOT_OFFLINE_KEYWORDS = ["document", "updating", "update"]  # keywords indicating maintenance
 DECAY_FLOOR = 0.30       # decay target (30%)
 DECAY_DEFAULT = 0.50     # default rate when no data at all
 
@@ -85,6 +87,9 @@ class NodeHealthMonitor:
         self._task: Optional[asyncio.Task] = None
         self._running = False
         self._http: Optional[httpx.AsyncClient] = None
+        self._blackbot_last_check: float = 0  # timestamp of last BlackBot health check
+        self._auto_maintenance: bool = False   # auto maintenance mode toggle
+        self._maintenance_active: bool = False  # whether auto-maintenance is currently ON
 
     # ─── Lifecycle ───────────────────────────────────────────────────
 
@@ -127,6 +132,15 @@ class NodeHealthMonitor:
             self._poll_oldbot(),
         ]
         await asyncio.gather(*tasks, return_exceptions=True)
+
+        # BlackBot health check runs every 30 min (separate interval)
+        now = time.time()
+        if now - self._blackbot_last_check >= BLACKBOT_HEALTH_INTERVAL:
+            try:
+                await self._poll_blackbot_health()
+                self._blackbot_last_check = now
+            except Exception as e:
+                logger.error("[NodeHealth] BlackBot health check error: %s", e)
 
         # Update nodes that have no external API (use internal stats only)
         for bot_id in ("blackbot", "dualbot"):
@@ -178,8 +192,11 @@ class NodeHealthMonitor:
 
         except Exception as e:
             logger.warning("[NodeHealth] GetGem poll failed: %s", e)
-            # Don't change status on poll failure — keep last known state
+            # Mark as circuit_broken on connection failure
+            node.status = "circuit_broken"
             node.extra["pollError"] = str(e)
+            node.extra["offline"] = True
+            node.last_updated = time.time()
 
     async def _poll_oldbot(self):
         """Poll OldBot /api/public/gemini-status for success rate."""
@@ -226,6 +243,95 @@ class NodeHealthMonitor:
             logger.warning("[NodeHealth] OldBot poll failed: %s", e)
             node.extra["pollError"] = str(e)
 
+    async def _poll_blackbot_health(self):
+        """Health check for BlackBot: send a fake SheerID link and check response.
+        
+        If response contains keywords like 'document', 'updating', 'update',
+        it means BlackBot is in maintenance/update mode → mark circuit_broken.
+        """
+        import uuid
+        node = self._ensure_node("blackbot")
+
+        # Get a Telegram client assigned to blackbot
+        try:
+            import telegram_manager
+            tg = telegram_manager.tg_manager
+
+            import config_manager
+            cfg = config_manager.get_config()
+            accounts = cfg.get("telegramAccounts", [])
+            all_clients = tg.get_all_clients()
+
+            client = None
+            for acc in accounts:
+                if "blackbot" in acc.get("assignedBots", []) and acc.get("enabled"):
+                    ci = all_clients.get(acc["id"])
+                    if ci and ci.is_connected():
+                        client = ci
+                        break
+
+            if not client:
+                logger.info("[NodeHealth] BlackBot health check skipped: no connected client")
+                return
+
+            # Send a fake link
+            fake_vid = str(uuid.uuid4())
+            fake_link = f"https://services.sheerid.com/verify/{fake_vid}/"
+            bot_username = "Black_Verifier"
+
+            logger.info("[NodeHealth] BlackBot health check: sending fake link...")
+
+            from telethon import events
+            loop = asyncio.get_event_loop()
+            future = loop.create_future()
+
+            async def _handler(event):
+                if future.done():
+                    return
+                reply_text = event.message.text or event.message.message or ""
+                if reply_text:
+                    future.set_result(reply_text)
+
+            client.add_event_handler(_handler, events.NewMessage(from_users=bot_username))
+            client.add_event_handler(_handler, events.MessageEdited(from_users=bot_username))
+
+            try:
+                await client.send_message(bot_username, fake_link)
+                reply = await asyncio.wait_for(future, timeout=30)
+            except asyncio.TimeoutError:
+                logger.warning("[NodeHealth] BlackBot health check: no response in 30s")
+                reply = None
+            except Exception as e:
+                logger.error("[NodeHealth] BlackBot health check send error: %s", e)
+                reply = None
+            finally:
+                client.remove_event_handler(_handler, events.NewMessage)
+                client.remove_event_handler(_handler, events.MessageEdited)
+
+            if reply:
+                reply_lower = reply.lower()
+                is_offline = any(kw in reply_lower for kw in BLACKBOT_OFFLINE_KEYWORDS)
+                logger.info("[NodeHealth] BlackBot health response: '%s' → offline=%s",
+                          reply[:100], is_offline)
+                if is_offline:
+                    node.status = "circuit_broken"
+                    node.extra["offline"] = True
+                    node.extra["offlineReason"] = f"Health check: {reply[:80]}"
+                    node.last_updated = time.time()
+                else:
+                    node.extra.pop("offline", None)
+                    node.extra.pop("offlineReason", None)
+                    # Recover from offline → mark healthy so it can receive traffic again
+                    if node.status == "circuit_broken":
+                        node.status = "healthy"
+                        node.recover_streak = 0
+                        logger.info("[NodeHealth] BlackBot recovered from offline → healthy")
+            else:
+                logger.info("[NodeHealth] BlackBot health check: no reply, status unchanged")
+
+        except Exception as e:
+            logger.error("[NodeHealth] BlackBot health check error: %s", e)
+
     def _update_internal_node(self, bot_id: str):
         """Update a node using only internal bot_stats_tracker data.
         
@@ -236,24 +342,6 @@ class NodeHealthMonitor:
         stats = bot_stats_tracker.get_stats(bot_id)
         total = stats.get("total", 0)
         raw_rate = stats.get("rate", DECAY_DEFAULT)
-
-        # ── Data Decay ──
-        # If no records at all, or records are stale, decay toward DECAY_FLOOR
-        records = bot_stats_tracker._records.get(bot_id)
-        if records:
-            last_ts = records[-1][0]  # timestamp of most recent record
-            age = time.time() - last_ts
-            if age > DECAY_START_SECS:
-                # Linear decay: at DECAY_START_SECS → raw_rate, at 2x → DECAY_FLOOR
-                decay_progress = min((age - DECAY_START_SECS) / DECAY_START_SECS, 1.0)
-                raw_rate = raw_rate + (DECAY_FLOOR - raw_rate) * decay_progress
-                node.extra["decayed"] = True
-                node.extra["idleMinutes"] = round(age / 60, 1)
-        elif total == 0:
-            # No data at all — use decay floor
-            raw_rate = DECAY_FLOOR
-            node.extra["decayed"] = True
-            node.extra["idleMinutes"] = None  # no data ever
 
         node.success_rate = max(raw_rate, 0.0)
         node.source = "internal"
@@ -318,7 +406,55 @@ class NodeHealthMonitor:
                     node.status = "degraded"
                     logger.warning("[NodeHealth] %s degraded (rate=%.0f%%)", node.node_id, rate * 100)
 
+        # ── Auto Maintenance Check ──
+        if self._auto_maintenance:
+            self._check_auto_maintenance()
+
     # ─── Public API ──────────────────────────────────────────────────
+
+    def _check_auto_maintenance(self):
+        """Auto-toggle maintenance based on all-node circuit break status."""
+        import config_manager
+
+        enabled_nodes = [n for n in self._nodes.values() if n.enabled]
+        if not enabled_nodes:
+            return
+
+        all_broken = all(n.status == "circuit_broken" for n in enabled_nodes)
+
+        if all_broken and not self._maintenance_active:
+            # All nodes down → enable maintenance
+            config_manager.update_config({
+                "maintenance": {
+                    "enabled": True,
+                    "message": "所有验证节点已掉线，系统自动进入维护模式",
+                    "estimatedEnd": None,
+                }
+            })
+            self._maintenance_active = True
+            logger.warning("[NodeHealth] AUTO MAINTENANCE ON — all %d enabled nodes are circuit_broken",
+                         len(enabled_nodes))
+
+        elif not all_broken and self._maintenance_active:
+            # At least one node recovered → disable maintenance
+            config_manager.update_config({
+                "maintenance": {
+                    "enabled": False,
+                    "message": "",
+                    "estimatedEnd": None,
+                }
+            })
+            self._maintenance_active = False
+            recovered = [n.node_id for n in enabled_nodes if n.status != "circuit_broken"]
+            logger.info("[NodeHealth] AUTO MAINTENANCE OFF — nodes recovered: %s", recovered)
+
+    def set_auto_maintenance(self, enabled: bool):
+        """Enable or disable auto maintenance mode."""
+        self._auto_maintenance = enabled
+        if not enabled:
+            self._maintenance_active = False
+        self._save_config()
+        logger.info("[NodeHealth] Auto maintenance %s", "ENABLED" if enabled else "DISABLED")
 
     def _ensure_node(self, node_id: str) -> NodeStatus:
         if node_id not in self._nodes:
@@ -552,6 +688,8 @@ class NodeHealthMonitor:
             "thresholds": dict(self._thresholds),
             "mode": self._mode,
             "lockedAllocation": dict(self._locked_allocation),
+            "autoMaintenance": self._auto_maintenance,
+            "maintenanceActive": self._maintenance_active,
         }
 
     def update_config(self, thresholds: dict = None, mode: str = None, locked_allocation: dict = None):
@@ -582,6 +720,7 @@ class NodeHealthMonitor:
                     "lockedAllocation": self._locked_allocation,
                     "nodeEnabled": {nid: n.enabled for nid, n in self._nodes.items()},
                     "nodeWeights": {nid: n.weight for nid, n in self._nodes.items()},
+                    "autoMaintenance": self._auto_maintenance,
                 }, f, indent=2)
         except Exception as e:
             logger.error("[NodeHealth] Failed to save config: %s", e)
@@ -606,6 +745,8 @@ class NodeHealthMonitor:
                 if "nodeWeights" in data:
                     for nid, weight in data["nodeWeights"].items():
                         self._ensure_node(nid).weight = max(0.1, min(1.0, float(weight)))
+                if "autoMaintenance" in data:
+                    self._auto_maintenance = bool(data["autoMaintenance"])
                 logger.info("[NodeHealth] Loaded saved config")
         except Exception as e:
             logger.warning("[NodeHealth] Could not load config: %s", e)

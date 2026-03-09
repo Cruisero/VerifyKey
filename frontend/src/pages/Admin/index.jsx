@@ -2481,6 +2481,18 @@ export default function Admin() {
                                     } catch (e) { console.error(e); }
                                 };
 
+                                const toggleAutoMaintenance = async () => {
+                                    try {
+                                        const token = user?.token || localStorage.getItem('verifykey-token');
+                                        await fetch(`${API_BASE}/api/admin/node-health/auto-maintenance`, {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                            body: JSON.stringify({ enabled: !config.autoMaintenance })
+                                        });
+                                        const res = await fetch(`${API_BASE}/api/admin/node-health`, { headers: { 'Authorization': `Bearer ${token}` } });
+                                        if (res.ok) setNodeHealth(await res.json());
+                                    } catch (e) { console.error(e); }
+                                };
+
                                 const forceRefresh = async () => {
                                     try {
                                         const token = user?.token || localStorage.getItem('verifykey-token');
@@ -2562,6 +2574,7 @@ export default function Admin() {
                                                                         </span>
                                                                     )}
                                                                     {n.extra?.maintenance && <span style={{ color: '#ef4444', marginLeft: '6px' }}>⚠️ Maintenance</span>}
+                                                                    {n.extra?.offline && <span style={{ color: '#ef4444', marginLeft: '6px' }} title={n.extra.offlineReason || n.extra.pollError || ''}>🔌 掉线</span>}
                                                                     {n.source === 'external' && <span style={{ marginLeft: '6px' }}>🌐</span>}
                                                                 </div>
                                                             </div>
@@ -2710,8 +2723,20 @@ export default function Admin() {
                                                     }}
                                                     onClick={() => saveConfig({ mode: 'locked', lockedAllocation: allocation })}
                                                 >📌 锁定分配</button>
+                                                <button className="btn btn-sm"
+                                                    style={{
+                                                        background: config.autoMaintenance ? 'linear-gradient(135deg, #10b981, #059669)' : 'var(--bg-tertiary)',
+                                                        color: config.autoMaintenance ? '#fff' : 'inherit',
+                                                        padding: '8px 20px', fontSize: '13px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer',
+                                                        boxShadow: config.autoMaintenance ? '0 2px 8px rgba(16,185,129,0.3)' : 'none'
+                                                    }}
+                                                    onClick={toggleAutoMaintenance}
+                                                >{config.autoMaintenance ? '✅' : '🔧'} 自动维护</button>
                                                 {config.mode === 'locked' && (
                                                     <span style={{ fontSize: '11px', color: '#f59e0b', alignSelf: 'center' }}>⚠️ 当前为锁定模式，不会自动调整分配</span>
+                                                )}
+                                                {config.maintenanceActive && (
+                                                    <span style={{ fontSize: '11px', color: '#ef4444', alignSelf: 'center' }}>🚨 自动维护已触发 — 所有节点掉线</span>
                                                 )}
                                             </div>
 

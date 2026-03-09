@@ -4993,6 +4993,14 @@ async def clear_node_cooldown(request: dict):
     return {"ok": True, "nodeId": node_id, "message": f"{node_id} cooldown cleared"}
 
 
+@app.post("/api/admin/node-health/auto-maintenance")
+async def toggle_auto_maintenance(request: dict):
+    """Admin: Enable/disable auto maintenance mode."""
+    enabled = request.get("enabled", False)
+    node_health_monitor.set_auto_maintenance(bool(enabled))
+    return {"ok": True, "autoMaintenance": enabled}
+
+
 # ========== Routing Stats API ==========
 
 @app.get("/api/routing/stats")

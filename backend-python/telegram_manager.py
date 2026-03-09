@@ -485,7 +485,7 @@ class TelegramAccountManager:
     # ------ Notification Listener (DualBot external stats) ------
 
     def _register_notification_handler(self, client: TelegramClient, account_id: str):
-        """Register a persistent listener for @AutoGeminiProbot verification notifications.
+        """Register a persistent listener for @NotifSuccess verification notifications.
         
         Only registers ONCE (on the first connected account) because the notifications
         come from a public channel — multiple listeners would cause duplicate counting.
@@ -493,13 +493,10 @@ class TelegramAccountManager:
         if self._notif_registered:
             return  # Already listening on another account
         
-        # Get the verify bot username from config
-        config = config_manager.get_config()
-        dual_config = config.get("verification", {}).get("dualBot", {})
-        verify_bot = dual_config.get("verifyBot", "@AutoGeminiProbot").lstrip("@")
+        notif_channel = "NotifSuccess"
 
         async def _on_notification(event):
-            """Handle incoming notification messages from the verify bot."""
+            """Handle incoming notification messages from the notification channel."""
             try:
                 text = event.message.text or event.message.message or ""
                 if not text:
@@ -511,17 +508,17 @@ class TelegramAccountManager:
                 if "VERIFICATION SUCCESSFUL" in text_upper or "SUCCESSFULLY VERIFIED" in text_upper:
                     from bot_stats import bot_stats_tracker
                     bot_stats_tracker.record("dualbot", True)
-                    logger.info(f"[TGNotif] DualBot SUCCESS detected from @{verify_bot}")
+                    logger.info(f"[TGNotif] DualBot SUCCESS detected from @{notif_channel}")
                 elif "VERIFICATION FAILED" in text_upper or "VERIFICATION REJECTED" in text_upper or "TASK FAILED" in text_upper:
                     from bot_stats import bot_stats_tracker
                     bot_stats_tracker.record("dualbot", False)
-                    logger.info(f"[TGNotif] DualBot FAIL detected from @{verify_bot}")
+                    logger.info(f"[TGNotif] DualBot FAIL detected from @{notif_channel}")
             except Exception as e:
                 logger.warning(f"[TGNotif] Handler error: {e}")
 
-        client.add_event_handler(_on_notification, events.NewMessage(from_users=verify_bot))
+        client.add_event_handler(_on_notification, events.NewMessage(from_users=notif_channel))
         self._notif_registered = True
-        logger.info(f"[TGManager] Registered notification listener for @{verify_bot} on account {account_id} (single listener)")
+        logger.info(f"[TGManager] Registered notification listener for @{notif_channel} on account {account_id} (single listener)")
 
     # ------ Helpers ------
 

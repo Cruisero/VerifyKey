@@ -257,22 +257,15 @@ class NodeHealthMonitor:
             import telegram_manager
             tg = telegram_manager.tg_manager
 
-            import config_manager
-            cfg = config_manager.get_config()
-            accounts = cfg.get("telegramAccounts", [])
-            all_clients = tg.get_all_clients()
-
-            client = None
-            for acc in accounts:
-                if "blackbot" in acc.get("assignedBots", []) and acc.get("enabled"):
-                    ci = all_clients.get(acc["id"])
-                    if ci and ci.is_connected():
-                        client = ci
-                        break
-
-            if not client:
+            result = tg.get_next_client("blackbot")
+            if not result:
+                # Fallback: try any connected client
+                result = tg.get_next_client()
+            if not result:
                 logger.info("[NodeHealth] BlackBot health check skipped: no connected client")
                 return
+            
+            account_id, client = result
 
             # Send a fake link
             fake_vid = str(uuid.uuid4())

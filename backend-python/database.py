@@ -79,11 +79,19 @@ def init_db():
                 note TEXT DEFAULT ''
             );
 
+            CREATE TABLE IF NOT EXISTS bot_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bot_id TEXT NOT NULL,
+                success INTEGER NOT NULL,
+                timestamp REAL NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_vh_status ON verification_history(status);
             CREATE INDEX IF NOT EXISTS idx_vh_timestamp ON verification_history(timestamp);
             CREATE INDEX IF NOT EXISTS idx_vh_vid ON verification_history(verification_id);
             CREATE INDEX IF NOT EXISTS idx_bvl_timestamp ON bot_verify_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_cdk_status ON cdkeys(status);
+            CREATE INDEX IF NOT EXISTS idx_bs_bot_ts ON bot_stats(bot_id, timestamp);
         """)
 
         # Migrate existing JSON data

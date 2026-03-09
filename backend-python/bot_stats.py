@@ -2,7 +2,7 @@
 Bot Stats Tracker — Real-time sliding window success rate tracking for each bot type.
 Used by the waterfall priority system to sort bots by expected cost = price / success_rate.
 
-Storage: In-memory only (resets on restart, re-learns quickly).
+Storage: SQLite-backed (persists across restarts).
 """
 
 import time
@@ -24,19 +24,70 @@ BOT_WINDOW_OVERRIDES = {
 # prior_rate: assumed success rate, prior_count: virtual sample size for smoothing
 BOT_PRIOR_CONFIG = {
     "blackbot": {"prior_rate": 0.5, "prior_count": 10},
-    # BlackBot: starts at 70% with 10 virtual records (7 success, 3 fail)
-    # Real data blends in gradually: 1 real success → (7+1)/(10+1) = 72.7%
+    # BlackBot: starts at 50% with 10 virtual records (5 success, 5 fail)
+    # Real data blends in gradually: 1 real success → (5+1)/(10+1) = 54.5%
 }
 
 
 class BotStatsTracker:
-    """Track per-bot success rates using a sliding time window."""
+    """Track per-bot success rates using a sliding time window with SQLite persistence."""
 
     def __init__(self, window_minutes: int = DEFAULT_WINDOW_MINUTES):
         self._window_seconds = window_minutes * 60
         self._window_minutes = window_minutes
         # {bot_id: deque of (timestamp, success: bool)}
         self._records: Dict[str, deque] = {}
+        self._db_loaded = False
+
+    def _load_from_db(self):
+        """Load records from SQLite on first access."""
+        if self._db_loaded:
+            return
+        self._db_loaded = True
+        try:
+            import database
+            conn = database.get_connection()
+            # Load all records within the max possible window (24h)
+            cutoff = time.time() - 86400
+            cursor = conn.execute(
+                "SELECT bot_id, success, timestamp FROM bot_stats WHERE timestamp > ? ORDER BY timestamp",
+                (cutoff,)
+            )
+            count = 0
+            for row in cursor.fetchall():
+                bot_id = row["bot_id"]
+                if bot_id not in self._records:
+                    self._records[bot_id] = deque()
+                self._records[bot_id].append((row["timestamp"], bool(row["success"])))
+                count += 1
+            if count > 0:
+                logger.info(f"[BotStats] Loaded {count} records from database")
+        except Exception as e:
+            logger.warning(f"[BotStats] Failed to load from DB: {e}")
+
+    def _save_to_db(self, bot_id: str, success: bool, ts: float):
+        """Save a single record to SQLite."""
+        try:
+            import database
+            conn = database.get_connection()
+            conn.execute(
+                "INSERT INTO bot_stats (bot_id, success, timestamp) VALUES (?, ?, ?)",
+                (bot_id, 1 if success else 0, ts)
+            )
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"[BotStats] Failed to save to DB: {e}")
+
+    def _cleanup_db(self):
+        """Remove old records from DB (older than 24h)."""
+        try:
+            import database
+            conn = database.get_connection()
+            cutoff = time.time() - 86400
+            conn.execute("DELETE FROM bot_stats WHERE timestamp < ?", (cutoff,))
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"[BotStats] Failed to cleanup DB: {e}")
 
     @property
     def window_minutes(self) -> int:
@@ -75,16 +126,21 @@ class BotStatsTracker:
 
     def record(self, bot_id: str, success: bool):
         """Record a verification result for a bot."""
+        self._load_from_db()
+        ts = time.time()
         if bot_id not in self._records:
             self._records[bot_id] = deque()
-        self._records[bot_id].append((time.time(), success))
+        self._records[bot_id].append((ts, success))
         self._cleanup(bot_id)
+        # Persist to DB
+        self._save_to_db(bot_id, success, ts)
 
     def get_success_rate(self, bot_id: str) -> float:
         """
         Get success rate for a bot within the sliding window.
         Uses Bayesian prior smoothing for bots with configured priors.
         """
+        self._load_from_db()
         self._cleanup(bot_id)
         q = self._records.get(bot_id)
         prior_s, prior_n = self._get_prior(bot_id)
@@ -100,6 +156,7 @@ class BotStatsTracker:
 
     def get_stats(self, bot_id: str) -> dict:
         """Get detailed stats for a specific bot."""
+        self._load_from_db()
         self._cleanup(bot_id)
         q = self._records.get(bot_id)
         prior_s, prior_n = self._get_prior(bot_id)
@@ -120,6 +177,7 @@ class BotStatsTracker:
 
     def get_all_stats(self) -> dict:
         """Get stats for all tracked bots."""
+        self._load_from_db()
         result = {}
         for bot_id in list(self._records.keys()):
             result[bot_id] = self.get_stats(bot_id)

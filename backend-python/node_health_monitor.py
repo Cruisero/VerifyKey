@@ -26,6 +26,14 @@ DECAY_START_SECS = 600   # 10 minutes — start decaying rate after this idle ti
 DECAY_FLOOR = 0.30       # decay target (30%)
 DECAY_DEFAULT = 0.50     # default rate when no data at all
 
+# Per-node concurrent capacity (how many links can be processed at once)
+NODE_CONCURRENCY = {
+    "getgem": 10,     # GetGem API: 10 concurrent links
+    "oldbot": 5,      # OldBot: 5 per Telegram account
+    "blackbot": 1,    # BlackBot: 1 per Telegram account
+    "dualbot": 1,     # DualBot: 1 per Telegram account
+}
+
 EXTERNAL_APIS = {
     "getgem": "https://getgem.cc/api/stats",
     "oldbot": "https://sheeridbot.com/api/public/gemini-status",
@@ -45,6 +53,7 @@ class NodeStatus:
     status: str = "healthy"           # healthy | degraded | circuit_broken
     success_rate: float = 0.5         # 0-1
     enabled: bool = True              # manual toggle
+    weight: float = 1.0               # manual cost weight (0.1 - 1.0)
     sparkline: List[int] = field(default_factory=list)  # 0=pass, 1=fail, 2=cancel
     extra: dict = field(default_factory=dict)            # slots, pending, maintenance, etc.
     last_updated: float = 0.0
@@ -57,6 +66,7 @@ class NodeStatus:
             "status": self.status,
             "successRate": round(self.success_rate * 100, 1),
             "enabled": self.enabled,
+            "weight": self.weight,
             "sparkline": self.sparkline[-SPARKLINE_SIZE:],
             "extra": self.extra,
             "lastUpdated": self.last_updated,
@@ -326,6 +336,12 @@ class NodeHealthMonitor:
         node.enabled = enabled
         logger.info("[NodeHealth] %s manually %s", node_id, "enabled" if enabled else "disabled")
 
+    def set_node_weight(self, node_id: str, weight: float):
+        """Set cost weight for a node (0.1 - 1.0). Higher = more traffic."""
+        node = self._ensure_node(node_id)
+        node.weight = max(0.1, min(1.0, weight))
+        logger.info("[NodeHealth] %s weight set to %.1f", node_id, node.weight)
+
     def get_effective_rate(self, node_id: str) -> float:
         """Get the effective success rate for routing decisions."""
         node = self._nodes.get(node_id)
@@ -361,8 +377,9 @@ class NodeHealthMonitor:
                 continue
             rate = node.success_rate
             if node.status == "degraded":
-                rate *= 0.5  # halve the weight for degraded nodes
-            weights[nid] = max(rate, 0.01)
+                rate *= 0.5  # halve the rate for degraded nodes
+            # Blend: 70% success rate + 30% manual weight
+            weights[nid] = max(rate * 0.7 + node.weight * 0.3, 0.01)
 
         if not weights:
             # No healthy nodes — fallback to equal distribution of available
@@ -395,6 +412,100 @@ class NodeHealthMonitor:
             allocation[top] += diff
 
         return allocation
+
+    def allocate_by_capacity(self, total_vids: int, capacities: Dict[str, int]) -> Dict[str, int]:
+        """Allocate VIDs across nodes respecting capacity constraints.
+        
+        3-step algorithm:
+          1. Compute ideal allocation by effective weight (rate×0.7 + weight×0.3)
+          2. Cap each node by its capacity
+          3. Redistribute overflow to nodes with remaining capacity
+        
+        Args:
+            total_vids: Number of VIDs to distribute
+            capacities: {node_id: max_concurrent_capacity}
+        
+        Returns:
+            {node_id: num_vids_assigned}
+        """
+        if not capacities or total_vids <= 0:
+            return {}
+
+        # Filter to enabled, non-broken nodes with capacity > 0
+        effective = {}
+        for nid, cap in capacities.items():
+            if cap <= 0:
+                continue
+            node = self._nodes.get(nid)
+            if node and not node.enabled:
+                continue
+            if node and node.status == "circuit_broken":
+                continue
+            rate = node.success_rate if node else DECAY_DEFAULT
+            if node and node.status == "degraded":
+                rate *= 0.5
+            w = node.weight if node else 1.0
+            effective[nid] = {
+                "weight": max(rate * 0.7 + w * 0.3, 0.01),
+                "capacity": cap,
+            }
+
+        if not effective:
+            return {}
+
+        # Step 1: Ideal allocation by weight
+        total_weight = sum(e["weight"] for e in effective.values())
+        assigned = {}
+        for nid, e in effective.items():
+            ideal = total_vids * e["weight"] / total_weight
+            assigned[nid] = round(ideal)
+
+        # Fix rounding to match total
+        rounding_diff = total_vids - sum(assigned.values())
+        if rounding_diff != 0:
+            # Add/remove from highest weight node
+            top = max(effective, key=lambda n: effective[n]["weight"])
+            assigned[top] += rounding_diff
+
+        # Step 2 & 3: Cap and redistribute (iterative)
+        for _ in range(5):  # max 5 redistribution rounds
+            overflow = 0
+            for nid in list(assigned.keys()):
+                cap = effective[nid]["capacity"]
+                if assigned[nid] > cap:
+                    overflow += assigned[nid] - cap
+                    assigned[nid] = cap
+
+            if overflow == 0:
+                break
+
+            # Redistribute overflow to nodes with remaining capacity
+            remaining = {nid: effective[nid]["capacity"] - assigned[nid]
+                        for nid in assigned if effective[nid]["capacity"] - assigned[nid] > 0}
+            if not remaining:
+                # All nodes at capacity — drop the overflow (shouldn't happen normally)
+                logger.warning("[NodeHealth] All nodes at capacity, %d VIDs unassignable", overflow)
+                break
+
+            remaining_weight = sum(effective[nid]["weight"] for nid in remaining)
+            for nid in remaining:
+                share = round(overflow * effective[nid]["weight"] / remaining_weight)
+                share = min(share, remaining[nid])  # don't exceed remaining capacity
+                assigned[nid] += share
+
+            # Handle any leftover from rounding
+            leftover = total_vids - sum(assigned.values())
+            if leftover > 0:
+                for nid in sorted(remaining, key=lambda n: effective[n]["weight"], reverse=True):
+                    can_add = effective[nid]["capacity"] - assigned[nid]
+                    add = min(leftover, can_add)
+                    assigned[nid] += add
+                    leftover -= add
+                    if leftover <= 0:
+                        break
+
+        logger.info("[NodeHealth] Capacity allocation: %s (total=%d)", assigned, total_vids)
+        return assigned
 
     def select_node(self, available_nodes: List[str] = None) -> str:
         """Select a single node probabilistically based on allocation weights.
@@ -470,6 +581,7 @@ class NodeHealthMonitor:
                     "mode": self._mode,
                     "lockedAllocation": self._locked_allocation,
                     "nodeEnabled": {nid: n.enabled for nid, n in self._nodes.items()},
+                    "nodeWeights": {nid: n.weight for nid, n in self._nodes.items()},
                 }, f, indent=2)
         except Exception as e:
             logger.error("[NodeHealth] Failed to save config: %s", e)
@@ -491,6 +603,9 @@ class NodeHealthMonitor:
                 if "nodeEnabled" in data:
                     for nid, enabled in data["nodeEnabled"].items():
                         self._ensure_node(nid).enabled = enabled
+                if "nodeWeights" in data:
+                    for nid, weight in data["nodeWeights"].items():
+                        self._ensure_node(nid).weight = max(0.1, min(1.0, float(weight)))
                 logger.info("[NodeHealth] Loaded saved config")
         except Exception as e:
             logger.warning("[NodeHealth] Could not load config: %s", e)
@@ -501,6 +616,47 @@ class NodeHealthMonitor:
         return self.get_all_statuses()
 
 
-# ─── Global Singleton ────────────────────────────────────────────────
+# ─── Capacity Tracker (real-time slot management) ────────────────────
+class CapacityTracker:
+    """Track real-time in-use capacity per node.
+    
+    acquire(node_id) before processing a VID, release(node_id) when done.
+    available(node_id, max_cap) returns remaining free slots.
+    """
+
+    def __init__(self):
+        self._in_use: Dict[str, int] = {}
+        self._lock = __import__("threading").Lock()
+
+    def acquire(self, node_id: str, count: int = 1):
+        """Mark slots as in-use."""
+        with self._lock:
+            self._in_use[node_id] = self._in_use.get(node_id, 0) + count
+            logger.debug("[Capacity] %s acquired %d → in_use=%d", node_id, count, self._in_use[node_id])
+
+    def release(self, node_id: str, count: int = 1):
+        """Release slots back to available pool."""
+        with self._lock:
+            self._in_use[node_id] = max(0, self._in_use.get(node_id, 0) - count)
+            logger.debug("[Capacity] %s released %d → in_use=%d", node_id, count, self._in_use[node_id])
+
+    def available(self, node_id: str, max_capacity: int) -> int:
+        """Return remaining free slots for a node."""
+        with self._lock:
+            return max(0, max_capacity - self._in_use.get(node_id, 0))
+
+    def in_use(self, node_id: str) -> int:
+        """Return current in-use count."""
+        with self._lock:
+            return self._in_use.get(node_id, 0)
+
+    def get_all_usage(self) -> Dict[str, int]:
+        """Return snapshot of all in-use counts."""
+        with self._lock:
+            return dict(self._in_use)
+
+
+# ─── Global Singletons ───────────────────────────────────────────────
 node_health_monitor = NodeHealthMonitor()
 node_health_monitor._load_config()
+capacity_tracker = CapacityTracker()

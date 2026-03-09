@@ -2456,6 +2456,18 @@ export default function Admin() {
                                     } catch (e) { console.error(e); }
                                 };
 
+                                const setNodeWeight = async (nodeId, weight) => {
+                                    try {
+                                        const token = user?.token || localStorage.getItem('verifykey-token');
+                                        await fetch(`${API_BASE}/api/admin/node-health/weight`, {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                            body: JSON.stringify({ nodeId, weight })
+                                        });
+                                        const res = await fetch(`${API_BASE}/api/admin/node-health`, { headers: { 'Authorization': `Bearer ${token}` } });
+                                        if (res.ok) setNodeHealth(await res.json());
+                                    } catch (e) { console.error(e); }
+                                };
+
                                 const forceRefresh = async () => {
                                     try {
                                         const token = user?.token || localStorage.getItem('verifykey-token');
@@ -2551,6 +2563,20 @@ export default function Admin() {
                                                                         }} />
                                                                     </span>
                                                                 </label>
+                                                            </div>
+                                                            {/* Weight slider */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                                                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', minWidth: '28px' }}>权重</span>
+                                                                <input type="range" min="0.1" max="1.0" step="0.1"
+                                                                    defaultValue={n.weight ?? 1.0}
+                                                                    key={`${nid}-${n.weight}`}
+                                                                    onMouseUp={(e) => setNodeWeight(nid, parseFloat(e.target.value))}
+                                                                    onTouchEnd={(e) => setNodeWeight(nid, parseFloat(e.target.value))}
+                                                                    style={{ flex: 1, height: '4px', accentColor: nodeColors[nid] || '#6b7280' }}
+                                                                />
+                                                                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)', minWidth: '28px', textAlign: 'right' }}>
+                                                                    ×{(n.weight ?? 1.0).toFixed(1)}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     );

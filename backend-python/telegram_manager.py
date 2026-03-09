@@ -9,7 +9,7 @@ import uuid
 import logging
 import os
 from typing import Optional, Dict
-from telethon import TelegramClient
+from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 
@@ -33,6 +33,9 @@ class TelegramAccountManager:
         self._quotas: Dict[str, Optional[int]] = {}
         # New: Per-account cooldown tracking {account_id: expiry_timestamp}
         self._cooldowns: Dict[str, float] = {}
+        
+        # Track whether notification handler is registered (single listener for public channel)
+        self._notif_registered: bool = False
         
         # Pending login sessions: {account_id: TelegramClient}
         self._login_sessions: Dict[str, TelegramClient] = {}
@@ -410,6 +413,9 @@ class TelegramAccountManager:
             # Add to pool
             self._clients[account_id] = client
             
+            # Register notification listener for DualBot stats
+            self._register_notification_handler(client, account_id)
+            
             if set_as_primary:
                 self._client = client
                 self._active_account_id = account_id
@@ -475,6 +481,47 @@ class TelegramAccountManager:
 
         logger.info(f"[TGManager] Auto-connect finished. Pool size: {connected_count}")
         return {"success": connected_count > 0}
+
+    # ------ Notification Listener (DualBot external stats) ------
+
+    def _register_notification_handler(self, client: TelegramClient, account_id: str):
+        """Register a persistent listener for @AutoGeminiProbot verification notifications.
+        
+        Only registers ONCE (on the first connected account) because the notifications
+        come from a public channel — multiple listeners would cause duplicate counting.
+        """
+        if self._notif_registered:
+            return  # Already listening on another account
+        
+        # Get the verify bot username from config
+        config = config_manager.get_config()
+        dual_config = config.get("verification", {}).get("dualBot", {})
+        verify_bot = dual_config.get("verifyBot", "@AutoGeminiProbot").lstrip("@")
+
+        async def _on_notification(event):
+            """Handle incoming notification messages from the verify bot."""
+            try:
+                text = event.message.text or event.message.message or ""
+                if not text:
+                    return
+                
+                text_upper = text.upper()
+                
+                # Only process final verification results
+                if "VERIFICATION SUCCESSFUL" in text_upper or "SUCCESSFULLY VERIFIED" in text_upper:
+                    from bot_stats import bot_stats_tracker
+                    bot_stats_tracker.record("dualbot", True)
+                    logger.info(f"[TGNotif] DualBot SUCCESS detected from @{verify_bot}")
+                elif "VERIFICATION FAILED" in text_upper or "VERIFICATION REJECTED" in text_upper or "TASK FAILED" in text_upper:
+                    from bot_stats import bot_stats_tracker
+                    bot_stats_tracker.record("dualbot", False)
+                    logger.info(f"[TGNotif] DualBot FAIL detected from @{verify_bot}")
+            except Exception as e:
+                logger.warning(f"[TGNotif] Handler error: {e}")
+
+        client.add_event_handler(_on_notification, events.NewMessage(from_users=verify_bot))
+        self._notif_registered = True
+        logger.info(f"[TGManager] Registered notification listener for @{verify_bot} on account {account_id} (single listener)")
 
     # ------ Helpers ------
 

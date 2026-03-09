@@ -4578,8 +4578,7 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
 
     mode = routing.get("mode", "mixed")
     allocation = routing.get("allocation", {"getgem": 50, "bot": 50})
-    fallback_enabled = routing.get("fallbackEnabled", True)
-    fallback_errors = routing.get("fallbackErrors", ["timeout", "internalError", "rateLimited", "cooldown", "error"])
+    # (Fallback removed — each VID goes directly to its assigned node)
     auto_degrade_threshold = routing.get("autoDegradeThreshold", 30)
 
     # GetGem config
@@ -4616,34 +4615,48 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             )
         cdk_remaining = cdk_check["remaining"]
 
-    # ---- Determine actual allocation via node_health_monitor ----
-    from node_health_monitor import node_health_monitor as _nhm
-    alloc = _nhm.get_allocation()  # e.g. {"getgem": 50, "oldbot": 25, "blackbot": 15, "dualbot": 10}
+    # ---- Determine capacity-aware allocation via node_health_monitor ----
+    from node_health_monitor import node_health_monitor as _nhm, NODE_CONCURRENCY, capacity_tracker as _cap
+    import config_manager as _cm_alloc
+    _cfg_alloc = _cm_alloc.get_config()
 
-    # If getgem CDK is not configured, force its allocation to 0 and redistribute
-    if not getgem_available:
-        alloc["getgem"] = 0
-    # If no bots available, force all bot allocations to 0
-    if not bot_available:
-        for k in ("oldbot", "blackbot", "dualbot"):
-            alloc[k] = k in alloc and 0
+    # Compute dynamic capacities for each node (real-time available, not max)
+    capacities = {}
 
-    # Normalize: redistribute removed allocation proportionally
-    active = {k: v for k, v in alloc.items() if v > 0}
-    if active:
-        total_w = sum(active.values())
-        alloc = {k: round(v / total_w * 100) for k, v in active.items()}
-        # Fix rounding to exactly 100
-        diff = 100 - sum(alloc.values())
-        if diff and alloc:
-            top = max(alloc, key=alloc.get)
-            alloc[top] += diff
-    else:
-        # Fallback: everything to getgem if available, else error
-        if getgem_available:
-            alloc = {"getgem": 100}
-        else:
-            raise HTTPException(status_code=400, detail="没有任何可用的验证节点")
+    # GetGem: fixed API capacity minus currently in-use
+    if getgem_available:
+        max_cap = NODE_CONCURRENCY.get("getgem", 10)
+        capacities["getgem"] = _cap.available("getgem", max_cap)
+
+    # Bot nodes: capacity = (concurrency_per_account × connected_accounts) minus in-use
+    if bot_available:
+        all_connected = tg_manager.get_all_clients()  # {account_id: client}
+        tg_accounts = _cfg_alloc.get("telegramAccounts", [])
+        for bot_type in ("oldbot", "blackbot", "dualbot"):
+            per_account = NODE_CONCURRENCY.get(bot_type, 1)
+            account_count = 0
+            for acc in tg_accounts:
+                if not acc.get("enabled", True):
+                    continue
+                if bot_type not in acc.get("assignedBots", ["dualbot"]):
+                    continue
+                if acc["id"] in all_connected and all_connected[acc["id"]].is_connected():
+                    account_count += 1
+            if account_count > 0:
+                max_cap = per_account * account_count
+                avail = _cap.available(bot_type, max_cap)
+                if avail > 0:
+                    capacities[bot_type] = avail
+
+    if not capacities:
+        raise HTTPException(status_code=400, detail="没有任何可用的验证节点")
+
+    # Allocate VIDs by capacity + weight
+    total = len(request.verificationIds)
+    alloc = _nhm.allocate_by_capacity(total, capacities)
+
+    if not alloc or sum(alloc.values()) == 0:
+        raise HTTPException(status_code=400, detail="无法分配验证链接，所有节点不可用")
 
     # Build VID → original link mapping (for bot path to use correct program ID in URL)
     _vid_to_link = {}
@@ -4654,28 +4667,16 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             if m:
                 _vid_to_link[m.group(1)] = link
 
-    # Split VIDs by allocation into node groups
-    total = len(request.verificationIds)
+    # Split VIDs into node groups based on allocation counts
     node_vids = {}  # node_id -> [vid, ...]
     idx = 0
-    for nid, pct in alloc.items():
-        count = round(total * pct / 100)
+    for nid, count in alloc.items():
         node_vids[nid] = request.verificationIds[idx:idx + count]
         idx += count
-    # Assign any remaining VIDs (from rounding) to the highest-allocation node
+    # Assign any remaining VIDs (from rounding) to the highest-capacity node
     if idx < total:
         top_node = max(alloc, key=alloc.get)
         node_vids[top_node] = node_vids.get(top_node, []) + request.verificationIds[idx:]
-
-    # Separate into getgem group and bot groups
-    getgem_vids = node_vids.get("getgem", [])
-    bot_vids = []
-    bot_node_order = []  # track which bot nodes have VIDs
-    for nid in ("oldbot", "blackbot", "dualbot"):
-        vids_for_node = node_vids.get(nid, [])
-        if vids_for_node:
-            bot_vids.extend(vids_for_node)
-            bot_node_order.append(nid)
 
     alloc_log = ", ".join(f"{k}={len(node_vids.get(k, []))}" for k in alloc)
     print(f"[MixedMode] Smart routing: {alloc_log} (allocation: {alloc})")
@@ -4691,306 +4692,189 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
 
         # Broadcast initial events
         for vid in request.verificationIds:
-            via_label = "getgem" if vid in getgem_vids else "bot"
-            fmt({"type": "progress", "vid": vid, "step": "submitted", "via": via_label, "message": f"等待验证 ({via_label})..."})
+            assigned_node = next((nid for nid, vids in node_vids.items() if vid in vids), "unknown")
+            fmt({"type": "progress", "vid": vid, "step": "submitted", "via": assigned_node, "message": f"等待验证 ({assigned_node})..."})
 
         all_results = []
 
-        # ---- GetGem group (async) ----
-        async def process_getgem_batch(vids):
-            results = []
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-                cdk_list = [c.strip() for c in getgem_cdk.replace(',', '\n').split('\n') if c.strip()]
-                if not cdk_list:
-                    for vid in vids:
-                        results.append({"verificationId": vid, "status": "error", "success": False,
-                                        "message": "GetGem API CDK 未配置", "via": "getgem"})
-                    return results
+        # ---- GetGem processor ----
+        async def process_getgem_vid(vid):
+            """Process a single VID via GetGem API."""
+            _cap.acquire("getgem")
+            try:
+                fmt({"type": "progress", "vid": vid, "step": "warmup", "via": "getgem", "message": "GetGem: 文档生成中..."})
+                async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                    cdk_list = [c.strip() for c in getgem_cdk.replace(',', '\n').split('\n') if c.strip()]
+                    if not cdk_list:
+                        return {"verificationId": vid, "status": "error", "success": False,
+                                "message": "GetGem API CDK 未配置", "via": "getgem"}
 
-                for vid in vids:
-                    try:
-                        fmt({"type": "progress", "vid": vid, "step": "warmup", "via": "getgem", "message": "GetGem: 文档生成中..."})
-
-                        submit_resp = None
-                        error_detail = ""
-                        for current_cdk in cdk_list:
-                            submit_resp = await client.post(
-                                f"{getgem_url}/api/verify",
-                                json={"verificationId": vid, "cdk": current_cdk}
-                            )
-                            if submit_resp.status_code == 200:
-                                error_detail = ""
-                                break
-                            error_detail = submit_resp.json().get("error", submit_resp.text[:100]) if submit_resp else "No response"
-                            if "balance" in error_detail.lower() or "cdk" in error_detail.lower():
-                                continue
-                            else:
-                                break
-
-                        if submit_resp and submit_resp.status_code != 200:
-                            results.append({"verificationId": vid, "status": "error", "success": False,
-                                            "message": _translate_getgem_error(error_detail), "via": "getgem"})
+                    submit_resp = None
+                    error_detail = ""
+                    for current_cdk in cdk_list:
+                        submit_resp = await client.post(
+                            f"{getgem_url}/api/verify",
+                            json={"verificationId": vid, "cdk": current_cdk}
+                        )
+                        if submit_resp.status_code == 200:
+                            error_detail = ""
+                            break
+                        error_detail = submit_resp.json().get("error", submit_resp.text[:100]) if submit_resp else "No response"
+                        if "balance" in error_detail.lower() or "cdk" in error_detail.lower():
                             continue
-
-                        submit_data = submit_resp.json()
-
-                        # Handle immediate rejection
-                        if submit_data.get("status") == "rejected":
-                            error_ids = submit_data.get("errorIds", [])
-                            msg = submit_data.get("message", "Verification rejected")
-                            if "expiredVerification" in error_ids:
-                                msg = "验证链接已过期，请刷新页面获取新链接"
-                            elif "invalidVerification" in error_ids:
-                                msg = "无效的验证链接"
-                            else:
-                                msg = _translate_getgem_error(msg)
-                            results.append({"verificationId": vid, "status": "rejected", "success": False,
-                                            "message": msg, "via": "getgem"})
-                            continue
-
-                        task_id = submit_data.get("taskId")
-                        if not task_id:
-                            results.append({"verificationId": vid, "status": "error", "success": False,
-                                            "message": "未获取到 taskId", "via": "getgem"})
-                            continue
-
-                        # Poll for result
-                        fmt({"type": "progress", "vid": vid, "step": "waiting", "via": "getgem", "message": "GetGem: 等待验证结果..."})
-                        result_found = False
-                        for _ in range(60):
-                            await asyncio.sleep(5)
-                            status_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
-                            if status_resp.status_code != 200:
-                                continue
-                            status_data = status_resp.json()
-                            if not status_data.get("completed"):
-                                continue
-                            if status_data.get("success"):
-                                results.append({"verificationId": vid, "status": "approved", "success": True,
-                                                "message": "验证成功", "via": "getgem", "taskId": task_id})
-                            else:
-                                last_error = status_data.get("error", "Unknown error")
-                                results.append({"verificationId": vid, "status": "rejected", "success": False,
-                                                "message": f"验证失败: {_translate_getgem_error(last_error)}",
-                                                "via": "getgem", "taskId": task_id})
-                            result_found = True
+                        else:
                             break
 
-                        if not result_found:
-                            results.append({"verificationId": vid, "status": "timeout", "success": False,
-                                            "message": "轮询超时（5分钟）", "via": "getgem", "taskId": task_id})
+                    if submit_resp and submit_resp.status_code != 200:
+                        return {"verificationId": vid, "status": "error", "success": False,
+                                "message": _translate_getgem_error(error_detail), "via": "getgem"}
 
-                    except Exception as e:
-                        results.append({"verificationId": vid, "status": "error", "success": False,
-                                        "message": f"错误: {str(e)}", "via": "getgem"})
-            return results
+                    submit_data = submit_resp.json()
 
-        # ---- Bot group (reuse unified bot pool logic) ----
-        async def process_bot_batch(vids):
-            results = []
-            if not vids:
-                return results
+                    # Handle immediate rejection
+                    if submit_data.get("status") == "rejected":
+                        error_ids = submit_data.get("errorIds", [])
+                        msg = submit_data.get("message", "Verification rejected")
+                        if "expiredVerification" in error_ids:
+                            msg = "验证链接已过期，请刷新页面获取新链接"
+                        elif "invalidVerification" in error_ids:
+                            msg = "无效的验证链接"
+                        else:
+                            msg = _translate_getgem_error(msg)
+                        return {"verificationId": vid, "status": "rejected", "success": False,
+                                "message": msg, "via": "getgem"}
 
-            # Build links from VIDs for bot verification — use original links if available
-            links = []
-            for vid in vids:
-                original_link = _vid_to_link.get(vid)
-                if original_link:
-                    links.append(original_link)
+                    task_id = submit_data.get("taskId")
+                    if not task_id:
+                        return {"verificationId": vid, "status": "error", "success": False,
+                                "message": "未获取到 taskId", "via": "getgem"}
+
+                    # Poll for result
+                    fmt({"type": "progress", "vid": vid, "step": "waiting", "via": "getgem", "message": "GetGem: 等待验证结果..."})
+                    for _ in range(60):
+                        await asyncio.sleep(5)
+                        status_resp = await client.get(f"{getgem_url}/api/status/{task_id}")
+                        if status_resp.status_code != 200:
+                            continue
+                        status_data = status_resp.json()
+                        if not status_data.get("completed"):
+                            continue
+                        if status_data.get("success"):
+                            return {"verificationId": vid, "status": "approved", "success": True,
+                                    "message": "验证成功", "via": "getgem", "taskId": task_id}
+                        else:
+                            err_msg = status_data.get("message", "验证失败")
+                            return {"verificationId": vid, "status": "failed", "success": False,
+                                    "message": _translate_getgem_error(err_msg), "via": "getgem", "taskId": task_id}
+
+                    return {"verificationId": vid, "status": "timeout", "success": False,
+                            "message": "GetGem 验证超时", "via": "getgem"}
+            except Exception as e:
+                return {"verificationId": vid, "status": "error", "success": False,
+                        "message": f"GetGem 错误: {str(e)}", "via": "getgem"}
+            finally:
+                _cap.release("getgem")
+
+        # ---- Bot processor (single VID → single bot, no fallback) ----
+        async def process_bot_vid(vid, bot_type):
+            """Process a single VID via a specific bot type. No fallback."""
+            _cap.acquire(bot_type)
+            try:
+                link = _vid_to_link.get(vid, f"https://services.sheerid.com/verify/{vid}/?verificationId={vid}")
+                via_label = f"bot:{bot_type}"
+                fmt({"type": "progress", "vid": vid, "step": "warmup", "via": via_label, "message": f"{bot_type}: 提交验证中..."})
+
+                import config_manager as _cm
+                _cfg = _cm.get_config()
+
+                # Get client for this bot
+                pool_item = None
+                if bot_type == "dualbot":
+                    pool_item = tg_manager.get_next_client(bot_type="dualbot")
                 else:
-                    # Fallback: construct link (VID in path may not work for all programs)
-                    links.append(f"https://services.sheerid.com/verify/{vid}/?verificationId={vid}")
-
-            import config_manager as _cm
-            _cfg = _cm.get_config()
-            enabled_bots = []
-            d_cfg = _cfg.get("verification", {}).get("dualBot", {})
-            if d_cfg.get("enabled"):
-                enabled_bots.append({"type": "dualbot", "config": d_cfg})
-            for sb in _cfg.get("verification", {}).get("singleBots", []):
-                if sb.get("enabled"):
-                    enabled_bots.append({"type": sb["id"], "config": sb})
-
-            if not enabled_bots:
-                for vid in vids:
-                    results.append({"verificationId": vid, "status": "error", "success": False,
-                                    "message": "没有可用的 Telegram Bot", "via": "bot"})
-                return results
-
-            # Sort bots by node_health_monitor allocation weight
-            from node_health_monitor import node_health_monitor as _nhm
-            ordered = _nhm.get_ordered_nodes([b["type"] for b in enabled_bots])
-            bot_order_map = {nid: i for i, nid in enumerate(ordered)}
-            sorted_bots = sorted(enabled_bots, key=lambda b: bot_order_map.get(b["type"], 999))
-
-            for i, vid in enumerate(vids):
-                link = links[i]
-                fmt({"type": "progress", "vid": vid, "step": "warmup", "via": "bot", "message": "Bot: 提交验证中..."})
-
-                last_result = None
-                for bot_entry in sorted_bots:
-                    bot_type = bot_entry["type"]
-                    bot_config = bot_entry["config"]
-                    bot_timeout = bot_config.get("timeout", 120)
-
-                    pool_item = None
-                    if bot_type == "dualbot":
-                        pool_item = tg_manager.get_next_client(bot_type="dualbot")
-                    else:
-                        # SingleBot client retrieval
-                        accounts = _cfg.get("telegramAccounts", [])
-                        all_clients = tg_manager.get_all_clients()
-                        for acc in accounts:
-                            if bot_type in acc.get("assignedBots", []) and acc.get("enabled"):
-                                ci = all_clients.get(acc["id"])
-                                if ci and ci.is_connected():
-                                    pool_item = (acc["id"], ci)
-                                    break
-
-                    if not pool_item:
-                        continue
-
-                    acc_id, client = pool_item
-                    try:
-                        async def on_progress(progress, _bt=bot_type):
-                            fmt({"type": "progress", "vid": vid, "via": f"bot:{_bt}", **progress})
-
-                        if bot_type == "dualbot":
-                            result = await dual_bot.verify(
-                                client=client, link=link, account_id=acc_id,
-                                warmup_bot=bot_config.get("warmupBot"),
-                                verify_bot=bot_config.get("verifyBot"),
-                                auto_bypass=bot_config.get("autoBypass", True),
-                                timeout=bot_timeout, on_progress=on_progress
-                            )
-                        else:
-                            single_verifier = GenericSingleBotVerifier(bot_config)
-                            result = await single_verifier.verify(
-                                client=client, link=link, account_id=acc_id,
-                                timeout=bot_timeout, on_progress=on_progress
-                            )
-
-                        bot_stats_tracker.record(bot_type, result.get("success", False))
-
-                        via_label = f"bot:{bot_type}"
-                        if result.get("success"):
-                            results.append({"verificationId": vid, "status": "approved", "success": True,
-                                            "message": result.get("message", "验证成功"), "via": via_label,
-                                            "claimLink": result.get("claimLink")})
-                            last_result = None
-                            break
-                        else:
-                            last_result = {"verificationId": vid, "status": result.get("status", "failed"),
-                                           "success": False, "message": result.get("message", "验证失败"),
-                                           "via": via_label}
-                            # If verified-stage failure, don't try next bot
-                            if result.get("status") in ("failed", "rejected"):
+                    accounts = _cfg.get("telegramAccounts", [])
+                    all_clients = tg_manager.get_all_clients()
+                    for acc in accounts:
+                        if bot_type in acc.get("assignedBots", []) and acc.get("enabled"):
+                            ci = all_clients.get(acc["id"])
+                            if ci and ci.is_connected():
+                                pool_item = (acc["id"], ci)
                                 break
-                            # Cooldown at warmup → try next bot
-                            if result.get("status") == "cooldown" and result.get("cooldown_stage") != "verify":
-                                continue
-                            break
 
-                    except Exception as e:
-                        last_result = {"verificationId": vid, "status": "error", "success": False,
-                                       "message": f"Bot 错误: {str(e)}", "via": f"bot:{bot_type}"}
-                        break
+                if not pool_item:
+                    return {"verificationId": vid, "status": "error", "success": False,
+                            "message": f"没有可用的 {bot_type} 客户端", "via": via_label}
 
-                if last_result:
-                    results.append(last_result)
+                acc_id, client = pool_item
+                try:
+                    async def on_progress(progress, _bt=bot_type):
+                        fmt({"type": "progress", "vid": vid, "via": f"bot:{_bt}", **progress})
 
-            return results
+                    bot_config = {}
+                    if bot_type == "dualbot":
+                        bot_config = _cfg.get("verification", {}).get("dualBot", {})
+                        bot_timeout = bot_config.get("timeout", 120)
+                        result = await dual_bot.verify(
+                            client=client, link=link, account_id=acc_id,
+                            warmup_bot=bot_config.get("warmupBot"),
+                            verify_bot=bot_config.get("verifyBot"),
+                            auto_bypass=bot_config.get("autoBypass", True),
+                            timeout=bot_timeout, on_progress=on_progress
+                        )
+                    else:
+                        # SingleBot
+                        for sb in _cfg.get("verification", {}).get("singleBots", []):
+                            if sb.get("id") == bot_type:
+                                bot_config = sb
+                                break
+                        bot_timeout = bot_config.get("timeout", 120)
+                        single_verifier = GenericSingleBotVerifier(bot_config)
+                        result = await single_verifier.verify(
+                            client=client, link=link, account_id=acc_id,
+                            timeout=bot_timeout, on_progress=on_progress
+                        )
 
-        # ---- Run both groups in parallel ----
-        getgem_task = asyncio.create_task(process_getgem_batch(getgem_vids)) if getgem_vids else None
-        bot_task = asyncio.create_task(process_bot_batch(bot_vids)) if bot_vids else None
+                    bot_stats_tracker.record(bot_type, result.get("success", False))
 
-        # Stream progress while waiting
-        pending = [t for t in [getgem_task, bot_task] if t]
-        while pending and not all(t.done() for t in pending):
+                    if result.get("success"):
+                        return {"verificationId": vid, "status": "approved", "success": True,
+                                "message": result.get("message", "验证成功"), "via": via_label,
+                                "claimLink": result.get("claimLink")}
+                    else:
+                        return {"verificationId": vid, "status": result.get("status", "failed"),
+                                "success": False, "message": result.get("message", "验证失败"),
+                                "via": via_label}
+                except Exception as e:
+                    return {"verificationId": vid, "status": "error", "success": False,
+                            "message": f"Bot 错误: {str(e)}", "via": via_label}
+            finally:
+                _cap.release(bot_type)
+
+        # ---- Launch all VIDs in parallel (each to its assigned node) ----
+        tasks = []
+        for nid, vids in node_vids.items():
+            for vid in vids:
+                if nid == "getgem":
+                    tasks.append(asyncio.create_task(process_getgem_vid(vid)))
+                else:
+                    tasks.append(asyncio.create_task(process_bot_vid(vid, nid)))
+
+        # Stream progress while waiting for all tasks to complete
+        while tasks and not all(t.done() for t in tasks):
             while progress_events:
                 yield progress_events.pop(0)
             await asyncio.sleep(0.3)
         while progress_events:
             yield progress_events.pop(0)
 
-        if getgem_task:
+        # Collect results
+        for t in tasks:
             try:
-                all_results.extend(await getgem_task)
+                result = await t
+                if result:
+                    all_results.append(result)
             except Exception as e:
-                logging.error(f"[MixedMode] GetGem task crashed: {e}")
-                for vid in getgem_vids:
-                    all_results.append({"verificationId": vid, "status": "error", "success": False, "message": f"GetGem 错误: {str(e)}", "via": "getgem"})
-                    broadcast_verify_event({"type": "progress", "vid": vid, "step": "result", "success": False, "status": "error", "message": f"GetGem 错误: {str(e)}"})
-        if bot_task:
-            try:
-                all_results.extend(await bot_task)
-            except Exception as e:
-                logging.error(f"[MixedMode] Bot task crashed: {e}")
-                for vid in bot_vids:
-                    all_results.append({"verificationId": vid, "status": "error", "success": False, "message": f"Bot 错误: {str(e)}", "via": "bot"})
-                    broadcast_verify_event({"type": "progress", "vid": vid, "step": "result", "success": False, "status": "error", "message": f"Bot 错误: {str(e)}"})
-
-        # ---- Fallback: retry failed items with the other node ----
-        if fallback_enabled:
-            fallback_items = []
-            for r in all_results:
-                if r.get("success"):
-                    continue
-                # Check if error type is in the fallback whitelist
-                error_msg = r.get("message", "")
-                status = r.get("status", "")
-                should_fallback = status in fallback_errors
-                if not should_fallback:
-                    for err_key in fallback_errors:
-                        if err_key.lower() in error_msg.lower():
-                            should_fallback = True
-                            break
-                if should_fallback:
-                    fallback_items.append(r)
-
-            if fallback_items:
-                print(f"[MixedMode] Fallback: {len(fallback_items)} items to retry")
-                for fb in fallback_items:
-                    vid = fb["verificationId"]
-                    original_via = fb.get("via", "")
-                    fmt({"type": "progress", "vid": vid, "step": "fallback",
-                         "message": f"正在切换备用节点重试...", "via": "fallback"})
-
-                # Determine fallback target
-                fallback_getgem_vids = []
-                fallback_bot_vids = []
-                for fb in fallback_items:
-                    if fb.get("via", "").startswith("bot") and getgem_available:
-                        fallback_getgem_vids.append(fb["verificationId"])
-                    elif fb.get("via") == "getgem" and bot_available:
-                        fallback_bot_vids.append(fb["verificationId"])
-
-                fb_getgem_task = asyncio.create_task(process_getgem_batch(fallback_getgem_vids)) if fallback_getgem_vids else None
-                fb_bot_task = asyncio.create_task(process_bot_batch(fallback_bot_vids)) if fallback_bot_vids else None
-
-                fb_pending = [t for t in [fb_getgem_task, fb_bot_task] if t]
-                while fb_pending and not all(t.done() for t in fb_pending):
-                    while progress_events:
-                        yield progress_events.pop(0)
-                    await asyncio.sleep(0.3)
-                while progress_events:
-                    yield progress_events.pop(0)
-
-                fb_results = []
-                if fb_getgem_task:
-                    fb_results.extend(await fb_getgem_task)
-                if fb_bot_task:
-                    fb_results.extend(await fb_bot_task)
-
-                # Replace original failed results with fallback results
-                fb_map = {r["verificationId"]: r for r in fb_results}
-                for i, r in enumerate(all_results):
-                    vid = r["verificationId"]
-                    if vid in fb_map:
-                        fb_r = fb_map[vid]
-                        fb_r["via"] = f"fallback:{fb_r.get('via', '')}"
-                        all_results[i] = fb_r
+                logging.error(f"[MixedMode] Task error: {e}")
 
         # ---- Apply manual overrides (admin marked pass/fail while verification was running) ----
         for i, r in enumerate(all_results):
@@ -5075,6 +4959,18 @@ async def toggle_node_enabled(request: dict):
     node_health_monitor.set_node_enabled(node_id, enabled)
     node_health_monitor._save_config()
     return {"ok": True, "nodeId": node_id, "enabled": enabled}
+
+
+@app.post("/api/admin/node-health/weight")
+async def set_node_weight(request: dict):
+    """Admin: Set cost weight for a specific node."""
+    node_id = request.get("nodeId")
+    weight = request.get("weight", 1.0)
+    if not node_id:
+        raise HTTPException(status_code=400, detail="nodeId required")
+    node_health_monitor.set_node_weight(node_id, float(weight))
+    node_health_monitor._save_config()
+    return {"ok": True, "nodeId": node_id, "weight": weight}
 
 
 # ========== Routing Stats API ==========

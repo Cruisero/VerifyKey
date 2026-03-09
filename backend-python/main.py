@@ -4491,6 +4491,7 @@ async def getgem_status():
 
 class MixedVerifyRequest(BaseModel):
     verificationIds: List[str]
+    links: Optional[List[str]] = None
     cdk: Optional[str] = None
 
 
@@ -4568,6 +4569,15 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
         elif bot_rate * 100 < auto_degrade_threshold and getgem_rate * 100 >= auto_degrade_threshold:
             effective_getgem_pct, effective_bot_pct = 100, 0
             print(f"[MixedMode] Bot auto-degraded (rate={bot_rate:.0%} < {auto_degrade_threshold}%)")
+
+    # Build VID → original link mapping (for bot path to use correct program ID in URL)
+    _vid_to_link = {}
+    if request.links:
+        import re as _re_links
+        for link in request.links:
+            m = _re_links.search(r'verificationId=([a-zA-Z0-9-]+)', link)
+            if m:
+                _vid_to_link[m.group(1)] = link
 
     # Split VIDs by allocation
     total = len(request.verificationIds)
@@ -4691,8 +4701,15 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             if not vids:
                 return results
 
-            # Build links from VIDs for bot verification
-            links = [f"https://services.sheerid.com/verify/{vid}/?verificationId={vid}" for vid in vids]
+            # Build links from VIDs for bot verification — use original links if available
+            links = []
+            for vid in vids:
+                original_link = _vid_to_link.get(vid)
+                if original_link:
+                    links.append(original_link)
+                else:
+                    # Fallback: construct link (VID in path may not work for all programs)
+                    links.append(f"https://services.sheerid.com/verify/{vid}/?verificationId={vid}")
 
             import config_manager as _cm
             _cfg = _cm.get_config()

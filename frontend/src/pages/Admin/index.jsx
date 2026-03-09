@@ -5616,20 +5616,27 @@ export default function Admin() {
                                         cursor: 'pointer'
                                     }}
                                     onClick={async () => {
-                                        if (!confirm('确定要清空所有验证状态记录吗？此操作不可撤销。')) return;
+                                        if (!confirm('确定要重置验证状态显示吗？（不会删除数据库记录）')) return;
                                         try {
-                                            const res = await fetch(`${API_BASE}/api/verify/history`, { method: 'DELETE' });
+                                            const res = await fetch(`${API_BASE}/api/verify/history`);
                                             if (res.ok) {
                                                 const data = await res.json();
-                                                setHistoryData([]);
-                                                setHistoryStats({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
+                                                setHistoryData(data.history || []);
+                                                const h = data.history || [];
+                                                setHistoryStats({
+                                                    pass: h.filter(r => r.status === 'pass').length,
+                                                    failed: h.filter(r => r.status === 'failed').length,
+                                                    processing: h.filter(r => r.status === 'processing').length,
+                                                    cancel: h.filter(r => r.status === 'cancel').length,
+                                                    total: h.length,
+                                                });
                                             }
                                         } catch (e) {
-                                            alert('清空失败: ' + e.message);
+                                            alert('重置失败: ' + e.message);
                                         }
                                     }}
                                 >
-                                    🗑️ 清空所有记录
+                                    🔄 重新计算
                                 </button>
                                 <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                                     共 {historyStats.total || 0} 条记录

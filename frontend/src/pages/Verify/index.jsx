@@ -452,7 +452,7 @@ export default function Verify() {
             const response = await fetch(`${API_BASE}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ verificationIds, cdk: cdkCode })
+                body: JSON.stringify({ verificationIds, links: items, cdk: cdkCode })
             });
 
             if (!response.ok) {

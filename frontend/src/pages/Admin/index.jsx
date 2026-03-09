@@ -1012,6 +1012,7 @@ export default function Admin() {
     });
     const [routingStats, setRoutingStats] = useState(null);
     const [nodeHealth, setNodeHealth] = useState(null);
+    const [showTemplates, setShowTemplates] = useState(false);
     const [batchApiSettings, setBatchApiSettings] = useState({
         apiUrl: 'https://batch.1key.me/api/batch',
         apiKey: ''
@@ -2306,8 +2307,16 @@ export default function Admin() {
                                         letterSpacing: '0.5px'
                                     }}>📄 模板类</span>
                                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>本地生成</span>
+                                    <button
+                                        onClick={() => setShowTemplates(prev => !prev)}
+                                        style={{
+                                            marginLeft: 'auto', background: 'none', border: '1px solid var(--border-color)',
+                                            borderRadius: '6px', padding: '2px 10px', fontSize: '11px', cursor: 'pointer',
+                                            color: 'var(--text-secondary)'
+                                        }}
+                                    >{showTemplates ? '收起' : '展开'}</button>
                                 </div>
-                                <div className="provider-cards">
+                                {showTemplates && <div className="provider-cards">
 
                                     <div
                                         className={`provider-card ${aiProvider === 'gemini' ? 'active' : ''}`}
@@ -2407,223 +2416,16 @@ export default function Admin() {
                                         </div>
                                     </div>
 
-                                </div>
+                                </div>}
                             </div>
 
-                            {/* Mixed Mode Routing Config */}
-                            {aiProvider === 'mixed' && (
-                                <div className="provider-settings">
-                                    <h4>🔀 混合模式 路由策略</h4>
-                                    <div className="settings-form">
-                                        <div style={{
-                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                            color: 'white', padding: '16px 20px', borderRadius: '8px', marginBottom: '16px'
-                                        }}>
-                                            <p style={{ margin: 0, fontSize: '14px' }}>
-                                                <strong>混合模式</strong> 将 GetGem API 与 Telegram Bot 统一为一个验证池。
-                                                根据分配比例自动分配链接，失败时自动 Fallback 到另一个节点。
-                                            </p>
-                                        </div>
-
-                                        {/* Real-time Stats */}
-                                        {routingStats && (
-                                            <div style={{
-                                                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px'
-                                            }}>
-                                                <div style={{
-                                                    background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: '8px',
-                                                    border: '1px solid var(--border-color)'
-                                                }}>
-                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>💎 GetGem 成功率</div>
-                                                    <div style={{ fontSize: '20px', fontWeight: 700, color: routingStats.getgem.rate >= 0.5 ? '#4caf50' : '#f44336' }}>
-                                                        {(routingStats.getgem.rate * 100).toFixed(0)}%
-                                                    </div>
-                                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                                        {routingStats.getgem.success}/{routingStats.getgem.total} 成功
-                                                    </div>
-                                                </div>
-                                                <div style={{
-                                                    background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: '8px',
-                                                    border: '1px solid var(--border-color)'
-                                                }}>
-                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>🤖 Bot 成功率</div>
-                                                    <div style={{ fontSize: '20px', fontWeight: 700, color: routingStats.bot.rate >= 0.5 ? '#4caf50' : '#f44336' }}>
-                                                        {(routingStats.bot.rate * 100).toFixed(0)}%
-                                                    </div>
-                                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                                        {routingStats.bot.success}/{routingStats.bot.total} 成功
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Allocation Slider */}
-                                        <div className="input-group">
-                                            <label className="input-label">分配比例</label>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '80px' }}>💎 GetGem {routingStrategy.allocation.getgem}%</span>
-                                                <input
-                                                    type="range" min="0" max="100" step="10"
-                                                    value={routingStrategy.allocation.getgem}
-                                                    onChange={(e) => {
-                                                        const v = parseInt(e.target.value);
-                                                        setRoutingStrategy(prev => ({
-                                                            ...prev,
-                                                            allocation: { getgem: v, bot: 100 - v }
-                                                        }));
-                                                    }}
-                                                    style={{ flex: 1 }}
-                                                />
-                                                <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '70px', textAlign: 'right' }}>🤖 Bot {routingStrategy.allocation.bot}%</span>
-                                            </div>
-                                            {routingStats && (
-                                                <button
-                                                    style={{
-                                                        marginTop: '8px', fontSize: '12px', padding: '4px 12px',
-                                                        borderRadius: '6px', border: '1px solid var(--border-color)',
-                                                        background: 'var(--bg-tertiary)', cursor: 'pointer', color: 'var(--text-primary)'
-                                                    }}
-                                                    onClick={() => setRoutingStrategy(prev => ({
-                                                        ...prev,
-                                                        allocation: { getgem: routingStats.recommended.getgem, bot: routingStats.recommended.bot }
-                                                    }))}
-                                                >
-                                                    📊 使用推荐比例 ({routingStats.recommended.getgem}/{routingStats.recommended.bot})
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        {/* Fallback Toggle */}
-                                        <div className="input-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div>
-                                                <label className="input-label" style={{ marginBottom: 0 }}>失败自动 Fallback</label>
-                                                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                                                    仅对超时/限流/系统错误生效，验证被拒绝不会 Fallback
-                                                </p>
-                                            </div>
-                                            <label className="toggle-switch">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={routingStrategy.fallbackEnabled}
-                                                    onChange={(e) => setRoutingStrategy(prev => ({
-                                                        ...prev, fallbackEnabled: e.target.checked
-                                                    }))}
-                                                />
-                                                <span className="toggle-slider"></span>
-                                            </label>
-                                        </div>
-
-                                        {/* Fallback Error Whitelist */}
-                                        {routingStrategy.fallbackEnabled && (
-                                            <div className="input-group">
-                                                <label className="input-label">Fallback 触发错误白名单</label>
-                                                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 8px' }}>
-                                                    只有以下状态/关键词匹配的失败结果才会触发 Fallback 重试
-                                                </p>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                                                    {(routingStrategy.fallbackErrors || []).map((err, idx) => (
-                                                        <span key={idx} style={{
-                                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                                            background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)',
-                                                            borderRadius: '6px', padding: '3px 8px 3px 10px',
-                                                            fontSize: '12px', fontFamily: 'monospace', color: 'var(--text-primary)',
-                                                        }}>
-                                                            {err}
-                                                            <button
-                                                                onClick={() => setRoutingStrategy(prev => ({
-                                                                    ...prev,
-                                                                    fallbackErrors: prev.fallbackErrors.filter((_, i) => i !== idx)
-                                                                }))}
-                                                                style={{
-                                                                    background: 'none', border: 'none', cursor: 'pointer',
-                                                                    color: '#dc2626', fontSize: '14px', fontWeight: 700,
-                                                                    padding: '0 2px', lineHeight: 1, display: 'flex', alignItems: 'center',
-                                                                }}
-                                                                title="移除"
-                                                            >×</button>
-                                                        </span>
-                                                    ))}
-                                                    {(routingStrategy.fallbackErrors || []).length === 0 && (
-                                                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                                                            无白名单项，Fallback 不会触发
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '6px' }}>
-                                                    <input
-                                                        type="text"
-                                                        className="input"
-                                                        placeholder="输入错误类型，如 rejected"
-                                                        style={{ flex: 1, fontSize: '12px' }}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter' && e.target.value.trim()) {
-                                                                const val = e.target.value.trim();
-                                                                if (!(routingStrategy.fallbackErrors || []).includes(val)) {
-                                                                    setRoutingStrategy(prev => ({
-                                                                        ...prev,
-                                                                        fallbackErrors: [...(prev.fallbackErrors || []), val]
-                                                                    }));
-                                                                }
-                                                                e.target.value = '';
-                                                            }
-                                                        }}
-                                                    />
-                                                    <button
-                                                        className="btn btn-sm btn-secondary"
-                                                        style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
-                                                        onClick={(e) => {
-                                                            const input = e.target.previousElementSibling;
-                                                            const val = input.value.trim();
-                                                            if (val && !(routingStrategy.fallbackErrors || []).includes(val)) {
-                                                                setRoutingStrategy(prev => ({
-                                                                    ...prev,
-                                                                    fallbackErrors: [...(prev.fallbackErrors || []), val]
-                                                                }));
-                                                            }
-                                                            input.value = '';
-                                                        }}
-                                                    >+ 添加</button>
-                                                    <button
-                                                        className="btn btn-sm btn-outline"
-                                                        style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
-                                                        onClick={() => setRoutingStrategy(prev => ({
-                                                            ...prev,
-                                                            fallbackErrors: ['timeout', 'internalError', 'rateLimited', 'cooldown', 'error']
-                                                        }))}
-                                                        title="恢复默认白名单"
-                                                    >重置</button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Auto Degrade Threshold */}
-                                        <div className="input-group">
-                                            <label className="input-label">自动降级阈值</label>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{ fontSize: '13px' }}>成功率低于</span>
-                                                <input
-                                                    type="number" min="0" max="100" step="5"
-                                                    className="input"
-                                                    style={{ width: '70px', textAlign: 'center' }}
-                                                    value={routingStrategy.autoDegradeThreshold}
-                                                    onChange={(e) => setRoutingStrategy(prev => ({
-                                                        ...prev,
-                                                        autoDegradeThreshold: parseInt(e.target.value) || 0
-                                                    }))}
-                                                />
-                                                <span style={{ fontSize: '13px' }}>% 时自动将该节点流量切到另一方</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Node Health Monitor Dashboard */}
-                            {aiProvider === 'mixed' && nodeHealth && (() => {
-                                const nodes = nodeHealth.nodes || {};
-                                const config = nodeHealth.config || {};
+                            {/* Mixed Mode — Unified Smart Routing Panel */}
+                            {aiProvider === 'mixed' && (() => {
+                                const nh = nodeHealth || {};
+                                const nodes = nh.nodes || {};
+                                const config = nh.config || {};
                                 const thresholds = config.thresholds || {};
-                                const allocation = nodeHealth.allocation || {};
+                                const allocation = nh.allocation || {};
                                 const nodeOrder = ['getgem', 'oldbot', 'blackbot', 'dualbot'];
                                 const nodeLabels = { getgem: 'GetGem', oldbot: 'OldBot', blackbot: 'BlackBot', dualbot: 'DualBot' };
                                 const nodeColors = { getgem: '#10b981', oldbot: '#3b82f6', blackbot: '#8b5cf6', dualbot: '#6b7280' };
@@ -2668,11 +2470,20 @@ export default function Admin() {
                                 };
 
                                 return (
-                                    <div className="provider-settings" style={{ marginTop: '12px' }}>
-                                        <h4>🔄 智能路由监控</h4>
+                                    <div className="provider-settings">
+                                        <h4>🔀 混合模式 智能路由</h4>
                                         <div className="settings-form">
+                                            <div style={{
+                                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                color: 'white', padding: '16px 20px', borderRadius: '8px', marginBottom: '16px'
+                                            }}>
+                                                <p style={{ margin: 0, fontSize: '14px' }}>
+                                                    <strong>混合模式</strong> 将 GetGem API 与 Telegram Bot 统一为一个验证池。
+                                                    根据各节点实时成功率自动分配流量，失败时自动 Fallback 到其他节点。
+                                                </p>
+                                            </div>
 
-                                            {/* Node Cards */}
+                                            {/* ── Node Health Cards ── */}
                                             <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
                                                 {nodeOrder.map(nid => {
                                                     const n = nodes[nid] || { nodeId: nid, status: 'healthy', successRate: 50, enabled: true, sparkline: [], extra: {} };
@@ -2695,7 +2506,6 @@ export default function Admin() {
                                                             <div style={{ fontSize: '24px', fontWeight: 800, color, marginBottom: '6px' }}>
                                                                 {n.successRate?.toFixed(1) ?? '—'}%
                                                             </div>
-                                                            {/* Sparkline */}
                                                             {n.sparkline && n.sparkline.length > 0 && (
                                                                 <div style={{ display: 'flex', gap: '2px', marginBottom: '8px', height: '18px', alignItems: 'flex-end' }}>
                                                                     {n.sparkline.map((r, i) => (
@@ -2708,7 +2518,6 @@ export default function Admin() {
                                                                     ))}
                                                                 </div>
                                                             )}
-                                                            {/* Extra info */}
                                                             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                                                 {nid === 'getgem' && n.extra?.availableSlots !== undefined && (
                                                                     <span>{n.extra.availableSlots}/{n.extra.maxConcurrent || '?'} slots</span>
@@ -2722,7 +2531,6 @@ export default function Admin() {
                                                                 {n.extra?.maintenance && <span style={{ color: '#ef4444', marginLeft: '6px' }}>⚠️ Maintenance</span>}
                                                                 {n.source === 'external' && <span style={{ marginLeft: '6px' }}>🌐</span>}
                                                             </div>
-                                                            {/* Toggle */}
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                 <span style={{ fontSize: '12px' }}>启用</span>
                                                                 <label style={{ position: 'relative', width: '36px', height: '20px', cursor: 'pointer' }}>
@@ -2744,36 +2552,9 @@ export default function Admin() {
                                                 })}
                                             </div>
 
-                                            {/* Threshold Sliders */}
+                                            {/* ── Traffic Allocation Bar ── */}
                                             <div style={{ marginBottom: '20px' }}>
-                                                <h5 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600 }}>⚙️ 阈值配置</h5>
-                                                {[
-                                                    { key: 'degradeThreshold', label: '降级阈值', color: '#f59e0b', desc: '低于此值 → 分配减半' },
-                                                    { key: 'circuitBreakThreshold', label: '熔断阈值', color: '#ef4444', desc: '低于此值 → 停用' },
-                                                    { key: 'recoverThreshold', label: '恢复阈值', color: '#10b981', desc: '高于此值连续3次 → 恢复' },
-                                                ].map(({ key, label, color, desc }) => (
-                                                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                                                        <span style={{ fontSize: '12px', minWidth: '70px', color }}>{label}</span>
-                                                        <input type="range" min="0" max="100" step="5"
-                                                            value={thresholds[key] || 50}
-                                                            onChange={(e) => {
-                                                                const val = parseInt(e.target.value);
-                                                                setNodeHealth(prev => ({
-                                                                    ...prev, config: { ...prev.config, thresholds: { ...prev.config.thresholds, [key]: val } }
-                                                                }));
-                                                            }}
-                                                            onMouseUp={(e) => saveConfig({ thresholds: { [key]: parseInt(e.target.value) } })}
-                                                            style={{ flex: 1, accentColor: color }}
-                                                        />
-                                                        <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '40px', color }}>{thresholds[key] || 50}%</span>
-                                                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{desc}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Traffic Allocation Bar */}
-                                            <div style={{ marginBottom: '20px' }}>
-                                                <h5 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600 }}>📊 流量分配</h5>
+                                                <label className="input-label">📊 流量分配</label>
                                                 <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', height: '32px', marginBottom: '8px' }}>
                                                     {nodeOrder.map(nid => {
                                                         const pct = allocation[nid] || 0;
@@ -2800,13 +2581,40 @@ export default function Admin() {
                                                 </div>
                                             </div>
 
-                                            {/* Mode Buttons */}
-                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                            {/* ── Threshold Sliders ── */}
+                                            <div style={{ marginBottom: '20px' }}>
+                                                <label className="input-label">⚙️ 阈值配置</label>
+                                                {[
+                                                    { key: 'degradeThreshold', label: '降级阈值', color: '#f59e0b', desc: '低于此值 → 分配减半' },
+                                                    { key: 'circuitBreakThreshold', label: '熔断阈值', color: '#ef4444', desc: '低于此值 → 停用' },
+                                                    { key: 'recoverThreshold', label: '恢复阈值', color: '#10b981', desc: '高于此值连续3次 → 恢复' },
+                                                ].map(({ key, label, color, desc }) => (
+                                                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                                                        <span style={{ fontSize: '12px', minWidth: '70px', color }}>{label}</span>
+                                                        <input type="range" min="0" max="100" step="5"
+                                                            value={thresholds[key] || 50}
+                                                            onChange={(e) => {
+                                                                const val = parseInt(e.target.value);
+                                                                setNodeHealth(prev => ({
+                                                                    ...prev, config: { ...prev.config, thresholds: { ...prev.config.thresholds, [key]: val } }
+                                                                }));
+                                                            }}
+                                                            onMouseUp={(e) => saveConfig({ thresholds: { [key]: parseInt(e.target.value) } })}
+                                                            style={{ flex: 1, accentColor: color }}
+                                                        />
+                                                        <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '40px', color }}>{thresholds[key] || 50}%</span>
+                                                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{desc}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* ── Mode Buttons ── */}
+                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
                                                 <button className="btn btn-sm"
                                                     style={{ background: 'var(--bg-tertiary)', padding: '6px 16px', fontSize: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}
                                                     onClick={forceRefresh}
                                                 >🔄 手动刷新</button>
-                                                <button className={`btn btn-sm ${config.mode === 'auto' ? 'btn-primary' : ''}`}
+                                                <button className="btn btn-sm"
                                                     style={{
                                                         background: config.mode === 'auto' ? '#3b82f6' : 'var(--bg-tertiary)',
                                                         color: config.mode === 'auto' ? '#fff' : 'inherit',
@@ -2814,7 +2622,7 @@ export default function Admin() {
                                                     }}
                                                     onClick={() => saveConfig({ mode: 'auto' })}
                                                 >⚡ 自动路由</button>
-                                                <button className={`btn btn-sm ${config.mode === 'locked' ? 'btn-primary' : ''}`}
+                                                <button className="btn btn-sm"
                                                     style={{
                                                         background: config.mode === 'locked' ? '#f59e0b' : 'var(--bg-tertiary)',
                                                         color: config.mode === 'locked' ? '#fff' : 'inherit',
@@ -2826,13 +2634,118 @@ export default function Admin() {
                                                     <span style={{ fontSize: '11px', color: '#f59e0b', alignSelf: 'center' }}>⚠️ 当前为锁定模式，不会自动调整分配</span>
                                                 )}
                                             </div>
+
+                                            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0 0 16px' }} />
+
+                                            {/* ── Fallback Toggle ── */}
+                                            <div className="input-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <div>
+                                                    <label className="input-label" style={{ marginBottom: 0 }}>失败自动 Fallback</label>
+                                                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                                                        仅对超时/限流/系统错误生效，验证被拒绝不会 Fallback
+                                                    </p>
+                                                </div>
+                                                <label className="toggle-switch">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={routingStrategy.fallbackEnabled}
+                                                        onChange={(e) => setRoutingStrategy(prev => ({
+                                                            ...prev, fallbackEnabled: e.target.checked
+                                                        }))}
+                                                    />
+                                                    <span className="toggle-slider"></span>
+                                                </label>
+                                            </div>
+
+                                            {/* ── Fallback Error Whitelist ── */}
+                                            {routingStrategy.fallbackEnabled && (
+                                                <div className="input-group">
+                                                    <label className="input-label">Fallback 触发错误白名单</label>
+                                                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 8px' }}>
+                                                        只有以下状态/关键词匹配的失败结果才会触发 Fallback 重试
+                                                    </p>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                                                        {(routingStrategy.fallbackErrors || []).map((err, idx) => (
+                                                            <span key={idx} style={{
+                                                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                                background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)',
+                                                                borderRadius: '6px', padding: '3px 8px 3px 10px',
+                                                                fontSize: '12px', fontFamily: 'monospace', color: 'var(--text-primary)',
+                                                            }}>
+                                                                {err}
+                                                                <button
+                                                                    onClick={() => setRoutingStrategy(prev => ({
+                                                                        ...prev,
+                                                                        fallbackErrors: prev.fallbackErrors.filter((_, i) => i !== idx)
+                                                                    }))}
+                                                                    style={{
+                                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                                        color: '#dc2626', fontSize: '14px', fontWeight: 700,
+                                                                        padding: '0 2px', lineHeight: 1, display: 'flex', alignItems: 'center',
+                                                                    }}
+                                                                    title="移除"
+                                                                >×</button>
+                                                            </span>
+                                                        ))}
+                                                        {(routingStrategy.fallbackErrors || []).length === 0 && (
+                                                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                                                                无白名单项，Fallback 不会触发
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                                        <input
+                                                            type="text"
+                                                            className="input"
+                                                            placeholder="输入错误类型，如 rejected"
+                                                            style={{ flex: 1, fontSize: '12px' }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                    const val = e.target.value.trim();
+                                                                    if (!(routingStrategy.fallbackErrors || []).includes(val)) {
+                                                                        setRoutingStrategy(prev => ({
+                                                                            ...prev,
+                                                                            fallbackErrors: [...(prev.fallbackErrors || []), val]
+                                                                        }));
+                                                                    }
+                                                                    e.target.value = '';
+                                                                }
+                                                            }}
+                                                        />
+                                                        <button
+                                                            className="btn btn-sm btn-secondary"
+                                                            style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
+                                                            onClick={(e) => {
+                                                                const input = e.target.previousElementSibling;
+                                                                const val = input.value.trim();
+                                                                if (val && !(routingStrategy.fallbackErrors || []).includes(val)) {
+                                                                    setRoutingStrategy(prev => ({
+                                                                        ...prev,
+                                                                        fallbackErrors: [...(prev.fallbackErrors || []), val]
+                                                                    }));
+                                                                }
+                                                                input.value = '';
+                                                            }}
+                                                        >+ 添加</button>
+                                                        <button
+                                                            className="btn btn-sm btn-outline"
+                                                            style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
+                                                            onClick={() => setRoutingStrategy(prev => ({
+                                                                ...prev,
+                                                                fallbackErrors: ['timeout', 'internalError', 'rateLimited', 'cooldown', 'error']
+                                                            }))}
+                                                            title="恢复默认白名单"
+                                                        >重置</button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );
                             })()}
 
                             {/* GetGem.cc API Settings */}
-                            {(aiProvider === 'getgem' || aiProvider === 'mixed') && (
+                            {aiProvider === 'getgem' && (
                                 <div className="provider-settings">
                                     <h4>💎 GetGem API 配置</h4>
                                     <div className="settings-form">

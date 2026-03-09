@@ -3993,6 +3993,22 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                         })
                         continue
 
+                    # Handle immediate success (e.g. already_success — link was already verified)
+                    if submit_data.get("status") == "success":
+                        import logging
+                        logging.info(f"[GetGem] Immediate success for {vid[:8]}: reason={submit_data.get('reason')}, redirectUrl={submit_data.get('redirectUrl')}")
+                        all_results.append({
+                            "verificationId": vid,
+                            "status": "approved",
+                            "success": True,
+                            "message": submit_data.get("message", "验证成功"),
+                            "interMsg": "Verification successful",
+                            "redirectUrl": submit_data.get("redirectUrl"),
+                            "alreadyVerified": submit_data.get("reason") == "already_success"
+                        })
+                        result_found = True
+                        continue
+
                     task_id = submit_data.get("taskId")
 
                     if not task_id:

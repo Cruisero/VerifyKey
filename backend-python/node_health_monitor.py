@@ -289,6 +289,12 @@ class NodeHealthMonitor:
             client.add_event_handler(_handler, events.MessageEdited(from_users=bot_username))
 
             try:
+                # Ensure conversation is initiated (some bots require /start first)
+                try:
+                    await client.send_message(bot_username, "/start")
+                    await asyncio.sleep(2)  # wait for bot to respond
+                except Exception:
+                    pass  # ignore if already started
                 await client.send_message(bot_username, fake_link)
                 reply = await asyncio.wait_for(future, timeout=30)
             except asyncio.TimeoutError:

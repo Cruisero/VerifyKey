@@ -3644,15 +3644,40 @@ class ManualOverrideRequest(BaseModel):
 
 @app.patch("/api/verify/history/{record_id}")
 async def override_verification_status(record_id: str, request: ManualOverrideRequest):
-    """Admin: Manually override a verification record's status (pass/failed)"""
+    """Admin: Manually override a verification record's status (pass/failed) with CDK quota adjustment"""
     if request.status not in ("pass", "failed"):
         raise HTTPException(status_code=400, detail="Status must be 'pass' or 'failed'")
+    
+    # Get current record to check old status and CDK
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT status, cdk FROM verification_history WHERE id = ?", (record_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    old_status = row["status"]
+    cdk_code = row["cdk"]
+    
+    # CDK quota adjustment
+    cdk_message = ""
+    if cdk_code and cdk_code != "__BOT_INTERNAL__":
+        if request.status == "pass" and old_status != "pass":
+            # Marking as Pass → deduct 1 CDK quota
+            result = cdk_manager.use_cdk(cdk_code, 1)
+            cdk_message = f" | CDK {cdk_code}: {result['message']}"
+        elif request.status == "failed" and old_status == "pass":
+            # Marking Pass→Failed → refund 1 CDK quota
+            result = cdk_manager.refund_cdk(cdk_code, 1)
+            cdk_message = f" | CDK {cdk_code}: {result['message']}"
+    
     success = verification_history.update_verification(record_id, request.status)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
     # Broadcast the update via SSE so admin page refreshes
     broadcast_verify_event({"type": "history_updated", "id": record_id, "status": request.status})
-    return {"updated": True, "id": record_id, "status": request.status}
+    return {"updated": True, "id": record_id, "status": request.status, "cdkMessage": cdk_message}
 
 
 @app.delete("/api/verify/history")

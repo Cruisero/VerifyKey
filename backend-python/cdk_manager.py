@@ -154,6 +154,41 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
         return {"success": True, "remaining": new_remaining, "message": f"扣减成功，剩余 {new_remaining} 次"}
 
 
+def refund_cdk(code: str, amount: int = 1) -> Dict:
+    """
+    Refund quota to a CDK (reverse of use_cdk).
+    
+    Args:
+        code: CDK code
+        amount: Amount to refund (default 1)
+    
+    Returns:
+        Dict with: success (bool), remaining (int), message (str)
+    """
+    code = _normalize_code(code)
+    conn = database.get_connection()
+
+    with _lock:
+        cursor = conn.execute("SELECT quota, used FROM cdkeys WHERE code = ?", (code,))
+        row = cursor.fetchone()
+
+        if not row:
+            return {"success": False, "remaining": 0, "message": "无效的 CDK"}
+
+        new_used = max(0, row["used"] - amount)
+        new_remaining = row["quota"] - new_used
+        new_status = "unused" if new_used == 0 else "active"
+        now = datetime.now().isoformat()
+
+        conn.execute(
+            "UPDATE cdkeys SET used = ?, status = ?, last_used_at = ? WHERE code = ?",
+            (new_used, new_status, now, code)
+        )
+        conn.commit()
+
+        return {"success": True, "remaining": new_remaining, "message": f"退还成功，剩余 {new_remaining} 次"}
+
+
 def get_all_cdks() -> List[Dict]:
     """Get all CDKs as a list (for Admin panel)"""
     conn = database.get_connection()

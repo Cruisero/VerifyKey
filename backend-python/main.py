@@ -5004,7 +5004,6 @@ async def toggle_auto_maintenance(request: dict):
 @app.get("/api/admin/notif-check")
 async def check_notification_listener():
     """Admin: Diagnose DualBot notification listener status."""
-    from telegram_manager import tg_manager
     diag = {
         "handlerRegistered": tg_manager._notif_registered,
         "channel": "NotifSuccess",

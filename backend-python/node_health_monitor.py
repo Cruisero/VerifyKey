@@ -254,8 +254,8 @@ class NodeHealthMonitor:
 
         # Get a Telegram client assigned to blackbot
         try:
-            import telegram_manager
-            tg = telegram_manager.tg_manager
+            import main
+            tg = main.tg_manager
 
             result = tg.get_next_client("blackbot")
             if not result:

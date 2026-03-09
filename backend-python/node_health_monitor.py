@@ -616,16 +616,24 @@ class NodeHealthMonitor:
         return self.get_all_statuses()
 
 
-# ─── Capacity Tracker (real-time slot management) ────────────────────
+# Cooldown constants
+COOLDOWN_CONSECUTIVE_FAILURES = 5   # Enter cooldown after N consecutive failures
+COOLDOWN_DURATION_SECS = 1800       # 30 minutes
+
+
+# ─── Capacity Tracker (real-time slot management + cooldown) ─────────
 class CapacityTracker:
-    """Track real-time in-use capacity per node.
+    """Track real-time in-use capacity per node with consecutive-failure cooldown.
     
     acquire(node_id) before processing a VID, release(node_id) when done.
-    available(node_id, max_cap) returns remaining free slots.
+    record_result(node_id, success) to track consecutive failures.
+    available(node_id, max_cap) returns 0 if node is in cooldown.
     """
 
     def __init__(self):
         self._in_use: Dict[str, int] = {}
+        self._consecutive_failures: Dict[str, int] = {}
+        self._cooldown_until: Dict[str, float] = {}   # node_id -> timestamp
         self._lock = __import__("threading").Lock()
 
     def acquire(self, node_id: str, count: int = 1):
@@ -640,9 +648,49 @@ class CapacityTracker:
             self._in_use[node_id] = max(0, self._in_use.get(node_id, 0) - count)
             logger.debug("[Capacity] %s released %d → in_use=%d", node_id, count, self._in_use[node_id])
 
-    def available(self, node_id: str, max_capacity: int) -> int:
-        """Return remaining free slots for a node."""
+    def record_result(self, node_id: str, success: bool):
+        """Track consecutive failures. Enter cooldown after COOLDOWN_CONSECUTIVE_FAILURES."""
         with self._lock:
+            if success:
+                self._consecutive_failures[node_id] = 0
+                return
+            # Failure
+            count = self._consecutive_failures.get(node_id, 0) + 1
+            self._consecutive_failures[node_id] = count
+            if count >= COOLDOWN_CONSECUTIVE_FAILURES:
+                until = time.time() + COOLDOWN_DURATION_SECS
+                self._cooldown_until[node_id] = until
+                self._consecutive_failures[node_id] = 0  # reset counter
+                logger.warning("[Capacity] %s entered 30-min cooldown after %d consecutive failures (until %s)",
+                             node_id, count, time.strftime('%H:%M:%S', time.localtime(until)))
+
+    def is_cooled_down(self, node_id: str) -> bool:
+        """Check if node is currently in cooldown."""
+        with self._lock:
+            until = self._cooldown_until.get(node_id, 0)
+            if until > 0 and time.time() < until:
+                return True
+            elif until > 0:
+                # Cooldown expired — clear it
+                del self._cooldown_until[node_id]
+            return False
+
+    def get_cooldown_remaining(self, node_id: str) -> int:
+        """Return remaining cooldown seconds (0 if not in cooldown)."""
+        with self._lock:
+            until = self._cooldown_until.get(node_id, 0)
+            remaining = until - time.time()
+            return max(0, int(remaining))
+
+    def available(self, node_id: str, max_capacity: int) -> int:
+        """Return remaining free slots. Returns 0 if in cooldown."""
+        with self._lock:
+            # Check cooldown
+            until = self._cooldown_until.get(node_id, 0)
+            if until > 0 and time.time() < until:
+                return 0
+            elif until > 0:
+                del self._cooldown_until[node_id]
             return max(0, max_capacity - self._in_use.get(node_id, 0))
 
     def in_use(self, node_id: str) -> int:
@@ -654,6 +702,14 @@ class CapacityTracker:
         """Return snapshot of all in-use counts."""
         with self._lock:
             return dict(self._in_use)
+
+    def get_all_cooldowns(self) -> Dict[str, int]:
+        """Return snapshot of all active cooldowns {node_id: remaining_seconds}."""
+        now = time.time()
+        with self._lock:
+            return {nid: max(0, int(until - now))
+                    for nid, until in self._cooldown_until.items()
+                    if until > now}
 
 
 # ─── Global Singletons ───────────────────────────────────────────────

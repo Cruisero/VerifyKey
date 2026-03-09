@@ -4760,16 +4760,20 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                         if not status_data.get("completed"):
                             continue
                         if status_data.get("success"):
+                            _cap.record_result("getgem", True)
                             return {"verificationId": vid, "status": "approved", "success": True,
                                     "message": "验证成功", "via": "getgem", "taskId": task_id}
                         else:
                             err_msg = status_data.get("message", "验证失败")
+                            _cap.record_result("getgem", False)
                             return {"verificationId": vid, "status": "failed", "success": False,
                                     "message": _translate_getgem_error(err_msg), "via": "getgem", "taskId": task_id}
 
+                    _cap.record_result("getgem", False)
                     return {"verificationId": vid, "status": "timeout", "success": False,
                             "message": "GetGem 验证超时", "via": "getgem"}
             except Exception as e:
+                _cap.record_result("getgem", False)
                 return {"verificationId": vid, "status": "error", "success": False,
                         "message": f"GetGem 错误: {str(e)}", "via": "getgem"}
             finally:
@@ -4835,6 +4839,7 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                         )
 
                     bot_stats_tracker.record(bot_type, result.get("success", False))
+                    _cap.record_result(bot_type, result.get("success", False))
 
                     if result.get("success"):
                         return {"verificationId": vid, "status": "approved", "success": True,
@@ -4921,10 +4926,12 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
 @app.get("/api/admin/node-health")
 async def get_node_health():
     """Admin: Get all node statuses and monitor config."""
+    from node_health_monitor import capacity_tracker as _cap_api
     return {
         "nodes": node_health_monitor.get_all_statuses(),
         "config": node_health_monitor.get_config(),
         "allocation": node_health_monitor.get_allocation(["getgem", "oldbot", "blackbot", "dualbot"]),
+        "cooldowns": _cap_api.get_all_cooldowns(),
     }
 
 
@@ -4971,6 +4978,19 @@ async def set_node_weight(request: dict):
     node_health_monitor.set_node_weight(node_id, float(weight))
     node_health_monitor._save_config()
     return {"ok": True, "nodeId": node_id, "weight": weight}
+
+
+@app.post("/api/admin/node-health/clear-cooldown")
+async def clear_node_cooldown(request: dict):
+    """Admin: Manually clear cooldown for a specific node."""
+    node_id = request.get("nodeId")
+    if not node_id:
+        raise HTTPException(status_code=400, detail="nodeId required")
+    from node_health_monitor import capacity_tracker as _cap_api
+    with _cap_api._lock:
+        _cap_api._cooldown_until.pop(node_id, None)
+        _cap_api._consecutive_failures.pop(node_id, None)
+    return {"ok": True, "nodeId": node_id, "message": f"{node_id} cooldown cleared"}
 
 
 # ========== Routing Stats API ==========

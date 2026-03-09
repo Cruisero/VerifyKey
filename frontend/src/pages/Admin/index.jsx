@@ -2426,6 +2426,7 @@ export default function Admin() {
                                 const config = nh.config || {};
                                 const thresholds = config.thresholds || {};
                                 const allocation = nh.allocation || {};
+                                const cooldowns = nh.cooldowns || {};
                                 const nodeOrder = ['getgem', 'oldbot', 'blackbot', 'dualbot'];
                                 const nodeLabels = { getgem: 'GetGem', oldbot: 'OldBot', blackbot: 'BlackBot', dualbot: 'DualBot' };
                                 const nodeColors = { getgem: '#10b981', oldbot: '#3b82f6', blackbot: '#8b5cf6', dualbot: '#6b7280' };
@@ -2468,6 +2469,18 @@ export default function Admin() {
                                     } catch (e) { console.error(e); }
                                 };
 
+                                const clearCooldown = async (nodeId) => {
+                                    try {
+                                        const token = user?.token || localStorage.getItem('verifykey-token');
+                                        await fetch(`${API_BASE}/api/admin/node-health/clear-cooldown`, {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                            body: JSON.stringify({ nodeId })
+                                        });
+                                        const res = await fetch(`${API_BASE}/api/admin/node-health`, { headers: { 'Authorization': `Bearer ${token}` } });
+                                        if (res.ok) setNodeHealth(await res.json());
+                                    } catch (e) { console.error(e); }
+                                };
+
                                 const forceRefresh = async () => {
                                     try {
                                         const token = user?.token || localStorage.getItem('verifykey-token');
@@ -2491,7 +2504,7 @@ export default function Admin() {
                                             }}>
                                                 <p style={{ margin: 0, fontSize: '14px' }}>
                                                     <strong>混合模式</strong> 将 GetGem API 与 Telegram Bot 统一为一个验证池。
-                                                    根据各节点实时成功率自动分配流量，失败时自动 Fallback 到其他节点。
+                                                    根据各节点实时成功率、权重和并发容量智能分配验证链接。
                                                 </p>
                                             </div>
 
@@ -2506,7 +2519,8 @@ export default function Admin() {
                                                             flex: '1 1 0', minWidth: '140px',
                                                             background: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px 16px',
                                                             border: `1px solid ${n.enabled ? color + '30' : 'var(--border-color)'}`,
-                                                            opacity: n.enabled ? 1 : 0.5, transition: 'all .2s'
+                                                            opacity: n.enabled ? 1 : 0.5, transition: 'all .2s',
+                                                            display: 'flex', flexDirection: 'column',
                                                         }}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                                                 <span style={{ fontWeight: 700, fontSize: '14px' }}>{nodeLabels[nid]}</span>
@@ -2518,65 +2532,91 @@ export default function Admin() {
                                                             <div style={{ fontSize: '24px', fontWeight: 800, color, marginBottom: '6px' }}>
                                                                 {n.successRate?.toFixed(1) ?? '—'}%
                                                             </div>
-                                                            {n.sparkline && n.sparkline.length > 0 && (
-                                                                <div style={{ display: 'flex', gap: '2px', marginBottom: '8px', height: '18px', alignItems: 'flex-end' }}>
-                                                                    {n.sparkline.map((r, i) => (
-                                                                        <div key={i} style={{
-                                                                            width: '4px', borderRadius: '1px',
-                                                                            height: r === 0 ? '18px' : r === 2 ? '8px' : '12px',
-                                                                            background: r === 0 ? '#10b981' : r === 2 ? '#f59e0b' : '#ef4444',
-                                                                            opacity: 0.8,
-                                                                        }} />
-                                                                    ))}
+                                                            {/* Variable-height content area — grows to push controls to bottom */}
+                                                            <div style={{ flex: 1, marginBottom: '8px' }}>
+                                                                {n.sparkline && n.sparkline.length > 0 && (
+                                                                    <div style={{ display: 'flex', gap: '2px', marginBottom: '8px', height: '18px', alignItems: 'flex-end' }}>
+                                                                        {n.sparkline.map((r, i) => (
+                                                                            <div key={i} style={{
+                                                                                width: '4px', borderRadius: '1px',
+                                                                                height: r === 0 ? '18px' : r === 2 ? '8px' : '12px',
+                                                                                background: r === 0 ? '#10b981' : r === 2 ? '#f59e0b' : '#ef4444',
+                                                                                opacity: 0.8,
+                                                                            }} />
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                                    {nid === 'getgem' && n.extra?.availableSlots !== undefined && (
+                                                                        <span>{n.extra.availableSlots}/{n.extra.maxConcurrent || '?'} slots</span>
+                                                                    )}
+                                                                    {nid === 'oldbot' && n.extra?.pending !== undefined && (
+                                                                        <span>{n.extra.pending} pending</span>
+                                                                    )}
+                                                                    {(nid === 'blackbot' || nid === 'dualbot') && n.extra?.total !== undefined && (
+                                                                        <span>{n.extra.total} verified</span>
+                                                                    )}
+                                                                    {n.extra?.decayed && (
+                                                                        <span style={{ color: '#f59e0b', marginLeft: '4px' }} title={n.extra.idleMinutes ? `空闲 ${n.extra.idleMinutes} 分钟` : '无历史数据'}>
+                                                                            ⏳ {n.extra.idleMinutes ? `空闲${Math.round(n.extra.idleMinutes)}m` : '无数据'}
+                                                                        </span>
+                                                                    )}
+                                                                    {n.extra?.maintenance && <span style={{ color: '#ef4444', marginLeft: '6px' }}>⚠️ Maintenance</span>}
+                                                                    {n.source === 'external' && <span style={{ marginLeft: '6px' }}>🌐</span>}
                                                                 </div>
-                                                            )}
-                                                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                                                                {nid === 'getgem' && n.extra?.availableSlots !== undefined && (
-                                                                    <span>{n.extra.availableSlots}/{n.extra.maxConcurrent || '?'} slots</span>
-                                                                )}
-                                                                {nid === 'oldbot' && n.extra?.pending !== undefined && (
-                                                                    <span>{n.extra.pending} pending</span>
-                                                                )}
-                                                                {(nid === 'blackbot' || nid === 'dualbot') && n.extra?.total !== undefined && (
-                                                                    <span>{n.extra.total} verified</span>
-                                                                )}
-                                                                {n.extra?.decayed && (
-                                                                    <span style={{ color: '#f59e0b', marginLeft: '4px' }} title={n.extra.idleMinutes ? `空闲 ${n.extra.idleMinutes} 分钟` : '无历史数据'}>
-                                                                        ⏳ {n.extra.idleMinutes ? `空闲${Math.round(n.extra.idleMinutes)}m` : '无数据'}
-                                                                    </span>
-                                                                )}
-                                                                {n.extra?.maintenance && <span style={{ color: '#ef4444', marginLeft: '6px' }}>⚠️ Maintenance</span>}
-                                                                {n.source === 'external' && <span style={{ marginLeft: '6px' }}>🌐</span>}
                                                             </div>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span style={{ fontSize: '12px' }}>启用</span>
-                                                                <label style={{ position: 'relative', width: '36px', height: '20px', cursor: 'pointer' }}>
-                                                                    <input type="checkbox" checked={n.enabled} onChange={(e) => toggleNode(nid, e.target.checked)}
-                                                                        style={{ opacity: 0, width: 0, height: 0 }} />
-                                                                    <span style={{
-                                                                        position: 'absolute', inset: 0, borderRadius: '10px', transition: '.2s',
-                                                                        background: n.enabled ? nodeColors[nid] : '#ccc',
+                                                            {/* Controls pinned to bottom */}
+                                                            <div>
+                                                                {/* Cooldown badge */}
+                                                                {cooldowns[nid] > 0 && (
+                                                                    <div style={{
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                                        background: '#fef2f2', border: '1px solid #fecaca',
+                                                                        borderRadius: '8px', padding: '6px 10px', marginBottom: '8px',
                                                                     }}>
+                                                                        <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>
+                                                                            🧊 冷却中 {Math.floor(cooldowns[nid] / 60)}:{String(cooldowns[nid] % 60).padStart(2, '0')}
+                                                                        </span>
+                                                                        <button
+                                                                            onClick={() => clearCooldown(nid)}
+                                                                            style={{
+                                                                                fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                                                                                background: '#dc2626', color: 'white', border: 'none',
+                                                                                cursor: 'pointer', fontWeight: 600,
+                                                                            }}
+                                                                        >解除</button>
+                                                                    </div>
+                                                                )}
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '12px' }}>启用</span>
+                                                                    <label style={{ position: 'relative', width: '36px', height: '20px', cursor: 'pointer' }}>
+                                                                        <input type="checkbox" checked={n.enabled} onChange={(e) => toggleNode(nid, e.target.checked)}
+                                                                            style={{ opacity: 0, width: 0, height: 0 }} />
                                                                         <span style={{
-                                                                            position: 'absolute', width: '16px', height: '16px', borderRadius: '50%', background: '#fff',
-                                                                            top: '2px', left: n.enabled ? '18px' : '2px', transition: '.2s',
-                                                                        }} />
+                                                                            position: 'absolute', inset: 0, borderRadius: '10px', transition: '.2s',
+                                                                            background: n.enabled ? nodeColors[nid] : '#ccc',
+                                                                        }}>
+                                                                            <span style={{
+                                                                                position: 'absolute', width: '16px', height: '16px', borderRadius: '50%', background: '#fff',
+                                                                                top: '2px', left: n.enabled ? '18px' : '2px', transition: '.2s',
+                                                                            }} />
+                                                                        </span>
+                                                                    </label>
+                                                                </div>
+                                                                {/* Weight slider */}
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                                                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', minWidth: '28px' }}>权重</span>
+                                                                    <input type="range" min="0.1" max="1.0" step="0.1"
+                                                                        defaultValue={n.weight ?? 1.0}
+                                                                        key={`${nid}-${n.weight}`}
+                                                                        onMouseUp={(e) => setNodeWeight(nid, parseFloat(e.target.value))}
+                                                                        onTouchEnd={(e) => setNodeWeight(nid, parseFloat(e.target.value))}
+                                                                        style={{ flex: 1, height: '4px', accentColor: nodeColors[nid] || '#6b7280' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)', minWidth: '28px', textAlign: 'right' }}>
+                                                                        ×{(n.weight ?? 1.0).toFixed(1)}
                                                                     </span>
-                                                                </label>
-                                                            </div>
-                                                            {/* Weight slider */}
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
-                                                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', minWidth: '28px' }}>权重</span>
-                                                                <input type="range" min="0.1" max="1.0" step="0.1"
-                                                                    defaultValue={n.weight ?? 1.0}
-                                                                    key={`${nid}-${n.weight}`}
-                                                                    onMouseUp={(e) => setNodeWeight(nid, parseFloat(e.target.value))}
-                                                                    onTouchEnd={(e) => setNodeWeight(nid, parseFloat(e.target.value))}
-                                                                    style={{ flex: 1, height: '4px', accentColor: nodeColors[nid] || '#6b7280' }}
-                                                                />
-                                                                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)', minWidth: '28px', textAlign: 'right' }}>
-                                                                    ×{(n.weight ?? 1.0).toFixed(1)}
-                                                                </span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     );
@@ -2675,110 +2715,7 @@ export default function Admin() {
                                                 )}
                                             </div>
 
-                                            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0 0 16px' }} />
 
-                                            {/* ── Fallback Toggle ── */}
-                                            <div className="input-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                <div>
-                                                    <label className="input-label" style={{ marginBottom: 0 }}>失败自动 Fallback</label>
-                                                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                                                        仅对超时/限流/系统错误生效，验证被拒绝不会 Fallback
-                                                    </p>
-                                                </div>
-                                                <label className="toggle-switch">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={routingStrategy.fallbackEnabled}
-                                                        onChange={(e) => setRoutingStrategy(prev => ({
-                                                            ...prev, fallbackEnabled: e.target.checked
-                                                        }))}
-                                                    />
-                                                    <span className="toggle-slider"></span>
-                                                </label>
-                                            </div>
-
-                                            {/* ── Fallback Error Whitelist ── */}
-                                            {routingStrategy.fallbackEnabled && (
-                                                <div className="input-group">
-                                                    <label className="input-label">Fallback 触发错误白名单</label>
-                                                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 8px' }}>
-                                                        只有以下状态/关键词匹配的失败结果才会触发 Fallback 重试
-                                                    </p>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                                                        {(routingStrategy.fallbackErrors || []).map((err, idx) => (
-                                                            <span key={idx} style={{
-                                                                display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                                                background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)',
-                                                                borderRadius: '6px', padding: '3px 8px 3px 10px',
-                                                                fontSize: '12px', fontFamily: 'monospace', color: 'var(--text-primary)',
-                                                            }}>
-                                                                {err}
-                                                                <button
-                                                                    onClick={() => setRoutingStrategy(prev => ({
-                                                                        ...prev,
-                                                                        fallbackErrors: prev.fallbackErrors.filter((_, i) => i !== idx)
-                                                                    }))}
-                                                                    style={{
-                                                                        background: 'none', border: 'none', cursor: 'pointer',
-                                                                        color: '#dc2626', fontSize: '14px', fontWeight: 700,
-                                                                        padding: '0 2px', lineHeight: 1, display: 'flex', alignItems: 'center',
-                                                                    }}
-                                                                    title="移除"
-                                                                >×</button>
-                                                            </span>
-                                                        ))}
-                                                        {(routingStrategy.fallbackErrors || []).length === 0 && (
-                                                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                                                                无白名单项，Fallback 不会触发
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                                        <input
-                                                            type="text"
-                                                            className="input"
-                                                            placeholder="输入错误类型，如 rejected"
-                                                            style={{ flex: 1, fontSize: '12px' }}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter' && e.target.value.trim()) {
-                                                                    const val = e.target.value.trim();
-                                                                    if (!(routingStrategy.fallbackErrors || []).includes(val)) {
-                                                                        setRoutingStrategy(prev => ({
-                                                                            ...prev,
-                                                                            fallbackErrors: [...(prev.fallbackErrors || []), val]
-                                                                        }));
-                                                                    }
-                                                                    e.target.value = '';
-                                                                }
-                                                            }}
-                                                        />
-                                                        <button
-                                                            className="btn btn-sm btn-secondary"
-                                                            style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
-                                                            onClick={(e) => {
-                                                                const input = e.target.previousElementSibling;
-                                                                const val = input.value.trim();
-                                                                if (val && !(routingStrategy.fallbackErrors || []).includes(val)) {
-                                                                    setRoutingStrategy(prev => ({
-                                                                        ...prev,
-                                                                        fallbackErrors: [...(prev.fallbackErrors || []), val]
-                                                                    }));
-                                                                }
-                                                                input.value = '';
-                                                            }}
-                                                        >+ 添加</button>
-                                                        <button
-                                                            className="btn btn-sm btn-outline"
-                                                            style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
-                                                            onClick={() => setRoutingStrategy(prev => ({
-                                                                ...prev,
-                                                                fallbackErrors: ['timeout', 'internalError', 'rateLimited', 'cooldown', 'error']
-                                                            }))}
-                                                            title="恢复默认白名单"
-                                                        >重置</button>
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 );

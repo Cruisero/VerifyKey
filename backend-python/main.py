@@ -4327,10 +4327,11 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
         # Log verification results to history
         for r in all_results:
             vid_log = r.get("verificationId", "")
+            msg = r.get("message", "")
             if r["status"] == "approved":
-                verification_history.log_verification("pass", vid_log, cdk=request.cdk or "")
-            elif r["status"] in ("rejected", "error"):
-                verification_history.log_verification("failed", vid_log, cdk=request.cdk or "")
+                verification_history.log_verification("pass", vid_log, message=msg, cdk=request.cdk or "")
+            elif r["status"] in ("rejected", "error", "timeout"):
+                verification_history.log_verification("failed", vid_log, message=msg, cdk=request.cdk or "")
 
         # Deduct local CDK quota
         nonlocal cdk_remaining

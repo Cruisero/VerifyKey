@@ -414,7 +414,7 @@ class TelegramAccountManager:
             self._clients[account_id] = client
             
             # Register notification listener for DualBot stats
-            self._register_notification_handler(client, account_id)
+            await self._register_notification_handler(client, account_id)
             
             if set_as_primary:
                 self._client = client
@@ -484,7 +484,7 @@ class TelegramAccountManager:
 
     # ------ Notification Listener (DualBot external stats) ------
 
-    def _register_notification_handler(self, client: TelegramClient, account_id: str):
+    async def _register_notification_handler(self, client: TelegramClient, account_id: str):
         """Register a persistent listener for @NotifSuccess verification notifications.
         
         Only registers ONCE (on the first connected account) because the notifications
@@ -495,6 +495,15 @@ class TelegramAccountManager:
         
         notif_channel = "NotifSuccess"
 
+        # Resolve the channel entity first (more reliable than string username)
+        try:
+            entity = await client.get_entity(notif_channel)
+            channel_id = entity.id
+            logger.info(f"[TGNotif] Resolved @{notif_channel} → id={channel_id} title={getattr(entity, 'title', '?')}")
+        except Exception as e:
+            logger.error(f"[TGNotif] Cannot resolve @{notif_channel}: {e}. Handler NOT registered.")
+            return
+
         async def _on_notification(event):
             """Handle incoming notification messages from the notification channel."""
             try:
@@ -503,6 +512,7 @@ class TelegramAccountManager:
                     return
                 
                 text_upper = text.upper()
+                logger.debug(f"[TGNotif] Message from @{notif_channel}: {text[:80]}")
                 
                 # Only process final verification results
                 if "VERIFICATION SUCCESSFUL" in text_upper or "SUCCESSFULLY VERIFIED" in text_upper:
@@ -516,9 +526,9 @@ class TelegramAccountManager:
             except Exception as e:
                 logger.warning(f"[TGNotif] Handler error: {e}")
 
-        client.add_event_handler(_on_notification, events.NewMessage(chats=notif_channel))
+        client.add_event_handler(_on_notification, events.NewMessage(chats=channel_id))
         self._notif_registered = True
-        logger.info(f"[TGManager] Registered notification listener for @{notif_channel} on account {account_id} (single listener)")
+        logger.info(f"[TGManager] ✅ Registered notification listener for @{notif_channel} (id={channel_id}) on account {account_id}")
 
     # ------ Helpers ------
 

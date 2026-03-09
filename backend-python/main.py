@@ -2658,10 +2658,18 @@ async def verify_unified(request: UnifiedVerifyRequest):
 
         async def process_and_emit(link):
             """Wrapper: run process_single_link and emit per-link result immediately."""
-            result = await process_single_link(link)
-            acc_id, r = result if result else (None, {"success": False, "status": "error", "message": "系统内部异常"})
             vid = link_vid_map.get(link, "")
-            # Emit per-link result event immediately
+            try:
+                result = await process_single_link(link)
+                acc_id, r = result if result else (None, {"success": False, "status": "error", "message": "系统内部异常"})
+            except Exception as exc:
+                import traceback
+                logging.error(f"[Unified] process_single_link exception: {traceback.format_exc()}")
+                acc_id = None
+                r = {"success": False, "status": "error", "message": f"验证出错: {str(exc)}"}
+                result = (acc_id, r)
+
+            # Emit per-link result event immediately (always, including errors)
             link_result_event = {
                 "type": "progress", "link": link, "vid": vid,
                 "step": "result",

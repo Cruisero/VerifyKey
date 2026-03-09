@@ -2768,7 +2768,9 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 if r.get("status") == "approved":
                     verification_history.log_verification("pass", vid, msg, cdk=cdk_label, via=f"bot:{via_label}")
                 elif not r.get("success") and not r.get("alreadyVerified"):
-                    verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label, via=f"bot:{via_label}")
+                    # Store actual status (failed/rejected/timeout/no_credits/error/etc.) for admin SSE
+                    actual_status = r.get("status", "failed")
+                    verification_history.log_verification(actual_status, vid, msg or f"Rejected: {actual_status}", cdk=cdk_label, via=f"bot:{via_label}")
 
             # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----
             failed_vids = [r.get("verificationId") for r in results 
@@ -3699,13 +3701,22 @@ async def backup_download_endpoint(authorization: Optional[str] = Header(None)):
 
 @app.get("/api/verify/history")
 async def get_verification_history_endpoint():
-    """Get recent verification history for the real-time status grid (public, sanitized)"""
+    """Get recent verification history for the real-time status grid (public, sanitized).
+    Only returns final results (pass/failed) — not timeout/no_credits/error/etc.
+    """
     history = verification_history.get_recent_history(200)
-    stats = verification_history.get_history_stats()
-    # Strip sensitive fields for public endpoint — only expose what the status grid needs
+    # Only include final results for the status grid
+    final_only = [h for h in history if h["status"] in ("pass", "failed")]
+    stats = {
+        "total": len(final_only),
+        "pass": sum(1 for h in final_only if h["status"] == "pass"),
+        "failed": sum(1 for h in final_only if h["status"] == "failed"),
+        "processing": 0,
+        "cancel": 0,
+    }
     sanitized = [
         {"id": h["id"], "status": h["status"], "timestamp": h["timestamp"]}
-        for h in history
+        for h in final_only
     ]
     return {
         "history": sanitized,

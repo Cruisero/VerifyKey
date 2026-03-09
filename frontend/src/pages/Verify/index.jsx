@@ -35,6 +35,18 @@ export default function Verify() {
 
     const { t, lang } = useLang();
 
+    // Sanitize SSE messages: strip internal routing info (getgem, bot, fallback, etc.)
+    const sanitizeMessage = (msg) => {
+        if (!msg) return msg;
+        // Replace provider/routing references with generic terms
+        let s = msg;
+        s = s.replace(/getgem/gi, '').replace(/fallback/gi, '').replace(/bot[:\s]?[a-zA-Z0-9_@]*/gi, '');
+        s = s.replace(/network\s*error/gi, t('msgError') || '验证失败');
+        s = s.replace(/切换备用节点/g, t('processing') || '处理中');
+        s = s.replace(/\s{2,}/g, ' ').trim();
+        return s || (t('msgError') || '验证失败');
+    };
+
     const programs = [
         { value: 'gemini', label: 'Gemini' },
     ];
@@ -272,7 +284,7 @@ export default function Verify() {
                                         if (!matchVid) return r;
 
                                         let status = 'failed';
-                                        let message = (lang === 'en' && event.interMsg) ? event.interMsg : (event.message || '');
+                                        let message = sanitizeMessage((lang === 'en' && event.interMsg) ? event.interMsg : (event.message || ''));
 
                                         if (event.status === 'approved') {
                                             status = 'success';
@@ -295,9 +307,10 @@ export default function Verify() {
                                     waiting: t('stepWaiting'),
                                     failed: t('stepFailed'),
                                     bypass: t('stepBypass'),
-                                    cooldown_wait: `${event.message}`
+                                    cooldown_wait: t('stepWaiting') || '⏳ 等待中...',
+                                    fallback: t('stepVerify') || '🔄 验证中...',
                                 };
-                                const progressMsg = stepMessages[event.step] || event.message;
+                                const progressMsg = stepMessages[event.step] || sanitizeMessage(event.message);
 
                                 setResults(prev => prev.map(r => {
                                     const matchVid = r.verificationId === event.vid || r.fullLink === event.link;
@@ -471,9 +484,9 @@ export default function Verify() {
                                 waiting: t('stepWaiting'),
                                 failed: t('stepFailed'),
                                 bypass: t('stepBypass'),
-                                fallback: '🔄 切换备用节点...',
+                                fallback: t('stepVerify') || '🔄 验证中...',
                             };
-                            const progressMsg = stepMessages[event.step] || event.message;
+                            const progressMsg = stepMessages[event.step] || sanitizeMessage(event.message);
 
                             setResults(prev => prev.map(r => {
                                 const matchVid = r.verificationId === event.vid;
@@ -845,7 +858,7 @@ export default function Verify() {
                                             </div>
                                             <div className="result-info">
                                                 <span className="result-id">{result.verificationId}</span>
-                                                <span className="result-message">{(result.message || t('resultProcessing')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, '')}</span>
+                                                <span className="result-message">{sanitizeMessage((result.message || t('resultProcessing')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, ''))}</span>
                                             </div>
                                             <span className="result-time">{formatTime(result.timestamp)}</span>
                                         </div>

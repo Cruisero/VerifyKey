@@ -3623,7 +3623,24 @@ async def backup_download_endpoint(authorization: Optional[str] = Header(None)):
 
 @app.get("/api/verify/history")
 async def get_verification_history_endpoint():
-    """Get recent verification history for the real-time status grid"""
+    """Get recent verification history for the real-time status grid (public, sanitized)"""
+    history = verification_history.get_recent_history(200)
+    stats = verification_history.get_history_stats()
+    # Strip sensitive fields for public endpoint — only expose what the status grid needs
+    sanitized = [
+        {"id": h["id"], "status": h["status"], "timestamp": h["timestamp"]}
+        for h in history
+    ]
+    return {
+        "history": sanitized,
+        "stats": stats
+    }
+
+
+@app.get("/api/admin/verify-history")
+async def get_admin_verification_history(authorization: Optional[str] = Header(None)):
+    """Get full verification history with all fields (admin only)"""
+    _verify_admin_token(authorization)
     history = verification_history.get_recent_history(200)
     stats = verification_history.get_history_stats()
     return {

@@ -1138,7 +1138,7 @@ export default function Admin() {
                 const headers = { 'Authorization': `Bearer ${token}` };
                 const [statsRes, logRes] = await Promise.all([
                     fetch(`${API_BASE}/api/admin/bot-stats`, { headers }),
-                    fetch(`${API_BASE}/api/verify/history`)
+                    fetch(`${API_BASE}/api/admin/verify-history`, { headers })
                 ]);
                 if (statsRes.ok) setSiteStats(await statsRes.json());
                 if (logRes.ok) {
@@ -1251,7 +1251,10 @@ export default function Admin() {
         if (activeTab === 'verify-status') {
             (async () => {
                 try {
-                    const res = await fetch(`${API_BASE}/api/verify/history`);
+                    const token = user?.token || localStorage.getItem('verifykey-token');
+                    const res = await fetch(`${API_BASE}/api/admin/verify-history`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
                     if (res.ok) {
                         const data = await res.json();
                         setHistoryData(data.history || []);

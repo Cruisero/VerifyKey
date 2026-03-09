@@ -465,7 +465,6 @@ export default function Verify() {
                         const event = JSON.parse(line.slice(6));
 
                         if (event.type === 'progress') {
-                            const viaTag = event.via ? `[${event.via}] ` : '';
                             const stepMessages = {
                                 warmup: t('stepWarmup'),
                                 verify: t('stepVerify'),
@@ -474,12 +473,12 @@ export default function Verify() {
                                 bypass: t('stepBypass'),
                                 fallback: '🔄 切换备用节点...',
                             };
-                            const progressMsg = viaTag + (stepMessages[event.step] || event.message);
+                            const progressMsg = stepMessages[event.step] || event.message;
 
                             setResults(prev => prev.map(r => {
                                 const matchVid = r.verificationId === event.vid;
                                 return matchVid && r.status === 'processing'
-                                    ? { ...r, message: progressMsg, via: event.via }
+                                    ? { ...r, message: progressMsg }
                                     : r;
                             }));
                         } else if (event.type === 'done') {
@@ -507,7 +506,7 @@ export default function Verify() {
                                         }
                                         setResults(prev => prev.map(r =>
                                             r.id === resultItem.id
-                                                ? { ...r, status, message, verificationId: result.verificationId, redirectUrl: result.redirectUrl, via: result.via }
+                                                ? { ...r, status, message, verificationId: result.verificationId, redirectUrl: result.redirectUrl }
                                                 : r
                                         ));
                                     }
@@ -845,18 +844,7 @@ export default function Verify() {
                                                 {result.status === 'failed' && <span className="status-icon failed">✕</span>}
                                             </div>
                                             <div className="result-info">
-                                                <span className="result-id">
-                                                    {result.verificationId}
-                                                    {result.via && (
-                                                        <span style={{
-                                                            fontSize: '10px', padding: '1px 6px', borderRadius: '4px', marginLeft: '6px',
-                                                            background: result.via.includes('getgem') ? '#6366F1' : result.via.includes('fallback') ? '#f59e0b' : '#0088cc',
-                                                            color: 'white', fontWeight: 500, verticalAlign: 'middle'
-                                                        }}>
-                                                            {result.via.includes('fallback') ? '🔄 ' : ''}{result.via.replace('fallback:', '').replace('bot:', '')}
-                                                        </span>
-                                                    )}
-                                                </span>
+                                                <span className="result-id">{result.verificationId}</span>
                                                 <span className="result-message">{(result.message || t('resultProcessing')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, '')}</span>
                                             </div>
                                             <span className="result-time">{formatTime(result.timestamp)}</span>
@@ -939,6 +927,6 @@ export default function Verify() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

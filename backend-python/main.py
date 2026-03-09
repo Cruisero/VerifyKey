@@ -2511,6 +2511,41 @@ async def verify_unified(request: UnifiedVerifyRequest):
             elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
                 verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label)
 
+        # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----
+        failed_vids = [r.get("verificationId") for r in results 
+                       if not r.get("success") and r.get("verificationId") 
+                       and r.get("status") in ("timeout", "error", "failed", "rejected", "cooldown")
+                       and not r.get("alreadyVerified")]
+        
+        if failed_vids and not is_bot_internal:
+            async def _delayed_recheck(_vids, _cdk_code, _cdk_label):
+                await asyncio.sleep(120)  # Wait 2 minutes
+                import httpx
+                recheck_success = 0
+                for vid in _vids:
+                    try:
+                        async with httpx.AsyncClient(timeout=10) as http_client:
+                            resp = await http_client.get(f"https://services.sheerid.com/rest/v2/verification/{vid}")
+                            if resp.status_code == 200:
+                                step = resp.json().get("currentStep", "")
+                                if step == "success":
+                                    recheck_success += 1
+                                    logger.info(f"[DelayedRecheck] VID {vid[:12]} actually SUCCEEDED! Deducting CDK.")
+                                    verification_history.log_verification("pass", vid, "延迟复查：验证实际已通过", cdk=_cdk_label)
+                                    broadcast_verify_event({
+                                        "type": "recheck_success",
+                                        "vid": vid,
+                                        "message": "延迟复查发现验证已通过"
+                                    })
+                    except Exception as e:
+                        logger.warning(f"[DelayedRecheck] Error checking {vid[:12]}: {e}")
+                
+                if recheck_success > 0:
+                    deduct = cdk_manager.use_cdk(_cdk_code, recheck_success)
+                    logger.info(f"[DelayedRecheck] Deducted {recheck_success} CDK credits. Remaining: {deduct.get('remaining', '?')}")
+            
+            asyncio.create_task(_delayed_recheck(failed_vids, request.cdk, cdk_label))
+
         done_event = {
             "type": "done",
             "results": results,

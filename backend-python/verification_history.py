@@ -10,6 +10,9 @@ from typing import Dict, List
 
 import database
 
+# Display reset point — records before this timestamp won't be shown
+_display_reset_at: str = ""
+
 
 def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "", via: str = "") -> Dict:
     """
@@ -89,6 +92,7 @@ def update_verification(record_id: str, status: str) -> bool:
 def get_recent_history(limit: int = 200) -> List[Dict]:
     """
     Get recent verification history.
+    Only returns records after _display_reset_at if set.
     
     Args:
         limit: Max number of records to return
@@ -96,11 +100,18 @@ def get_recent_history(limit: int = 200) -> List[Dict]:
     Returns:
         List of verification records, newest last
     """
+    global _display_reset_at
     conn = database.get_connection()
-    cursor = conn.execute(
-        "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history ORDER BY rowid DESC LIMIT ?",
-        (limit,)
-    )
+    if _display_reset_at:
+        cursor = conn.execute(
+            "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history WHERE timestamp > ? ORDER BY rowid DESC LIMIT ?",
+            (_display_reset_at, limit)
+        )
+    else:
+        cursor = conn.execute(
+            "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history ORDER BY rowid DESC LIMIT ?",
+            (limit,)
+        )
     rows = cursor.fetchall()
     # Return newest last (reverse the DESC order)
     return [
@@ -115,6 +126,13 @@ def get_recent_history(limit: int = 200) -> List[Dict]:
         }
         for r in reversed(rows)
     ]
+
+
+def reset_display() -> str:
+    """Set the display reset point to now. Records before this won't be shown."""
+    global _display_reset_at
+    _display_reset_at = datetime.utcnow().isoformat() + "Z"
+    return _display_reset_at
 
 
 def get_history_stats() -> Dict:

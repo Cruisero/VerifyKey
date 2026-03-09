@@ -5650,9 +5650,12 @@ export default function Admin() {
                                         onClick={async (e) => {
                                             if (!confirm('确定要重置验证状态显示吗？（不会删除数据库记录）')) return;
                                             const btn = e.currentTarget;
-                                            btn.textContent = '⏳ 计算中...';
+                                            btn.textContent = '⏳ 重置中...';
                                             btn.disabled = true;
                                             try {
+                                                // Set reset point on backend
+                                                await fetch(`${API_BASE}/api/verify/history/reset`, { method: 'POST' });
+                                                // Re-fetch (will return empty since all records before reset)
                                                 const res = await fetch(`${API_BASE}/api/verify/history`);
                                                 if (res.ok) {
                                                     const data = await res.json();
@@ -5665,10 +5668,8 @@ export default function Admin() {
                                                         cancel: h.filter(r => r.status === 'cancel').length,
                                                         total: h.length,
                                                     });
-                                                    btn.textContent = '✅ 已更新';
-                                                } else {
-                                                    btn.textContent = '❌ 失败';
                                                 }
+                                                btn.textContent = '✅ 已重置';
                                             } catch (err) {
                                                 btn.textContent = '❌ 错误';
                                                 console.error(err);

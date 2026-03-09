@@ -3839,6 +3839,13 @@ async def clear_verification_history():
     return {"cleared": True, "count": count}
 
 
+@app.post("/api/verify/history/reset")
+async def reset_verification_display():
+    """Reset the display — only shows records created after this point. DB records preserved."""
+    reset_at = verification_history.reset_display()
+    return {"ok": True, "resetAt": reset_at}
+
+
 # ========== Auto-Record Rules (Persistent) ==========
 import json as _json
 from datetime import datetime, timezone

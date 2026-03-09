@@ -2038,7 +2038,7 @@ export default function Admin() {
                                                         }}
                                                     >✓ Pass</button>
                                                 )}
-                                                {!isProcessing && isPass && (
+                                                {(isPass || isProcessing) && (
                                                     <button
                                                         title="手动标记为失败"
                                                         style={{
@@ -2059,50 +2059,6 @@ export default function Admin() {
                                                             } catch (err) { console.error(err); }
                                                         }}
                                                     >✕ Fail</button>
-                                                )}
-                                                {isProcessing && (
-                                                    <>
-                                                        <button
-                                                            title="手动标记为通过"
-                                                            style={{
-                                                                background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px',
-                                                                padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                                                lineHeight: '20px', whiteSpace: 'nowrap', minWidth: '70px', textAlign: 'center',
-                                                            }}
-                                                            onClick={async (e) => {
-                                                                e.stopPropagation();
-                                                                if (!confirm(`确认将 ${shortVid} 手动标记为通过？`)) return;
-                                                                try {
-                                                                    await fetch(`${API_BASE}/api/verify/history/${r.id}`, {
-                                                                        method: 'PATCH',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ status: 'pass' })
-                                                                    });
-                                                                    fetchVerifyHistory();
-                                                                } catch (err) { console.error(err); }
-                                                            }}
-                                                        >✓ Pass</button>
-                                                        <button
-                                                            title="手动标记为失败"
-                                                            style={{
-                                                                background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px',
-                                                                padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                                                lineHeight: '20px', whiteSpace: 'nowrap', minWidth: '70px', textAlign: 'center',
-                                                            }}
-                                                            onClick={async (e) => {
-                                                                e.stopPropagation();
-                                                                if (!confirm(`确认将 ${shortVid} 手动标记为失败？`)) return;
-                                                                try {
-                                                                    await fetch(`${API_BASE}/api/verify/history/${r.id}`, {
-                                                                        method: 'PATCH',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ status: 'failed' })
-                                                                    });
-                                                                    fetchVerifyHistory();
-                                                                } catch (err) { console.error(err); }
-                                                            }}
-                                                        >✕ Fail</button>
-                                                    </>
                                                 )}
                                             </div>
                                         </div>

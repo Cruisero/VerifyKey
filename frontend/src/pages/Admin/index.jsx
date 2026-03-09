@@ -5117,7 +5117,7 @@ export default function Admin() {
                             )}
 
                             {/* Region Mode Settings - Template providers only */}
-                            {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
+                            {!['getgem', 'batch_api', 'telegram', 'mixed'].includes(aiProvider) && (
                                 <div className="provider-settings region-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                                     <h4>🌍 验证地区配置</h4>
                                     <p className="settings-desc" style={{ marginBottom: '16px' }}>
@@ -5161,7 +5161,7 @@ export default function Admin() {
                             )}
 
                             {/* Proxy Settings - Template providers only */}
-                            {!['getgem', 'batch_api', 'telegram'].includes(aiProvider) && (
+                            {!['getgem', 'batch_api', 'telegram', 'mixed'].includes(aiProvider) && (
                                 <div className="provider-settings proxy-settings" style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                                     <h4>🌐 住宅代理配置 (Residential Proxy)</h4>
                                     <p className="settings-desc" style={{ marginBottom: '16px' }}>

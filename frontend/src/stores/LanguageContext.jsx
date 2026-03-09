@@ -119,6 +119,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         msgRejected: '❌ 验证被拒绝',
         msgError: '❌ 验证出错',
         msgNoCredits: '⚠️ CDK 配额不足',
+        msgTimeout: '⏱️ 验证超时，请等待几分钟后刷新链接重试',
         msgApiSuccess: '✅ 验证通过',
         msgApiFail: '❌ ',
 
@@ -274,6 +275,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`
         msgRejected: '❌ Rejected',
         msgError: '❌ Error',
         msgNoCredits: '⚠️ Insufficient CDK credits',
+        msgTimeout: '⏱️ Verification timed out. Please wait a few minutes and try again with a refreshed link',
         msgApiSuccess: '✅ Approved',
         msgApiFail: '❌ ',
 

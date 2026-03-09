@@ -299,6 +299,8 @@ export default function Verify() {
                                             fetchHistory();
                                         } else if (event.success) {
                                             status = 'success';
+                                        } else if (event.status === 'timeout') {
+                                            message = t('msgTimeout');
                                         }
 
                                         return { ...r, status, message, claimLink: event.claimLink || r.claimLink };
@@ -351,6 +353,8 @@ export default function Verify() {
                                                 message = resolveMsg('msgRejected');
                                             } else if (result.status === 'no_credits') {
                                                 message = t('msgNoCredits');
+                                            } else if (result.status === 'timeout') {
+                                                message = t('msgTimeout');
                                             }
                                             setResults(prev => prev.map(r =>
                                                 r.id === resultItem.id
@@ -411,6 +415,8 @@ export default function Verify() {
                                 message = resolveMsg('msgRejected');
                             } else if (result.status === 'no_credits') {
                                 message = t('msgNoCredits');
+                            } else if (result.status === 'timeout') {
+                                message = t('msgTimeout');
                             }
                             setResults(prev => prev.map(r =>
                                 r.id === resultItem.id

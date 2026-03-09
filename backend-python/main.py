@@ -110,6 +110,31 @@ def _load_pending_getgem_tasks() -> dict:
         logger.warning(f"[GetGem] Failed to load pending tasks: {e}")
     return {}
 
+
+def _translate_getgem_error(raw_error: str) -> str:
+    """Translate raw GetGem error strings to user-friendly Chinese messages."""
+    error_map = {
+        "fraudRulesReject": "检测到欺诈行为，请刷新页面获取新链接",
+        "maxRetriesExceeded": "已达最大重试次数，请刷新页面获取新链接",
+        "expiredVerification": "验证链接已过期，请刷新页面获取新链接",
+        "invalidVerification": "无效的验证链接",
+        "docReviewReject": "文档审核未通过，请刷新页面获取新链接",
+        "docReviewRejection": "文档审核被拒绝，请刷新页面获取新链接",
+        "noMatchingRecord": "未找到匹配记录，请检查信息是否正确",
+        "alreadyVerified": "此链接已被验证过",
+        "programHasEnded": "该验证活动已结束",
+        "internalError": "服务器内部错误，请稍后重试",
+        "rateLimited": "请求过于频繁，请稍后重试",
+        "maxAttemptsReached": "已达最大尝试次数，请刷新页面获取新链接",
+    }
+    for key, msg in error_map.items():
+        if key.lower() in raw_error.lower():
+            return msg
+    if "rejected:" in raw_error.lower():
+        return "验证被拒绝，请刷新页面获取新链接"
+    return raw_error
+
+
 async def _resume_getgem_poll(vid: str, task_id: str, cdk: str):
     """Resume polling a GetGem task after container restart."""
     import httpx
@@ -144,12 +169,13 @@ async def _resume_getgem_poll(vid: str, task_id: str, cdk: str):
                             })
                         else:
                             error = status_data.get("error", "Unknown error")
+                            translated = _translate_getgem_error(error)
                             logger.info(f"[GetGem Recovery] VID {vid[:8]} FAILED: {error}")
                             verification_history.log_verification("failed", vid, cdk=cdk)
                             broadcast_verify_event({
                                 "type": "progress", "vid": vid, "step": "result",
                                 "success": False, "status": "failed",
-                                "message": f"验证失败: {error}",
+                                "message": f"验证失败: {translated}",
                                 "interMsg": f"Verification failed: {error}",
                             })
                         _remove_pending_getgem_task(vid)
@@ -4246,7 +4272,8 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                                 break
                             else:
                                 last_error = status_data.get('error', 'Unknown error')
-                                yield fmt({"type": "progress", "vid": vid, "step": "failed", "message": f"验证失败: {last_error}，重试中..."})
+                                translated_error = _translate_getgem_error(last_error)
+                                yield fmt({"type": "progress", "vid": vid, "step": "failed", "message": f"验证失败: {translated_error}，重试中..."})
 
                                 retry_ok = False
                                 for _retry in range(6):
@@ -4270,7 +4297,7 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
                                         "verificationId": vid,
                                         "status": "rejected",
                                         "success": False,
-                                        "message": f"验证失败: {last_error}",
+                                        "message": f"验证失败: {translated_error}",
                                         "taskId": task_id
                                     })
                                 result_found = True

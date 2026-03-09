@@ -2270,8 +2270,9 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             bot_stats_tracker.record("dualbot", r.get("success", False))
             if r.get("status") == "approved":
                 verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
-            elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
-                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label)
+            elif not r.get("success") and not r.get("alreadyVerified"):
+                actual_status = r.get("status", "failed")
+                verification_history.log_verification(actual_status, vid, msg or f"Rejected: {actual_status}", cdk=cdk_label)
 
         # Send final done event with all results
         done_event = {
@@ -3210,8 +3211,9 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
             bot_stats_tracker.record(request.botId, r.get("success", False))
             if r.get("status") == "approved":
                 verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
-            elif r.get("status") in ("failed", "rejected", "error", "cooldown"):
-                verification_history.log_verification("failed", vid, msg or f"Rejected: {r.get('status', '')}", cdk=cdk_label)
+            elif not r.get("success") and not r.get("alreadyVerified"):
+                actual_status = r.get("status", "failed")
+                verification_history.log_verification(actual_status, vid, msg or f"Rejected: {actual_status}", cdk=cdk_label)
 
         done_event = {
             "type": "done",
@@ -4482,9 +4484,10 @@ async def verify_via_getgem(request: GetGemVerifyRequest):
             if r["status"] == "approved":
                 bot_stats_tracker.record("getgem", True)
                 verification_history.log_verification("pass", vid_log, message=msg, cdk=request.cdk or "", via="getgem")
-            elif r["status"] in ("rejected", "error", "timeout"):
+            elif not r.get("success") and not r.get("alreadyVerified"):
                 bot_stats_tracker.record("getgem", False)
-                verification_history.log_verification("failed", vid_log, message=msg, cdk=request.cdk or "", via="getgem")
+                actual_status = r.get("status", "failed")
+                verification_history.log_verification(actual_status, vid_log, message=msg or f"Rejected: {actual_status}", cdk=request.cdk or "", via="getgem")
 
         # Deduct local CDK quota
         nonlocal cdk_remaining
@@ -4927,9 +4930,10 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             if r.get("status") == "approved":
                 bot_stats_tracker.record("getgem" if "getgem" in via else "bot", True)
                 verification_history.log_verification("pass", vid_log, message=msg, cdk=request.cdk or "", via=via)
-            elif r.get("status") in ("rejected", "error", "timeout"):
+            elif not r.get("success") and not r.get("alreadyVerified"):
                 bot_stats_tracker.record("getgem" if "getgem" in via else "bot", False)
-                verification_history.log_verification("failed", vid_log, message=msg, cdk=request.cdk or "", via=via)
+                actual_status = r.get("status", "failed")
+                verification_history.log_verification(actual_status, vid_log, message=msg or f"Rejected: {actual_status}", cdk=request.cdk or "", via=via)
 
         nonlocal cdk_remaining
         successful = sum(1 for r in all_results if r.get("status") == "approved")

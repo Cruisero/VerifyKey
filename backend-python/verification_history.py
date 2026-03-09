@@ -12,6 +12,23 @@ import database
 
 # Display reset point — records before this timestamp won't be shown
 _display_reset_at: str = ""
+_reset_loaded: bool = False
+
+
+def _load_reset_timestamp():
+    """Load the display reset timestamp from DB on first access."""
+    global _display_reset_at, _reset_loaded
+    if _reset_loaded:
+        return
+    _reset_loaded = True
+    try:
+        conn = database.get_connection()
+        cursor = conn.execute("SELECT value FROM kv_store WHERE key = 'display_reset_at'")
+        row = cursor.fetchone()
+        if row:
+            _display_reset_at = row["value"]
+    except Exception:
+        pass
 
 
 def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "", via: str = "") -> Dict:
@@ -101,6 +118,7 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
     Returns:
         List of verification records, newest last
     """
+    _load_reset_timestamp()
     global _display_reset_at
     conn = database.get_connection()
     if _display_reset_at and not ignore_reset:
@@ -133,6 +151,16 @@ def reset_display() -> str:
     """Set the display reset point to now. Records before this won't be shown."""
     global _display_reset_at
     _display_reset_at = datetime.utcnow().isoformat() + "Z"
+    # Persist to DB
+    try:
+        conn = database.get_connection()
+        conn.execute(
+            "INSERT OR REPLACE INTO kv_store (key, value) VALUES ('display_reset_at', ?)",
+            (_display_reset_at,)
+        )
+        conn.commit()
+    except Exception:
+        pass
     return _display_reset_at
 
 

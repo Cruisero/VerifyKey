@@ -86,6 +86,11 @@ def init_db():
                 timestamp REAL NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS kv_store (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_vh_status ON verification_history(status);
             CREATE INDEX IF NOT EXISTS idx_vh_timestamp ON verification_history(timestamp);
             CREATE INDEX IF NOT EXISTS idx_vh_vid ON verification_history(verification_id);

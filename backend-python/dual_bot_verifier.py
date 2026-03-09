@@ -183,30 +183,34 @@ class DualBotVerifier:
                 except Exception as e:
                     logger.warning(f"[DualBot] [{account_id}] Race check failed: {e}")
 
-            # ---- Step 3: Auto bypass on failure (synchronous — wait for completion) ----
+            # ---- Step 3: Auto bypass on failure (async — fire and forget) ----
             # Skip bypass if bot quota exhausted (nothing to bypass on SheerID side)
             skip_bypass = "程序崩溃" in parsed.get("message", "")
             if not parsed["success"] and auto_bypass and parsed["status"] in ("failed", "rejected") and not skip_bypass:
-                # Emit "failed" progress first, then "bypass" progress
-                await emit("failed", "Verification failed, refreshing link...")
-                await emit("bypass", "Refreshing link...")
-                logger.info(f"[DualBot] [{account_id}] Step 3: Running bypass for {vid[:8]}...")
-                bypass_ok = await self._run_bypass(vid, account_id)
-                
                 # Build message with specific failure reason
                 reason_key = parsed.get("failureReasonKey", "reasonFailed")
                 reason_zh = {"reasonFraud": "检测到欺诈", "reasonDocRejected": "文档被拒绝", "reasonFailed": "验证失败"}
                 reason = reason_zh.get(reason_key, "验证失败")
                 
-                if bypass_ok:
-                    parsed["message"] = f"{reason}，链接已刷新，请重新获取新链接"
-                    parsed["messageKey"] = "msgBypassDone"
-                    parsed["bypassed"] = "done"
-                else:
-                    parsed["message"] = f"{reason}，请等待几分钟后刷新页面获取新链接"
-                    parsed["messageKey"] = "msgBypassFailed"
-                    parsed["bypassed"] = "failed"
+                parsed["message"] = f"{reason}，链接正在刷新中..."
+                parsed["messageKey"] = "msgBypassStarted"
+                parsed["bypassed"] = "started"
                 parsed["failureReasonKey"] = reason_key
+                
+                # Fire-and-forget bypass (runs in background, doesn't block account)
+                async def _bg_bypass(_vid, _acc_id, _emit):
+                    try:
+                        await _emit("bypass", "Refreshing link...")
+                        logger.info(f"[DualBot] [{_acc_id}] Async bypass started for {_vid[:8]}...")
+                        ok = await self._run_bypass(_vid, _acc_id)
+                        if ok:
+                            logger.info(f"[DualBot] [{_acc_id}] Async bypass DONE for {_vid[:8]}")
+                        else:
+                            logger.warning(f"[DualBot] [{_acc_id}] Async bypass FAILED for {_vid[:8]}")
+                    except Exception as e:
+                        logger.error(f"[DualBot] [{_acc_id}] Async bypass error: {e}")
+                
+                asyncio.create_task(_bg_bypass(vid, account_id, emit))
 
             return parsed
 

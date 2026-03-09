@@ -2493,7 +2493,9 @@ export default function Admin() {
                                     } catch (e) { console.error(e); }
                                 };
 
-                                const forceRefresh = async () => {
+                                const forceRefresh = async (e) => {
+                                    const btn = e?.currentTarget;
+                                    if (btn) { btn.disabled = true; btn.textContent = '⏳ 刷新中...'; btn.style.opacity = '0.6'; }
                                     try {
                                         const token = user?.token || localStorage.getItem('verifykey-token');
                                         const res = await fetch(`${API_BASE}/api/admin/node-health/refresh`, {
@@ -2502,8 +2504,12 @@ export default function Admin() {
                                         if (res.ok) {
                                             const data = await res.json();
                                             setNodeHealth(prev => ({ ...prev, nodes: data.nodes, allocation: data.allocation }));
+                                            if (btn) { btn.textContent = '✅ 已刷新'; btn.style.background = '#10b981'; btn.style.color = '#fff'; }
+                                            setTimeout(() => { if (btn) { btn.textContent = '🔄 手动刷新'; btn.style.background = ''; btn.style.color = ''; btn.style.opacity = '1'; btn.disabled = false; } }, 1500);
+                                            return;
                                         }
                                     } catch (e) { console.error(e); }
+                                    if (btn) { btn.textContent = '🔄 手动刷新'; btn.style.opacity = '1'; btn.style.background = ''; btn.style.color = ''; btn.disabled = false; }
                                 };
 
                                 return (

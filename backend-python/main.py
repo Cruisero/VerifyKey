@@ -2514,7 +2514,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
         # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----
         failed_vids = [r.get("verificationId") for r in results 
                        if not r.get("success") and r.get("verificationId") 
-                       and r.get("status") in ("timeout", "error", "failed", "rejected", "cooldown")
+                       and r.get("status") in ("timeout", "error")
                        and not r.get("alreadyVerified")]
         
         if failed_vids and not is_bot_internal:

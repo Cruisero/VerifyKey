@@ -32,6 +32,7 @@ import auth
 import cdk_manager
 import verification_history
 from bot_stats import bot_stats_tracker
+from node_health_monitor import node_health_monitor
 import database
 
 # Load environment variables
@@ -199,6 +200,37 @@ async def _resume_getgem_poll(vid: str, task_id: str, cdk: str):
 
 # ========== Admin SSE Event Bus ==========
 _admin_sse_subscribers: list = []  # list of asyncio.Queue for connected admin clients
+
+# ========== Manual Override Signal ==========
+# VID → {"status": "pass"|"failed", "timestamp": float}
+# Running verification tasks check this to early-return when admin manually overrides
+_manual_overrides: dict = {}
+
+def set_manual_override(vid: str, status: str):
+    """Set a manual override for a verification ID."""
+    import time
+    _manual_overrides[vid] = {"status": status, "timestamp": time.time()}
+
+def check_manual_override(vid: str):
+    """Check if a VID has been manually overridden. Returns status or None."""
+    entry = _manual_overrides.get(vid)
+    if entry:
+        import time
+        # Override valid for 10 minutes
+        if time.time() - entry["timestamp"] < 600:
+            return entry["status"]
+        else:
+            _manual_overrides.pop(vid, None)
+    return None
+
+def consume_manual_override(vid: str):
+    """Check and consume a manual override (removes it after reading)."""
+    entry = _manual_overrides.pop(vid, None)
+    if entry:
+        import time
+        if time.time() - entry["timestamp"] < 600:
+            return entry["status"]
+    return None
 
 def broadcast_verify_event(event: dict):
     """Broadcast a verification event to all connected admin SSE subscribers."""
@@ -1730,6 +1762,13 @@ async def startup_event():
     global telegram_bot
     import config_manager
     config = config_manager.get_config()
+
+    # Start node health monitor
+    try:
+        await node_health_monitor.start()
+        print("[Startup] Node health monitor started")
+    except Exception as e:
+        print(f"[Startup] Node health monitor error: {e}")
     
     # Multi-account auto-connect (new system)
     try:
@@ -3760,9 +3799,41 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     success = verification_history.update_verification(record_id, request.status)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
+    # Also set the manual override signal so running verification tasks can detect it
+    # Extract VID from the record
+    cursor2 = conn.execute("SELECT verificationId FROM verification_history WHERE id = ?", (record_id,))
+    row2 = cursor2.fetchone()
+    if row2 and row2["verificationId"]:
+        set_manual_override(row2["verificationId"], request.status)
     # Broadcast the update via SSE so admin page refreshes
     broadcast_verify_event({"type": "history_updated", "id": record_id, "status": request.status})
     return {"updated": True, "id": record_id, "status": request.status, "cdkMessage": cdk_message}
+
+
+class VidOverrideRequest(BaseModel):
+    vid: str
+    status: str  # 'pass' or 'failed'
+
+@app.post("/api/admin/override-vid")
+async def override_verification_by_vid(request: VidOverrideRequest):
+    """Admin: Override a verification by VID (for processing entries not yet in DB).
+    Sets the manual override signal so running verification tasks early-return."""
+    if request.status not in ("pass", "failed"):
+        raise HTTPException(status_code=400, detail="Status must be 'pass' or 'failed'")
+    
+    set_manual_override(request.vid, request.status)
+    
+    # Broadcast a per-link result event so admin SSE log updates immediately
+    broadcast_verify_event({
+        "type": "progress",
+        "vid": request.vid,
+        "step": "result",
+        "status": "approved" if request.status == "pass" else "failed",
+        "success": request.status == "pass",
+        "message": "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败",
+    })
+    
+    return {"ok": True, "vid": request.vid, "status": request.status}
 
 
 @app.delete("/api/verify/history")
@@ -4905,6 +4976,19 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                         fb_r["via"] = f"fallback:{fb_r.get('via', '')}"
                         all_results[i] = fb_r
 
+        # ---- Apply manual overrides (admin marked pass/fail while verification was running) ----
+        for i, r in enumerate(all_results):
+            vid = r.get("verificationId", "")
+            override_status = consume_manual_override(vid)
+            if override_status:
+                all_results[i] = {
+                    **r,
+                    "status": "approved" if override_status == "pass" else "failed",
+                    "success": override_status == "pass",
+                    "message": "管理员手动标记为通过" if override_status == "pass" else "管理员手动标记为失败",
+                    "via": r.get("via", "") + " (manual)",
+                }
+
         # ---- Log results and deduct CDK ----
         for r in all_results:
             vid_log = r.get("verificationId", "")
@@ -4930,6 +5014,51 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
 
     from starlette.responses import StreamingResponse
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ========== Node Health Monitor API ==========
+
+@app.get("/api/admin/node-health")
+async def get_node_health():
+    """Admin: Get all node statuses and monitor config."""
+    return {
+        "nodes": node_health_monitor.get_all_statuses(),
+        "config": node_health_monitor.get_config(),
+        "allocation": node_health_monitor.get_allocation(["getgem", "oldbot", "blackbot", "dualbot"]),
+    }
+
+
+@app.post("/api/admin/node-health/config")
+async def update_node_health_config(request: dict):
+    """Admin: Update monitor thresholds, mode, and locked allocation."""
+    node_health_monitor.update_config(
+        thresholds=request.get("thresholds"),
+        mode=request.get("mode"),
+        locked_allocation=request.get("lockedAllocation"),
+    )
+    return {"ok": True, "config": node_health_monitor.get_config()}
+
+
+@app.post("/api/admin/node-health/refresh")
+async def force_refresh_node_health():
+    """Admin: Force immediate re-poll of all external APIs."""
+    statuses = await node_health_monitor.force_refresh()
+    return {
+        "nodes": statuses,
+        "allocation": node_health_monitor.get_allocation(["getgem", "oldbot", "blackbot", "dualbot"]),
+    }
+
+
+@app.post("/api/admin/node-health/toggle")
+async def toggle_node_enabled(request: dict):
+    """Admin: Enable/disable a specific node."""
+    node_id = request.get("nodeId")
+    enabled = request.get("enabled", True)
+    if not node_id:
+        raise HTTPException(status_code=400, detail="nodeId required")
+    node_health_monitor.set_node_enabled(node_id, enabled)
+    node_health_monitor._save_config()
+    return {"ok": True, "nodeId": node_id, "enabled": enabled}
 
 
 # ========== Routing Stats API ==========

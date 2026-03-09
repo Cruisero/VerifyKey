@@ -1011,6 +1011,7 @@ export default function Admin() {
         autoDegradeThreshold: 30
     });
     const [routingStats, setRoutingStats] = useState(null);
+    const [nodeHealth, setNodeHealth] = useState(null);
     const [batchApiSettings, setBatchApiSettings] = useState({
         apiUrl: 'https://batch.1key.me/api/batch',
         apiKey: ''
@@ -1155,6 +1156,12 @@ export default function Admin() {
                     });
                 }
             } catch (e) { console.error('Failed to fetch site data:', e); }
+            // Also fetch node health data
+            try {
+                const token = user?.token || localStorage.getItem('verifykey-token');
+                const nhRes = await fetch(`${API_BASE}/api/admin/node-health`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (nhRes.ok) setNodeHealth(await nhRes.json());
+            } catch (e) { /* ignore */ }
         };
         fetchSiteData();
         const interval = setInterval(fetchSiteData, 15000);
@@ -2073,12 +2080,26 @@ export default function Admin() {
                                                             e.stopPropagation();
                                                             if (!confirm(`确认将 ${shortVid} 手动标记为通过？`)) return;
                                                             try {
-                                                                await fetch(`${API_BASE}/api/verify/history/${r.id}`, {
-                                                                    method: 'PATCH',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ status: 'pass' })
-                                                                });
-                                                                fetchVerifyHistory();
+                                                                if (typeof r.id === 'string' && r.id.startsWith('sse-')) {
+                                                                    // SSE-only entry: use VID-based override
+                                                                    await fetch(`${API_BASE}/api/admin/override-vid`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ vid: r.verificationId, status: 'pass' })
+                                                                    });
+                                                                    setVerifyLog(prev => prev.map(item =>
+                                                                        item.verificationId === r.verificationId
+                                                                            ? { ...item, status: 'pass', message: '管理员手动标记为通过' }
+                                                                            : item
+                                                                    ));
+                                                                } else {
+                                                                    await fetch(`${API_BASE}/api/verify/history/${r.id}`, {
+                                                                        method: 'PATCH',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ status: 'pass' })
+                                                                    });
+                                                                    fetchVerifyHistory();
+                                                                }
                                                             } catch (err) { console.error(err); }
                                                         }}
                                                     >✓ Pass</button>
@@ -2095,12 +2116,26 @@ export default function Admin() {
                                                             e.stopPropagation();
                                                             if (!confirm(`确认将 ${shortVid} 手动标记为失败？`)) return;
                                                             try {
-                                                                await fetch(`${API_BASE}/api/verify/history/${r.id}`, {
-                                                                    method: 'PATCH',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ status: 'failed' })
-                                                                });
-                                                                fetchVerifyHistory();
+                                                                if (typeof r.id === 'string' && r.id.startsWith('sse-')) {
+                                                                    // SSE-only entry: use VID-based override
+                                                                    await fetch(`${API_BASE}/api/admin/override-vid`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ vid: r.verificationId, status: 'failed' })
+                                                                    });
+                                                                    setVerifyLog(prev => prev.map(item =>
+                                                                        item.verificationId === r.verificationId
+                                                                            ? { ...item, status: 'failed', message: '管理员手动标记为失败' }
+                                                                            : item
+                                                                    ));
+                                                                } else {
+                                                                    await fetch(`${API_BASE}/api/verify/history/${r.id}`, {
+                                                                        method: 'PATCH',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ status: 'failed' })
+                                                                    });
+                                                                    fetchVerifyHistory();
+                                                                }
                                                             } catch (err) { console.error(err); }
                                                         }}
                                                     >✕ Fail</button>
@@ -2582,6 +2617,218 @@ export default function Admin() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Node Health Monitor Dashboard */}
+                            {aiProvider === 'mixed' && nodeHealth && (() => {
+                                const nodes = nodeHealth.nodes || {};
+                                const config = nodeHealth.config || {};
+                                const thresholds = config.thresholds || {};
+                                const allocation = nodeHealth.allocation || {};
+                                const nodeOrder = ['getgem', 'oldbot', 'blackbot', 'dualbot'];
+                                const nodeLabels = { getgem: 'GetGem', oldbot: 'OldBot', blackbot: 'BlackBot', dualbot: 'DualBot' };
+                                const nodeColors = { getgem: '#10b981', oldbot: '#3b82f6', blackbot: '#8b5cf6', dualbot: '#6b7280' };
+                                const statusColors = { healthy: '#10b981', degraded: '#f59e0b', circuit_broken: '#ef4444' };
+                                const statusLabels = { healthy: 'Healthy', degraded: 'Degraded', circuit_broken: 'Broken' };
+
+                                const saveConfig = async (updates) => {
+                                    try {
+                                        const token = user?.token || localStorage.getItem('verifykey-token');
+                                        await fetch(`${API_BASE}/api/admin/node-health/config`, {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                            body: JSON.stringify(updates)
+                                        });
+                                        const res = await fetch(`${API_BASE}/api/admin/node-health`, { headers: { 'Authorization': `Bearer ${token}` } });
+                                        if (res.ok) setNodeHealth(await res.json());
+                                    } catch (e) { console.error(e); }
+                                };
+
+                                const toggleNode = async (nodeId, enabled) => {
+                                    try {
+                                        const token = user?.token || localStorage.getItem('verifykey-token');
+                                        await fetch(`${API_BASE}/api/admin/node-health/toggle`, {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                            body: JSON.stringify({ nodeId, enabled })
+                                        });
+                                        const res = await fetch(`${API_BASE}/api/admin/node-health`, { headers: { 'Authorization': `Bearer ${token}` } });
+                                        if (res.ok) setNodeHealth(await res.json());
+                                    } catch (e) { console.error(e); }
+                                };
+
+                                const forceRefresh = async () => {
+                                    try {
+                                        const token = user?.token || localStorage.getItem('verifykey-token');
+                                        const res = await fetch(`${API_BASE}/api/admin/node-health/refresh`, {
+                                            method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
+                                        });
+                                        if (res.ok) {
+                                            const data = await res.json();
+                                            setNodeHealth(prev => ({ ...prev, nodes: data.nodes, allocation: data.allocation }));
+                                        }
+                                    } catch (e) { console.error(e); }
+                                };
+
+                                return (
+                                    <div className="provider-settings" style={{ marginTop: '12px' }}>
+                                        <h4>🔄 智能路由监控</h4>
+                                        <div className="settings-form">
+
+                                            {/* Node Cards */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                                                {nodeOrder.map(nid => {
+                                                    const n = nodes[nid] || { nodeId: nid, status: 'healthy', successRate: 50, enabled: true, sparkline: [], extra: {} };
+                                                    const color = statusColors[n.status] || '#6b7280';
+                                                    const label = statusLabels[n.status] || n.status;
+                                                    return (
+                                                        <div key={nid} style={{
+                                                            background: 'var(--bg-secondary)', borderRadius: '12px', padding: '14px 16px',
+                                                            border: `1px solid ${n.enabled ? color + '30' : 'var(--border-color)'}`,
+                                                            opacity: n.enabled ? 1 : 0.5, transition: 'all .2s'
+                                                        }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                                <span style={{ fontWeight: 700, fontSize: '14px' }}>{nodeLabels[nid]}</span>
+                                                                <span style={{ fontSize: '11px', color, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, display: 'inline-block' }} />
+                                                                    {label}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '24px', fontWeight: 800, color, marginBottom: '6px' }}>
+                                                                {n.successRate?.toFixed(1) ?? '—'}%
+                                                            </div>
+                                                            {/* Sparkline */}
+                                                            {n.sparkline && n.sparkline.length > 0 && (
+                                                                <div style={{ display: 'flex', gap: '2px', marginBottom: '8px', height: '18px', alignItems: 'flex-end' }}>
+                                                                    {n.sparkline.map((r, i) => (
+                                                                        <div key={i} style={{
+                                                                            width: '4px', borderRadius: '1px',
+                                                                            height: r === 0 ? '18px' : r === 2 ? '8px' : '12px',
+                                                                            background: r === 0 ? '#10b981' : r === 2 ? '#f59e0b' : '#ef4444',
+                                                                            opacity: 0.8,
+                                                                        }} />
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            {/* Extra info */}
+                                                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                                                {nid === 'getgem' && n.extra?.availableSlots !== undefined && (
+                                                                    <span>{n.extra.availableSlots}/{n.extra.maxConcurrent || '?'} slots</span>
+                                                                )}
+                                                                {nid === 'oldbot' && n.extra?.pending !== undefined && (
+                                                                    <span>{n.extra.pending} pending</span>
+                                                                )}
+                                                                {(nid === 'blackbot' || nid === 'dualbot') && n.extra?.total !== undefined && (
+                                                                    <span>{n.extra.total} verified</span>
+                                                                )}
+                                                                {n.extra?.maintenance && <span style={{ color: '#ef4444', marginLeft: '6px' }}>⚠️ Maintenance</span>}
+                                                                {n.source === 'external' && <span style={{ marginLeft: '6px' }}>🌐</span>}
+                                                            </div>
+                                                            {/* Toggle */}
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span style={{ fontSize: '12px' }}>启用</span>
+                                                                <label style={{ position: 'relative', width: '36px', height: '20px', cursor: 'pointer' }}>
+                                                                    <input type="checkbox" checked={n.enabled} onChange={(e) => toggleNode(nid, e.target.checked)}
+                                                                        style={{ opacity: 0, width: 0, height: 0 }} />
+                                                                    <span style={{
+                                                                        position: 'absolute', inset: 0, borderRadius: '10px', transition: '.2s',
+                                                                        background: n.enabled ? nodeColors[nid] : '#ccc',
+                                                                    }}>
+                                                                        <span style={{
+                                                                            position: 'absolute', width: '16px', height: '16px', borderRadius: '50%', background: '#fff',
+                                                                            top: '2px', left: n.enabled ? '18px' : '2px', transition: '.2s',
+                                                                        }} />
+                                                                    </span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Threshold Sliders */}
+                                            <div style={{ marginBottom: '20px' }}>
+                                                <h5 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600 }}>⚙️ 阈值配置</h5>
+                                                {[
+                                                    { key: 'degradeThreshold', label: '降级阈值', color: '#f59e0b', desc: '低于此值 → 分配减半' },
+                                                    { key: 'circuitBreakThreshold', label: '熔断阈值', color: '#ef4444', desc: '低于此值 → 停用' },
+                                                    { key: 'recoverThreshold', label: '恢复阈值', color: '#10b981', desc: '高于此值连续3次 → 恢复' },
+                                                ].map(({ key, label, color, desc }) => (
+                                                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                                                        <span style={{ fontSize: '12px', minWidth: '70px', color }}>{label}</span>
+                                                        <input type="range" min="0" max="100" step="5"
+                                                            value={thresholds[key] || 50}
+                                                            onChange={(e) => {
+                                                                const val = parseInt(e.target.value);
+                                                                setNodeHealth(prev => ({
+                                                                    ...prev, config: { ...prev.config, thresholds: { ...prev.config.thresholds, [key]: val } }
+                                                                }));
+                                                            }}
+                                                            onMouseUp={(e) => saveConfig({ thresholds: { [key]: parseInt(e.target.value) } })}
+                                                            style={{ flex: 1, accentColor: color }}
+                                                        />
+                                                        <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '40px', color }}>{thresholds[key] || 50}%</span>
+                                                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{desc}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Traffic Allocation Bar */}
+                                            <div style={{ marginBottom: '20px' }}>
+                                                <h5 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600 }}>📊 流量分配</h5>
+                                                <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', height: '32px', marginBottom: '8px' }}>
+                                                    {nodeOrder.map(nid => {
+                                                        const pct = allocation[nid] || 0;
+                                                        if (pct <= 0) return null;
+                                                        return (
+                                                            <div key={nid} style={{
+                                                                width: `${pct}%`, background: nodeColors[nid],
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                color: '#fff', fontSize: '12px', fontWeight: 700, transition: 'width .3s',
+                                                                minWidth: pct > 0 ? '30px' : '0',
+                                                            }}>
+                                                                {pct}%
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                                                    {nodeOrder.map(nid => (
+                                                        <span key={nid} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+                                                            <span style={{ width: 8, height: 8, borderRadius: '2px', background: nodeColors[nid] }} />
+                                                            {nodeLabels[nid]} {allocation[nid] || 0}%
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Mode Buttons */}
+                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                <button className="btn btn-sm"
+                                                    style={{ background: 'var(--bg-tertiary)', padding: '6px 16px', fontSize: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}
+                                                    onClick={forceRefresh}
+                                                >🔄 手动刷新</button>
+                                                <button className={`btn btn-sm ${config.mode === 'auto' ? 'btn-primary' : ''}`}
+                                                    style={{
+                                                        background: config.mode === 'auto' ? '#3b82f6' : 'var(--bg-tertiary)',
+                                                        color: config.mode === 'auto' ? '#fff' : 'inherit',
+                                                        padding: '6px 16px', fontSize: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer'
+                                                    }}
+                                                    onClick={() => saveConfig({ mode: 'auto' })}
+                                                >⚡ 自动路由</button>
+                                                <button className={`btn btn-sm ${config.mode === 'locked' ? 'btn-primary' : ''}`}
+                                                    style={{
+                                                        background: config.mode === 'locked' ? '#f59e0b' : 'var(--bg-tertiary)',
+                                                        color: config.mode === 'locked' ? '#fff' : 'inherit',
+                                                        padding: '6px 16px', fontSize: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer'
+                                                    }}
+                                                    onClick={() => saveConfig({ mode: 'locked', lockedAllocation: allocation })}
+                                                >📌 锁定分配</button>
+                                                {config.mode === 'locked' && (
+                                                    <span style={{ fontSize: '11px', color: '#f59e0b', alignSelf: 'center' }}>⚠️ 当前为锁定模式，不会自动调整分配</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {/* GetGem.cc API Settings */}
                             {(aiProvider === 'getgem' || aiProvider === 'mixed') && (

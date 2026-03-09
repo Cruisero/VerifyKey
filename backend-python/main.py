@@ -4906,7 +4906,10 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
             deduct = cdk_manager.use_cdk(request.cdk, successful)
             cdk_remaining = deduct.get("remaining", cdk_remaining)
 
-        yield f"data: {_json.dumps({'type': 'done', 'results': all_results, 'stats': {'total': len(all_results), 'approved': successful, 'rejected': sum(1 for r in all_results if not r.get('success'))}, 'cdkRemaining': cdk_remaining}, ensure_ascii=False)}\n\n"
+        # Broadcast done event to admin SSE so the overview log updates from "processing" to final status
+        done_payload = {'type': 'done', 'results': all_results, 'stats': {'total': len(all_results), 'approved': successful, 'rejected': sum(1 for r in all_results if not r.get('success'))}, 'cdkRemaining': cdk_remaining}
+        broadcast_verify_event(done_payload)
+        yield f"data: {_json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
     from starlette.responses import StreamingResponse
     return StreamingResponse(event_stream(), media_type="text/event-stream")

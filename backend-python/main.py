@@ -4692,7 +4692,7 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                 return results
 
             # Build links from VIDs for bot verification
-            links = [f"https://services.sheerid.com/verify/{vid}" for vid in vids]
+            links = [f"https://services.sheerid.com/verify/{vid}/?verificationId={vid}" for vid in vids]
 
             import config_manager as _cm
             _cfg = _cm.get_config()

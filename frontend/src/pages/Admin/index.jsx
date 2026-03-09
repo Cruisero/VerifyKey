@@ -2478,6 +2478,89 @@ export default function Admin() {
                                             </label>
                                         </div>
 
+                                        {/* Fallback Error Whitelist */}
+                                        {routingStrategy.fallbackEnabled && (
+                                            <div className="input-group">
+                                                <label className="input-label">Fallback 触发错误白名单</label>
+                                                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 8px' }}>
+                                                    只有以下状态/关键词匹配的失败结果才会触发 Fallback 重试
+                                                </p>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                                                    {(routingStrategy.fallbackErrors || []).map((err, idx) => (
+                                                        <span key={idx} style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                            background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)',
+                                                            borderRadius: '6px', padding: '3px 8px 3px 10px',
+                                                            fontSize: '12px', fontFamily: 'monospace', color: 'var(--text-primary)',
+                                                        }}>
+                                                            {err}
+                                                            <button
+                                                                onClick={() => setRoutingStrategy(prev => ({
+                                                                    ...prev,
+                                                                    fallbackErrors: prev.fallbackErrors.filter((_, i) => i !== idx)
+                                                                }))}
+                                                                style={{
+                                                                    background: 'none', border: 'none', cursor: 'pointer',
+                                                                    color: '#dc2626', fontSize: '14px', fontWeight: 700,
+                                                                    padding: '0 2px', lineHeight: 1, display: 'flex', alignItems: 'center',
+                                                                }}
+                                                                title="移除"
+                                                            >×</button>
+                                                        </span>
+                                                    ))}
+                                                    {(routingStrategy.fallbackErrors || []).length === 0 && (
+                                                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                                                            无白名单项，Fallback 不会触发
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                                    <input
+                                                        type="text"
+                                                        className="input"
+                                                        placeholder="输入错误类型，如 rejected"
+                                                        style={{ flex: 1, fontSize: '12px' }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                const val = e.target.value.trim();
+                                                                if (!(routingStrategy.fallbackErrors || []).includes(val)) {
+                                                                    setRoutingStrategy(prev => ({
+                                                                        ...prev,
+                                                                        fallbackErrors: [...(prev.fallbackErrors || []), val]
+                                                                    }));
+                                                                }
+                                                                e.target.value = '';
+                                                            }
+                                                        }}
+                                                    />
+                                                    <button
+                                                        className="btn btn-sm btn-secondary"
+                                                        style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
+                                                        onClick={(e) => {
+                                                            const input = e.target.previousElementSibling;
+                                                            const val = input.value.trim();
+                                                            if (val && !(routingStrategy.fallbackErrors || []).includes(val)) {
+                                                                setRoutingStrategy(prev => ({
+                                                                    ...prev,
+                                                                    fallbackErrors: [...(prev.fallbackErrors || []), val]
+                                                                }));
+                                                            }
+                                                            input.value = '';
+                                                        }}
+                                                    >+ 添加</button>
+                                                    <button
+                                                        className="btn btn-sm btn-outline"
+                                                        style={{ fontSize: '12px', padding: '4px 12px', whiteSpace: 'nowrap' }}
+                                                        onClick={() => setRoutingStrategy(prev => ({
+                                                            ...prev,
+                                                            fallbackErrors: ['timeout', 'internalError', 'rateLimited', 'cooldown', 'error']
+                                                        }))}
+                                                        title="恢复默认白名单"
+                                                    >重置</button>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Auto Degrade Threshold */}
                                         <div className="input-group">
                                             <label className="input-label">自动降级阈值</label>

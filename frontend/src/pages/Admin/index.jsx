@@ -5650,7 +5650,8 @@ export default function Admin() {
                                         onClick={async () => {
                                             if (!confirm('确定要重置验证状态显示吗？（不会删除数据库记录）')) return;
                                             try {
-                                                const res = await fetch(`${API_BASE}/api/verify/history`);
+                                                const token = user?.token || localStorage.getItem('verifykey-token');
+                                                const res = await fetch(`${API_BASE}/api/verify/history`, { headers: { 'Authorization': `Bearer ${token}` } });
                                                 if (res.ok) {
                                                     const data = await res.json();
                                                     setHistoryData(data.history || []);

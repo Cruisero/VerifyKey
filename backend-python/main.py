@@ -3523,6 +3523,23 @@ async def delete_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional
     return {"success": True, "message": "CDK 已删除"}
 
 
+@app.post("/api/cdk/consume")
+async def consume_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional[str] = Header(None)):
+    """Manually consume 1 quota from a CDK (admin only)"""
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    
+    token = authorization.split(' ')[1]
+    user_data = auth.verify_token(token)
+    if not user_data or user_data.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = cdk_manager.use_cdk(request.code, 1)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return {"success": True, "remaining": result["remaining"], "message": result["message"]}
+
+
 @app.get("/api/cdk/stats")
 async def cdk_stats_endpoint():
     """Get CDK statistics"""

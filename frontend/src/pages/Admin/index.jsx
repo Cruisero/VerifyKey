@@ -740,6 +740,24 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
         } catch (e) { alert('删除失败: ' + e.message); }
     };
 
+    const handleConsume = async (code) => {
+        if (!confirm(`确定手动消耗 CDK: ${code} 的 1 个额度？`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/cdk/consume`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ code })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert(`✅ ${data.message}`);
+                await fetchCDKs();
+            } else {
+                const err = await res.json();
+                alert('消耗失败: ' + (err.detail || '未知错误'));
+            }
+        } catch (e) { alert('消耗失败: ' + e.message); }
+    };
+
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
     };
@@ -882,6 +900,9 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                                     style={{ background: expandedCdk === c.code ? 'var(--color-primary)' : undefined, color: expandedCdk === c.code ? 'white' : undefined }}
                                                 >👁️</button>
                                                 <button className="btn btn-sm btn-secondary" onClick={() => copyToClipboard(c.code)}>📋</button>
+                                                <button className="btn btn-sm btn-warning" onClick={() => handleConsume(c.code)} title="手动消耗 1 个额度" disabled={c.remaining <= 0}
+                                                    style={{ opacity: c.remaining <= 0 ? 0.4 : 1 }}
+                                                >🔥</button>
                                                 <button className="btn btn-sm btn-outline" onClick={() => handleDelete(c.code)} style={{ color: 'var(--color-danger)' }}>🗑️</button>
                                             </div>
                                         </td>

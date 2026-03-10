@@ -23,8 +23,7 @@ POLL_INTERVAL = 30  # seconds
 SPARKLINE_SIZE = 20  # recent results to show in sparkline
 CANARY_MIN_PCT = 5   # minimum % allocation per enabled node (canary probing)
 DECAY_START_SECS = 600   # 10 minutes — start decaying rate after this idle time
-BLACKBOT_HEALTH_INTERVAL = 1800  # 30 minutes — interval for BlackBot health check
-BLACKBOT_OFFLINE_KEYWORDS = ["document", "updating", "update"]  # keywords indicating maintenance
+
 DECAY_FLOOR = 0.30       # decay target (30%)
 DECAY_DEFAULT = 0.50     # default rate when no data at all
 
@@ -87,7 +86,7 @@ class NodeHealthMonitor:
         self._task: Optional[asyncio.Task] = None
         self._running = False
         self._http: Optional[httpx.AsyncClient] = None
-        self._blackbot_last_check: float = 0  # timestamp of last BlackBot health check
+
         self._auto_maintenance: bool = False   # auto maintenance mode toggle
         self._maintenance_active: bool = False  # whether auto-maintenance is currently ON
 
@@ -133,14 +132,6 @@ class NodeHealthMonitor:
         ]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        # BlackBot health check runs every 30 min (separate interval)
-        now = time.time()
-        if now - self._blackbot_last_check >= BLACKBOT_HEALTH_INTERVAL:
-            try:
-                await self._poll_blackbot_health()
-                self._blackbot_last_check = now
-            except Exception as e:
-                logger.error("[NodeHealth] BlackBot health check error: %s", e)
 
         # Update nodes that have no external API (use internal stats only)
         for bot_id in ("blackbot", "dualbot"):
@@ -243,103 +234,6 @@ class NodeHealthMonitor:
             logger.warning("[NodeHealth] OldBot poll failed: %s", e)
             node.extra["pollError"] = str(e)
 
-    async def _poll_blackbot_health(self):
-        """Health check for BlackBot: send a fake SheerID link and check response.
-        
-        If response contains keywords like 'document', 'updating', 'update',
-        it means BlackBot is in maintenance/update mode → mark circuit_broken.
-        """
-        import uuid
-        node = self._ensure_node("blackbot")
-
-        # Get a Telegram client assigned to blackbot
-        try:
-            import main
-            tg = main.tg_manager
-
-            result = tg.get_next_client("blackbot")
-            if not result:
-                # Fallback: try any connected client
-                result = tg.get_next_client()
-            if not result:
-                logger.info("[NodeHealth] BlackBot health check skipped: no connected client")
-                return
-            
-            account_id, client = result
-
-            # Send a fake link (must match real SheerID format)
-            import secrets
-            fake_program_id = "67c8c14f5f17a83b745e3f82"  # use a real-looking program ID
-            fake_vid = secrets.token_hex(12)  # 24-char hex like real verificationId
-            fake_link = f"https://services.sheerid.com/verify/{fake_program_id}/?verificationId={fake_vid}"
-
-            # Get bot username from config
-            import config_manager
-            cfg = config_manager.get_config()
-            bot_username = "black_verifier_bot"  # default
-            for bot in cfg.get("verification", {}).get("singleBots", []):
-                if bot.get("id") == "blackbot":
-                    bot_username = bot.get("username", "@black_verifier_bot").lstrip("@")
-                    break
-
-            logger.info("[NodeHealth] BlackBot health check: sending fake link...")
-
-            from telethon import events
-            loop = asyncio.get_event_loop()
-            future = loop.create_future()
-
-            async def _handler(event):
-                if future.done():
-                    return
-                reply_text = event.message.text or event.message.message or ""
-                if reply_text:
-                    future.set_result(reply_text)
-
-            client.add_event_handler(_handler, events.NewMessage(from_users=bot_username))
-            client.add_event_handler(_handler, events.MessageEdited(from_users=bot_username))
-
-            try:
-                # Ensure conversation is initiated (some bots require /start first)
-                try:
-                    await client.send_message(bot_username, "/start")
-                    await asyncio.sleep(2)  # wait for bot to respond
-                except Exception:
-                    pass  # ignore if already started
-                await client.send_message(bot_username, fake_link)
-                reply = await asyncio.wait_for(future, timeout=30)
-            except asyncio.TimeoutError:
-                logger.warning("[NodeHealth] BlackBot health check: no response in 30s")
-                reply = None
-            except Exception as e:
-                logger.error("[NodeHealth] BlackBot health check send error: %s", e)
-                reply = None
-            finally:
-                client.remove_event_handler(_handler, events.NewMessage)
-                client.remove_event_handler(_handler, events.MessageEdited)
-
-            if reply:
-                reply_lower = reply.lower()
-                is_offline = any(kw in reply_lower for kw in BLACKBOT_OFFLINE_KEYWORDS)
-                logger.info("[NodeHealth] BlackBot health response: '%s' → offline=%s",
-                          reply[:100], is_offline)
-                if is_offline:
-                    node.status = "circuit_broken"
-                    node.extra["offline"] = True
-                    node.extra["offlineReason"] = f"Health check: {reply[:80]}"
-                    node.last_updated = time.time()
-                else:
-                    node.extra.pop("offline", None)
-                    node.extra.pop("offlineReason", None)
-                    # Recover from offline → mark healthy so it can receive traffic again
-                    if node.status == "circuit_broken":
-                        node.status = "healthy"
-                        node.recover_streak = 0
-                        logger.info("[NodeHealth] BlackBot recovered from offline → healthy")
-            else:
-                logger.info("[NodeHealth] BlackBot health check: no reply, status unchanged")
-
-        except Exception as e:
-            logger.error("[NodeHealth] BlackBot health check error: %s", e)
 
     def _update_internal_node(self, bot_id: str):
         """Update a node using only internal bot_stats_tracker data.
@@ -766,8 +660,7 @@ class NodeHealthMonitor:
             logger.warning("[NodeHealth] Could not load config: %s", e)
 
     async def force_refresh(self):
-        """Force an immediate re-poll of all external APIs (including BlackBot health check)."""
-        self._blackbot_last_check = 0  # force BlackBot health check to run
+        """Force an immediate re-poll of all external APIs."""
         await self._poll_all()
         return self.get_all_statuses()
 

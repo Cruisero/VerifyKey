@@ -2429,13 +2429,11 @@ async def verify_unified(request: UnifiedVerifyRequest):
     if not enabled_bots:
         raise HTTPException(status_code=400, detail="没有启用任何验证 Bot，请在管理后台启用至少一个")
 
-    # ---- Sort bots by node_health_monitor allocation weight ----
+    # ---- Build bot map for probabilistic selection ----
     from node_health_monitor import node_health_monitor as _nhm
     _bot_type_ids = [b["type"] for b in enabled_bots]
-    ordered_ids = _nhm.get_ordered_nodes(_bot_type_ids)
-    _order_map = {nid: i for i, nid in enumerate(ordered_ids)}
-    sorted_bots = sorted(enabled_bots, key=lambda b: _order_map.get(b["type"], 999))
-    logger.info(f"[Waterfall] Bot priority (nhm): {[b['type'] for b in sorted_bots]}")
+    _bot_map = {b["type"]: b for b in enabled_bots}
+    logger.info(f"[Route] Enabled bots: {_bot_type_ids}, allocation: {_nhm.get_allocation(_bot_type_ids)}")
 
     # Extract VIDs
     def _extract_vid_u(link):
@@ -2508,7 +2506,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
             return min(active) if active else 0
 
         async def process_single_link(link_to_verify):
-            """Waterfall: try each bot in priority order. If one fails, try the next."""
+            """Probabilistic routing: select bot by weighted probability, fallback on non-terminal failure."""
             vid = link_vid_map.get(link_to_verify, "")
 
             # VID deduplication
@@ -2518,7 +2516,7 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 vid_lock = _vid_locks[vid]
 
                 if vid_lock.locked():
-                    logger.info(f"[Waterfall] VID {vid[:8]}... already being processed, waiting...")
+                    logger.info(f"[Route] VID {vid[:8]}... already being processed, waiting...")
                     async with vid_lock:
                         if vid in _vid_results:
                             cached = _vid_results[vid]
@@ -2531,9 +2529,14 @@ async def verify_unified(request: UnifiedVerifyRequest):
             last_result = None
 
             async with lock_ctx:
-              # ---- Waterfall: try bots in priority order ----
-              for bot_idx, bot_entry in enumerate(sorted_bots):
-                bot_type = bot_entry["type"]
+              # ---- Probabilistic routing: pick bot by weight, fallback on non-terminal failure ----
+              remaining_bot_ids = list(_bot_type_ids)  # copy — we remove as we try
+              selected_bot_type = _nhm.select_node(remaining_bot_ids)
+              logger.info(f"[Route] VID {vid[:8]}... selected bot: {selected_bot_type} (from {remaining_bot_ids})")
+
+              while selected_bot_type and remaining_bot_ids:
+                bot_entry = _bot_map[selected_bot_type]
+                bot_type = selected_bot_type
                 bot_config = bot_entry["config"]
                 max_retries = bot_config.get("maxRetries", 5)
                 bot_timeout = bot_config.get("verifyTimeout", bot_config.get("timeout", 180))
@@ -2542,18 +2545,20 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 suspension_expiry = _bot_suspensions.get(bot_type, 0)
                 if suspension_expiry > _time.time():
                     remaining = int(suspension_expiry - _time.time())
-                    logger.info(f"[Waterfall:{bot_type}] Bot is SUSPENDED for {remaining}s more, skipping...")
+                    logger.info(f"[Route:{bot_type}] Bot is SUSPENDED for {remaining}s more, re-selecting...")
                     on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
                                      "step": "suspended", "message": f"节点暂停中，切换下一个..."}
-                    # User SSE: strip botType; Admin broadcast: keep it
                     user_event = {k: v for k, v in on_prog_event.items() if k != "botType"}
                     progress_events.append(f"data: {json.dumps(user_event, ensure_ascii=False)}\n\n")
                     broadcast_verify_event(on_prog_event)
-                    continue  # Skip to next bot in waterfall
+                    # Remove and re-select
+                    remaining_bot_ids = [b for b in remaining_bot_ids if b != bot_type]
+                    selected_bot_type = _nhm.select_node(remaining_bot_ids) if remaining_bot_ids else None
+                    logger.info(f"[Route] Re-selected bot: {selected_bot_type} (remaining: {remaining_bot_ids})")
+                    continue
 
                 async def on_progress(progress, _bt=bot_type):
                     event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": _bt, **progress}
-                    # User SSE: strip botType; Admin broadcast: keep it
                     user_event = {k: v for k, v in event.items() if k != "botType"}
                     progress_events.append(f"data: {json.dumps(user_event, ensure_ascii=False)}\n\n")
                     broadcast_verify_event(event)
@@ -2564,22 +2569,21 @@ async def verify_unified(request: UnifiedVerifyRequest):
                     single_verifier = GenericSingleBotVerifier(bot_config)
 
                 bot_succeeded = False
+                should_reselect = False
                 for attempt in range(max_retries):
                     pool_item = _get_next_client_for_bot(bot_type)
 
                     if not pool_item:
-                        # If there are more bots in the waterfall, skip immediately
-                        # Only wait for cooldown on the LAST bot
-                        is_last_bot = (bot_idx >= len(sorted_bots) - 1)
-                        
-                        if not is_last_bot:
-                            logger.info(f"[Waterfall:{bot_type}] No accounts available, skipping to next bot...")
-                            break  # break inner retry loop → continue to next bot
+                        # No accounts available — check if we can re-select another bot
+                        if len(remaining_bot_ids) > 1:
+                            logger.info(f"[Route:{bot_type}] No accounts available, re-selecting another bot...")
+                            should_reselect = True
+                            break
                         
                         # Last bot: wait for cooldown
                         wait_time = _get_shortest_cooldown_for_bot(bot_type)
                         if wait_time > 0:
-                            logger.info(f"[Waterfall:{bot_type}] Last bot, waiting {wait_time:.0f}s for cooldown...")
+                            logger.info(f"[Route:{bot_type}] Last available bot, waiting {wait_time:.0f}s for cooldown...")
                             on_prog_event = {"type": "progress", "link": link_to_verify, "vid": vid, "botType": bot_type,
                                              "step": "cooldown_wait", "message": f"排队中..."}
                             progress_events.append(f"data: {json.dumps(on_prog_event, ensure_ascii=False)}\n\n")
@@ -2593,7 +2597,8 @@ async def verify_unified(request: UnifiedVerifyRequest):
                                     pool_item = _get_next_client_for_bot(bot_type)
 
                         if not pool_item:
-                            logger.info(f"[Waterfall:{bot_type}] No accounts available, trying next bot...")
+                            logger.info(f"[Route:{bot_type}] No accounts available after wait, re-selecting...")
+                            should_reselect = True
                             break
 
                     acc_id, client = pool_item
@@ -2629,15 +2634,13 @@ async def verify_unified(request: UnifiedVerifyRequest):
                         if result.get("remaining_quota") is not None:
                             tg_manager.update_quota(acc_id, result["remaining_quota"])
 
-                        # If cooldown came from verify stage, the link was already consumed
-                        # Do NOT retry — treat as terminal failure
                         if result.get("cooldown_stage") == "verify":
-                            logger.warning(f"[Waterfall:{bot_type}] Account {acc_id} cooldown at VERIFY stage — link consumed, stopping retry")
+                            logger.warning(f"[Route:{bot_type}] Account {acc_id} cooldown at VERIFY stage — link consumed, stopping")
                             last_result = (acc_id, result)
                             bot_succeeded = True
                             break
 
-                        logger.info(f"[Waterfall:{bot_type}] Account {acc_id} cooldown at warmup stage, retrying with another account...")
+                        logger.info(f"[Route:{bot_type}] Account {acc_id} cooldown at warmup stage, retrying with another account...")
                         continue
 
                     # Record stats for this bot
@@ -2649,14 +2652,13 @@ async def verify_unified(request: UnifiedVerifyRequest):
                     result_raw = result.get("raw_response", result.get("message", ""))
                     for srule in suspension_rules:
                         suspend_seconds = srule.get("duration", 300)
-                        # Match against message or raw_response
                         should_suspend = False
                         if result_raw and any(k.lower() in result_raw.lower() for k in srule.get("keywords", [])):
                             should_suspend = True
                         
                         if should_suspend:
                             _bot_suspensions[bot_type] = _time.time() + suspend_seconds
-                            logger.warning(f"[Waterfall:{bot_type}] SUSPENDED for {suspend_seconds}s! Rule matched: {srule.get('keywords')}")
+                            logger.warning(f"[Route:{bot_type}] SUSPENDED for {suspend_seconds}s! Rule matched: {srule.get('keywords')}")
                             broadcast_verify_event({
                                 "type": "bot_suspended",
                                 "botType": bot_type,
@@ -2664,37 +2666,45 @@ async def verify_unified(request: UnifiedVerifyRequest):
                                 "reason": f"Rule matched: {srule.get('keywords')}",
                                 "message": result_raw[:100] if result_raw else ""
                             })
-                            # Treat as non-final: fallback to next bot
                             bot_succeeded = False
+                            should_reselect = True
                             break
                     
-                    # If suspension triggered, skip to next bot
+                    # If suspension triggered, re-select another bot
                     if _bot_suspensions.get(bot_type, 0) > _time.time():
-                        break  # break inner retry → continue to next bot in waterfall
+                        should_reselect = True
+                        break
 
                     if result.get("success"):
-                        # Success! Cache and return
                         bot_succeeded = True
                         break
 
                     if result.get("status") == "no_credits":
-                        # Bot has no credits/quota — try next bot in waterfall
-                        logger.info(f"[Waterfall] {bot_type} has no credits, trying next bot...")
-                        break  # break inner retry loop, continue to next bot
-
-                    if result.get("status") in ("failed", "rejected", "error"):
-                        # Verification-level failure — this is a FINAL result, do NOT switch bots
-                        # Same link should NOT be sent to a different bot
-                        logger.info(f"[Waterfall] {bot_type} returned final result: {result.get('status')}")
-                        bot_succeeded = True  # mark as "done" so we don't try next bot
+                        logger.info(f"[Route] {bot_type} has no credits, re-selecting another bot...")
+                        should_reselect = True
                         break
 
-                    # Other statuses (e.g. approved) — return as-is
+                    if result.get("status") in ("failed", "rejected", "error"):
+                        # Terminal result — do NOT re-select; return as-is
+                        logger.info(f"[Route] {bot_type} returned terminal result: {result.get('status')}")
+                        bot_succeeded = True
+                        break
+
+                    # Other statuses — return as-is
                     bot_succeeded = True
                     break
 
                 if bot_succeeded:
-                    break  # break outer waterfall loop
+                    break  # exit the while loop
+
+                if should_reselect:
+                    # Remove current bot and probabilistically pick another
+                    remaining_bot_ids = [b for b in remaining_bot_ids if b != bot_type]
+                    selected_bot_type = _nhm.select_node(remaining_bot_ids) if remaining_bot_ids else None
+                    logger.info(f"[Route] Re-selected bot: {selected_bot_type} (remaining: {remaining_bot_ids})")
+                    continue
+                else:
+                    break  # exhausted retries for this bot, no re-select
 
               # Cache final result for deduplication
               if last_result and vid:

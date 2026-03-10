@@ -22,11 +22,9 @@ BOT_WINDOW_OVERRIDES = {
 
 # Per-bot default success rate overrides (when no data)
 # prior_rate: assumed success rate, prior_count: virtual sample size for smoothing
-BOT_PRIOR_CONFIG = {
-    "blackbot": {"prior_rate": 0.5, "prior_count": 10},
-    # BlackBot: starts at 50% with 10 virtual records (5 success, 5 fail)
-    # Real data blends in gradually: 1 real success → (5+1)/(10+1) = 54.5%
-}
+# NOTE: Bayesian priors removed — all bots now use pure real data.
+# When no data exists, DEFAULT_SUCCESS_RATE (0.5) is returned directly.
+BOT_PRIOR_CONFIG = {}
 
 
 class BotStatsTracker:

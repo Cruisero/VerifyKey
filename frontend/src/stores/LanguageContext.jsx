@@ -37,23 +37,19 @@ https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699
 
 注意：右键复制链接，不要点击打开！
 链接验证失败后等待几秒钟刷新页面即可得到新链接。
+如果失败之后链接没有重置，可手动到 https://onepass.fun/pass 重置。
 
-验证失败不消耗额度
-
-如果失败之后链接没有重置，可手动到 https://onepass.fun/pass 重置`,
+验证失败不消耗额度`,
         textareaPlaceholderApi: `粘贴验证 ID 或链接，每行一个...
-
 例如：
 699528d723c407520aeadc45
 https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
 
 注意：右键复制链接，不要点击打开！
-
 链接验证失败后等待几秒钟刷新页面即可得到新链接。
+如果失败之后链接没有重置，可手动到 https://onepass.fun/pass 重置。
 
-验证失败不消耗额度
-
-如果失败之后链接没有重置，可手动到 https://onepass.fun/pass 重置`,
+验证失败不消耗额度`,
 
         // Verify - CDK
         cdkRemaining: 'CDK 剩余额度',
@@ -206,16 +202,14 @@ https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699
 
 ⚠️ Note: Right-click to copy the link, don't click it!`,
         textareaPlaceholderApi: `Paste verification IDs or links, one per line...
-
 Example:
 699528d723c407520aeadc45
 https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
 
 After a link verification fails, wait a few seconds and refresh the page to get a new link.
+If the link is not reset after a failure, you can manually reset it at https://onepass.fun/pass.
 
-Failed verification does not consume quota.
-
-If the link is not reset after a failure, you can manually reset it at https://onepass.fun/pass.`,
+Failed verification does not consume quota.`,
 
         // Verify - CDK
         cdkRemaining: 'CDK Remaining',

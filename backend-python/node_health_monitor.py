@@ -27,6 +27,10 @@ DECAY_START_SECS = 600   # 10 minutes — start decaying rate after this idle ti
 DECAY_FLOOR = 0.30       # decay target (30%)
 DECAY_DEFAULT = 0.50     # default rate when no data at all
 
+# Confidence blending: internal-only bots blend default rate with real rate
+# based on sample count. At CONFIDENCE_FULL_SAMPLES, 100% real data is used.
+CONFIDENCE_FULL_SAMPLES = 10
+
 # Per-node concurrent capacity (how many links can be processed at once)
 NODE_CONCURRENCY = {
     "getgem": 10,     # GetGem API: 10 concurrent links
@@ -238,15 +242,22 @@ class NodeHealthMonitor:
     def _update_internal_node(self, bot_id: str):
         """Update a node using only internal bot_stats_tracker data.
         
-        Applies data decay: if no recent data for >DECAY_START_SECS,
-        the success rate decays linearly toward DECAY_FLOOR.
+        Uses confidence-based blending: when sample count is low,
+        the rate is blended with DECAY_DEFAULT to avoid overreacting
+        to a small number of results.
+        
+        confidence = min(total / CONFIDENCE_FULL_SAMPLES, 1.0)
+        blended_rate = DECAY_DEFAULT * (1 - confidence) + raw_rate * confidence
         """
         node = self._ensure_node(bot_id)
         stats = bot_stats_tracker.get_stats(bot_id)
         total = stats.get("total", 0)
         raw_rate = stats.get("rate", DECAY_DEFAULT)
 
-        node.success_rate = max(raw_rate, 0.0)
+        # Confidence blending: smooth transition from default to real rate
+        confidence = min(total / CONFIDENCE_FULL_SAMPLES, 1.0)
+        blended_rate = DECAY_DEFAULT * (1 - confidence) + raw_rate * confidence
+        node.success_rate = max(blended_rate, 0.0)
         node.source = "internal"
         node.last_updated = time.time()
 
@@ -259,6 +270,7 @@ class NodeHealthMonitor:
             "total": total,
             "success": stats.get("success", 0),
             "failed": stats.get("failed", 0),
+            "confidence": round(confidence, 2),
         })
 
     # ─── Status Computation ──────────────────────────────────────────

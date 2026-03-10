@@ -1241,6 +1241,43 @@ export default function Admin() {
                         }
                         return newLog.slice(0, 300);
                     });
+                } else if (data.type === 'recheck_success') {
+                    // Delayed recheck discovered a timed-out VID actually succeeded
+                    const vid = data.vid || '';
+                    if (vid) {
+                        setVerifyLog(prev => {
+                            const existingIdx = prev.findIndex(l => l.verificationId === vid);
+                            if (existingIdx >= 0) {
+                                const newLog = [...prev];
+                                newLog[existingIdx] = {
+                                    ...newLog[existingIdx],
+                                    status: 'pass',
+                                    message: data.message || '延迟复查：验证已通过',
+                                    timestamp: new Date().toISOString(),
+                                };
+                                return newLog;
+                            } else {
+                                return [{
+                                    id: `sse-recheck-${Date.now()}-${Math.random()}`,
+                                    verificationId: vid,
+                                    status: 'pass',
+                                    message: data.message || '延迟复查：验证已通过',
+                                    timestamp: new Date().toISOString(),
+                                    cdk: '',
+                                }, ...prev].slice(0, 300);
+                            }
+                        });
+                    }
+                } else if (data.type === 'history_updated') {
+                    // Manual status override from admin — update in-place
+                    const vid = data.id || '';
+                    if (vid && data.status) {
+                        setVerifyLog(prev => prev.map(l =>
+                            l.verificationId === vid
+                                ? { ...l, status: data.status === 'pass' ? 'pass' : 'failed', timestamp: new Date().toISOString() }
+                                : l
+                        ));
+                    }
                 }
             } catch (err) {
                 console.error('Overview SSE parse error', err);

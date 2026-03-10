@@ -2080,14 +2080,17 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
 
                         if _ps == "error":
                             _msg = f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "failed", "message": _msg}]})
                             raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "success":
                             _msg = "该链接已验证成功，无需重复提交"
+                            verification_history.log_verification("pass", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": True, "status": "approved", "message": _msg, "alreadyVerified": True}]})
                             raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "docUpload" and _prj:
                             _msg = f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "rejected", "message": _msg}]})
                             raise HTTPException(status_code=400, detail=_msg)
             except HTTPException:
@@ -2366,14 +2369,17 @@ async def verify_unified(request: UnifiedVerifyRequest):
                         _prj = _pd.get("rejectionReasons", [])
                         if _ps == "error":
                             _msg = f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "failed", "message": _msg}]})
                             raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "success":
                             _msg = "该链接已验证成功，无需重复提交"
+                            verification_history.log_verification("pass", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": True, "status": "approved", "message": _msg, "alreadyVerified": True}]})
                             raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "docUpload" and _prj:
                             _msg = f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "rejected", "message": _msg}]})
                             raise HTTPException(status_code=400, detail=_msg)
             except HTTPException:
@@ -2994,14 +3000,17 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
 
                         if _ps == "error":
                             _msg = f"该链接已失败 ({', '.join(_pe) if _pe else '未知错误'})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "failed", "message": _msg}]})
                             raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "success":
                             _msg = "该链接已验证成功，无需重复提交"
+                            verification_history.log_verification("pass", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": True, "status": "approved", "message": _msg, "alreadyVerified": True}]})
                             raise HTTPException(status_code=400, detail=_msg)
                         if _ps == "docUpload" and _prj:
                             _msg = f"该链接已被拒绝 ({', '.join(_prj)})，请刷新页面获取新链接"
+                            verification_history.log_verification("failed", _pre_vid, _msg, cdk=request.cdk or "")
                             broadcast_verify_event({"type": "done", "results": [{"verificationId": _pre_vid, "success": False, "status": "rejected", "message": _msg}]})
                             raise HTTPException(status_code=400, detail=_msg)
             except HTTPException:

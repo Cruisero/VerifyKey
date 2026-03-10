@@ -40,14 +40,20 @@ https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699
 
 验证失败不消耗额度
 
-如果失败多次，可以尝试切换VPN，但保持使用美国IP`,
+如果失败之后链接没有重置，可手动到 https://onepass.fun/pass 重置`,
         textareaPlaceholderApi: `粘贴验证 ID 或链接，每行一个...
 
 例如：
 699528d723c407520aeadc45
 https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
 
-注意：右键复制链接，不要点击打开！`,
+注意：右键复制链接，不要点击打开！
+
+链接验证失败后等待几秒钟刷新页面即可得到新链接。
+
+验证失败不消耗额度
+
+如果失败之后链接没有重置，可手动到 https://onepass.fun/pass 重置`,
 
         // Verify - CDK
         cdkRemaining: 'CDK 剩余额度',
@@ -203,7 +209,13 @@ https://services.sheerid.com/verify/67c8c14f5f17a83b745e3f82/?verificationId=699
 
 Example:
 699528d723c407520aeadc45
-https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45`,
+https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
+
+After a link verification fails, wait a few seconds and refresh the page to get a new link.
+
+Failed verification does not consume quota.
+
+If the link is not reset after a failure, you can manually reset it at https://onepass.fun/pass.`,
 
         // Verify - CDK
         cdkRemaining: 'CDK Remaining',

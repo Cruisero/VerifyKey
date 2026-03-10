@@ -2227,8 +2227,25 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
         # Shared progress events list (appended by callbacks, consumed by stream)
         progress_events = []
         
+        # Wrapper to persist history in task context (survives client disconnect)
+        async def process_and_log(link):
+            acc_id, r = await process_single_link(link)
+            try:
+                r_vid = r.get("verificationId", link_vid_map.get(link, ""))
+                r_msg = r.get("message", r.get("reason", ""))
+                cdk_label = request.cdk if not is_bot_internal else "BOT"
+                bot_stats_tracker.record("dualbot", r.get("success", False))
+                if r.get("status") == "approved":
+                    verification_history.log_verification("pass", r_vid, r_msg, cdk=cdk_label)
+                elif not r.get("success") and not r.get("alreadyVerified"):
+                    actual_status = r.get("status", "failed")
+                    verification_history.log_verification(actual_status, r_vid, r_msg or f"Rejected: {actual_status}", cdk=cdk_label)
+            except Exception as hist_err:
+                logging.warning(f"[DualBot] Failed to log verification history: {hist_err}")
+            return acc_id, r
+
         # Start all verifications in parallel
-        tasks = [asyncio.create_task(process_single_link(link)) for link in clean_links]
+        tasks = [asyncio.create_task(process_and_log(link)) for link in clean_links]
         
         # Stream progress events while tasks are running
         while not all(t.done() for t in tasks):
@@ -2266,16 +2283,8 @@ async def verify_via_dualbot(request: DualBotVerifyRequest):
             cdk_remaining = deduct.get("remaining", cdk_remaining)
 
         cdk_label = request.cdk if not is_bot_internal else "BOT"
-        for r in results:
-            vid = r.get("verificationId", "")
-            msg = r.get("message", r.get("reason", ""))
-            # Record stats for DualBot
-            bot_stats_tracker.record("dualbot", r.get("success", False))
-            if r.get("status") == "approved":
-                verification_history.log_verification("pass", vid, msg, cdk=cdk_label)
-            elif not r.get("success") and not r.get("alreadyVerified"):
-                actual_status = r.get("status", "failed")
-                verification_history.log_verification(actual_status, vid, msg or f"Rejected: {actual_status}", cdk=cdk_label)
+        # NOTE: verification_history logging is now done in process_and_log() above
+        # so results are persisted even if the SSE stream is cancelled by client disconnect.
 
         # Send final done event with all results
         done_event = {
@@ -2707,7 +2716,8 @@ async def verify_unified(request: UnifiedVerifyRequest):
         progress_events = []
 
         async def process_and_emit(link):
-            """Wrapper: run process_single_link and emit per-link result immediately."""
+            """Wrapper: run process_single_link and emit per-link result immediately.
+            Also logs to verification_history here (not in generator) so results survive client disconnect."""
             vid = link_vid_map.get(link, "")
             try:
                 result = await process_single_link(link)
@@ -2722,6 +2732,20 @@ async def verify_unified(request: UnifiedVerifyRequest):
             # Mark this VID as completed
             if vid:
                 _completed_vids.add(vid)
+
+            # Persist to verification_history immediately (survives client disconnect)
+            try:
+                r_vid = r.get("verificationId", vid)
+                r_msg = r.get("message", r.get("reason", ""))
+                r_via = r.get("botType", "bot")
+                cdk_label = request.cdk if not is_bot_internal else "BOT"
+                if r.get("status") == "approved":
+                    verification_history.log_verification("pass", r_vid, r_msg, cdk=cdk_label, via=f"bot:{r_via}")
+                elif not r.get("success") and not r.get("alreadyVerified"):
+                    actual_status = r.get("status", "failed")
+                    verification_history.log_verification(actual_status, r_vid, r_msg or f"Rejected: {actual_status}", cdk=cdk_label, via=f"bot:{r_via}")
+            except Exception as hist_err:
+                logging.warning(f"[Unified] Failed to log verification history: {hist_err}")
 
             # Emit per-link result event immediately (always, including errors)
             link_result_event = {
@@ -2772,16 +2796,8 @@ async def verify_unified(request: UnifiedVerifyRequest):
                 cdk_remaining = deduct.get("remaining", cdk_remaining)
 
             cdk_label = request.cdk if not is_bot_internal else "BOT"
-            for r in results:
-                vid = r.get("verificationId", "")
-                msg = r.get("message", r.get("reason", ""))
-                via_label = r.get("botType", "bot")
-                if r.get("status") == "approved":
-                    verification_history.log_verification("pass", vid, msg, cdk=cdk_label, via=f"bot:{via_label}")
-                elif not r.get("success") and not r.get("alreadyVerified"):
-                    # Store actual status (failed/rejected/timeout/no_credits/error/etc.) for admin SSE
-                    actual_status = r.get("status", "failed")
-                    verification_history.log_verification(actual_status, vid, msg or f"Rejected: {actual_status}", cdk=cdk_label, via=f"bot:{via_label}")
+            # NOTE: verification_history logging is now done in process_and_emit() above
+            # so results are persisted even if the SSE stream is cancelled by client disconnect.
 
             # ---- Delayed recheck: for timeout/error results, check SheerID after 2 minutes ----
             failed_vids = [r.get("verificationId") for r in results 
@@ -3842,11 +3858,28 @@ class VidOverrideRequest(BaseModel):
 @app.post("/api/admin/override-vid")
 async def override_verification_by_vid(request: VidOverrideRequest):
     """Admin: Override a verification by VID (for processing entries not yet in DB).
-    Sets the manual override signal so running verification tasks early-return."""
+    Sets the manual override signal so running verification tasks early-return.
+    Also persists the result to verification_history so it survives page reloads."""
     if request.status not in ("pass", "failed"):
         raise HTTPException(status_code=400, detail="Status must be 'pass' or 'failed'")
     
     set_manual_override(request.vid, request.status)
+    
+    # Persist to DB: check if VID already exists in history
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT id, status FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+        (request.vid,)
+    )
+    existing = cursor.fetchone()
+    override_msg = "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败"
+    
+    if existing:
+        # Update existing record
+        verification_history.update_verification(existing["id"], request.status)
+    else:
+        # Create new record so it appears in history API
+        verification_history.log_verification(request.status, request.vid, override_msg)
     
     # Broadcast a per-link result event so admin SSE log updates immediately
     broadcast_verify_event({
@@ -3855,7 +3888,7 @@ async def override_verification_by_vid(request: VidOverrideRequest):
         "step": "result",
         "status": "approved" if request.status == "pass" else "failed",
         "success": request.status == "pass",
-        "message": "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败",
+        "message": override_msg,
     })
     
     return {"ok": True, "vid": request.vid, "status": request.status}

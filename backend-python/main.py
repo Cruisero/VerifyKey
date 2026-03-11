@@ -3747,14 +3747,17 @@ async def backup_download_endpoint(authorization: Optional[str] = Header(None)):
 async def get_verification_history_endpoint():
     """Get recent verification history for the real-time status grid (public, sanitized).
     Only returns final results (pass/failed) — not timeout/no_credits/error/etc.
+    Stats are computed from ALL records (not limited by the grid window).
     """
     history = verification_history.get_recent_history(200)
     # Only include final results for the status grid
     final_only = [h for h in history if h["status"] in ("pass", "failed")]
+    # Compute stats from ALL records, not just the windowed 200
+    all_stats = verification_history.get_history_stats()
     stats = {
-        "total": len(final_only),
-        "pass": sum(1 for h in final_only if h["status"] == "pass"),
-        "failed": sum(1 for h in final_only if h["status"] == "failed"),
+        "total": all_stats.get("pass", 0) + all_stats.get("failed", 0),
+        "pass": all_stats.get("pass", 0),
+        "failed": all_stats.get("failed", 0),
         "processing": 0,
         "cancel": 0,
     }
@@ -3773,7 +3776,7 @@ async def get_admin_verification_history(authorization: Optional[str] = Header(N
     """Get full verification history with all fields (admin only)"""
     _verify_admin_token(authorization)
     history = verification_history.get_recent_history(200, ignore_reset=True)
-    stats = verification_history.get_history_stats()
+    stats = verification_history.get_history_stats(respect_reset=False)
     return {
         "history": history,
         "stats": stats

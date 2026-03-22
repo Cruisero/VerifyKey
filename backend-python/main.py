@@ -3618,6 +3618,29 @@ async def validate_cdk_endpoint(request: CDKValidateRequest):
     return result
 
 
+@app.post("/api/cdk/redeem")
+async def redeem_cdk_endpoint(request: CDKValidateRequest, authorization: Optional[str] = Header(None)):
+    """Redeem a CDK code: transfer all credits to user account. Requires login."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录后再兑换积分")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+
+    result = cdk_manager.redeem_cdk(request.code, user["id"])
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+
+    # Return updated user credits
+    updated_user = auth.get_user_by_id(user["id"])
+    return {
+        "success": True,
+        "credits_added": result["credits_added"],
+        "new_balance": updated_user["credits"] if updated_user else 0,
+        "message": result["message"]
+    }
+
 @app.post("/api/cdk/generate")
 async def generate_cdk_endpoint(request: CDKGenerateRequest, authorization: Optional[str] = Header(None)):
     """Generate CDK codes (admin only)"""
@@ -5646,6 +5669,823 @@ async def toggle_maintenance(request: Request, authorization: Optional[str] = He
         }
     else:
         raise HTTPException(status_code=500, detail="保存失败")
+
+
+# ========== Pixel API Proxy Routes (Google One via iqless.icu) ==========
+
+import httpx
+
+# Track active Pixel API polling tasks: job_id -> asyncio.Task
+_pixel_polling_tasks: dict = {}
+
+
+def _get_pixel_config():
+    """Get Pixel API config from config_manager."""
+    import config_manager
+    cfg = config_manager.load_config()
+    pixel = cfg.get("pixelApi", {})
+    return {
+        "enabled": pixel.get("enabled", False),
+        "apiKey": pixel.get("apiKey", ""),
+        "baseUrl": pixel.get("baseUrl", "https://iqless.icu"),
+    }
+
+
+async def _pixel_poll_job(job_id: str, email: str, cdk_code: str, pixel_cfg: dict):
+    """Background task: poll Pixel API job status and broadcast SSE events to admin."""
+    import time
+    base_url = pixel_cfg["baseUrl"]
+    headers = {"X-API-Key": pixel_cfg["apiKey"]}
+    start_time = time.time()
+
+    # Broadcast initial submitted event
+    broadcast_verify_event({
+        "type": "progress",
+        "source": "pixel",
+        "vid": job_id,
+        "link": email,
+        "step": "submitted",
+        "message": "任务已提交，等待设备处理...",
+    })
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            for _ in range(100):  # max ~5 min (100 * 3s)
+                await asyncio.sleep(3)
+                try:
+                    resp = await client.get(f"{base_url}/api/jobs/{job_id}", headers=headers)
+                    if resp.status_code != 200:
+                        continue
+                    data = resp.json()
+                except Exception:
+                    continue
+
+                status = data.get("status", "")
+                stage = data.get("stage", 0)
+                total_stages = data.get("total_stages", 8)
+                stage_label = data.get("stage_label", "")
+                elapsed = data.get("elapsed_seconds", time.time() - start_time)
+
+                # Broadcast progress
+                queue_pos = data.get("queue_position", -1)
+                if status == "queued":
+                    msg = f"⏳ 排队中 (位置: {queue_pos})" if queue_pos >= 0 else "⏳ 排队中..."
+                elif status == "running":
+                    msg = f"🔄 [{stage}/{total_stages}] {stage_label}" if stage_label else f"🔄 [{stage}/{total_stages}]"
+                else:
+                    msg = stage_label or status
+
+                broadcast_verify_event({
+                    "type": "progress",
+                    "source": "pixel",
+                    "vid": job_id,
+                    "link": email,
+                    "step": "processing" if status in ("queued", "running") else "result",
+                    "status": status,
+                    "stage": stage,
+                    "totalStages": total_stages,
+                    "stageLabel": stage_label,
+                    "queuePosition": queue_pos,
+                    "message": msg,
+                    "elapsed": round(elapsed, 1),
+                })
+
+                if status == "success":
+                    url = data.get("url", "")
+                    # Deduct CDK points on success only
+                    if cdk_code:
+                        cdk_manager.use_cdk(cdk_code, 1.0)
+                        logging.info(f"[UPixel] Deducted 1 point from {cdk_code} for job {job_id}")
+                    verification_history.log_verification("pass", job_id, f"Google One URL: {url}", cdk=cdk_code)
+                    # Broadcast final result
+                    broadcast_verify_event({
+                        "type": "progress",
+                        "source": "pixel",
+                        "vid": job_id,
+                        "link": email,
+                        "step": "result",
+                        "status": "approved",
+                        "success": True,
+                        "message": f"✅ 获取成功",
+                        "url": url,
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+
+                elif status == "failed":
+                    error = data.get("error", "UNKNOWN_ERROR")
+                    verification_history.log_verification("failed", job_id, f"失败: {error}", cdk=cdk_code)
+                    broadcast_verify_event({
+                        "type": "progress",
+                        "source": "pixel",
+                        "vid": job_id,
+                        "link": email,
+                        "step": "result",
+                        "status": "failed",
+                        "success": False,
+                        "message": f"❌ {error}",
+                        "error": error,
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        print(f"[Pixel] Poll error for {job_id}: {e}")
+        broadcast_verify_event({
+            "type": "progress",
+            "source": "pixel",
+            "vid": job_id,
+            "link": email,
+            "step": "result",
+            "status": "failed",
+            "success": False,
+            "message": f"❌ 轮询错误: {str(e)}",
+        })
+    finally:
+        _pixel_polling_tasks.pop(job_id, None)
+
+
+class PixelJobRequest(BaseModel):
+    email: str
+    password: str
+    totp_secret: str
+    cdk: str = ""
+    priority: int = 0
+
+
+@app.post("/api/pixel/jobs")
+async def pixel_submit_job(request: PixelJobRequest):
+    """Submit a Pixel API job — validates CDK, proxies to iqless.icu, starts background poller."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg["enabled"] or not pixel_cfg["apiKey"]:
+        raise HTTPException(status_code=503, detail="Pixel API 未启用或未配置 API Key")
+
+    # Validate CDK
+    cdk_code = request.cdk.strip()
+    if cdk_code:
+        cdk_result = cdk_manager.validate_cdk(cdk_code)
+        if not cdk_result.get("valid"):
+            raise HTTPException(status_code=400, detail="CDK 无效或已耗尽")
+        if cdk_result.get("remaining", 0) < 1.0:
+            raise HTTPException(status_code=400, detail="CDK 积分不足（需要 1 积分）")
+
+    # Proxy to Pixel API
+    base_url = pixel_cfg["baseUrl"]
+    headers = {
+        "X-API-Key": pixel_cfg["apiKey"],
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "email": request.email,
+        "password": request.password,
+        "totp_secret": request.totp_secret,
+        "priority": request.priority,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(f"{base_url}/api/jobs", headers=headers, json=payload)
+
+        if resp.status_code == 200:
+            data = resp.json()
+            job_id = data.get("job_id", "")
+
+            # Start background polling task
+            task = asyncio.create_task(_pixel_poll_job(job_id, request.email, cdk_code, pixel_cfg))
+            _pixel_polling_tasks[job_id] = task
+
+            return {
+                "job_id": job_id,
+                "status": data.get("status", "queued"),
+                "queue_position": data.get("queue_position", -1),
+                "estimated_wait_seconds": data.get("estimated_wait_seconds", 0),
+            }
+        else:
+            # Forward error from Pixel API
+            try:
+                err = resp.json()
+                detail = err.get("detail", {})
+                if isinstance(detail, dict):
+                    msg = detail.get("message", f"Pixel API 错误: HTTP {resp.status_code}")
+                    code = detail.get("code", "")
+                else:
+                    msg = str(detail)
+                    code = ""
+            except Exception:
+                msg = f"Pixel API 错误: HTTP {resp.status_code}"
+                code = ""
+            raise HTTPException(status_code=resp.status_code, detail=f"{code}: {msg}" if code else msg)
+
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"无法连接 Pixel API: {str(e)}")
+
+
+@app.get("/api/pixel/jobs/{job_id}")
+async def pixel_get_job(job_id: str):
+    """Proxy: get Pixel API job status."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg["apiKey"]:
+        raise HTTPException(status_code=503, detail="Pixel API 未配置")
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/jobs/{job_id}",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/pixel/health")
+async def pixel_health():
+    """Proxy: Pixel API health check (no auth required on remote side)."""
+    pixel_cfg = _get_pixel_config()
+    base_url = pixel_cfg.get("baseUrl", "https://iqless.icu")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{base_url}/api/health")
+        if resp.status_code == 200:
+            return resp.json()
+        return {"status": "error", "httpStatus": resp.status_code}
+    except Exception as e:
+        return {"status": "offline", "error": str(e)}
+
+
+@app.get("/api/pixel/balance")
+async def pixel_balance():
+    """Proxy: get Pixel API key balance."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg["apiKey"]:
+        raise HTTPException(status_code=503, detail="Pixel API 未配置")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/balance",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/pixel/queue")
+async def pixel_queue():
+    """Proxy: get Pixel API queue status."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg["apiKey"]:
+        raise HTTPException(status_code=503, detail="Pixel API 未配置")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/queue",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/pixel/history")
+async def pixel_history(limit: int = 50, offset: int = 0):
+    """Proxy: get Pixel API success history."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg["apiKey"]:
+        raise HTTPException(status_code=503, detail="Pixel API 未配置")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/history",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+                params={"limit": limit, "offset": offset},
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/pixel/config")
+async def pixel_get_config(authorization: Optional[str] = Header(None)):
+    """Get Pixel API configuration (admin only)."""
+    _verify_admin_token(authorization)
+    pixel_cfg = _get_pixel_config()
+    # Mask API key
+    api_key = pixel_cfg.get("apiKey", "")
+    if api_key and len(api_key) > 12:
+        masked = api_key[:8] + "..." + api_key[-4:]
+    else:
+        masked = api_key
+    return {
+        "enabled": pixel_cfg["enabled"],
+        "apiKey": masked,
+        "baseUrl": pixel_cfg["baseUrl"],
+        "hasKey": bool(api_key),
+    }
+
+
+@app.post("/api/pixel/config")
+async def pixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
+    """Update Pixel API configuration (admin only)."""
+    _verify_admin_token(authorization)
+    import config_manager
+    body = await request.json()
+
+    updates = {}
+    if "enabled" in body:
+        updates["enabled"] = bool(body["enabled"])
+    if "apiKey" in body and body["apiKey"]:
+        updates["apiKey"] = body["apiKey"]
+    if "baseUrl" in body:
+        updates["baseUrl"] = body["baseUrl"]
+
+    result = config_manager.update_config({"pixelApi": updates})
+    if result:
+        return {"success": True}
+    raise HTTPException(status_code=500, detail="保存失败")
+
+
+# ========== KPixel API (Pro Tier) ==========
+
+def _get_kpixel_config():
+    """Get KPixel API config from config_manager."""
+    import config_manager
+    cfg = config_manager.load_config()
+    kp = cfg.get("kpixelApi", {})
+    return {
+        "enabled": kp.get("enabled", False),
+        "cdkey": kp.get("cdkey", ""),
+        "baseUrl": kp.get("baseUrl", "https://2key.kckc1818.com/openapi.php"),
+        "creditCost": kp.get("creditCost", 1.5),
+    }
+
+
+_kpixel_polling_tasks: dict = {}
+
+
+async def _kpixel_poll_job(task_id: int, email: str, cdk_code: str, kpixel_cfg: dict):
+    """Background task: poll KPixel API job status and broadcast SSE events."""
+    import time
+    base_url = kpixel_cfg["baseUrl"]
+    cdkey = kpixel_cfg["cdkey"]
+    credit_cost = kpixel_cfg.get("creditCost", 1.5)
+    start_time = time.time()
+
+    broadcast_verify_event({
+        "type": "progress",
+        "source": "kpixel",
+        "vid": str(task_id),
+        "link": email,
+        "step": "submitted",
+        "message": "任务已提交，等待设备处理...",
+    })
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            for _ in range(120):  # max ~6 min
+                await asyncio.sleep(3)
+                try:
+                    resp = await client.post(base_url, json={
+                        "action": "get_status",
+                        "cdkey": cdkey,
+                        "task_id": task_id,
+                    })
+                    if resp.status_code != 200:
+                        continue
+                    data = resp.json()
+                    if not data.get("success"):
+                        continue
+                except Exception:
+                    continue
+
+                info = data.get("data", {})
+                status = info.get("status", "")
+                message = info.get("message", "")
+                elapsed = time.time() - start_time
+
+                # Map status for SSE
+                if status == "Pending":
+                    broadcast_verify_event({
+                        "type": "progress", "source": "kpixel",
+                        "vid": str(task_id), "link": email,
+                        "step": "processing", "status": "queued",
+                        "message": "⏳ 排队中...",
+                        "elapsed": round(elapsed, 1),
+                    })
+                elif status == "Running":
+                    broadcast_verify_event({
+                        "type": "progress", "source": "kpixel",
+                        "vid": str(task_id), "link": email,
+                        "step": "processing", "status": "running",
+                        "message": f"🔄 运行中... {message}" if message else "🔄 运行中...",
+                        "elapsed": round(elapsed, 1),
+                    })
+                elif status == "Success":
+                    # Deduct CDK points on success
+                    if cdk_code:
+                        cdk_manager.use_cdk(cdk_code, credit_cost)
+                        logging.info(f"[KPixel] Deducted {credit_cost} points from {cdk_code} for task {task_id}")
+                    verification_history.log_verification("pass", str(task_id), f"KPixel 成功: {message}", cdk=cdk_code)
+                    broadcast_verify_event({
+                        "type": "progress", "source": "kpixel",
+                        "vid": str(task_id), "link": email,
+                        "step": "result", "status": "approved",
+                        "success": True,
+                        "message": f"✅ {message}" if message else "✅ 验证成功",
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+                elif status == "Failed":
+                    verification_history.log_verification("failed", str(task_id), f"KPixel 失败: {message}", cdk=cdk_code)
+                    broadcast_verify_event({
+                        "type": "progress", "source": "kpixel",
+                        "vid": str(task_id), "link": email,
+                        "step": "result", "status": "failed",
+                        "success": False,
+                        "message": f"❌ {message}" if message else "❌ 验证失败",
+                        "error": message,
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logging.error(f"[KPixel] Poll error for task {task_id}: {e}")
+        broadcast_verify_event({
+            "type": "progress", "source": "kpixel",
+            "vid": str(task_id), "link": email,
+            "step": "result", "status": "failed",
+            "success": False,
+            "message": f"❌ 轮询错误: {str(e)}",
+        })
+    finally:
+        _kpixel_polling_tasks.pop(task_id, None)
+
+
+class KPixelJobRequest(BaseModel):
+    email: str
+    password: str
+    twofa: str
+    cdk: str = ""
+
+
+@app.post("/api/kpixel/jobs")
+async def kpixel_submit_job(request: KPixelJobRequest):
+    """Submit a KPixel (Pro) job — validates CDK, posts to kckc1818 API."""
+    kpixel_cfg = _get_kpixel_config()
+    if not kpixel_cfg["enabled"] or not kpixel_cfg["cdkey"]:
+        raise HTTPException(status_code=503, detail="KPixel API 未启用或未配置")
+
+    credit_cost = kpixel_cfg.get("creditCost", 1.5)
+
+    # Validate CDK
+    cdk_code = request.cdk.strip()
+    if cdk_code:
+        cdk_result = cdk_manager.validate_cdk(cdk_code)
+        if not cdk_result.get("valid"):
+            raise HTTPException(status_code=400, detail="CDK 无效或已耗尽")
+        if cdk_result.get("remaining", 0) < credit_cost:
+            raise HTTPException(status_code=400, detail=f"CDK 积分不足（需要 {credit_cost} 积分）")
+
+    # Submit to KPixel API
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(kpixel_cfg["baseUrl"], json={
+                "action": "submit_task",
+                "cdkey": kpixel_cfg["cdkey"],
+                "email": request.email,
+                "password": request.password,
+                "twofa": request.twofa,
+            })
+
+        data = resp.json()
+        if data.get("success"):
+            task_id = data.get("task_id", 0)
+            # Start background polling
+            task = asyncio.create_task(_kpixel_poll_job(task_id, request.email, cdk_code, kpixel_cfg))
+            _kpixel_polling_tasks[task_id] = task
+            return {
+                "job_id": str(task_id),
+                "task_id": task_id,
+                "status": "queued",
+                "remaining_uses": data.get("remaining_uses", -1),
+            }
+        else:
+            raise HTTPException(status_code=400, detail=data.get("message", "KPixel 提交失败"))
+
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"无法连接 KPixel API: {str(e)}")
+
+
+@app.post("/api/kpixel/jobs/{task_id}/status")
+async def kpixel_get_status(task_id: int):
+    """Query KPixel job status."""
+    kpixel_cfg = _get_kpixel_config()
+    if not kpixel_cfg["cdkey"]:
+        raise HTTPException(status_code=503, detail="KPixel API 未配置")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(kpixel_cfg["baseUrl"], json={
+                "action": "get_status",
+                "cdkey": kpixel_cfg["cdkey"],
+                "task_id": task_id,
+            })
+        return resp.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/kpixel/jobs/{task_id}/cancel")
+async def kpixel_cancel_job(task_id: int):
+    """Cancel a pending KPixel job."""
+    kpixel_cfg = _get_kpixel_config()
+    if not kpixel_cfg["cdkey"]:
+        raise HTTPException(status_code=503, detail="KPixel API 未配置")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(kpixel_cfg["baseUrl"], json={
+                "action": "cancel_task",
+                "cdkey": kpixel_cfg["cdkey"],
+                "task_id": task_id,
+            })
+        return resp.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/kpixel/balance")
+async def kpixel_balance():
+    """Query KPixel API remaining uses."""
+    kpixel_cfg = _get_kpixel_config()
+    if not kpixel_cfg["cdkey"]:
+        raise HTTPException(status_code=503, detail="KPixel API 未配置")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(kpixel_cfg["baseUrl"], json={
+                "action": "get_balance",
+                "cdkey": kpixel_cfg["cdkey"],
+            })
+        return resp.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/kpixel/config")
+async def kpixel_get_config(authorization: Optional[str] = Header(None)):
+    """Get KPixel API configuration (admin only)."""
+    _verify_admin_token(authorization)
+    kpixel_cfg = _get_kpixel_config()
+    masked_key = ""
+    if kpixel_cfg["cdkey"]:
+        k = kpixel_cfg["cdkey"]
+        masked_key = k[:4] + "..." + k[-4:] if len(k) > 8 else k[:2] + "..."
+    return {
+        "enabled": kpixel_cfg["enabled"],
+        "cdkey": masked_key,
+        "hasKey": bool(kpixel_cfg["cdkey"]),
+        "baseUrl": kpixel_cfg["baseUrl"],
+        "creditCost": kpixel_cfg["creditCost"],
+    }
+
+
+@app.post("/api/kpixel/config")
+async def kpixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
+    """Update KPixel API configuration (admin only)."""
+    _verify_admin_token(authorization)
+    import config_manager
+    body = await request.json()
+
+    updates = {}
+    if "enabled" in body:
+        updates["enabled"] = bool(body["enabled"])
+    if "cdkey" in body and body["cdkey"]:
+        updates["cdkey"] = body["cdkey"]
+    if "baseUrl" in body:
+        updates["baseUrl"] = body["baseUrl"]
+    if "creditCost" in body:
+        updates["creditCost"] = float(body["creditCost"])
+
+    result = config_manager.update_config({"kpixelApi": updates})
+    if result:
+        return {"success": True}
+    raise HTTPException(status_code=500, detail="保存失败")
+
+
+# ==============================================================
+# GPT Recharge — Card Key Pool + Proxy
+# ==============================================================
+
+GPT_RECHARGE_BASE = "https://chong.databrain.sbs"
+GPT_RECHARGE_COST = 2.0  # CDK points per successful recharge
+
+import uuid as _uuid
+
+def _gpt_sign():
+    """Generate a sign value (UUID v4) matching the external API's expectation."""
+    return str(_uuid.uuid4())
+
+
+# --- Admin: Add card keys in bulk ---
+@app.post("/api/gpt-keys/add")
+async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未授权")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+
+    body = await request.json()
+    keys_text = body.get("keys", "")
+    keys = [k.strip() for k in keys_text.strip().split("\n") if k.strip()]
+    if not keys:
+        raise HTTPException(status_code=400, detail="没有有效的卡密")
+
+    conn = database.get_connection()
+    now = datetime.now().isoformat()
+    added = 0
+    for key in keys:
+        try:
+            conn.execute(
+                "INSERT INTO gpt_keys (card_key, status, created_at) VALUES (?, 'available', ?)",
+                (key, now)
+            )
+            added += 1
+        except Exception:
+            pass  # duplicate key, skip
+    conn.commit()
+    return {"success": True, "added": added, "total_input": len(keys)}
+
+
+# --- Admin: List card keys ---
+@app.get("/api/gpt-keys/list")
+async def gpt_keys_list(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未授权")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+
+    conn = database.get_connection()
+    rows = conn.execute("SELECT * FROM gpt_keys ORDER BY id DESC").fetchall()
+    return {"keys": [dict(r) for r in rows]}
+
+
+# --- Admin: Stats ---
+@app.get("/api/gpt-keys/stats")
+async def gpt_keys_stats(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未授权")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+
+    conn = database.get_connection()
+    total = conn.execute("SELECT COUNT(*) FROM gpt_keys").fetchone()[0]
+    available = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='available'").fetchone()[0]
+    used = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='used'").fetchone()[0]
+    return {"total": total, "available": available, "used": used}
+
+
+# --- Admin: Delete a card key ---
+@app.delete("/api/gpt-keys/{key_id}")
+async def gpt_keys_delete(key_id: int, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未授权")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+
+    conn = database.get_connection()
+    conn.execute("DELETE FROM gpt_keys WHERE id=?", (key_id,))
+    conn.commit()
+    return {"success": True}
+
+
+# --- User: Exchange CDK points for a card key ---
+@app.post("/api/gpt/exchange")
+async def gpt_exchange(request: Request):
+    body = await request.json()
+    cdk_code = body.get("cdk", "").strip()
+    if not cdk_code:
+        raise HTTPException(status_code=400, detail="请输入 CDK")
+
+    # Validate CDK has enough points
+    cdk_info = cdk_manager.validate_cdk(cdk_code)
+    if not cdk_info.get("valid"):
+        raise HTTPException(status_code=400, detail="CDK 无效")
+    remaining = cdk_info.get("remaining", 0)
+    if remaining < GPT_RECHARGE_COST:
+        raise HTTPException(status_code=400, detail=f"CDK 积分不足（需要 {GPT_RECHARGE_COST} 积分，剩余 {remaining}）")
+
+    # Pick an available key from pool
+    conn = database.get_connection()
+    row = conn.execute("SELECT id, card_key FROM gpt_keys WHERE status='available' LIMIT 1").fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail="暂无可用卡密，请联系管理员")
+
+    key_id, card_key = row["id"], row["card_key"]
+
+    # Mark key as reserved (but don't deduct CDK yet — deduct on successful recharge)
+    now = datetime.now().isoformat()
+    conn.execute(
+        "UPDATE gpt_keys SET status='reserved', used_by_cdk=?, used_at=? WHERE id=?",
+        (cdk_code, now, key_id)
+    )
+    conn.commit()
+
+    # Call external API to validate the card key
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{GPT_RECHARGE_BASE}/api/vip/c",
+                json={"cdk": card_key, "sign": _gpt_sign(), "timestamp": int(datetime.now().timestamp() * 1000)}
+            )
+            data = resp.json()
+    except Exception as e:
+        # Rollback reservation
+        conn.execute("UPDATE gpt_keys SET status='available', used_by_cdk='', used_at='' WHERE id=?", (key_id,))
+        conn.commit()
+        raise HTTPException(status_code=502, detail=f"外部 API 错误: {str(e)}")
+
+    if resp.status_code != 200 or data.get("code") != 1:
+        # Key invalid — mark as failed
+        conn.execute("UPDATE gpt_keys SET status='invalid' WHERE id=?", (key_id,))
+        conn.commit()
+        raise HTTPException(status_code=400, detail=data.get("message", "卡密验证失败"))
+
+    return {
+        "success": True,
+        "card_key": card_key,
+        "masked": data.get("data", ""),
+        "key_id": key_id,
+    }
+
+
+# --- User: Recharge (proxy to external API) ---
+@app.post("/api/gpt/recharge")
+async def gpt_recharge(request: Request):
+    body = await request.json()
+    cdk_code = body.get("cdk", "").strip()
+    card_key = body.get("card_key", "").strip()
+    account = body.get("account", "").strip()
+    email = body.get("email", "").strip()
+
+    if not cdk_code or not card_key or not account:
+        raise HTTPException(status_code=400, detail="参数不完整")
+
+    # Call external recharge API
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{GPT_RECHARGE_BASE}/api/vip/r",
+                json={
+                    "cdk": card_key,
+                    "account": account,
+                    "type": "gpt",
+                    "sign": _gpt_sign(),
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                }
+            )
+            data = resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"充值请求失败: {str(e)}")
+
+    if resp.status_code != 200 or data.get("code") != 1:
+        raise HTTPException(status_code=400, detail=data.get("message", "充值失败，请稍后重试"))
+
+    # Success — deduct CDK points
+    result = cdk_manager.use_cdk(cdk_code, GPT_RECHARGE_COST)
+    if not result.get("success"):
+        # Recharge succeeded but CDK deduction failed — log but don't fail the user
+        print(f"[GPT Recharge] WARNING: CDK deduction failed for {cdk_code}: {result.get('message')}")
+
+    # Mark card key as used
+    conn = database.get_connection()
+    now = datetime.now().isoformat()
+    conn.execute(
+        "UPDATE gpt_keys SET status='used', used_email=?, used_at=? WHERE card_key=?",
+        (email, now, card_key)
+    )
+    conn.commit()
+
+    return {"success": True, "message": "充值成功"}
 
 
 if __name__ == "__main__":

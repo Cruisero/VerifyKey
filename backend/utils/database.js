@@ -58,9 +58,34 @@ async function initDatabase() {
         )
     `);
 
+    // Migration: add invite columns to existing users table
+    const colInfo = db.exec('PRAGMA table_info(users)');
+    const existingCols = colInfo.length > 0 ? colInfo[0].values.map(r => r[1]) : [];
+    if (!existingCols.includes('invite_code')) {
+        db.run('ALTER TABLE users ADD COLUMN invite_code TEXT');
+    }
+    if (!existingCols.includes('invited_by')) {
+        db.run('ALTER TABLE users ADD COLUMN invited_by INTEGER');
+    }
+    if (!existingCols.includes('has_consumed')) {
+        db.run('ALTER TABLE users ADD COLUMN has_consumed INTEGER DEFAULT 0');
+    }
+
+    // Invitation rewards log
+    db.run(`
+        CREATE TABLE IF NOT EXISTS invitation_rewards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            inviter_id INTEGER NOT NULL,
+            invitee_id INTEGER NOT NULL,
+            reward_amount REAL DEFAULT 0.2,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
     // Create indexes  
     db.run(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_verifications_user ON verifications(user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code)`);
 
     // Save database
     saveDatabase();

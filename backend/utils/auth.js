@@ -5,6 +5,7 @@
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const database = require('./database');
 
 // JWT secret (should be in .env in production)
@@ -24,7 +25,7 @@ async function init() {
 /**
  * Register a new user
  */
-async function register(email, password, username) {
+async function register(email, password, username, inviteCode) {
     await init();
 
     // Check if user already exists
@@ -33,16 +34,24 @@ async function register(email, password, username) {
         throw new Error('该邮箱已被注册');
     }
 
+    // Look up inviter if invite code provided
+    let inviterId = null;
+    if (inviteCode) {
+        const inviter = database.prepare('SELECT id FROM users WHERE invite_code = ?').get(inviteCode);
+        if (inviter) inviterId = inviter.id;
+    }
+
     // Hash password
     const hashedPassword = bcrypt.hashSync(password, 10);
+    const myInviteCode = generateInviteCode();
 
     // Insert user
     const result = database.prepare(`
-        INSERT INTO users (email, username, password, role, credits)
-        VALUES (?, ?, ?, 'user', 100)
-    `).run(email, username, hashedPassword);
+        INSERT INTO users (email, username, password, role, credits, invite_code, invited_by)
+        VALUES (?, ?, ?, 'user', 100, ?, ?)
+    `).run(email, username, hashedPassword, myInviteCode, inviterId);
 
-    const user = database.prepare('SELECT id, email, username, role, credits, created_at FROM users WHERE id = ?').get(result.lastInsertRowid);
+    const user = database.prepare('SELECT id, email, username, role, credits, invite_code, created_at FROM users WHERE id = ?').get(result.lastInsertRowid);
 
     // Generate token
     const token = generateToken(user);
@@ -84,7 +93,7 @@ async function verifyToken(token) {
     try {
         await init();
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = database.prepare('SELECT id, email, username, role, credits, created_at FROM users WHERE id = ?').get(decoded.userId);
+        const user = database.prepare('SELECT id, email, username, role, credits, invite_code, created_at FROM users WHERE id = ?').get(decoded.userId);
         return user;
     } catch (error) {
         return null;
@@ -107,7 +116,7 @@ function generateToken(user) {
  */
 async function getUserById(id) {
     await init();
-    return database.prepare('SELECT id, email, username, role, credits, created_at FROM users WHERE id = ?').get(id);
+    return database.prepare('SELECT id, email, username, role, credits, invite_code, created_at FROM users WHERE id = ?').get(id);
 }
 
 /**
@@ -120,6 +129,64 @@ async function updateCredits(userId, amount) {
 }
 
 /**
+ * Generate a unique 8-char invite code
+ */
+function generateInviteCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code;
+    do {
+        code = '';
+        const bytes = crypto.randomBytes(8);
+        for (let i = 0; i < 8; i++) {
+            code += chars[bytes[i] % chars.length];
+        }
+        // Check uniqueness
+        const existing = database.prepare('SELECT id FROM users WHERE invite_code = ?').get(code);
+        if (!existing) break;
+    } while (true);
+    return code;
+}
+
+/**
+ * Trigger invite reward when invitee consumes credits for the first time
+ * Returns the inviter's updated user if reward was given, null otherwise
+ */
+async function triggerInviteReward(userId) {
+    await init();
+    const user = database.prepare('SELECT id, invited_by, has_consumed FROM users WHERE id = ?').get(userId);
+    if (!user || user.has_consumed || !user.invited_by) return null;
+
+    // Mark as consumed
+    database.prepare('UPDATE users SET has_consumed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(userId);
+
+    // Reward inviter +0.2 credits
+    const rewardAmount = 0.2;
+    database.prepare('UPDATE users SET credits = credits + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(rewardAmount, user.invited_by);
+
+    // Log the reward
+    database.prepare('INSERT INTO invitation_rewards (inviter_id, invitee_id, reward_amount) VALUES (?, ?, ?)').run(user.invited_by, userId, rewardAmount);
+
+    console.log(`[Invite] User ${user.invited_by} rewarded +${rewardAmount} credits (invitee: ${userId})`);
+    return getUserById(user.invited_by);
+}
+
+/**
+ * Get invitation stats for a user
+ */
+async function getInviteStats(userId) {
+    await init();
+    const user = database.prepare('SELECT invite_code FROM users WHERE id = ?').get(userId);
+    const invited = database.prepare('SELECT COUNT(*) as count FROM users WHERE invited_by = ?').get(userId);
+    const rewards = database.prepare('SELECT COALESCE(SUM(reward_amount), 0) as total FROM invitation_rewards WHERE inviter_id = ?').get(userId);
+
+    return {
+        inviteCode: user?.invite_code || '',
+        invitedCount: invited?.count || 0,
+        totalRewards: rewards?.total || 0
+    };
+}
+
+/**
  * Create admin user if not exists
  */
 async function ensureAdminUser() {
@@ -128,11 +195,16 @@ async function ensureAdminUser() {
 
     if (!existing) {
         const hashedPassword = bcrypt.hashSync('admin123', 10);
+        const adminInviteCode = generateInviteCode();
         database.prepare(`
-            INSERT INTO users (email, username, password, role, credits)
-            VALUES (?, '管理员', ?, 'admin', 9999)
-        `).run(adminEmail, hashedPassword);
+            INSERT INTO users (email, username, password, role, credits, invite_code)
+            VALUES (?, '管理员', ?, 'admin', 9999, ?)
+        `).run(adminEmail, hashedPassword, adminInviteCode);
         console.log('[Auth] Admin user created: admin@verifykey.com / admin123');
+    } else if (!existing.invite_code) {
+        // Backfill invite code for existing admin
+        const code = generateInviteCode();
+        database.prepare('UPDATE users SET invite_code = ? WHERE id = ?').run(code, existing.id);
     }
 }
 
@@ -143,5 +215,7 @@ module.exports = {
     verifyToken,
     generateToken,
     getUserById,
-    updateCredits
+    updateCredits,
+    triggerInviteReward,
+    getInviteStats
 };

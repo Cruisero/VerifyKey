@@ -270,6 +270,22 @@ DEFAULT_CONFIG = {
         "content": "在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。\n如果验证链接中 verificationId= 后面是空的，建议直接换号。\n一次消耗一个配额，成功后自动扣除。"
     },
     
+    # Pixel API (Google One via iqless.icu) — "UPixel" 普通验证
+    "pixelApi": {
+        "enabled": False,
+        "apiKey": "",  # ak_XXXX-XXXX-... format
+        "baseUrl": "https://iqless.icu",
+        "creditCost": 1.0
+    },
+    
+    # KPixel API (Google One via kckc1818.com) — "KPixel" Pro 验证
+    "kpixelApi": {
+        "enabled": False,
+        "cdkey": "",  # K-XXXX... format
+        "baseUrl": "https://2key.kckc1818.com/openapi.php",
+        "creditCost": 1.5
+    },
+    
     # Last updated
     "updatedAt": None
 }

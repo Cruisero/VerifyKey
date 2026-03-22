@@ -91,12 +91,23 @@ def init_db():
                 value TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS gpt_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_key TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL DEFAULT 'available',
+                used_by_cdk TEXT DEFAULT '',
+                used_email TEXT DEFAULT '',
+                created_at TEXT DEFAULT '',
+                used_at TEXT DEFAULT ''
+            );
+
             CREATE INDEX IF NOT EXISTS idx_vh_status ON verification_history(status);
             CREATE INDEX IF NOT EXISTS idx_vh_timestamp ON verification_history(timestamp);
             CREATE INDEX IF NOT EXISTS idx_vh_vid ON verification_history(verification_id);
             CREATE INDEX IF NOT EXISTS idx_bvl_timestamp ON bot_verify_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_cdk_status ON cdkeys(status);
             CREATE INDEX IF NOT EXISTS idx_bs_bot_ts ON bot_stats(bot_id, timestamp);
+            CREATE INDEX IF NOT EXISTS idx_gk_status ON gpt_keys(status);
         """)
 
         # Migrate existing JSON data

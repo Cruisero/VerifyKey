@@ -28,7 +28,7 @@ def generate_cdks(count: int, quota: int, note: str = "") -> List[str]:
     
     Args:
         count: Number of CDKs to generate
-        quota: Credits per CDK (1, 2, 5, 20, 100)
+        quota: Points per CDK (e.g. 1, 1.5, 5, 10, 50, 100)
         note: Optional note/label
     
     Returns:
@@ -58,6 +58,71 @@ def generate_cdks(count: int, quota: int, note: str = "") -> List[str]:
         conn.commit()
 
     return generated
+
+
+def _ensure_redeemed_by_column():
+    """Auto-migrate: add redeemed_by column to cdkeys if missing."""
+    conn = database.get_connection()
+    try:
+        conn.execute("SELECT redeemed_by FROM cdkeys LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE cdkeys ADD COLUMN redeemed_by INTEGER DEFAULT NULL")
+        conn.commit()
+        print("[CDK] Added redeemed_by column to cdkeys table")
+
+# Run migration on import
+_ensure_redeemed_by_column()
+
+
+def redeem_cdk(code: str, user_id: int) -> Dict:
+    """
+    Redeem a CDK: transfer ALL remaining credits to user account.
+    CDK is fully consumed after redemption.
+
+    Args:
+        code: CDK code
+        user_id: ID of the user redeeming
+
+    Returns:
+        Dict with: success, credits_added, message
+    """
+    import auth
+
+    code = _normalize_code(code)
+    conn = database.get_connection()
+
+    with _lock:
+        cursor = conn.execute("SELECT quota, used, status, redeemed_by FROM cdkeys WHERE code = ?", (code,))
+        row = cursor.fetchone()
+
+        if not row:
+            return {"success": False, "message": "无效的 CDK"}
+
+        if row["redeemed_by"] is not None:
+            return {"success": False, "message": "该 CDK 已被兑换过"}
+
+        remaining = row["quota"] - row["used"]
+        if remaining <= 0:
+            return {"success": False, "message": "CDK 积分已用完"}
+
+        # Transfer all remaining credits to user account
+        auth.update_credits(user_id, remaining)
+
+        # Mark CDK as fully used
+        now = datetime.now().isoformat()
+        conn.execute(
+            "UPDATE cdkeys SET used = quota, status = 'used', last_used_at = ?, redeemed_by = ? WHERE code = ?",
+            (now, user_id, code)
+        )
+        conn.commit()
+
+        remaining_display = int(remaining) if remaining == int(remaining) else round(remaining, 1)
+        return {
+            "success": True,
+            "credits_added": remaining,
+            "message": f"兑换成功！已充入 {remaining_display} 积分到您的账户"
+        }
+
 
 
 def _normalize_code(code: str) -> str:
@@ -103,14 +168,15 @@ def validate_cdk(code: str) -> Dict:
     remaining = row["quota"] - row["used"]
 
     if remaining <= 0:
-        return {"valid": False, "remaining": 0, "quota": row["quota"], "used": row["used"], "message": "CDK 额度已用完"}
+        return {"valid": False, "remaining": 0, "quota": row["quota"], "used": row["used"], "message": "CDK 积分已用完"}
 
+    remaining_display = int(remaining) if remaining == int(remaining) else round(remaining, 1)
     return {
         "valid": True,
         "remaining": remaining,
         "quota": row["quota"],
         "used": row["used"],
-        "message": f"CDK 有效，剩余 {remaining} 次"
+        "message": f"CDK 有效，剩余 {remaining_display} 积分"
     }
 
 
@@ -138,7 +204,7 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
         remaining = row["quota"] - row["used"]
 
         if remaining < amount:
-            return {"success": False, "remaining": remaining, "message": f"CDK 额度不足（剩余 {remaining}）"}
+            return {"success": False, "remaining": remaining, "message": f"CDK 积分不足（剩余 {remaining}）"}
 
         new_used = row["used"] + amount
         new_remaining = row["quota"] - new_used
@@ -151,7 +217,7 @@ def use_cdk(code: str, amount: int = 1) -> Dict:
         )
         conn.commit()
 
-        return {"success": True, "remaining": new_remaining, "message": f"扣减成功，剩余 {new_remaining} 次"}
+        return {"success": True, "remaining": new_remaining, "message": f"扣减成功，剩余 {new_remaining} 积分"}
 
 
 def refund_cdk(code: str, amount: int = 1) -> Dict:
@@ -186,7 +252,7 @@ def refund_cdk(code: str, amount: int = 1) -> Dict:
         )
         conn.commit()
 
-        return {"success": True, "remaining": new_remaining, "message": f"退还成功，剩余 {new_remaining} 次"}
+        return {"success": True, "remaining": new_remaining, "message": f"退还成功，剩余 {new_remaining} 积分"}
 
 
 def get_all_cdks() -> List[Dict]:

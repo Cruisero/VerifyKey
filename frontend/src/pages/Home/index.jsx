@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import logoImg from '../../assets/logo.png';
@@ -9,11 +9,22 @@ export default function Home() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [username, setUsername] = useState('');
+    const [inviteCode, setInviteCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     const { login, register } = useAuth();
     const navigate = useNavigate();
+
+    // Parse invite code from URL
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const ref = params.get('ref');
+        if (ref) {
+            setInviteCode(ref);
+            setIsLogin(false); // Switch to register tab when coming from invite link
+        }
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -24,7 +35,7 @@ export default function Home() {
             if (isLogin) {
                 await login(email, password);
             } else {
-                await register(email, password, username);
+                await register(email, password, username, inviteCode || undefined);
             }
             // 登录/注册成功后跳转到首页
             navigate('/');

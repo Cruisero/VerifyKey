@@ -19,7 +19,7 @@ app.use(express.json());
 // Register
 app.post('/api/auth/register', async (req, res) => {
     try {
-        const { email, password, username } = req.body;
+        const { email, password, username, inviteCode } = req.body;
 
         if (!email || !password || !username) {
             return res.status(400).json({ error: '请填写所有字段' });
@@ -29,7 +29,7 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: '密码至少6位' });
         }
 
-        const result = await auth.register(email, password, username);
+        const result = await auth.register(email, password, username, inviteCode);
         res.json(result);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -89,7 +89,31 @@ app.post('/api/auth/credits', async (req, res) => {
     }
 
     const updatedUser = await auth.updateCredits(user.id, amount);
+
+    // Trigger invite reward on first consumption (amount < 0 means spending)
+    if (amount < 0) {
+        await auth.triggerInviteReward(user.id);
+    }
+
     res.json({ user: updatedUser });
+});
+
+// Get invite stats
+app.get('/api/auth/invite-stats', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: '未登录' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const user = await auth.verifyToken(token);
+
+    if (!user) {
+        return res.status(401).json({ error: 'Token 无效' });
+    }
+
+    const stats = await auth.getInviteStats(user.id);
+    res.json(stats);
 });
 
 // Self-hosted verification endpoint

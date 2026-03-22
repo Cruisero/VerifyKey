@@ -233,3 +233,24 @@ def update_credits(user_id: int, amount: int) -> Optional[dict]:
     conn.close()
     
     return get_user_by_id(user_id)
+
+
+def deduct_credits(user_id: int, amount: float) -> Optional[dict]:
+    """Deduct credits from user. Returns updated user if sufficient, None if not."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT credits FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    if not row or row["credits"] < amount:
+        conn.close()
+        return None
+    cursor.execute("""
+        UPDATE users SET credits = credits - ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND credits >= ?
+    """, (amount, user_id, amount))
+    conn.commit()
+    conn.close()
+    if cursor.rowcount == 0:
+        return None
+    return get_user_by_id(user_id)
+

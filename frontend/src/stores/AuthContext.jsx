@@ -65,11 +65,11 @@ export function AuthProvider({ children }) {
         return data.user;
     };
 
-    const register = async (email, password, username) => {
+    const register = async (email, password, username, inviteCode) => {
         const res = await fetch(`${API_BASE}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, username })
+            body: JSON.stringify({ email, password, username, inviteCode })
         });
 
         const data = await res.json();
@@ -116,6 +116,14 @@ export function AuthProvider({ children }) {
     // Expose token for other API calls
     const getToken = () => token;
 
+    // Refresh user data from server
+    const refreshUser = async () => {
+        const savedToken = token || localStorage.getItem('verifykey-token');
+        if (savedToken) {
+            await fetchCurrentUser(savedToken);
+        }
+    };
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -124,6 +132,7 @@ export function AuthProvider({ children }) {
             register,
             logout,
             updateCredits,
+            refreshUser,
             getToken
         }}>
             {children}

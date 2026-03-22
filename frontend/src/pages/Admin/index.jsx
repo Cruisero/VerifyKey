@@ -675,6 +675,807 @@ function TelegramBotTab() {
     );
 }
 
+// ============================================================
+// Pixel API Tab Component
+// ============================================================
+// ==========================================
+// GPT Keys Management Tab
+// ==========================================
+function GptKeysTab() {
+    const { user } = useAuth();
+    const token = user?.token || localStorage.getItem('verifykey-token');
+    const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+
+    const [stats, setStats] = useState({ total: 0, available: 0, used: 0 });
+    const [keys, setKeys] = useState([]);
+    const [newKeys, setNewKeys] = useState('');
+    const [adding, setAdding] = useState(false);
+    const [addResult, setAddResult] = useState(null);
+
+    const fetchStats = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/gpt-keys/stats`, { headers: authHeaders });
+            if (res.ok) setStats(await res.json());
+        } catch (e) { console.error(e); }
+    };
+
+    const fetchKeys = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/gpt-keys/list`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setKeys(data.keys || []);
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    useEffect(() => { fetchStats(); fetchKeys(); }, []);
+
+    const handleAdd = async () => {
+        if (!newKeys.trim()) return;
+        setAdding(true);
+        setAddResult(null);
+        try {
+            const res = await fetch(`${API_BASE}/api/gpt-keys/add`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ keys: newKeys }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setAddResult(`✅ 成功添加 ${data.added} 个卡密（输入 ${data.total_input} 个）`);
+                setNewKeys('');
+                fetchStats();
+                fetchKeys();
+            } else {
+                setAddResult(`❌ ${data.detail}`);
+            }
+        } catch (e) {
+            setAddResult(`❌ ${e.message}`);
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm('确定删除此卡密？')) return;
+        try {
+            await fetch(`${API_BASE}/api/gpt-keys/${id}`, { method: 'DELETE', headers: authHeaders });
+            fetchStats();
+            fetchKeys();
+        } catch (e) { console.error(e); }
+    };
+
+    const statusBadge = (status) => {
+        const map = {
+            available: { bg: 'rgba(16,185,129,0.1)', color: '#059669', text: '可用' },
+            reserved: { bg: 'rgba(245,158,11,0.1)', color: '#d97706', text: '已预留' },
+            used: { bg: 'rgba(107,114,128,0.1)', color: '#6b7280', text: '已使用' },
+            invalid: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626', text: '无效' },
+        };
+        const s = map[status] || map.available;
+        return <span style={{ padding: '2px 10px', borderRadius: '8px', background: s.bg, color: s.color, fontWeight: 600, fontSize: '12px' }}>{s.text}</span>;
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                {[
+                    { label: '总卡密', value: stats.total, icon: '🎟️', color: '#7c5cfc' },
+                    { label: '可用', value: stats.available, icon: '✅', color: '#10b981' },
+                    { label: '已使用', value: stats.used, icon: '📋', color: '#6b7280' },
+                ].map(({ label, value, icon, color }) => (
+                    <div key={label} style={{
+                        background: 'var(--bg-primary)', border: '1px solid var(--border-primary)',
+                        borderRadius: '12px', padding: '20px', textAlign: 'center'
+                    }}>
+                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>{icon}</div>
+                        <div style={{ fontSize: '28px', fontWeight: 700, color }}>{value}</div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Add Keys */}
+            <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600 }}>
+                    ➕ 批量添加卡密
+                </div>
+                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <textarea
+                        className="input textarea"
+                        style={{ minHeight: '100px', fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: '13px' }}
+                        placeholder="每行一个卡密..."
+                        value={newKeys}
+                        onChange={e => setNewKeys(e.target.value)}
+                    />
+                    {addResult && (
+                        <div style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
+                            background: addResult.startsWith('✅') ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                            color: addResult.startsWith('✅') ? '#059669' : '#dc2626'
+                        }}>{addResult}</div>
+                    )}
+                    <button
+                        className="btn btn-primary"
+                        disabled={adding || !newKeys.trim()}
+                        onClick={handleAdd}
+                    >
+                        {adding ? '添加中...' : `添加 (${newKeys.split('\n').filter(l => l.trim()).length} 个)`}
+                    </button>
+                </div>
+            </div>
+
+            {/* Key List */}
+            <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>📋 卡密列表</span>
+                    <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{keys.length} 条记录</span>
+                </div>
+                <div style={{ overflow: 'auto', maxHeight: '400px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                            <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
+                                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>卡密</th>
+                                <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600 }}>状态</th>
+                                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>使用邮箱</th>
+                                <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600 }}>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {keys.map(k => (
+                                <tr key={k.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                                    <td style={{ padding: '10px 16px', fontFamily: "'SF Mono', monospace", maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {k.card_key}
+                                    </td>
+                                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>{statusBadge(k.status)}</td>
+                                    <td style={{ padding: '10px 16px', color: k.used_email ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+                                        {k.used_email || '-'}
+                                    </td>
+                                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                                        <button
+                                            onClick={() => handleDelete(k.id)}
+                                            style={{
+                                                background: 'rgba(239,68,68,0.08)', color: '#dc2626',
+                                                border: 'none', borderRadius: '6px', padding: '4px 12px',
+                                                cursor: 'pointer', fontSize: '12px', fontWeight: 500
+                                            }}
+                                        >🗑️</button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {keys.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                                        暂无卡密，请先添加
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+
+function PixelApiTab() {
+    const { user } = useAuth();
+    const token = user?.token || localStorage.getItem('verifykey-token');
+    const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+
+    const [activeSection, setActiveSection] = useState('status');
+    const [health, setHealth] = useState(null);
+    const [balance, setBalance] = useState(null);
+    const [queue, setQueue] = useState(null);
+    const [pixelConfig, setPixelConfig] = useState({ enabled: false, apiKey: '', baseUrl: 'https://iqless.icu', hasKey: false });
+    const [configSaving, setConfigSaving] = useState(false);
+    const [newApiKey, setNewApiKey] = useState('');
+    const [newBaseUrl, setNewBaseUrl] = useState('');
+
+    // KPixel (Pro) config state
+    const [kpixelConfig, setKpixelConfig] = useState({ enabled: false, cdkey: '', hasKey: false, baseUrl: '', creditCost: 1.5 });
+    const [newKPixelCdkey, setNewKPixelCdkey] = useState('');
+    const [kpixelSaving, setKpixelSaving] = useState(false);
+    const [pixelJobs, setPixelJobs] = useState([]);
+    const [history, setHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyOffset, setHistoryOffset] = useState(0);
+    const [historyTotal, setHistoryTotal] = useState(0);
+    const HISTORY_LIMIT = 20;
+
+    // Fetch status data
+    const fetchStatus = async () => {
+        try {
+            const [hRes, bRes, qRes] = await Promise.all([
+                fetch(`${API_BASE}/api/pixel/health`),
+                fetch(`${API_BASE}/api/pixel/balance`, { headers: authHeaders }).catch(() => null),
+                fetch(`${API_BASE}/api/pixel/queue`, { headers: authHeaders }).catch(() => null),
+            ]);
+            if (hRes.ok) setHealth(await hRes.json());
+            if (bRes && bRes.ok) setBalance(await bRes.json());
+            if (qRes && qRes.ok) setQueue(await qRes.json());
+        } catch (e) {
+            console.warn('Pixel status fetch error:', e);
+        }
+    };
+
+    // Fetch config
+    const fetchConfig = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/pixel/config`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setPixelConfig(data);
+                setNewBaseUrl(data.baseUrl || 'https://iqless.icu');
+            }
+        } catch (e) {
+            console.warn('Pixel config fetch error:', e);
+        }
+        // Fetch KPixel config
+        try {
+            const res2 = await fetch(`${API_BASE}/api/kpixel/config`, { headers: authHeaders });
+            if (res2.ok) {
+                const data2 = await res2.json();
+                setKpixelConfig(data2);
+            }
+        } catch (e) {
+            console.warn('KPixel config fetch error:', e);
+        }
+    };
+
+    // Fetch history
+    const fetchHistory = async (offset = 0) => {
+        setHistoryLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/pixel/history?limit=${HISTORY_LIMIT}&offset=${offset}`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setHistory(data.records || data.jobs || data.history || data.data || []);
+                setHistoryTotal(data.total || 0);
+                setHistoryOffset(offset);
+            }
+        } catch (e) {
+            console.warn('Pixel history fetch error:', e);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    // Initial fetch
+    useEffect(() => {
+        fetchStatus();
+        fetchConfig();
+        const interval = setInterval(fetchStatus, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // SSE: listen to the existing admin verify-stream for Pixel events
+    useEffect(() => {
+        const sseToken = user?.token || localStorage.getItem('verifykey-token');
+        if (!sseToken) return;
+
+        const sseUrl = `${API_BASE}/api/admin/verify-stream?authorization=Bearer ${sseToken}`;
+        const es = new EventSource(sseUrl);
+
+        es.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.source !== 'pixel' && data.source !== 'kpixel') return;
+
+                setPixelJobs(prev => {
+                    const jobId = data.vid || '';
+                    const existingIdx = prev.findIndex(j => j.jobId === jobId);
+
+                    let status = 'processing';
+                    if (data.step === 'result') {
+                        status = data.success ? 'success' : 'failed';
+                    } else if (data.step === 'submitted') {
+                        status = 'submitted';
+                    }
+
+                    const entry = {
+                        id: existingIdx >= 0 ? prev[existingIdx].id : Date.now() + Math.random(),
+                        jobId,
+                        email: data.link || '',
+                        status,
+                        stage: data.stage || 0,
+                        totalStages: data.totalStages || 8,
+                        stageLabel: data.stageLabel || '',
+                        message: data.message || '',
+                        url: data.url || (existingIdx >= 0 ? prev[existingIdx].url : ''),
+                        error: data.error || '',
+                        elapsed: data.elapsed || 0,
+                        timestamp: new Date().toISOString(),
+                    };
+
+                    if (existingIdx >= 0) {
+                        const newJobs = [...prev];
+                        newJobs[existingIdx] = { ...newJobs[existingIdx], ...entry };
+                        return newJobs;
+                    } else {
+                        return [entry, ...prev].slice(0, 200);
+                    }
+                });
+            } catch (err) {
+                // ignore parse errors
+            }
+        };
+
+        es.onerror = () => { /* auto-reconnect */ };
+
+        return () => es.close();
+    }, []);
+
+    // Save config
+    const saveConfig = async () => {
+        if (!token) {
+            alert('保存失败: 未登录，请刷新页面重新登录');
+            return;
+        }
+        setConfigSaving(true);
+        try {
+            const body = { enabled: pixelConfig.enabled };
+            if (newApiKey.trim()) body.apiKey = newApiKey.trim();
+            if (newBaseUrl.trim()) body.baseUrl = newBaseUrl.trim();
+
+            const res = await fetch(`${API_BASE}/api/pixel/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(body),
+            });
+            if (res.ok) {
+                alert('✅ Pixel API 配置已保存');
+                setNewApiKey('');
+                await fetchConfig();
+            } else {
+                let errMsg = `HTTP ${res.status}`;
+                try { const err = await res.json(); errMsg = err.detail || errMsg; } catch { try { errMsg = await res.text(); } catch {} }
+                alert('保存失败: ' + errMsg);
+            }
+        } catch (e) {
+            console.error('Save config error:', e);
+            alert('保存失败: 网络错误 - ' + e.message);
+        } finally {
+            setConfigSaving(false);
+        }
+    };
+
+    const maskEmail = (email) => {
+        if (!email) return '';
+        const [u, d] = email.split('@');
+        if (!u || !d) return email;
+        return (u.length > 3 ? u.slice(0, 2) + '***' + u.slice(-1) : u[0] + '***') + '@' + d;
+    };
+
+    const sections = [
+        { id: 'status', label: '📊 状态' },
+        { id: 'jobs', label: '🔄 实时任务' },
+        { id: 'history', label: '📜 历史' },
+        { id: 'config', label: '⚙️ 配置' },
+    ];
+
+    const activeJobs = pixelJobs.filter(j => j.status === 'processing' || j.status === 'submitted');
+    const completedJobs = pixelJobs.filter(j => j.status === 'success' || j.status === 'failed');
+
+    const statusColors = {
+        submitted: { bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.2)', color: '#3b82f6', icon: '◌' },
+        processing: { bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)', color: '#f59e0b', icon: '◎' },
+        success: { bg: 'rgba(22,163,74,0.08)', border: 'rgba(22,163,74,0.2)', color: '#16a34a', icon: '✓' },
+        failed: { bg: 'rgba(220,38,38,0.08)', border: 'rgba(220,38,38,0.2)', color: '#dc2626', icon: '✕' },
+    };
+
+    return (
+        <div className="tab-content">
+            {/* Sub-tabs */}
+            <div style={{ display: 'flex', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-lg)', flexWrap: 'wrap' }}>
+                {sections.map(s => (
+                    <button key={s.id}
+                        className={`btn btn-sm ${activeSection === s.id ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => {
+                            setActiveSection(s.id);
+                            if (s.id === 'history' && history.length === 0) fetchHistory(0);
+                        }}
+                    >{s.label}</button>
+                ))}
+            </div>
+
+            {/* ===== Status Section ===== */}
+            {activeSection === 'status' && (
+                <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--spacing-sm)' }}>
+                        <button className="btn btn-sm btn-secondary" onClick={fetchStatus}>🔄 刷新</button>
+                    </div>
+                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        {/* API Status */}
+                        <div className="stat-card card" style={{ borderLeft: `3px solid ${health?.status === 'ok' || health?.status === 'healthy' ? '#16a34a' : '#dc2626'}` }}>
+                            <div className="stat-icon">{health?.status === 'ok' || health?.status === 'healthy' ? '🟢' : '🔴'}</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{health?.status === 'ok' || health?.status === 'healthy' ? 'Online' : (health?.status || 'Unknown')}</span>
+                                <span className="stat-label">API 状态</span>
+                            </div>
+                        </div>
+                        {/* Devices */}
+                        <div className="stat-card card primary">
+                            <div className="stat-icon">📱</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{health?.devices?.connected ?? health?.connected_devices ?? '-'} / {health?.devices?.total ?? health?.total_devices ?? '-'}</span>
+                                <span className="stat-label">设备 (在线/总数)</span>
+                            </div>
+                        </div>
+                        {/* Balance */}
+                        <div className="stat-card card success">
+                            <div className="stat-icon">💰</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{balance?.balance ?? balance?.credits ?? '-'}</span>
+                                <span className="stat-label">API 余额</span>
+                            </div>
+                        </div>
+                        {/* Queue */}
+                        <div className="stat-card card warning">
+                            <div className="stat-icon">📋</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{queue?.queued ?? queue?.queue_length ?? queue?.pending ?? '-'}</span>
+                                <span className="stat-label">队列中</span>
+                            </div>
+                        </div>
+                    </div>
+                    {/* Ready devices */}
+                    {health?.devices?.ready !== undefined && (
+                        <div className="stats-grid">
+                            <div className="stat-card card info">
+                                <div className="stat-icon">✅</div>
+                                <div className="stat-info">
+                                    <span className="stat-value">{health.devices.ready}</span>
+                                    <span className="stat-label">就绪设备</span>
+                                </div>
+                            </div>
+                            <div className="stat-card card">
+                                <div className="stat-icon">⏱️</div>
+                                <div className="stat-info">
+                                    <span className="stat-value">{queue?.active ?? queue?.running ?? '-'}</span>
+                                    <span className="stat-label">执行中</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {/* Config status */}
+                    <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Pixel API:</span>
+                            <span style={{
+                                padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                background: pixelConfig.enabled ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
+                                color: pixelConfig.enabled ? '#16a34a' : '#dc2626',
+                            }}>
+                                {pixelConfig.enabled ? '已启用' : '未启用'}
+                            </span>
+                            <span style={{
+                                padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                background: pixelConfig.hasKey ? 'rgba(59,130,246,0.1)' : 'rgba(107,114,128,0.1)',
+                                color: pixelConfig.hasKey ? '#3b82f6' : '#6b7280',
+                            }}>
+                                {pixelConfig.hasKey ? `Key: ${pixelConfig.apiKey || '***'}` : '未配置 Key'}
+                            </span>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* ===== Real-time Job Monitor ===== */}
+            {activeSection === 'jobs' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px', flexWrap: 'wrap' }}>
+                        <span>总计 <strong>{pixelJobs.length}</strong> 任务</span>
+                        <span>|</span>
+                        <span style={{ color: '#f59e0b', fontWeight: 600 }}>
+                            {activeJobs.length} 进行中
+                        </span>
+                        <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                            {completedJobs.filter(j => j.status === 'success').length} 成功
+                        </span>
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>
+                            {completedJobs.filter(j => j.status === 'failed').length} 失败
+                        </span>
+                        <button className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }}
+                            onClick={() => setPixelJobs([])}>清除</button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '700px', overflowY: 'auto' }}>
+                        {pixelJobs.length === 0 && (
+                            <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '60px 20px' }}>
+                                <div style={{ fontSize: '36px', marginBottom: '12px' }}>📡</div>
+                                <p>暂无 Pixel API 任务</p>
+                                <p style={{ fontSize: '13px', marginTop: '4px' }}>从验证页面提交账号后，实时进度将显示在这里</p>
+                            </div>
+                        )}
+                        {pixelJobs.map((job) => {
+                            const sc = statusColors[job.status] || statusColors.failed;
+                            const progressPercent = job.totalStages > 0 ? (job.stage / job.totalStages) * 100 : 0;
+                            const isActive = job.status === 'processing' || job.status === 'submitted';
+
+                            return (
+                                <div key={job.id} style={{
+                                    display: 'flex', alignItems: 'flex-start', gap: '14px',
+                                    padding: '14px 18px', borderRadius: '10px',
+                                    background: sc.bg, border: `1px solid ${sc.border}`,
+                                }}>
+                                    <div style={{
+                                        width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                                        background: sc.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px',
+                                        ...(isActive ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
+                                    }}>{sc.icon}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
+                                                    {maskEmail(job.email)}
+                                                </span>
+                                                {isActive && (
+                                                    <span style={{
+                                                        fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
+                                                        background: sc.color, color: '#fff', fontWeight: 600,
+                                                    }}>
+                                                        {job.status === 'submitted' ? '已提交' : `${job.stage}/${job.totalStages}`}
+                                                    </span>
+                                                )}
+                                                {job.status === 'success' && (
+                                                    <span style={{
+                                                        fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
+                                                        background: '#16a34a', color: '#fff', fontWeight: 600,
+                                                    }}>成功</span>
+                                                )}
+                                                {job.status === 'failed' && (
+                                                    <span style={{
+                                                        fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
+                                                        background: '#dc2626', color: '#fff', fontWeight: 600,
+                                                    }}>失败</span>
+                                                )}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {job.elapsed > 0 && (
+                                                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{job.elapsed}s</span>
+                                                )}
+                                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                                    {new Date(job.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {/* Stage progress bar for active jobs */}
+                                        {isActive && job.totalStages > 0 && (
+                                            <div style={{
+                                                height: '4px', borderRadius: '2px', marginTop: '8px',
+                                                background: 'rgba(255,255,255,0.1)', overflow: 'hidden',
+                                            }}>
+                                                <div style={{
+                                                    height: '100%', borderRadius: '2px',
+                                                    width: `${progressPercent}%`,
+                                                    background: sc.color,
+                                                    transition: 'width 0.5s ease',
+                                                }} />
+                                            </div>
+                                        )}
+                                        {/* Message */}
+                                        {job.message && (
+                                            <div style={{
+                                                fontSize: '13px', fontWeight: 600, color: sc.color,
+                                                marginTop: '4px', wordBreak: 'break-all',
+                                            }}>
+                                                {job.message.replace(/^[❌✅✓✕⏳🔄\s]+/, '')}
+                                            </div>
+                                        )}
+                                        {/* URL for success */}
+                                        {job.status === 'success' && job.url && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                                                <a href={job.url} target="_blank" rel="noopener noreferrer"
+                                                    style={{
+                                                        fontSize: '12px', color: '#3b82f6', textDecoration: 'underline',
+                                                        wordBreak: 'break-all', maxWidth: '90%',
+                                                    }}>
+                                                    🔗 {job.url.length > 60 ? job.url.slice(0, 57) + '...' : job.url}
+                                                </a>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(job.url)}
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                        fontSize: '14px', padding: '2px',
+                                                    }}
+                                                    title="复制链接"
+                                                >📋</button>
+                                            </div>
+                                        )}
+                                        {/* Job ID */}
+                                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                                            ID: {job.jobId?.slice(0, 12) || '-'}...
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ===== History Section ===== */}
+            {activeSection === 'history' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+                        <h3>📜 Pixel API 历史 ({historyTotal})</h3>
+                        <button className="btn btn-sm btn-secondary" onClick={() => fetchHistory(0)} disabled={historyLoading}>
+                            {historyLoading ? '⏳' : '🔄'} 刷新
+                        </button>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>邮箱</th>
+                                    <th>状态</th>
+                                    <th>URL</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {history.length === 0 && (
+                                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无历史记录</td></tr>
+                                )}
+                                {history.map((item, i) => (
+                                    <tr key={item.job_id || item.email + i}>
+                                        <td>{maskEmail(item.email || '')}</td>
+                                        <td>
+                                            <span className={`badge badge-${(item.status === 'failed') ? 'error' : 'success'}`}>
+                                                {(item.status === 'failed') ? '❌ 失败' : '✅ 成功'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {item.url ? (
+                                                <a href={item.url} target="_blank" rel="noopener noreferrer"
+                                                    style={{ fontSize: '12px', color: '#3b82f6' }}>
+                                                    {item.url.length > 40 ? item.url.slice(0, 37) + '...' : item.url}
+                                                </a>
+                                            ) : '-'}
+                                        </td>
+                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                                            {item.completed_at || item.created_at ? new Date(item.completed_at || item.created_at).toLocaleString('zh-CN', { hour12: false }) : '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/* Pagination */}
+                    {historyTotal > HISTORY_LIMIT && (
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: 'var(--spacing-md)' }}>
+                            <button className="btn btn-sm btn-secondary"
+                                disabled={historyOffset === 0 || historyLoading}
+                                onClick={() => fetchHistory(Math.max(0, historyOffset - HISTORY_LIMIT))}
+                            >◀ 上一页</button>
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', alignSelf: 'center' }}>
+                                {historyOffset + 1}-{Math.min(historyOffset + HISTORY_LIMIT, historyTotal)} / {historyTotal}
+                            </span>
+                            <button className="btn btn-sm btn-secondary"
+                                disabled={historyOffset + HISTORY_LIMIT >= historyTotal || historyLoading}
+                                onClick={() => fetchHistory(historyOffset + HISTORY_LIMIT)}
+                            >下一页 ▶</button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ===== Config Section ===== */}
+            {activeSection === 'config' && (
+                <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
+                    <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Pixel API 配置</h3>
+                    <div style={{ display: 'grid', gap: 'var(--spacing-md)' }}>
+                        {/* Enable toggle */}
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                <span>📦</span>
+                                <strong>启用 UPixel 普通验证</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: pixelConfig.enabled ? '#16a34a' : '#dc2626' }}>
+                                        {pixelConfig.enabled ? '🟢 已启用' : '🔴 未启用'}
+                                    </span>
+                                    <input type="checkbox" checked={pixelConfig.enabled}
+                                        onChange={e => setPixelConfig({ ...pixelConfig, enabled: e.target.checked })} />
+                                </label>
+                            </div>
+                        </div>
+                        {/* API Key */}
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                                API Key {pixelConfig.hasKey && <span style={{ color: '#16a34a', fontWeight: 600 }}>（已配置: {pixelConfig.apiKey}）</span>}
+                            </label>
+                            <input className="input" type="password"
+                                value={newApiKey}
+                                onChange={e => setNewApiKey(e.target.value)}
+                                placeholder={pixelConfig.hasKey ? '留空保持不变，输入新 Key 更新' : 'ak_XXXX-XXXX-XXXX-XXXX'}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        {/* Base URL */}
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                                API Base URL
+                            </label>
+                            <input className="input"
+                                value={newBaseUrl}
+                                onChange={e => setNewBaseUrl(e.target.value)}
+                                placeholder="https://iqless.icu"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-lg)' }}
+                        onClick={saveConfig} disabled={configSaving}>
+                        {configSaving ? '⏳ 保存中...' : '💾 保存 UPixel 配置'}
+                    </button>
+
+                    {/* KPixel Pro Config */}
+                    <h4 style={{ marginTop: 'var(--spacing-xl)', marginBottom: 'var(--spacing-md)', borderTop: '1px solid var(--border-primary)', paddingTop: 'var(--spacing-lg)' }}>⚡ KPixel Pro 配置</h4>
+                    <div style={{ display: 'grid', gap: 'var(--spacing-md)' }}>
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                <span>⚡</span>
+                                <strong>启用 KPixel Pro</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: kpixelConfig.enabled ? '#16a34a' : '#dc2626' }}>
+                                        {kpixelConfig.enabled ? '🟢 已启用' : '🔴 未启用'}
+                                    </span>
+                                    <input type="checkbox" checked={kpixelConfig.enabled}
+                                        onChange={e => setKpixelConfig({ ...kpixelConfig, enabled: e.target.checked })} />
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                                CDKey {kpixelConfig.hasKey && <span style={{ color: '#16a34a', fontWeight: 600 }}>（已配置: {kpixelConfig.cdkey}）</span>}
+                            </label>
+                            <input className="input" type="password"
+                                value={newKPixelCdkey}
+                                onChange={e => setNewKPixelCdkey(e.target.value)}
+                                placeholder={kpixelConfig.hasKey ? '留空保持不变' : 'K-XXXXX...'}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-md)' }}
+                        onClick={async () => {
+                            if (!token) { alert('未登录'); return; }
+                            setKpixelSaving(true);
+                            try {
+                                const body = { enabled: kpixelConfig.enabled };
+                                if (newKPixelCdkey.trim()) body.cdkey = newKPixelCdkey.trim();
+                                const res = await fetch(`${API_BASE}/api/kpixel/config`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify(body),
+                                });
+                                if (res.ok) {
+                                    alert('✅ KPixel 配置已保存');
+                                    setNewKPixelCdkey('');
+                                    await fetchConfig();
+                                } else {
+                                    let errMsg = `HTTP ${res.status}`;
+                                    try { const err = await res.json(); errMsg = err.detail || errMsg; } catch {}
+                                    alert('保存失败: ' + errMsg);
+                                }
+                            } catch (e) {
+                                alert('保存失败: ' + e.message);
+                            } finally {
+                                setKpixelSaving(false);
+                            }
+                        }} disabled={kpixelSaving}>
+                        {kpixelSaving ? '⏳ 保存中...' : '💾 保存 KPixel 配置'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+
 // CDK Management Component
 function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkGenerating, setCdkGenerating, cdkGenQuota, setCdkGenQuota, cdkGenCount, setCdkGenCount, cdkGenNote, setCdkGenNote, cdkFilter, setCdkFilter, cdkNewCodes, setCdkNewCodes }) {
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -774,7 +1575,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
         return true;
     });
 
-    const quotaOptions = [1, 5, 20, 50, 100];
+    const quotaOptions = [1, 1.5, 5, 10, 50, 100];
 
     return (
         <div className="tab-content">
@@ -815,9 +1616,9 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                 <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: 'var(--text-lg)' }}>🎲 生成 CDK</h3>
                 <div style={{ display: 'flex', gap: 'var(--spacing-md)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div>
-                        <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>面额</label>
+                        <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>积分</label>
                         <select className="input" value={cdkGenQuota} onChange={e => setCdkGenQuota(Number(e.target.value))} style={{ width: '120px' }}>
-                            {quotaOptions.map(q => <option key={q} value={q}>{q} 次</option>)}
+                            {quotaOptions.map(q => <option key={q} value={q}>{q} 积分</option>)}
                         </select>
                     </div>
                     <div>
@@ -873,7 +1674,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                         <thead>
                             <tr>
                                 <th>CDK 代码</th>
-                                <th>面额</th>
+                                <th>积分</th>
                                 <th>使用情况</th>
                                 <th>状态</th>
                                 <th>备注</th>
@@ -886,7 +1687,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                 <React.Fragment key={c.code}>
                                     <tr>
                                         <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{c.code}</td>
-                                        <td>{c.quota} 次</td>
+                                        <td>{c.quota} 积分</td>
                                         <td>{c.used} / {c.quota}</td>
                                         <td>
                                             <span className={`badge badge-${c.status === 'unused' ? 'info' : c.status === 'active' ? 'success' : 'error'}`}>
@@ -1962,6 +2763,8 @@ export default function Admin() {
 
     const tabs = [
         { id: 'overview', label: t('tabOverview'), icon: '📊' },
+        { id: 'pixel-api', label: 'Pixel API', icon: '📡' },
+        { id: 'gpt-recharge', label: 'GPT 充值', icon: '🤖' },
         { id: 'cdk', label: t('tabCdk'), icon: '🔑' },
         { id: 'users', label: t('tabUsers'), icon: '👥' },
         { id: 'ai-generator', label: t('tabAiGen'), icon: '🤖' },
@@ -6268,6 +7071,15 @@ export default function Admin() {
                         </div>
                     )
                 }
+
+                {activeTab === 'pixel-api' && (
+                    <PixelApiTab />
+                )}
+
+                {/* GPT Recharge Tab */}
+                {activeTab === 'gpt-recharge' && (
+                    <GptKeysTab />
+                )}
             </div >
         </div >
     );

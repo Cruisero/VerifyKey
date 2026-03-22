@@ -1863,6 +1863,22 @@ export default function Admin() {
         password: ''
     });
 
+    // Email SMTP settings
+    const [emailSettings, setEmailSettings] = useState({
+        smtpHost: '',
+        smtpPort: '465',
+        smtpUser: '',
+        smtpPassword: '',
+        senderName: 'OnePASS',
+        useSsl: true,
+        hasStoredPassword: false
+    });
+    const [emailTesting, setEmailTesting] = useState(false);
+    const [emailTestResult, setEmailTestResult] = useState(null);
+    const [emailSaving, setEmailSaving] = useState(false);
+    const [emailSaved, setEmailSaved] = useState(false);
+    const [siteUrl, setSiteUrl] = useState('');
+
     // Region mode state: 'global' (default) or 'us_only'
     const [regionMode, setRegionMode] = useState('global');
 
@@ -2219,6 +2235,62 @@ export default function Admin() {
         }
     };
 
+    const handleSaveEmailConfig = async () => {
+        setEmailSaving(true);
+        setEmailSaved(false);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const updates = {
+                email: {
+                    smtpHost: emailSettings.smtpHost,
+                    smtpPort: emailSettings.smtpPort,
+                    smtpUser: emailSettings.smtpUser,
+                    smtpPassword: emailSettings.smtpPassword || undefined,
+                    senderName: emailSettings.senderName,
+                    useSsl: emailSettings.useSsl
+                },
+                siteUrl: siteUrl
+            };
+            const res = await fetch(`${API_BASE}/api/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) {
+                setEmailSaved(true);
+                setTimeout(() => setEmailSaved(false), 2000);
+                fetchConfig();
+            } else {
+                const err = await res.json();
+                alert(err.error || '保存失败');
+            }
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        } finally {
+            setEmailSaving(false);
+        }
+    };
+
+    const handleTestEmail = async () => {
+        setEmailTesting(true);
+        setEmailTestResult(null);
+        try {
+            // Save first, then test
+            await handleSaveEmailConfig();
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/email/test`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setEmailTestResult(data);
+        } catch (e) {
+            setEmailTestResult({ success: false, message: e.message });
+        } finally {
+            setEmailTesting(false);
+        }
+    };
+
     const handleCreateBackup = async () => {
         setBackupCreating(true);
         try {
@@ -2485,6 +2557,22 @@ export default function Admin() {
                         password: data.proxy.password?.includes('...') ? '' : (data.proxy.password || ''),
                         hasStoredCredentials: data.proxy.user?.includes('...')
                     }));
+                }
+                // Load email settings
+                if (data.email) {
+                    setEmailSettings(prev => ({
+                        ...prev,
+                        smtpHost: data.email.smtpHost || prev.smtpHost,
+                        smtpPort: data.email.smtpPort || prev.smtpPort,
+                        smtpUser: data.email.smtpUser || prev.smtpUser,
+                        smtpPassword: data.email.smtpPassword?.includes('...') ? '' : (data.email.smtpPassword || ''),
+                        senderName: data.email.senderName || prev.senderName,
+                        useSsl: data.email.useSsl !== false,
+                        hasStoredPassword: !!data.email.smtpPassword?.includes('...')
+                    }));
+                }
+                if (data.siteUrl) {
+                    setSiteUrl(data.siteUrl);
                 }
                 // Load region mode setting
                 if (data.aiGenerator?.regionMode) {
@@ -6983,6 +7071,166 @@ export default function Admin() {
                                         {tipsSaving ? (
                                             <><span className="loading-spinner small" /> 保存中...</>
                                         ) : '保存提示文案'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Email SMTP Configuration Card */}
+                            <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                                    borderBottom: '1px solid #fcd34d',
+                                    display: 'flex', alignItems: 'center', gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '20px' }}>📧</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: '#92400e' }}>邮箱配置</h3>
+                                    <span style={{ fontSize: '12px', color: '#b45309', marginLeft: 'auto' }}>用于发送密码重置邮件</span>
+                                </div>
+
+                                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {/* SMTP Host & Port */}
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <div style={{ flex: 2 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>SMTP 服务器</label>
+                                            <input
+                                                className="input"
+                                                value={emailSettings.smtpHost}
+                                                onChange={e => setEmailSettings(p => ({ ...p, smtpHost: e.target.value }))}
+                                                placeholder="smtp.qq.com"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>端口</label>
+                                            <input
+                                                className="input"
+                                                value={emailSettings.smtpPort}
+                                                onChange={e => setEmailSettings(p => ({ ...p, smtpPort: e.target.value }))}
+                                                placeholder="465"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* SMTP User & Password */}
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>用户名 / 邮箱</label>
+                                            <input
+                                                className="input"
+                                                value={emailSettings.smtpUser}
+                                                onChange={e => setEmailSettings(p => ({ ...p, smtpUser: e.target.value }))}
+                                                placeholder="noreply@example.com"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>
+                                                密码 / 授权码
+                                                {emailSettings.hasStoredPassword && <span style={{ color: '#7c5cfc', marginLeft: '6px', fontSize: '11px' }}>✓ 已保存</span>}
+                                            </label>
+                                            <input
+                                                className="input"
+                                                type="password"
+                                                value={emailSettings.smtpPassword}
+                                                onChange={e => setEmailSettings(p => ({ ...p, smtpPassword: e.target.value }))}
+                                                placeholder={emailSettings.hasStoredPassword ? '留空保留原密码' : '输入 SMTP 密码'}
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Sender Name & SSL */}
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>发件人名称</label>
+                                            <input
+                                                className="input"
+                                                value={emailSettings.senderName}
+                                                onChange={e => setEmailSettings(p => ({ ...p, senderName: e.target.value }))}
+                                                placeholder="OnePASS"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>网站地址 (用于重置链接)</label>
+                                            <input
+                                                className="input"
+                                                value={siteUrl}
+                                                onChange={e => setSiteUrl(e.target.value)}
+                                                placeholder="https://yourdomain.com"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                        <label style={{
+                                            display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                                            padding: '10px 16px', borderRadius: '8px', background: emailSettings.useSsl ? '#f0ecff' : '#f8fafc',
+                                            border: `1px solid ${emailSettings.useSsl ? '#7c5cfc' : '#e2e8f0'}`,
+                                            fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap',
+                                            transition: 'all 0.2s'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={emailSettings.useSsl}
+                                                onChange={e => setEmailSettings(p => ({ ...p, useSsl: e.target.checked }))}
+                                                style={{ accentColor: '#7c5cfc' }}
+                                            />
+                                            SSL
+                                        </label>
+                                    </div>
+
+                                    {/* Test Result */}
+                                    {emailTestResult && (
+                                        <div style={{
+                                            padding: '10px 14px', borderRadius: '8px',
+                                            background: emailTestResult.success ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.06)',
+                                            border: `1px solid ${emailTestResult.success ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.15)'}`,
+                                            color: emailTestResult.success ? '#16a34a' : '#dc2626',
+                                            fontSize: '13px', fontWeight: 500
+                                        }}>
+                                            {emailTestResult.success ? '✅' : '❌'} {emailTestResult.message}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                    padding: '16px 20px',
+                                    borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)'
+                                }}>
+                                    {emailSaved && (
+                                        <span style={{ color: '#10b981', fontSize: '13px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span>✓</span> 已保存
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={handleTestEmail}
+                                        disabled={emailTesting || !emailSettings.smtpHost}
+                                        style={{
+                                            padding: '8px 20px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                                            cursor: emailTesting ? 'not-allowed' : 'pointer',
+                                            fontSize: '13px', fontWeight: 600, color: '#64748b',
+                                            background: '#fff', transition: 'all 0.2s',
+                                            opacity: emailTesting ? 0.7 : 1
+                                        }}
+                                    >
+                                        {emailTesting ? '测试中...' : '🔌 测试连接'}
+                                    </button>
+                                    <button
+                                        onClick={handleSaveEmailConfig}
+                                        disabled={emailSaving}
+                                        style={{
+                                            padding: '8px 24px', borderRadius: '8px', border: 'none',
+                                            cursor: emailSaving ? 'not-allowed' : 'pointer',
+                                            fontSize: '14px', fontWeight: 600, color: '#fff',
+                                            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                            boxShadow: '0 2px 8px rgba(245,158,11,0.3)',
+                                            transition: 'all 0.2s', opacity: emailSaving ? 0.7 : 1
+                                        }}
+                                    >
+                                        {emailSaving ? '保存中...' : '保存邮箱配置'}
                                     </button>
                                 </div>
                             </div>

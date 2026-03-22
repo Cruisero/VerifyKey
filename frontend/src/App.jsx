@@ -11,10 +11,11 @@ import Admin from './pages/Admin';
 import ApiDocs from './pages/ApiDocs';
 import Maintenance from './pages/Maintenance';
 import Bypass from './pages/Bypass';
+import ResetPassword from './pages/ResetPassword';
 
 import './assets/styles/index.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3002' : '');
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3003' : '');
 
 /* ── Route tree (needs useAuth, so must be inside AuthProvider) ── */
 function AppRoutes({ maintenance }) {
@@ -27,8 +28,9 @@ function AppRoutes({ maintenance }) {
   if (showMaintenance) {
     return (
       <Routes>
-        {/* During maintenance: only admin + login routes work */}
+        {/* During maintenance: only admin + login + reset-password routes work */}
         <Route path="/login" element={<Home />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/admin"
           element={
@@ -88,6 +90,7 @@ function AppRoutes({ maintenance }) {
         }
       />
       <Route path="/pass" element={<Bypass />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>
   );
 }

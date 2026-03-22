@@ -45,7 +45,7 @@ cdk_manager.normalize_existing_cdks()
 database.start_auto_backup()
 
 # Configuration
-PORT = int(os.getenv("PORT", 3002))
+PORT = int(os.getenv("PORT", 3003))
 PROXY_HOST = os.getenv("PROXY_HOST", "geo.iproyal.com")
 PROXY_PORT = os.getenv("PROXY_PORT", "12321")
 PROXY_USER = os.getenv("PROXY_USER", "")
@@ -967,6 +967,10 @@ async def get_config_endpoint():
     
     # Proxy credentials are NOT masked - shown in admin panel
     
+    # Mask email SMTP password
+    if config.get("email", {}).get("smtpPassword"):
+        config["email"]["smtpPassword"] = mask_key(config["email"]["smtpPassword"])
+    
     return config
 
 
@@ -1664,6 +1668,70 @@ async def update_user_credits(authorization: Optional[str] = Header(None)):
     
     # For now, just return current user
     return {"success": True, "user": user}
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password_endpoint(request: ForgotPasswordRequest):
+    """Send password reset email"""
+    import email_service
+
+    token = auth.create_reset_token(request.email)
+    if not token:
+        # Don't reveal whether email exists — always return success
+        return {"success": True, "message": "如果该邮箱已注册，重置链接将发送到您的邮箱"}
+
+    # Build reset link using Referer or default
+    import config_manager
+    config = config_manager.get_config()
+    site_url = config.get("siteUrl", "").rstrip("/")
+    if not site_url:
+        site_url = "http://localhost:5173"
+    reset_link = f"{site_url}/reset-password?token={token}"
+
+    sent = email_service.send_reset_email(request.email, reset_link)
+    if not sent:
+        raise HTTPException(status_code=500, detail="邮件发送失败，请联系管理员检查邮箱配置")
+
+    return {"success": True, "message": "如果该邮箱已注册，重置链接将发送到您的邮箱"}
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+@app.post("/api/auth/reset-password")
+async def reset_password_endpoint(request: ResetPasswordRequest):
+    """Reset password using token"""
+    info = auth.verify_reset_token(request.token)
+    if not info:
+        raise HTTPException(status_code=400, detail="重置链接无效或已过期")
+
+    if len(request.password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度不能少于 6 位")
+
+    success = auth.reset_password(info["userId"], request.password)
+    if not success:
+        raise HTTPException(status_code=500, detail="密码重置失败")
+
+    return {"success": True, "message": "密码重置成功，请使用新密码登录"}
+
+
+@app.post("/api/email/test")
+async def test_email_endpoint(authorization: Optional[str] = Header(None)):
+    """Test SMTP connection (admin only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    import email_service
+    result = email_service.test_email_connection()
+    return result
 
 
 # ============ DOCUMENT CAPTURE ROUTES ============

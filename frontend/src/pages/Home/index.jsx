@@ -13,6 +13,13 @@ export default function Home() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Forgot password state
+    const [showForgot, setShowForgot] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotMsg, setForgotMsg] = useState('');
+    const [forgotError, setForgotError] = useState('');
+
     const { login, register } = useAuth();
     const navigate = useNavigate();
 
@@ -46,26 +53,53 @@ export default function Home() {
         }
     };
 
+    const API_BASE = import.meta.env.VITE_API_URL || '';
+
+    const handleForgotPassword = async (e) => {
+        e.preventDefault();
+        if (!forgotEmail.trim()) return;
+        setForgotLoading(true);
+        setForgotMsg('');
+        setForgotError('');
+        try {
+            const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: forgotEmail.trim() })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setForgotMsg(data.message || '重置链接已发送到您的邮箱');
+            } else {
+                setForgotError(data.detail || '发送失败，请稍后重试');
+            }
+        } catch {
+            setForgotError('网络错误，请稍后重试');
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
     const features = [
         {
+            icon: '💎',
+            title: '账户积分系统',
+            desc: '购买 CDK 卡密兑换积分到账户，积分统一管理，随用随扣'
+        },
+        {
             icon: '⚡',
-            title: '高速验证',
-            desc: '批量自动化验证，快速完成 Google Student 等学生资格认证'
+            title: 'Google One 验证',
+            desc: '批量提交 Google 账号，自动完成学生资格验证，支持普通/Pro 双通道'
         },
         {
-            icon: '🔒',
-            title: '安全可靠',
-            desc: '采用先进加密技术，保护您的数据安全'
+            icon: '🤖',
+            title: 'GPT 充值',
+            desc: '一键为 ChatGPT Plus 账户充值，快速便捷'
         },
         {
-            icon: '💰',
-            title: '灵活计费',
-            desc: '按次计费，用多少付多少，无需订阅'
-        },
-        {
-            icon: '📊',
-            title: '实时追踪',
-            desc: '查看验证状态和历史记录，一目了然'
+            icon: '🎁',
+            title: '邀请返利',
+            desc: '邀请好友注册，双方都可获得积分奖励'
         }
     ];
 
@@ -92,8 +126,8 @@ export default function Home() {
                         </h1>
 
                         <p className="hero-desc">
-                            为您提供高效、安全的学生资格验证服务。支持 Google Student、Gemini Advanced 等多种验证场景，
-                            一键完成批量验证，节省您的宝贵时间。
+                            一站式 Google One 学生验证 & GPT 充值平台。注册账户后使用 CDK 卡密兑换积分，
+                            即可批量提交验证或为 ChatGPT 充值，全程自动化处理。
                         </p>
 
                         <div className="hero-stats">
@@ -183,24 +217,38 @@ export default function Home() {
                             </button>
 
                             {isLogin && (
-                                <a href="#" className="forgot-password">忘记密码？</a>
+                                <a href="#" className="forgot-password" onClick={(e) => { e.preventDefault(); setShowForgot(true); setForgotMsg(''); setForgotError(''); setForgotEmail(email || ''); }}>忘记密码？</a>
                             )}
                         </form>
 
-                        <div className="auth-divider">
-                            <span>或使用以下方式</span>
-                        </div>
+                        {/* Forgot Password Modal */}
+                        {showForgot && (
+                            <div className="forgot-modal-overlay" onClick={() => setShowForgot(false)}>
+                                <div className="forgot-modal" onClick={e => e.stopPropagation()}>
+                                    <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700 }}>🔑 重置密码</h3>
+                                    <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#64748b' }}>输入您注册时使用的邮箱，我们将发送密码重置链接</p>
+                                    <form onSubmit={handleForgotPassword}>
+                                        <input
+                                            className="input"
+                                            type="email"
+                                            placeholder="your@email.com"
+                                            value={forgotEmail}
+                                            onChange={e => setForgotEmail(e.target.value)}
+                                            required
+                                            autoFocus
+                                            style={{ width: '100%', boxSizing: 'border-box', marginBottom: '12px' }}
+                                        />
+                                        {forgotMsg && <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'rgba(34,197,94,0.08)', color: '#16a34a', fontSize: '13px', fontWeight: 500, marginBottom: '12px' }}>✅ {forgotMsg}</div>}
+                                        {forgotError && <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: '13px', fontWeight: 500, marginBottom: '12px' }}>❌ {forgotError}</div>}
+                                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                            <button type="button" className="btn" onClick={() => setShowForgot(false)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>取消</button>
+                                            <button type="submit" className="btn btn-primary" disabled={forgotLoading} style={{ padding: '8px 24px', borderRadius: '8px', fontWeight: 600 }}>{forgotLoading ? '发送中...' : '发送重置链接'}</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
 
-                        <div className="social-login">
-                            <button className="social-btn">
-                                <span>🌐</span>
-                                Google
-                            </button>
-                            <button className="social-btn">
-                                <span>📧</span>
-                                GitHub
-                            </button>
-                        </div>
                     </div>
                 </section>
 
@@ -225,22 +273,22 @@ export default function Home() {
                         <div className="step-item">
                             <div className="step-number">1</div>
                             <div className="step-content">
-                                <h3>获取验证链接</h3>
-                                <p>在 one.google.com/ai-student 等页面获取验证链接</p>
+                                <h3>注册 / 登录账户</h3>
+                                <p>创建您的 OnePASS 账户，所有积分和记录统一管理</p>
                             </div>
                         </div>
                         <div className="step-item">
                             <div className="step-number">2</div>
                             <div className="step-content">
-                                <h3>提交验证请求</h3>
-                                <p>将链接粘贴到验证工具中，点击开始验证</p>
+                                <h3>购买并兑换 CDK</h3>
+                                <p>从 haodongxi.shop 购买 CDK 卡密，在平台内兑换积分到账户</p>
                             </div>
                         </div>
                         <div className="step-item">
                             <div className="step-number">3</div>
                             <div className="step-content">
-                                <h3>等待验证完成</h3>
-                                <p>系统自动处理，几秒钟内完成验证</p>
+                                <h3>提交验证 / 充值</h3>
+                                <p>输入 Google 账号批量验证，或一键 GPT 充值，积分自动扣除</p>
                             </div>
                         </div>
                     </div>

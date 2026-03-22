@@ -1162,7 +1162,6 @@ export default function Verify() {
                             </div>
                         </div>
                     )}
-
                     {/* Dashboard Content - Live Status (pixel tab only) */}
                     {serviceTab === 'pixel' && (
                         <div className="live-status-section card">

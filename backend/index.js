@@ -6,7 +6,7 @@ const { verifyWithPuppeteer } = require('./services/puppeteer-verifier');
 const auth = require('./utils/auth');
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3003;
 
 // Middleware
 app.use(cors());

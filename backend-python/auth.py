@@ -254,3 +254,51 @@ def deduct_credits(user_id: int, amount: float) -> Optional[dict]:
         return None
     return get_user_by_id(user_id)
 
+
+def create_reset_token(email: str) -> Optional[str]:
+    """Create a password reset token (1 hour expiry)"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, email FROM users WHERE email = ?", (email,))
+    user_row = cursor.fetchone()
+    conn.close()
+
+    if not user_row:
+        return None
+
+    payload = {
+        "userId": user_row["id"],
+        "email": user_row["email"],
+        "type": "password_reset",
+        "exp": datetime.utcnow() + timedelta(hours=1)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+def verify_reset_token(token: str) -> Optional[dict]:
+    """Verify a password reset token. Returns {'userId': ..., 'email': ...} or None"""
+    try:
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        if decoded.get("type") != "password_reset":
+            return None
+        return {"userId": decoded["userId"], "email": decoded["email"]}
+    except jwt.ExpiredSignatureError:
+        return None
+    except Exception:
+        return None
+
+
+def reset_password(user_id: int, new_password: str) -> bool:
+    """Reset user password"""
+    hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (hashed, user_id))
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+

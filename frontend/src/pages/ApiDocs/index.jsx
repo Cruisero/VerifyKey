@@ -5,157 +5,341 @@ const API_BASE_URL = 'https://onepass.fun';
 
 const ENDPOINTS = [
     {
-        group: '验证接口',
+        group: '🔐 用户认证',
         items: [
             {
                 method: 'POST',
-                path: '/api/v1/verify',
-                desc: '提交单个验证',
+                path: '/api/auth/register',
+                desc: '用户注册',
                 params: [
-                    { name: 'verificationId', type: 'string', required: true, desc: 'SheerID 验证 ID' },
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码' },
+                    { name: 'email', type: 'string', required: true, desc: '邮箱地址' },
+                    { name: 'password', type: 'string', required: true, desc: '密码' },
+                    { name: 'username', type: 'string', required: false, desc: '用户名（默认取邮箱前缀）' },
+                    { name: 'inviteCode', type: 'string', required: false, desc: '邀请码（有效邀请人将获得 +0.2 积分）' },
                 ],
                 response: `{
-  "taskId": "uuid-xxxx-xxxx",
-  "verificationId": "abc123",
-  "status": "pending",
-  "message": "Verification task created"
-}`,
-            },
-            {
-                method: 'POST',
-                path: '/api/v1/verify/batch',
-                desc: '批量提交验证',
-                params: [
-                    { name: 'verificationIds', type: 'string[]', required: true, desc: '验证 ID 列表（最多10个）' },
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码' },
-                ],
-                response: `{
-  "tasks": [
-    { "taskId": "uuid-1", "verificationId": "id1", "status": "pending" },
-    { "taskId": "uuid-2", "verificationId": "id2", "status": "pending" }
-  ],
-  "total": 2,
-  "message": "2 verification tasks created"
-}`,
-            },
-        ],
-    },
-    {
-        group: '任务管理',
-        items: [
-            {
-                method: 'GET',
-                path: '/api/v1/status/{task_id}',
-                desc: '查询任务状态',
-                params: [
-                    { name: 'task_id', type: 'string', required: true, desc: '任务 ID（URL 参数）' },
-                ],
-                response: `{
-  "taskId": "uuid-xxxx",
-  "verificationId": "abc123",
-  "status": "approved",
-  "completed": true,
   "success": true,
-  "error": null,
-  "redirectUrl": "https://...",
-  "createdAt": "2026-02-23T12:00:00",
-  "completedAt": "2026-02-23T12:01:30"
+  "token": "eyJhbGci...",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "username": "user",
+    "credits": 0,
+    "role": "user",
+    "invite_code": "A1B2C3"
+  }
 }`,
             },
-        ],
-    },
-    {
-        group: 'CDK 额度',
-        items: [
             {
-                method: 'GET',
-                path: '/api/v1/cdk/status',
-                desc: '查询 CDK 余额',
+                method: 'POST',
+                path: '/api/auth/login',
+                desc: '用户登录',
                 params: [
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（query 参数或 X-CDK-Key Header）' },
+                    { name: 'email', type: 'string', required: true, desc: '邮箱地址' },
+                    { name: 'password', type: 'string', required: true, desc: '密码' },
                 ],
                 response: `{
-  "code": "CDK-...XXXX",
-  "total_uses": 100,
-  "remaining_uses": 87,
-  "used_uses": 13,
-  "valid": true
+  "success": true,
+  "token": "eyJhbGci...",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "username": "user",
+    "credits": 5.5,
+    "role": "user"
+  }
+}`,
+            },
+            {
+                method: 'GET',
+                path: '/api/auth/me',
+                desc: '获取当前用户信息',
+                params: [
+                    { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
+                ],
+                response: `{
+  "success": true,
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "username": "user",
+    "credits": 5.5,
+    "role": "user",
+    "invite_code": "A1B2C3"
+  }
+}`,
+            },
+            {
+                method: 'POST',
+                path: '/api/auth/forgot-password',
+                desc: '发送密码重置邮件',
+                params: [
+                    { name: 'email', type: 'string', required: true, desc: '注册邮箱' },
+                ],
+                response: `{
+  "success": true,
+  "message": "重置链接已发送到邮箱"
+}`,
+            },
+            {
+                method: 'POST',
+                path: '/api/auth/reset-password',
+                desc: '重置密码',
+                params: [
+                    { name: 'token', type: 'string', required: true, desc: '重置令牌（来自邮件链接）' },
+                    { name: 'password', type: 'string', required: true, desc: '新密码' },
+                ],
+                response: `{
+  "success": true,
+  "message": "密码已重置"
 }`,
             },
         ],
     },
     {
-        group: '系统状态',
+        group: '💳 CDK 积分管理',
         items: [
             {
+                method: 'POST',
+                path: '/api/cdk/validate',
+                desc: '验证 CDK 有效性',
+                params: [
+                    { name: 'code', type: 'string', required: true, desc: 'CDK 激活码' },
+                ],
+                response: `{
+  "valid": true,
+  "remaining": 5.0,
+  "total": 5,
+  "used": 0,
+  "note": "赠送码"
+}`,
+            },
+            {
+                method: 'POST',
+                path: '/api/cdk/redeem',
+                desc: '兑换 CDK 积分到账户',
+                params: [
+                    { name: 'code', type: 'string', required: true, desc: 'CDK 激活码' },
+                    { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
+                ],
+                response: `{
+  "success": true,
+  "credits_added": 5.0,
+  "new_balance": 5.0,
+  "message": "兑换成功，获得 5.0 积分"
+}`,
+            },
+        ],
+    },
+    {
+        group: '📡 Gemini 验证服务 (Pixel)',
+        items: [
+            {
+                method: 'POST',
+                path: '/api/pixel/jobs',
+                desc: '提交 Gemini 验证任务',
+                params: [
+                    { name: 'email', type: 'string', required: true, desc: 'Google 账号邮箱' },
+                    { name: 'password', type: 'string', required: true, desc: '账号密码' },
+                    { name: 'totp_secret', type: 'string', required: true, desc: '2FA TOTP 密钥（Base32 编码）' },
+                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 1~1.5 积分）' },
+                    { name: 'priority', type: 'string', required: false, desc: '优先级：normal / high（Pro）' },
+                ],
+                response: `{
+  "job_id": "abc123-def456",
+  "status": "queued",
+  "queue_position": 3,
+  "estimated_wait_seconds": 120
+}`,
+            },
+            {
                 method: 'GET',
-                path: '/api/v1/health',
-                desc: '健康检查',
+                path: '/api/pixel/jobs/{job_id}',
+                desc: '查询验证任务状态',
+                params: [
+                    { name: 'job_id', type: 'string', required: true, desc: '任务 ID（URL 参数）' },
+                ],
+                response: `{
+  "job_id": "abc123-def456",
+  "status": "completed",
+  "result": "success",
+  "message": "验证完成",
+  "created_at": "2026-03-22T12:00:00Z",
+  "completed_at": "2026-03-22T12:05:30Z"
+}`,
+            },
+            {
+                method: 'GET',
+                path: '/api/pixel/health',
+                desc: 'Pixel 服务健康检查',
                 params: [],
                 response: `{
   "status": "ok",
-  "provider": "getgem",
-  "version": "1.0.0",
-  "timestamp": "2026-02-23T12:00:00"
+  "api_key_configured": true,
+  "base_url": "https://api.iqless.icu"
+}`,
+            },
+            {
+                method: 'GET',
+                path: '/api/pixel/balance',
+                desc: '查询 Pixel API 余额',
+                params: [],
+                response: `{
+  "balance": 150.0,
+  "currency": "CNY"
+}`,
+            },
+        ],
+    },
+    {
+        group: '🤖 ChatGPT 充值服务',
+        items: [
+            {
+                method: 'POST',
+                path: '/api/gpt/recharge',
+                desc: 'ChatGPT Plus 月度充值',
+                params: [
+                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 2 积分）' },
+                    { name: 'card_key', type: 'string', required: true, desc: '充值卡密' },
+                    { name: 'account', type: 'string', required: true, desc: 'ChatGPT 账号' },
+                    { name: 'email', type: 'string', required: false, desc: '绑定邮箱（记录用）' },
+                ],
+                response: `{
+  "success": true,
+  "message": "充值成功"
+}`,
+            },
+            {
+                method: 'POST',
+                path: '/api/gpt/exchange',
+                desc: '用积分兑换充值卡密',
+                params: [
+                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码' },
+                ],
+                response: `{
+  "success": true,
+  "card_key": "GPT-XXXX-XXXX-XXXX",
+  "message": "兑换成功"
+}`,
+            },
+        ],
+    },
+    {
+        group: '📊 实时验证状态',
+        items: [
+            {
+                method: 'GET',
+                path: '/api/verify/history',
+                desc: '获取验证历史（公开、脱敏）',
+                params: [],
+                response: `{
+  "history": [
+    { "id": "abc123", "status": "pass", "timestamp": "2026-03-22T12:00:00Z" },
+    { "id": "def456", "status": "failed", "timestamp": "2026-03-22T11:55:00Z" }
+  ],
+  "stats": {
+    "total": 138,
+    "pass": 133,
+    "failed": 5,
+    "processing": 0,
+    "cancel": 0
+  }
+}`,
+            },
+        ],
+    },
+    {
+        group: '🔧 系统状态',
+        items: [
+            {
+                method: 'GET',
+                path: '/api/status',
+                desc: '系统健康检查',
+                params: [],
+                response: `{
+  "status": "running",
+  "version": "2.0.0",
+  "uptime": "3d 12h 45m"
+}`,
+            },
+            {
+                method: 'GET',
+                path: '/api/config',
+                desc: '获取前端配置',
+                params: [],
+                response: `{
+  "siteName": "OnePass",
+  "pixelEnabled": true,
+  "gptEnabled": true,
+  "registerEnabled": true
 }`,
             },
         ],
     },
 ];
 
-const RATE_LIMITS = [
-    { path: '/api/v1/verify, /api/v1/verify/batch', limit: '100 次/IP', window: '60 秒' },
-    { path: '/api/v1/status/{id}', limit: '20 次/task_id', window: '60 秒' },
-    { path: '/api/v1/health', limit: '60 次/IP', window: '60 秒' },
-    { path: '/api/v1/cdk/status', limit: '60 次/IP', window: '60 秒' },
+const CREDITS_TABLE = [
+    { service: 'Gemini 普通认证', cost: '-1 积分' },
+    { service: 'Gemini 高级认证', cost: '-1.5 积分' },
+    { service: 'ChatGPT Plus 月度充值', cost: '-2 积分' },
+    { service: '邀请好友（首次兑换后）', cost: '+0.2 积分' },
 ];
 
 const ERROR_CODES = [
     { code: 400, desc: '请求参数错误' },
-    { code: 401, desc: '缺少 CDK 认证' },
-    { code: 403, desc: 'CDK 无效或额度不足' },
-    { code: 404, desc: '任务不存在' },
-    { code: 429, desc: '请求过于频繁（限流）' },
+    { code: 401, desc: '未登录或 Token 过期' },
+    { code: 403, desc: '权限不足（需要 Admin）' },
+    { code: 404, desc: '资源不存在' },
+    { code: 429, desc: '请求过于频繁' },
     { code: 500, desc: '服务器内部错误' },
+    { code: 502, desc: '上游服务不可用' },
+    { code: 503, desc: '服务未启用或未配置' },
 ];
 
 const FULL_EXAMPLE = `import requests
-import time
 
 BASE = "${API_BASE_URL}"
-CDK = "CDK-XXXXXXXXXXXXXXXX"
 
-# 1. 检查 CDK 余额
-cdk_info = requests.get(f"{BASE}/api/v1/cdk/status", params={"cdk": CDK}).json()
-print(f"CDK 剩余: {cdk_info['remaining_uses']}")
-
-# 2. 提交验证
-resp = requests.post(f"{BASE}/api/v1/verify", json={
-    "verificationId": "your-verification-id",
-    "cdk": CDK
+# 1. 登录获取 Token
+login = requests.post(f"{BASE}/api/auth/login", json={
+    "email": "user@example.com",
+    "password": "your_password"
 }).json()
-task_id = resp["taskId"]
-print(f"Task: {task_id}")
+token = login["token"]
+headers = {"Authorization": f"Bearer {token}"}
 
-# 3. 轮询状态
-interval = 5
+# 2. 查看当前积分
+me = requests.get(f"{BASE}/api/auth/me", headers=headers).json()
+print(f"当前积分: {me['user']['credits']}")
+
+# 3. 兑换 CDK 积分
+redeem = requests.post(f"{BASE}/api/cdk/redeem", 
+    json={"code": "CDK-XXXXXXXX"},
+    headers=headers
+).json()
+print(f"兑换成功，新余额: {redeem['new_balance']}")
+
+# 4. 提交 Gemini 验证
+job = requests.post(f"{BASE}/api/pixel/jobs", json={
+    "email": "google@gmail.com",
+    "password": "google_password",
+    "totp_secret": "JBSWY3DPEHPK3PXP",
+    "cdk": "CDK-XXXXXXXX",
+    "priority": "normal"
+}).json()
+print(f"任务已提交: {job['job_id']}")
+
+# 5. 轮询状态
+import time
 while True:
-    r = requests.get(f"{BASE}/api/v1/status/{task_id}")
-    if r.status_code == 429:
-        interval = min(interval * 2, 30)
-        time.sleep(interval)
-        continue
-    status = r.json()
-    print(f"  [{status['status']}]")
-    if status["completed"]:
-        if status["success"]:
-            print(f"✅ {status['redirectUrl']}")
-        else:
-            print(f"❌ {status['error']}")
+    status = requests.get(
+        f"{BASE}/api/pixel/jobs/{job['job_id']}"
+    ).json()
+    print(f"  状态: {status['status']}")
+    if status["status"] in ("completed", "failed"):
+        print(f"  结果: {status.get('result', 'N/A')}")
         break
-    interval = 5
-    time.sleep(interval)`;
+    time.sleep(10)`;
 
 export default function ApiDocs() {
     const [expanded, setExpanded] = useState({});
@@ -168,9 +352,9 @@ export default function ApiDocs() {
         <div className="api-docs">
             {/* Hero */}
             <div className="api-hero">
-                <h1>Student Verification API</h1>
+                <h1>OnePass API 文档</h1>
                 <p className="api-subtitle">
-                    通过 API 提交学生身份验证请求，查询任务状态，管理 CDK 额度。
+                    通过 API 管理用户认证、积分兑换、Gemini 验证、ChatGPT 充值等服务。
                 </p>
                 <div className="api-base-url">
                     Base URL: <code>{API_BASE_URL}</code>
@@ -182,27 +366,48 @@ export default function ApiDocs() {
             <div className="api-flow">
                 <div className="flow-step">
                     <span className="step-num">1</span>
-                    <span className="step-label">获取 CDK</span>
+                    <span className="step-label">注册 / 登录</span>
                 </div>
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">
                     <span className="step-num">2</span>
-                    <span className="step-label">POST /api/v1/verify</span>
+                    <span className="step-label">兑换 CDK 积分</span>
                 </div>
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">
                     <span className="step-num">3</span>
-                    <span className="step-label">轮询 /api/v1/status/{'{id}'}</span>
+                    <span className="step-label">提交验证 / 充值</span>
                 </div>
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">
                     <span className="step-num">4</span>
-                    <span className="step-label">获取 redirectUrl</span>
+                    <span className="step-label">轮询状态</span>
                 </div>
             </div>
+
+            {/* Credits info */}
             <div className="api-info-banner">
-                每次验证消耗 1 次 CDK 额度。验证失败会自动退还额度。请在提交前确保 CDK 有剩余次数。
+                所有服务使用积分支付。新用户默认 0 积分，需通过 CDK 兑换或邀请好友获取。
             </div>
+
+            {/* Credits Table */}
+            <h3 className="api-section-title">积分消耗</h3>
+            <table className="rate-limit-table">
+                <thead>
+                    <tr>
+                        <th>服务</th>
+                        <th>积分消耗</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {CREDITS_TABLE.map((r, i) => (
+                        <tr key={i}>
+                            <td>{r.service}</td>
+                            <td><code style={{ color: r.cost.startsWith('+') ? '#10b981' : '#ef4444' }}>{r.cost}</code></td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
 
             {/* Endpoint Groups */}
             {ENDPOINTS.map((group) => (
@@ -269,31 +474,6 @@ export default function ApiDocs() {
                 </div>
             ))}
 
-            {/* Rate Limits */}
-            <h3 className="api-section-title">限流规则</h3>
-            <table className="rate-limit-table">
-                <thead>
-                    <tr>
-                        <th>接口</th>
-                        <th>限制</th>
-                        <th>窗口</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {RATE_LIMITS.map((r, i) => (
-                        <tr key={i}>
-                            <td>{r.path}</td>
-                            <td>{r.limit}</td>
-                            <td>{r.window}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            <div className="api-info-banner warning">
-                超出限制返回 429 Too Many Requests。建议使用指数退避重试。<br />
-                /api/v1/status 按 task_id 独立限流，并发轮询多个任务不会互相影响。其余接口按 IP 限流。
-            </div>
-
             {/* Error Codes */}
             <h3 className="api-section-title">错误码参考</h3>
             <table className="error-table">
@@ -312,6 +492,14 @@ export default function ApiDocs() {
                     ))}
                 </tbody>
             </table>
+
+            {/* Auth Info */}
+            <h3 className="api-section-title">认证方式</h3>
+            <div className="api-info-banner">
+                需要认证的接口请在请求头中携带 <code>Authorization: Bearer {'<token>'}</code>。
+                Token 通过 <code>/api/auth/login</code> 或 <code>/api/auth/register</code> 获取。
+                Token 有效期 7 天，过期后需重新登录。
+            </div>
 
             {/* Full Example */}
             <div className="full-example">

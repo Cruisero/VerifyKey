@@ -1607,6 +1607,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     username: Optional[str] = None
+    inviteCode: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -1619,7 +1620,7 @@ async def register_user(request: RegisterRequest):
     """Register a new user"""
     try:
         username = request.username or request.email.split("@")[0]
-        result = auth.register(request.email, request.password, username)
+        result = auth.register(request.email, request.password, username, request.inviteCode)
         return {"success": True, **result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1732,6 +1733,64 @@ async def test_email_endpoint(authorization: Optional[str] = Header(None)):
     import email_service
     result = email_service.test_email_connection()
     return result
+
+
+# ============ USER MANAGEMENT (ADMIN) ============
+
+@app.get("/api/admin/users")
+async def list_users_endpoint(authorization: str = Header(None)):
+    """List all users (admin only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    users = auth.list_all_users()
+    return {"users": users}
+
+
+@app.post("/api/admin/users/{user_id}/toggle")
+async def toggle_user_endpoint(user_id: int, request: Request, authorization: str = Header(None)):
+    """Toggle user active/suspended status"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    admin = auth.verify_token(token)
+    if not admin or admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    data = await request.json()
+    status = data.get("status", "suspended")
+    if status not in ("active", "suspended"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    success = auth.toggle_user_status(user_id, status)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "status": status}
+
+
+@app.post("/api/admin/users/{user_id}/credits")
+async def update_user_credits_endpoint(user_id: int, request: Request, authorization: str = Header(None)):
+    """Update user credits (admin only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    admin = auth.verify_token(token)
+    if not admin or admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    data = await request.json()
+    credits = data.get("credits")
+    if credits is None or not isinstance(credits, (int, float)):
+        raise HTTPException(status_code=400, detail="Invalid credits value")
+
+    success = auth.update_user_credits_admin(user_id, int(credits))
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "credits": int(credits)}
 
 
 # ============ DOCUMENT CAPTURE ROUTES ============
@@ -4034,6 +4093,7 @@ def _save_auto_rules(rules):
 
 async def _auto_rule_loop(rule_id: str):
     """Background loop for a single auto-record rule"""
+    import random as _random
     while True:
         try:
             rules = _load_auto_rules()
@@ -4052,9 +4112,19 @@ async def _auto_rule_loop(rule_id: str):
                     print(f"[AutoRecord] Rule {rule_id} expired after {duration_hours}h")
                     break
             
-            status = rule.get("status", "pass")
-            unique_vid = f"auto-{rule_id[:6]}-{int(datetime.now(timezone.utc).timestamp())}"
-            verification_history.log_verification(status, unique_vid)
+            count = max(1, int(rule.get("count", 1)))
+            success_rate = min(100, max(0, float(rule.get("successRate", 100))))
+            
+            for i in range(count):
+                # Determine status based on success rate
+                if _random.random() * 100 < success_rate:
+                    status = "pass"
+                else:
+                    status = "failed"
+                ts = int(datetime.now(timezone.utc).timestamp())
+                unique_vid = f"auto-{rule_id[:6]}-{ts}-{i}"
+                verification_history.log_verification(status, unique_vid)
+            
             interval_sec = rule.get("intervalMinutes", 5) * 60
             await asyncio.sleep(interval_sec)
         except asyncio.CancelledError:
@@ -4098,6 +4168,8 @@ async def create_auto_record_rule(request: Request):
         "id": str(uuid.uuid4())[:8],
         "status": data.get("status", "pass"),
         "intervalMinutes": max(1, int(data.get("intervalMinutes", 5))),
+        "count": max(1, int(data.get("count", 1))),
+        "successRate": min(100, max(0, float(data.get("successRate", 100)))),
         "durationHours": max(0, float(data.get("durationHours", 0))),
         "enabled": data.get("enabled", True),
         "startedAt": datetime.now(timezone.utc).isoformat() if data.get("enabled", True) else None
@@ -4128,6 +4200,10 @@ async def toggle_auto_record_rule(rule_id: str, request: Request):
         rule["status"] = data["status"]
     if "durationHours" in data:
         rule["durationHours"] = max(0, float(data["durationHours"]))
+    if "count" in data:
+        rule["count"] = max(1, int(data["count"]))
+    if "successRate" in data:
+        rule["successRate"] = min(100, max(0, float(data["successRate"])))
     
     _save_auto_rules(rules)
     

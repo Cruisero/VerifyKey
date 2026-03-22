@@ -41,6 +41,7 @@ export default function Verify() {
 
     // Top-level service tab: 'pixel' | 'gpt'
     const [serviceTab, setServiceTab] = useState('pixel');
+    const [showGuide, setShowGuide] = useState(false);
 
     // GPT Recharge wizard state
     const [gptStep, setGptStep] = useState(1);
@@ -271,6 +272,7 @@ export default function Verify() {
                             status: 'success',
                             message: `✅ ${message || '验证成功'}`,
                             stageLabel: 'DONE',
+                            totalStages: 0,
                         } : r
                     ));
                     setCdkRemaining(prev => Math.max(0, prev - 1.5));
@@ -292,6 +294,7 @@ export default function Verify() {
                             message: status === 'Running'
                                 ? `🔄 运行中... ${message}`
                                 : `⏳ 排队中...`,
+                            stageLabel: status === 'Running' ? '运行中' : '排队中',
                         } : r
                     ));
                 }
@@ -420,10 +423,11 @@ export default function Verify() {
             timestamp: new Date().toISOString(),
             message: '⏳ 提交中...',
             stage: 0,
-            totalStages: 8,
+            totalStages: verifyTier === 'pro' ? 0 : 8,
             stageLabel: '',
             url: '',
             jobId: '',
+            source: verifyTier === 'pro' ? 'kpixel' : 'pixel',
         }));
         setResults(prev => [...resultItems, ...prev]);
 
@@ -563,16 +567,141 @@ export default function Verify() {
                         onClick={() => setServiceTab('pixel')}
                     >
                         <span className="service-tab-icon">📡</span>
-                        <span>Google One 验证</span>
+                        <span>Gemini 验证</span>
                     </button>
                     <button
                         className={`service-tab service-tab-gpt ${serviceTab === 'gpt' ? 'active' : ''}`}
                         onClick={() => setServiceTab('gpt')}
                     >
                         <span className="service-tab-icon">🤖</span>
-                        <span>GPT 充值</span>
+                        <span>ChatGPT 充值</span>
                     </button>
                 </div>
+
+                {/* Guide / Tutorial Toggle */}
+                <div className="guide-toggle-bar" onClick={() => setShowGuide(!showGuide)}>
+                    <span className="guide-toggle-label">
+                        <span className="guide-toggle-icon">📖</span>
+                        使用教程 & 积分规则
+                    </span>
+                    <span className={`guide-toggle-arrow ${showGuide ? 'open' : ''}`}>▾</span>
+                </div>
+
+                {showGuide && (
+                    <div className="guide-section">
+                        {/* Credits Rules + Invite (merged) */}
+                        <div className="guide-card guide-card-credits">
+                            <div className="guide-card-header">
+                                <span className="guide-card-icon">💰</span>
+                                <h3>积分规则 & 邀请奖励</h3>
+                            </div>
+                            <div className="guide-card-body">
+                                <div className="credits-price-grid">
+                                    <div className="credits-price-item">
+                                        <div className="credits-price-service">
+                                            <span className="credits-dot gemini"></span>
+                                            Gemini 普通认证
+                                        </div>
+                                        <span className="credits-price-val">-1 积分</span>
+                                    </div>
+                                    <div className="credits-price-item">
+                                        <div className="credits-price-service">
+                                            <span className="credits-dot pro"></span>
+                                            Gemini 高级认证
+                                        </div>
+                                        <span className="credits-price-val">-1.5 积分</span>
+                                    </div>
+                                    <div className="credits-price-item">
+                                        <div className="credits-price-service">
+                                            <span className="credits-dot gpt"></span>
+                                            ChatGPT 月度充值
+                                        </div>
+                                        <span className="credits-price-val">-2 积分</span>
+                                    </div>
+                                    <div className="credits-price-item invite">
+                                        <div className="credits-price-service">
+                                            <span className="credits-dot invite"></span>
+                                            邀请奖励
+                                        </div>
+                                        <span className="credits-price-val positive">+0.2 积分 / 人</span>
+                                    </div>
+                                </div>
+                                <p className="guide-note warn">⚠️ 被邀请用户注册后需首次兑换卡密，邀请人才能获得奖励积分</p>
+                                <p className="guide-note" style={{ marginTop: '6px' }}>✨ 所有服务积分通用，可通过 CDK 兑换或邀请获取</p>
+                            </div>
+                        </div>
+
+                        {/* Service Guide — conditional on tab */}
+                        {serviceTab === 'pixel' ? (
+                            <div className="guide-card guide-card-gemini">
+                                <div className="guide-card-header">
+                                    <span className="guide-card-icon">📡</span>
+                                    <h3>Gemini 验证服务</h3>
+                                </div>
+                                <div className="guide-card-body">
+                                    <p className="guide-desc">此服务为通过 Pixel 获取 <strong>Gemini Advanced 1 年 Pro 订阅</strong>，由 OnePASS 全自动完成。</p>
+                                    <ul className="guide-checklist">
+                                        <li>
+                                            <span className="check-icon required">🔐</span>
+                                            <span><strong>2FA 验证：</strong>必须开启，并设置好 Google Authenticator</span>
+                                        </li>
+                                        <li>
+                                            <span className="check-icon required">🌍</span>
+                                            <span><strong>地区要求：</strong>需在支持区域内</span>
+                                        </li>
+                                        <li>
+                                            <span className="check-icon required">👨‍👩‍👦</span>
+                                            <span><strong>家庭组：</strong>必须退出，确保无订阅过</span>
+                                        </li>
+                                        <li>
+                                            <span className="check-icon warn">💡</span>
+                                            <span><strong>账号建议：</strong>建议使用老号，新号极其容易封控，导致账号无法登录</span>
+                                        </li>
+                                        <li>
+                                            <span className="check-icon warn">🌐</span>
+                                            <span><strong>绑卡注意：</strong>绑卡时浏览器只能登录你要升级的账号，请先退出其他 Google 账号</span>
+                                        </li>
+                                    </ul>
+                                    <div className="guide-tier-info">
+                                        <div className="tier-item">
+                                            <span className="tier-badge normal">普通</span>
+                                            <span>认证完成后需 <strong>自行绑卡</strong>，如无信用卡可往商城购买</span>
+                                        </div>
+                                        <div className="tier-item">
+                                            <span className="tier-badge pro">高级</span>
+                                            <span>一条龙服务，认证完成后 <strong>自动绑卡</strong></span>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="guide-card guide-card-chatgpt">
+                                <div className="guide-card-header">
+                                    <span className="guide-card-icon">🤖</span>
+                                    <h3>ChatGPT 充值服务</h3>
+                                </div>
+                                <div className="guide-card-body">
+                                    <p className="guide-desc">应用户需求，现推出 <strong>ChatGPT Plus 月度自动充值</strong>服务，产品无质保。</p>
+                                    <ul className="guide-checklist">
+                                        <li>
+                                            <span className="check-icon success">✅</span>
+                                            <span>获取Session的前提是浏览器已经登陆ChatGPT</span>
+                                        </li>
+                                        <li>
+                                            <span className="check-icon success">✅</span>
+                                            <span>新号 / 老号均可充值</span>
+                                        </li>
+                                        <li>
+                                            <span className="check-icon success">✅</span>
+                                            <span>提前续费，时间会直接覆盖并非延续</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Main Verify Content */}
                 <div className="verify-content">
@@ -585,7 +714,7 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">📡</span>
-                                        <span>{verifyTier === 'pro' ? 'KPixel Pro 提交' : 'UPixel 普通提交'}</span>
+                                        <span>{verifyTier === 'pro' ? '高级提交-自动完成绑卡' : '普通提交-验证完成之后需自行绑卡'}</span>
                                     </div>
                                 </div>
 
@@ -602,7 +731,7 @@ export default function Verify() {
                                             className={`tier-tab tier-tab-pro ${verifyTier === 'pro' ? 'active' : ''}`}
                                             onClick={() => setVerifyTier('pro')}
                                         >
-                                            ⚡ Pro 验证 <span className="tier-cost">1.5 积分</span>
+                                            ⚡ 高级验证 <span className="tier-cost">1.5 积分</span>
                                         </button>
                                     </div>
 
@@ -877,7 +1006,7 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">🤖</span>
-                                        <span>ChatGPT Plus 充值</span>
+                                        <span>ChatGPT Plus 月度充值</span>
                                     </div>
                                     <span className="gpt-cost-badge">⚡ 2 积分 / 次</span>
                                 </div>

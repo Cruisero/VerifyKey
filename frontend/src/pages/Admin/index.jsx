@@ -974,19 +974,22 @@ function PixelApiTab() {
                         status = 'submitted';
                     }
 
+                    const isKPixel = data.source === 'kpixel';
+
                     const entry = {
                         id: existingIdx >= 0 ? prev[existingIdx].id : Date.now() + Math.random(),
                         jobId,
                         email: data.link || '',
                         status,
                         stage: data.stage || 0,
-                        totalStages: data.totalStages || 8,
+                        totalStages: isKPixel ? 0 : (data.totalStages || 8),
                         stageLabel: data.stageLabel || '',
                         message: data.message || '',
                         url: data.url || (existingIdx >= 0 ? prev[existingIdx].url : ''),
                         error: data.error || '',
                         elapsed: data.elapsed || 0,
                         timestamp: new Date().toISOString(),
+                        source: data.source || 'pixel',
                     };
 
                     if (existingIdx >= 0) {
@@ -1217,7 +1220,9 @@ function PixelApiTab() {
                                                         fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
                                                         background: sc.color, color: '#fff', fontWeight: 600,
                                                     }}>
-                                                        {job.status === 'submitted' ? '已提交' : `${job.stage}/${job.totalStages}`}
+                                                        {job.status === 'submitted' ? '已提交'
+                                                            : job.totalStages > 0 ? `${job.stage}/${job.totalStages}`
+                                                            : (job.stageLabel || '运行中')}
                                                     </span>
                                                 )}
                                                 {job.status === 'success' && (
@@ -1785,7 +1790,7 @@ export default function Admin() {
     const [addCount, setAddCount] = useState(1);
     const [addingStatus, setAddingStatus] = useState(null);
     const [autoRules, setAutoRules] = useState([]);
-    const [newRule, setNewRule] = useState({ intervalMinutes: 5, status: 'pass', durationHours: 0 });
+    const [newRule, setNewRule] = useState({ intervalMinutes: 5, status: 'pass', durationHours: 0, count: 1, successRate: 80 });
     const [savingRule, setSavingRule] = useState(false);
 
     // CDK management state
@@ -1879,6 +1884,12 @@ export default function Admin() {
     const [emailSaved, setEmailSaved] = useState(false);
     const [siteUrl, setSiteUrl] = useState('');
 
+    // User management state
+    const [users, setUsers] = useState([]);
+    const [usersLoading, setUsersLoading] = useState(false);
+    const [editingUser, setEditingUser] = useState(null);
+    const [editCredits, setEditCredits] = useState('');
+
     // Region mode state: 'global' (default) or 'us_only'
     const [regionMode, setRegionMode] = useState('global');
 
@@ -1950,6 +1961,7 @@ export default function Admin() {
     useEffect(() => {
         fetchConfig();
         fetchTgAccounts();
+        fetchUsers();
         // Fetch site-wide stats for Overview tab
         const fetchSiteData = async () => {
             try {
@@ -2232,6 +2244,71 @@ export default function Admin() {
             alert('保存失败: ' + e.message);
         } finally {
             setTipsSaving(false);
+        }
+    };
+
+    // ========= User Management =========
+    const fetchUsers = async () => {
+        setUsersLoading(true);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/users`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setUsers(data.users || []);
+            }
+        } catch (e) {
+            console.error('Failed to fetch users:', e);
+        } finally {
+            setUsersLoading(false);
+        }
+    };
+
+    const handleToggleUser = async (userId, currentStatus) => {
+        const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+        const action = newStatus === 'suspended' ? '禁用' : '启用';
+        if (!confirm(`确定${action}该用户？`)) return;
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/users/${userId}/toggle`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (res.ok) {
+                fetchUsers();
+            } else {
+                alert('操作失败');
+            }
+        } catch (e) {
+            alert('操作失败: ' + e.message);
+        }
+    };
+
+    const handleUpdateCredits = async () => {
+        if (!editingUser) return;
+        const credits = parseInt(editCredits);
+        if (isNaN(credits) || credits < 0) {
+            alert('请输入有效的积分数值');
+            return;
+        }
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/users/${editingUser.id}/credits`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ credits })
+            });
+            if (res.ok) {
+                setEditingUser(null);
+                fetchUsers();
+            } else {
+                alert('修改失败');
+            }
+        } catch (e) {
+            alert('修改失败: ' + e.message);
         }
     };
 
@@ -2842,12 +2919,7 @@ export default function Admin() {
         pendingWithdrawals: 3
     };
 
-    const users = [
-        { id: 1, username: 'user1', email: 'user1@example.com', credits: 150, status: 'active', joined: '2026-01-15' },
-        { id: 2, username: 'user2', email: 'user2@example.com', credits: 45, status: 'active', joined: '2026-01-18' },
-        { id: 3, username: 'user3', email: 'user3@example.com', credits: 0, status: 'suspended', joined: '2026-01-20' },
-        { id: 4, username: 'user4', email: 'user4@example.com', credits: 320, status: 'active', joined: '2026-01-22' },
-    ];
+    // users is state, fetched from API - see fetchUsers()
 
     const tabs = [
         { id: 'overview', label: t('tabOverview'), icon: '📊' },
@@ -3102,6 +3174,13 @@ export default function Admin() {
                 {/* Users Tab */}
                 {activeTab === 'users' && (
                     <div className="tab-content">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>共 {users.length} 个用户</span>
+                            <button className="btn btn-sm btn-secondary" onClick={fetchUsers} disabled={usersLoading}
+                                style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '13px' }}>
+                                {usersLoading ? '加载中...' : '🔄 刷新'}
+                            </button>
+                        </div>
                         <div className="users-table card">
                             <table className="data-table">
                                 <thead>
@@ -3109,29 +3188,70 @@ export default function Admin() {
                                         <th>ID</th>
                                         <th>用户名</th>
                                         <th>邮箱</th>
+                                        <th>角色</th>
                                         <th>积分</th>
+                                        <th>邀请码</th>
+                                        <th>邀请数</th>
                                         <th>状态</th>
                                         <th>注册时间</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    {users.length === 0 && !usersLoading && (
+                                        <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>暂无用户数据</td></tr>
+                                    )}
+                                    {usersLoading && (
+                                        <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>加载中...</td></tr>
+                                    )}
                                     {users.map(u => (
                                         <tr key={u.id}>
                                             <td>{u.id}</td>
-                                            <td>{u.username}</td>
+                                            <td style={{ fontWeight: 600 }}>{u.username || '-'}</td>
                                             <td>{u.email}</td>
-                                            <td>{u.credits}</td>
                                             <td>
-                                                <span className={`badge badge-${u.status === 'active' ? 'success' : 'error'}`}>
-                                                    {u.status === 'active' ? '正常' : '禁用'}
+                                                <span className={`badge ${u.role === 'admin' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: '11px' }}>
+                                                    {u.role === 'admin' ? '管理员' : '用户'}
                                                 </span>
                                             </td>
-                                            <td>{u.joined}</td>
+                                            <td style={{ fontWeight: 600, color: u.credits > 0 ? '#16a34a' : '#94a3b8' }}>{u.credits ?? 0}</td>
                                             <td>
-                                                <div className="action-btns">
-                                                    <button className="btn btn-sm btn-secondary">编辑</button>
-                                                    <button className="btn btn-sm btn-outline">禁用</button>
+                                                {u.invite_code ? (
+                                                    <code style={{ fontSize: '12px', padding: '2px 6px', background: 'rgba(124,92,252,0.08)', borderRadius: '4px', color: '#7c5cfc', cursor: 'pointer' }}
+                                                        onClick={() => { navigator.clipboard.writeText(u.invite_code); }}
+                                                        title="点击复制">
+                                                        {u.invite_code}
+                                                    </code>
+                                                ) : '-'}
+                                            </td>
+                                            <td>
+                                                {u.invite_count > 0 ? (
+                                                    <span style={{ fontWeight: 600, color: '#f59e0b' }}>👥 {u.invite_count}</span>
+                                                ) : (
+                                                    <span style={{ color: '#cbd5e1' }}>0</span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className={`badge badge-${(!u.status || u.status === 'active') ? 'success' : 'error'}`}>
+                                                    {(!u.status || u.status === 'active') ? '正常' : '禁用'}
+                                                </span>
+                                            </td>
+                                            <td style={{ fontSize: '13px', color: '#64748b' }}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td>
+                                            <td>
+                                                <div className="action-btns" style={{ display: 'flex', gap: '6px' }}>
+                                                    <button className="btn btn-sm btn-secondary"
+                                                        style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '6px' }}
+                                                        onClick={() => { setEditingUser(u); setEditCredits(String(u.credits ?? 0)); }}>
+                                                        编辑
+                                                    </button>
+                                                    {u.role !== 'admin' && (
+                                                        <button
+                                                            className={`btn btn-sm ${(!u.status || u.status === 'active') ? 'btn-outline' : 'btn-primary'}`}
+                                                            style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '6px' }}
+                                                            onClick={() => handleToggleUser(u.id, u.status || 'active')}>
+                                                            {(!u.status || u.status === 'active') ? '禁用' : '启用'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -3139,6 +3259,43 @@ export default function Admin() {
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Edit Credits Modal */}
+                        {editingUser && (
+                            <div onClick={() => setEditingUser(null)} style={{
+                                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+                            }}>
+                                <div onClick={e => e.stopPropagation()} style={{
+                                    background: 'var(--bg-card, #fff)', borderRadius: '16px', padding: '28px',
+                                    width: '400px', maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,0.15)'
+                                }}>
+                                    <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700 }}>✏️ 编辑用户</h3>
+                                    <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '14px' }}>
+                                        {editingUser.username || editingUser.email} (ID: {editingUser.id})
+                                    </p>
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>积分</label>
+                                        <input
+                                            className="input" type="number" min="0"
+                                            value={editCredits}
+                                            onChange={e => setEditCredits(e.target.value)}
+                                            style={{ width: '100%', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                        <button className="btn" onClick={() => setEditingUser(null)}
+                                            style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                                            取消
+                                        </button>
+                                        <button className="btn btn-primary" onClick={handleUpdateCredits}
+                                            style={{ padding: '8px 24px', borderRadius: '8px', fontWeight: 600 }}>
+                                            保存
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -6638,7 +6795,7 @@ export default function Admin() {
                                                         display: 'inline-block'
                                                     }}></span>
                                                     <span style={{ fontSize: '13px', fontWeight: 500 }}>
-                                                        每 {rule.intervalMinutes || Math.round((rule.intervalSeconds || 60) / 60)} 分钟 → {rule.status === 'pass' ? '✅ Pass' : rule.status === 'failed' ? '❌ Failed' : '◷ Cancel'}
+                                                        每 {rule.intervalMinutes || Math.round((rule.intervalSeconds || 60) / 60)} 分钟 → {rule.count || 1} 条 · 成功率 {rule.successRate ?? 100}%
                                                     </span>
                                                     <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
                                                         {rule.running ? '运行中' : '已停止'}
@@ -6720,17 +6877,26 @@ export default function Admin() {
                                         style={{ width: '65px', textAlign: 'center' }}
                                     />
                                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟 添加</span>
-                                    <select
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value={newRule.count}
+                                        onChange={(e) => setNewRule(prev => ({ ...prev, count: Math.max(1, parseInt(e.target.value) || 1) }))}
                                         className="input"
-                                        value={newRule.status}
-                                        onChange={(e) => setNewRule(prev => ({ ...prev, status: e.target.value }))}
-                                        style={{ width: '110px', cursor: 'pointer' }}
-                                    >
-                                        <option value="pass">✅ Pass</option>
-                                        <option value="failed">❌ Failed</option>
-                                        <option value="cancel">◷ Cancel</option>
-                                    </select>
-                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>时效</span>
+                                        style={{ width: '55px', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条 成功率</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={newRule.successRate}
+                                        onChange={(e) => setNewRule(prev => ({ ...prev, successRate: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) }))}
+                                        className="input"
+                                        style={{ width: '55px', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>%  时效</span>
                                     <input
                                         type="number"
                                         min="0"

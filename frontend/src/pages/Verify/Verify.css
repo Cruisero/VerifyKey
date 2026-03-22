@@ -2709,3 +2709,282 @@
     cursor: not-allowed;
     box-shadow: none;
 }
+
+/* ============================================
+   Guide / Tutorial Section
+   ============================================ */
+
+.guide-toggle-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    margin-bottom: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    user-select: none;
+}
+
+.guide-toggle-bar:hover {
+    border-color: var(--color-primary);
+    background: linear-gradient(135deg, rgba(124, 92, 252, 0.04), rgba(99, 102, 241, 0.02));
+}
+
+.guide-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.guide-toggle-icon {
+    font-size: 16px;
+}
+
+.guide-toggle-arrow {
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: transform 0.25s ease;
+}
+
+.guide-toggle-arrow.open {
+    transform: rotate(180deg);
+}
+
+.guide-section {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+    animation: guideSlideIn 0.3s ease;
+}
+
+@keyframes guideSlideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.guide-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: border-color var(--transition-fast);
+}
+
+.guide-card:hover {
+    border-color: rgba(124, 92, 252, 0.3);
+}
+
+.guide-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-primary);
+    background: linear-gradient(135deg, rgba(124, 92, 252, 0.05), transparent);
+}
+
+.guide-card-icon {
+    font-size: 18px;
+}
+
+.guide-card-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.guide-card-body {
+    padding: 16px 18px;
+}
+
+/* Credits Pricing */
+.credits-price-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.credits-price-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(124, 92, 252, 0.04);
+    border-radius: 8px;
+}
+
+.credits-price-service {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.credits-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.credits-dot.gemini { background: #10b981; }
+.credits-dot.pro { background: #7c5cfc; }
+.credits-dot.gpt { background: #f59e0b; }
+.credits-dot.invite { background: #06b6d4; }
+
+.credits-price-val {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ef4444;
+    white-space: nowrap;
+}
+
+.credits-price-val.positive {
+    color: #10b981;
+}
+
+.credits-price-item.invite {
+    background: rgba(6, 182, 212, 0.06);
+}
+
+/* Invite Rewards */
+.invite-reward-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02));
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+
+.invite-reward-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.invite-reward-val {
+    font-size: 14px;
+    font-weight: 700;
+    color: #10b981;
+}
+
+/* Guide Notes */
+.guide-note {
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #7c5cfc;
+    background: rgba(124, 92, 252, 0.06);
+    border-radius: 6px;
+    line-height: 1.5;
+}
+
+.guide-note.warn {
+    color: #d97706;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+/* Checklist */
+.guide-checklist {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.guide-checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+.check-icon {
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+    font-size: 13px;
+}
+
+/* Description */
+.guide-desc {
+    margin: 0 0 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/* Tier Info */
+.guide-tier-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0;
+    padding: 12px;
+    background: rgba(124, 92, 252, 0.04);
+    border-radius: 10px;
+}
+
+.tier-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.tier-badge {
+    flex-shrink: 0;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.tier-badge.normal {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+}
+
+.tier-badge.pro {
+    background: rgba(124, 92, 252, 0.12);
+    color: #7c5cfc;
+}
+
+/* Disclaimer */
+.guide-disclaimer {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.06);
+    border-radius: 6px;
+    border-left: 3px solid rgba(220, 38, 38, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .guide-section {
+        grid-template-columns: 1fr;
+    }
+}

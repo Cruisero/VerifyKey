@@ -89,6 +89,9 @@ export default function Verify() {
     const [cdkRedeemMsg, setCdkRedeemMsg] = useState('');
     const [cdkRedeemStatus, setCdkRedeemStatus] = useState(''); // 'success' | 'error'
 
+    // Service maintenance status
+    const [serviceStatus, setServiceStatus] = useState(null);
+
     // Polling refs
     const pollingRefs = useRef({});
 
@@ -131,6 +134,21 @@ export default function Verify() {
             }
         };
         fetchConfig();
+    }, []);
+
+    // Fetch service maintenance status
+    useEffect(() => {
+        const fetchServiceStatus = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/service-status`);
+                if (res.ok) setServiceStatus(await res.json());
+            } catch (e) {
+                console.warn('Failed to fetch service status:', e);
+            }
+        };
+        fetchServiceStatus();
+        const interval = setInterval(fetchServiceStatus, 60000);
+        return () => clearInterval(interval);
     }, []);
 
     // Redeem CDK — transfer credits to user account
@@ -576,6 +594,9 @@ export default function Verify() {
                     >
                         <span className="service-tab-icon">🤖</span>
                         <span>ChatGPT 充值</span>
+                        {serviceStatus?.gpt?.available === false && (
+                            <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 600, marginLeft: '6px' }}>🔧 维护中</span>
+                        )}
                     </button>
                 </div>
 
@@ -724,15 +745,23 @@ export default function Verify() {
                                     <div className="tier-tabs">
                                         <button
                                             className={`tier-tab ${verifyTier === 'standard' ? 'active' : ''}`}
-                                            onClick={() => setVerifyTier('standard')}
+                                            onClick={() => !serviceStatus?.upixel || serviceStatus.upixel.available ? setVerifyTier('standard') : null}
+                                            style={serviceStatus?.upixel?.available === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                         >
                                             📦 普通验证 <span className="tier-cost">1 积分</span>
+                                            {serviceStatus?.upixel?.available === false && (
+                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>🔧 维护中</span>
+                                            )}
                                         </button>
                                         <button
                                             className={`tier-tab tier-tab-pro ${verifyTier === 'pro' ? 'active' : ''}`}
-                                            onClick={() => setVerifyTier('pro')}
+                                            onClick={() => !serviceStatus?.kpixel || serviceStatus.kpixel.available ? setVerifyTier('pro') : null}
+                                            style={serviceStatus?.kpixel?.available === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                         >
                                             ⚡ 高级验证 <span className="tier-cost">1.5 积分</span>
+                                            {serviceStatus?.kpixel?.available === false && (
+                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>🔧 维护中</span>
+                                            )}
                                         </button>
                                     </div>
 

@@ -264,6 +264,13 @@ DEFAULT_CONFIG = {
         "message": "系统维护中，请稍后再试",
         "estimatedEnd": None
     },
+
+    # Per-service manual maintenance overrides
+    "serviceMaintenance": {
+        "upixel": False,
+        "kpixel": False,
+        "gpt": False
+    },
     
     # Tips inline (shown on verify page)
     "tipsInline": {

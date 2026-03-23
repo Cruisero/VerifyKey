@@ -757,13 +757,13 @@ function GptKeysTab() {
         return <span style={{ padding: '2px 10px', borderRadius: '8px', background: s.bg, color: s.color, fontWeight: 600, fontSize: '12px' }}>{s.text}</span>;
     };
 
+    const channelColors = { red: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626' }, sbs: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' }, vip: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed' } };
     const channelBadge = (ch) => {
-        const isRed = ch === 'red';
+        const c = channelColors[ch] || channelColors.sbs;
         return <span style={{
             padding: '2px 8px', borderRadius: '8px', fontWeight: 600, fontSize: '11px',
-            background: isRed ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
-            color: isRed ? '#dc2626' : '#3b82f6',
-        }}>{isRed ? 'RED' : 'SBS'}</span>;
+            background: c.bg, color: c.color,
+        }}>{(ch || 'sbs').toUpperCase()}</span>;
     };
 
     return (
@@ -798,8 +798,8 @@ function GptKeysTab() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{
                                     padding: '3px 10px', borderRadius: '8px', fontWeight: 700, fontSize: '12px',
-                                    background: ch === 'red' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)',
-                                    color: ch === 'red' ? '#dc2626' : '#3b82f6',
+                                    background: (channelColors[ch] || channelColors.sbs).bg,
+                                    color: (channelColors[ch] || channelColors.sbs).color,
                                 }}>{ch.toUpperCase()}</span>
                                 <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>通道</span>
                             </div>
@@ -818,15 +818,15 @@ function GptKeysTab() {
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>➕ 批量添加卡密</span>
                     <div style={{ display: 'flex', gap: '4px' }}>
-                        {['sbs', 'red'].map(ch => (
+                        {['sbs', 'red', 'vip'].map(ch => (
                             <button key={ch} onClick={() => setAddChannel(ch)} style={{
                                 padding: '4px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                                 fontWeight: 600, fontSize: '12px',
                                 background: addChannel === ch
-                                    ? (ch === 'red' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)')
+                                    ? (channelColors[ch] || channelColors.sbs).bg
                                     : 'var(--bg-secondary)',
                                 color: addChannel === ch
-                                    ? (ch === 'red' ? '#dc2626' : '#3b82f6')
+                                    ? (channelColors[ch] || channelColors.sbs).color
                                     : 'var(--text-tertiary)',
                             }}>{ch.toUpperCase()}</button>
                         ))}
@@ -959,6 +959,8 @@ function PixelApiTab() {
     const [kpixelConfig, setKpixelConfig] = useState({ enabled: false, cdkey: '', hasKey: false, baseUrl: '', creditCost: 1.5 });
     const [newKPixelCdkey, setNewKPixelCdkey] = useState('');
     const [kpixelSaving, setKpixelSaving] = useState(false);
+    const [kpixelBalance, setKpixelBalance] = useState(null);
+    const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, gpt: false });
     const [pixelJobs, setPixelJobs] = useState([]);
     const [history, setHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -969,14 +971,24 @@ function PixelApiTab() {
     // Fetch status data
     const fetchStatus = async () => {
         try {
-            const [hRes, bRes, qRes] = await Promise.all([
+            const [hRes, bRes, qRes, kbRes] = await Promise.all([
                 fetch(`${API_BASE}/api/pixel/health`),
                 fetch(`${API_BASE}/api/pixel/balance`, { headers: authHeaders }).catch(() => null),
                 fetch(`${API_BASE}/api/pixel/queue`, { headers: authHeaders }).catch(() => null),
+                fetch(`${API_BASE}/api/kpixel/balance`, { method: 'POST', headers: authHeaders }).catch(() => null),
             ]);
             if (hRes.ok) setHealth(await hRes.json());
             if (bRes && bRes.ok) setBalance(await bRes.json());
             if (qRes && qRes.ok) setQueue(await qRes.json());
+            if (kbRes && kbRes.ok) setKpixelBalance(await kbRes.json());
+            // Fetch manual service maintenance state
+            try {
+                const smRes = await fetch(`${API_BASE}/api/service-status`);
+                if (smRes.ok) {
+                    const smData = await smRes.json();
+                    if (smData.manual) setServiceMaint(smData.manual);
+                }
+            } catch {}
         } catch (e) {
             console.warn('Pixel status fetch error:', e);
         }
@@ -1171,6 +1183,7 @@ function PixelApiTab() {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--spacing-sm)' }}>
                         <button className="btn btn-sm btn-secondary" onClick={fetchStatus}>🔄 刷新</button>
                     </div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📡 UPixel (标准)</div>
                     <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
                         {/* API Status */}
                         <div className="stat-card card" style={{ borderLeft: `3px solid ${health?.status === 'ok' || health?.status === 'healthy' ? '#16a34a' : '#dc2626'}` }}>
@@ -1205,6 +1218,25 @@ function PixelApiTab() {
                             </div>
                         </div>
                     </div>
+
+                    {/* KPixel Status */}
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>⚡ KPixel (Pro)</div>
+                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <div className="stat-card card" style={{ borderLeft: `3px solid ${kpixelBalance && !kpixelBalance.error ? '#7c3aed' : '#dc2626'}` }}>
+                            <div className="stat-icon">{kpixelBalance && !kpixelBalance.error ? '🟢' : '🔴'}</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{kpixelBalance && !kpixelBalance.error ? 'Online' : (kpixelConfig.enabled ? 'Error' : 'Disabled')}</span>
+                                <span className="stat-label">API 状态</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card" style={{ borderLeft: '3px solid #7c3aed' }}>
+                            <div className="stat-icon">💎</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{kpixelBalance?.remaining_uses ?? kpixelBalance?.balance ?? '-'}</span>
+                                <span className="stat-label">API 余额</span>
+                            </div>
+                        </div>
+                    </div>
                     {/* Ready devices */}
                     {health?.devices?.ready !== undefined && (
                         <div className="stats-grid">
@@ -1225,7 +1257,7 @@ function PixelApiTab() {
                         </div>
                     )}
                     {/* Config status */}
-                    <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
+                    <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Pixel API:</span>
                             <span style={{
@@ -1243,6 +1275,79 @@ function PixelApiTab() {
                                 {pixelConfig.hasKey ? `Key: ${pixelConfig.apiKey || '***'}` : '未配置 Key'}
                             </span>
                         </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>KPixel API:</span>
+                            <span style={{
+                                padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                background: kpixelConfig.enabled ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
+                                color: kpixelConfig.enabled ? '#16a34a' : '#dc2626',
+                            }}>
+                                {kpixelConfig.enabled ? '已启用' : '未启用'}
+                            </span>
+                            {kpixelConfig.hasKey && (
+                                <span style={{
+                                    padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                    background: 'rgba(59,130,246,0.1)', color: '#3b82f6',
+                                }}>
+                                    CDKey: {kpixelConfig.cdkey || '***'}
+                                </span>
+                            )}
+                            {kpixelBalance && (
+                                <span style={{
+                                    padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                    background: 'rgba(139,92,246,0.1)', color: '#7c3aed',
+                                }}>
+                                    余额: {kpixelBalance.remaining_uses ?? kpixelBalance.balance ?? '-'}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Manual service maintenance toggles */}
+                    <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 服务维护开关</div>
+                        {[
+                            { key: 'upixel', label: '📦 普通验证 (UPixel)', desc: '关闭后用户无法使用普通验证' },
+                            { key: 'kpixel', label: '⚡ 高级验证 (KPixel)', desc: '关闭后用户无法使用高级验证' },
+                            { key: 'gpt', label: '🤖 ChatGPT 充值', desc: '关闭后用户无法使用 GPT 充值' },
+                        ].map(s => (
+                            <div key={s.key} style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                padding: '10px 0', borderBottom: '1px solid var(--border-primary)',
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: '13px', fontWeight: 600 }}>{s.label}</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{s.desc}</div>
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <span style={{
+                                        fontSize: '11px', fontWeight: 600,
+                                        color: serviceMaint[s.key] ? '#dc2626' : '#16a34a',
+                                    }}>
+                                        {serviceMaint[s.key] ? '维护中' : '正常'}
+                                    </span>
+                                    <input
+                                        type="checkbox"
+                                        checked={!!serviceMaint[s.key]}
+                                        onChange={async (e) => {
+                                            const val = e.target.checked;
+                                            setServiceMaint(prev => ({ ...prev, [s.key]: val }));
+                                            try {
+                                                await fetch(`${API_BASE}/api/service-status`, {
+                                                    method: 'POST',
+                                                    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ [s.key]: val }),
+                                                });
+                                            } catch (err) {
+                                                console.warn('Service maint toggle failed:', err);
+                                                setServiceMaint(prev => ({ ...prev, [s.key]: !val }));
+                                            }
+                                        }}
+                                        style={{ width: '36px', height: '20px', accentColor: '#dc2626' }}
+                                    />
+                                </label>
+                            </div>
+                        ))}
                     </div>
                 </>
             )}

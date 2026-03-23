@@ -5891,6 +5891,37 @@ async def get_service_status():
         except Exception:
             kpixel_reason = "无法连接 API"
 
+    # --- VPixel auto-detect (shares 高级验证 tier with KPixel) ---
+    vpixel_ok = False
+    vpixel_reason = ""
+    vpixel_cfg = config.get("vpixelApi", {})
+    if manual.get("vpixel"):
+        vpixel_reason = "管理员手动维护中"
+    elif not vpixel_cfg.get("enabled"):
+        vpixel_reason = "未启用"
+    elif not vpixel_cfg.get("card"):
+        vpixel_reason = "未配置卡密"
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"{vpixel_cfg.get('baseUrl', 'http://1688ai.vip')}/tasks/get_queue_up")
+                if resp.status_code == 200:
+                    vpixel_ok = True
+                else:
+                    vpixel_reason = "API 离线"
+        except Exception:
+            vpixel_reason = "无法连接 API"
+
+    # Combined pro-tier availability: available if EITHER KPixel or VPixel is up
+    pro_available = kpixel_ok or vpixel_ok
+    pro_reason = ""
+    if not pro_available:
+        # Show the first meaningful reason
+        if kpixel_reason and vpixel_reason:
+            pro_reason = f"KPixel: {kpixel_reason}; VPixel: {vpixel_reason}"
+        else:
+            pro_reason = kpixel_reason or vpixel_reason
+
     # --- GPT auto-detect ---
     gpt_ok = False
     gpt_reason = ""
@@ -5909,11 +5940,13 @@ async def get_service_status():
 
     return {
         "upixel": {"available": upixel_ok, "reason": upixel_reason},
-        "kpixel": {"available": kpixel_ok, "reason": kpixel_reason},
+        "kpixel": {"available": pro_available, "reason": pro_reason,
+                   "kpixelUp": kpixel_ok, "vpixelUp": vpixel_ok},
         "gpt": {"available": gpt_ok, "reason": gpt_reason},
         "manual": {
             "upixel": manual.get("upixel", False),
             "kpixel": manual.get("kpixel", False),
+            "vpixel": manual.get("vpixel", False),
             "gpt": manual.get("gpt", False),
         }
     }
@@ -5935,7 +5968,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "gpt"):
+    for key in ("upixel", "kpixel", "vpixel", "gpt"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -6427,12 +6460,19 @@ class KPixelJobRequest(BaseModel):
 
 @app.post("/api/kpixel/jobs")
 async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[str] = Header(None)):
-    """Submit a KPixel (Pro) job — validates user credits, posts to kckc1818 API."""
-    kpixel_cfg = _get_kpixel_config()
-    if not kpixel_cfg["enabled"] or not kpixel_cfg["cdkey"]:
-        raise HTTPException(status_code=503, detail="KPixel API 未启用或未配置")
+    """Submit a Pro-tier job — round-robins between KPixel and VPixel when both enabled."""
+    global _pro_tier_counter
 
-    credit_cost = kpixel_cfg.get("creditCost", 1.5)
+    kpixel_cfg = _get_kpixel_config()
+    vpixel_cfg = _get_vpixel_config()
+
+    kpixel_available = kpixel_cfg["enabled"] and kpixel_cfg["cdkey"]
+    vpixel_available = vpixel_cfg["enabled"] and vpixel_cfg["card"]
+
+    if not kpixel_available and not vpixel_available:
+        raise HTTPException(status_code=503, detail="高级验证 API 未启用或未配置")
+
+    credit_cost = kpixel_cfg.get("creditCost", 1.5) if kpixel_available else vpixel_cfg.get("creditCost", 1.5)
 
     # Auth via JWT token
     if not authorization or not authorization.startswith("Bearer "):
@@ -6446,34 +6486,89 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     if credits < credit_cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {credit_cost} 积分）")
 
-    # Submit to KPixel API
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(kpixel_cfg["baseUrl"], json={
-                "action": "submit_task",
-                "cdkey": kpixel_cfg["cdkey"],
-                "email": request.email,
-                "password": request.password,
-                "twofa": request.twofa,
-            })
+    # Round-robin: decide which service to use
+    use_vpixel = False
+    if kpixel_available and vpixel_available:
+        # Both available — alternate
+        use_vpixel = (_pro_tier_counter % 2 == 1)
+        _pro_tier_counter += 1
+    elif vpixel_available:
+        use_vpixel = True
+    # else: use kpixel (default)
 
-        data = resp.json()
-        if data.get("success"):
-            task_id = data.get("task_id", 0)
-            # Start background polling (pass user_id for credit deduction)
-            task = asyncio.create_task(_kpixel_poll_job(task_id, request.email, user_id, kpixel_cfg))
-            _kpixel_polling_tasks[task_id] = task
-            return {
-                "job_id": str(task_id),
-                "task_id": task_id,
-                "status": "queued",
-                "remaining_uses": data.get("remaining_uses", -1),
-            }
-        else:
-            raise HTTPException(status_code=400, detail=data.get("message", "KPixel 提交失败"))
+    if use_vpixel:
+        # ---- Route to VPixel ----
+        account_line = f"{request.email}--{request.password}--{request.twofa}"
+        from datetime import datetime as _dt
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{vpixel_cfg['baseUrl']}/tasks/submit",
+                    json={
+                        "card": vpixel_cfg["card"],
+                        "accounts": [account_line],
+                        "timestamp": _dt.utcnow().isoformat() + "Z",
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+            data = resp.json()
+            if data.get("success"):
+                import time as _t
+                poll_id = f"vp_{int(_t.time())}_{request.email[:8]}"
+                task = asyncio.create_task(
+                    _vpixel_poll_job(vpixel_cfg["card"], account_line, request.email, user_id, vpixel_cfg)
+                )
+                _vpixel_polling_tasks[poll_id] = task
+                return {
+                    "job_id": poll_id,
+                    "task_id": poll_id,
+                    "status": "queued",
+                    "source": "vpixel",
+                }
+            else:
+                # VPixel failed, try KPixel as fallback if available
+                if kpixel_available:
+                    logging.warning(f"[ProTier] VPixel submit failed ({data.get('message')}), falling back to KPixel")
+                    use_vpixel = False  # fall through to KPixel below
+                else:
+                    raise HTTPException(status_code=400, detail=data.get("message", "VPixel 提交失败"))
+        except httpx.HTTPError as e:
+            if kpixel_available:
+                logging.warning(f"[ProTier] VPixel connection failed ({e}), falling back to KPixel")
+                use_vpixel = False
+            else:
+                raise HTTPException(status_code=502, detail=f"无法连接 VPixel API: {str(e)}")
 
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"无法连接 KPixel API: {str(e)}")
+    if not use_vpixel:
+        # ---- Route to KPixel ----
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(kpixel_cfg["baseUrl"], json={
+                    "action": "submit_task",
+                    "cdkey": kpixel_cfg["cdkey"],
+                    "email": request.email,
+                    "password": request.password,
+                    "twofa": request.twofa,
+                })
+
+            data = resp.json()
+            if data.get("success"):
+                task_id = data.get("task_id", 0)
+                task = asyncio.create_task(_kpixel_poll_job(task_id, request.email, user_id, kpixel_cfg))
+                _kpixel_polling_tasks[task_id] = task
+                return {
+                    "job_id": str(task_id),
+                    "task_id": task_id,
+                    "status": "queued",
+                    "remaining_uses": data.get("remaining_uses", -1),
+                    "source": "kpixel",
+                }
+            else:
+                raise HTTPException(status_code=400, detail=data.get("message", "KPixel 提交失败"))
+
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"无法连接 KPixel API: {str(e)}")
+
 
 
 @app.post("/api/kpixel/jobs/{task_id}/status")
@@ -6565,6 +6660,303 @@ async def kpixel_update_config(request: Request, authorization: Optional[str] = 
         updates["creditCost"] = float(body["creditCost"])
 
     result = config_manager.update_config({"kpixelApi": updates})
+    if result:
+        return {"success": True}
+    raise HTTPException(status_code=500, detail="保存失败")
+
+
+# ========== VPixel API (1688ai.vip) — Shares "高级验证" with KPixel ==========
+
+def _get_vpixel_config():
+    """Get VPixel API config from config_manager."""
+    import config_manager
+    cfg = config_manager.load_config()
+    vp = cfg.get("vpixelApi", {})
+    return {
+        "enabled": vp.get("enabled", False),
+        "card": vp.get("card", ""),
+        "baseUrl": vp.get("baseUrl", "http://1688ai.vip"),
+        "creditCost": vp.get("creditCost", 1.5),
+    }
+
+
+_vpixel_polling_tasks: dict = {}
+# VPixel job status cache: poll_id -> {status, message, elapsed, ...}
+_vpixel_job_status: dict = {}
+
+# Round-robin counter for pro tier (KPixel vs VPixel)
+_pro_tier_counter: int = 0
+
+
+async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: int, vpixel_cfg: dict):
+    """Background task: poll VPixel API job status and broadcast SSE events.
+    VPixel status codes: 1=waiting, 2=processing, 3=success, 4=failed
+    Also writes to _vpixel_job_status cache for frontend polling.
+    """
+    import time
+    base_url = vpixel_cfg["baseUrl"]
+    credit_cost = vpixel_cfg.get("creditCost", 1.5)
+    start_time = time.time()
+
+    # Generate a pseudo-ID for tracking
+    poll_id = f"vp_{int(start_time)}_{email[:8]}"
+
+    # Init status cache
+    _vpixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": 0}
+
+    broadcast_verify_event({
+        "type": "progress",
+        "source": "vpixel",
+        "vid": poll_id,
+        "link": email,
+        "step": "submitted",
+        "message": "任务已提交，等待设备处理...",
+    })
+
+    STATUS_MAP = {1: "queued", 2: "running", 3: "success", 4: "failed"}
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            for _ in range(120):  # max ~10 min (120 * 5s)
+                await asyncio.sleep(5)
+                try:
+                    resp = await client.get(
+                        f"{base_url}/tasks/card/{card}",
+                        params={"page": 1, "page_size": 50}
+                    )
+                    if resp.status_code != 200:
+                        continue
+                    data = resp.json()
+                    if not data.get("success"):
+                        continue
+                except Exception:
+                    continue
+
+                # Find our account in the results
+                items = data.get("data", {}).get("items", [])
+                target_item = None
+                for item in items:
+                    if item.get("account_info", "").startswith(email):
+                        target_item = item
+                        break
+
+                if not target_item:
+                    # Account not yet in results, still waiting
+                    _vpixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": round(time.time() - start_time, 1)}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "vpixel",
+                        "vid": poll_id, "link": email,
+                        "step": "processing", "status": "queued",
+                        "message": "⏳ 排队中...",
+                        "elapsed": round(time.time() - start_time, 1),
+                    })
+                    continue
+
+                raw_status = target_item.get("status", 1)
+                mapped_status = STATUS_MAP.get(raw_status, "queued")
+                result_msg = target_item.get("result", "")
+                elapsed = time.time() - start_time
+
+                if mapped_status == "queued":
+                    _vpixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": round(elapsed, 1)}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "vpixel",
+                        "vid": poll_id, "link": email,
+                        "step": "processing", "status": "queued",
+                        "message": "⏳ 排队中...",
+                        "elapsed": round(elapsed, 1),
+                    })
+                elif mapped_status == "running":
+                    _vpixel_job_status[poll_id] = {"status": "Running", "message": result_msg or "运行中...", "elapsed": round(elapsed, 1)}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "vpixel",
+                        "vid": poll_id, "link": email,
+                        "step": "processing", "status": "running",
+                        "message": f"🔄 运行中... {result_msg}" if result_msg else "🔄 运行中...",
+                        "elapsed": round(elapsed, 1),
+                    })
+                elif mapped_status == "success":
+                    # Deduct credits
+                    if user_id:
+                        try:
+                            auth.deduct_credits(user_id, credit_cost)
+                            logging.info(f"[VPixel] Deducted {credit_cost} credits from user {user_id}")
+                        except Exception as e:
+                            logging.warning(f"[VPixel] Credit deduction failed for user {user_id}: {e}")
+                    verification_history.log_verification("pass", poll_id, f"VPixel 成功: {result_msg}", cdk=f"user:{user_id}")
+                    _vpixel_job_status[poll_id] = {"status": "Success", "message": result_msg or "验证成功", "elapsed": round(elapsed, 1)}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "vpixel",
+                        "vid": poll_id, "link": email,
+                        "step": "result", "status": "approved",
+                        "success": True,
+                        "message": f"✅ {result_msg}" if result_msg else "✅ 验证成功",
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+                elif mapped_status == "failed":
+                    verification_history.log_verification("failed", poll_id, f"VPixel 失败: {result_msg}", cdk=f"user:{user_id}")
+                    _vpixel_job_status[poll_id] = {"status": "Failed", "message": result_msg or "验证失败", "elapsed": round(elapsed, 1)}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "vpixel",
+                        "vid": poll_id, "link": email,
+                        "step": "result", "status": "failed",
+                        "success": False,
+                        "message": f"❌ {result_msg}" if result_msg else "❌ 验证失败",
+                        "error": result_msg,
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logging.error(f"[VPixel] Poll error for {email}: {e}")
+        _vpixel_job_status[poll_id] = {"status": "Failed", "message": f"轮询错误: {str(e)}", "elapsed": 0}
+        broadcast_verify_event({
+            "type": "progress", "source": "vpixel",
+            "vid": poll_id, "link": email,
+            "step": "result", "status": "failed",
+            "success": False,
+            "message": f"❌ 轮询错误: {str(e)}",
+        })
+    finally:
+        _vpixel_polling_tasks.pop(poll_id, None)
+
+
+@app.post("/api/vpixel/jobs/{poll_id}/status")
+async def vpixel_get_job_status(poll_id: str):
+    """Get VPixel job status from in-memory cache (same format as KPixel status)."""
+    status_entry = _vpixel_job_status.get(poll_id)
+    if not status_entry:
+        return {"success": False, "message": "Job not found"}
+    return {
+        "success": True,
+        "data": {
+            "status": status_entry.get("status", "Pending"),
+            "message": status_entry.get("message", ""),
+            "elapsed": status_entry.get("elapsed", 0),
+        }
+    }
+
+
+class VPixelJobRequest(BaseModel):
+    email: str
+    password: str
+    twofa: str
+    cdk: str = ""
+
+
+@app.post("/api/vpixel/jobs")
+async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[str] = Header(None)):
+    """Submit a VPixel job — validates user credits, posts to 1688ai.vip, starts background poller."""
+    vpixel_cfg = _get_vpixel_config()
+    if not vpixel_cfg["enabled"] or not vpixel_cfg["card"]:
+        raise HTTPException(status_code=503, detail="VPixel API 未启用或未配置卡密")
+
+    credit_cost = vpixel_cfg.get("creditCost", 1.5)
+
+    # Auth via JWT token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    user_id = user.get("id")
+    credits = user.get("credits", 0)
+    if credits < credit_cost:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {credit_cost} 积分）")
+
+    # Format account line for VPixel: email--password--2fa
+    account_line = f"{request.email}--{request.password}--{request.twofa}"
+
+    # Submit to VPixel API
+    from datetime import datetime as _dt
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{vpixel_cfg['baseUrl']}/tasks/submit",
+                json={
+                    "card": vpixel_cfg["card"],
+                    "accounts": [account_line],
+                    "timestamp": _dt.utcnow().isoformat() + "Z",
+                },
+                headers={"Content-Type": "application/json"},
+            )
+
+        data = resp.json()
+        if data.get("success"):
+            import time as _t
+            poll_id = f"vp_{int(_t.time())}_{request.email[:8]}"
+            # Start background polling
+            task = asyncio.create_task(
+                _vpixel_poll_job(vpixel_cfg["card"], account_line, request.email, user_id, vpixel_cfg)
+            )
+            _vpixel_polling_tasks[poll_id] = task
+            return {
+                "job_id": poll_id,
+                "task_id": poll_id,
+                "status": "queued",
+                "source": "vpixel",
+            }
+        else:
+            raise HTTPException(status_code=400, detail=data.get("message", "VPixel 提交失败"))
+
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"无法连接 VPixel API: {str(e)}")
+
+
+@app.get("/api/vpixel/queue")
+async def vpixel_queue():
+    """Get VPixel current queue size."""
+    vpixel_cfg = _get_vpixel_config()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{vpixel_cfg['baseUrl']}/tasks/get_queue_up")
+        if resp.status_code == 200:
+            return resp.json()
+        return {"queue": -1}
+    except Exception as e:
+        return {"queue": -1, "error": str(e)}
+
+
+@app.get("/api/vpixel/config")
+async def vpixel_get_config(authorization: Optional[str] = Header(None)):
+    """Get VPixel API configuration (admin only)."""
+    _verify_admin_token(authorization)
+    vpixel_cfg = _get_vpixel_config()
+    masked_card = ""
+    if vpixel_cfg["card"]:
+        c = vpixel_cfg["card"]
+        masked_card = c[:4] + "..." + c[-4:] if len(c) > 8 else c[:2] + "..."
+    return {
+        "enabled": vpixel_cfg["enabled"],
+        "card": masked_card,
+        "hasCard": bool(vpixel_cfg["card"]),
+        "baseUrl": vpixel_cfg["baseUrl"],
+        "creditCost": vpixel_cfg["creditCost"],
+    }
+
+
+@app.post("/api/vpixel/config")
+async def vpixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
+    """Update VPixel API configuration (admin only)."""
+    _verify_admin_token(authorization)
+    import config_manager
+    body = await request.json()
+
+    updates = {}
+    if "enabled" in body:
+        updates["enabled"] = bool(body["enabled"])
+    if "card" in body and body["card"]:
+        updates["card"] = body["card"]
+    if "baseUrl" in body:
+        updates["baseUrl"] = body["baseUrl"]
+    if "creditCost" in body:
+        updates["creditCost"] = float(body["creditCost"])
+
+    result = config_manager.update_config({"vpixelApi": updates})
     if result:
         return {"success": True}
     raise HTTPException(status_code=500, detail="保存失败")
@@ -6923,6 +7315,18 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     if not card_key or not account:
         raise HTTPException(status_code=400, detail="参数不完整")
 
+    import time as _gpt_time
+    gpt_vid = f"gpt_{int(_gpt_time.time())}_{email[:8] if email else 'unknown'}"
+
+    # SSE: submitted
+    broadcast_verify_event({
+        "type": "progress", "source": "gpt",
+        "vid": gpt_vid, "link": email or "GPT充值",
+        "step": "submitted",
+        "message": f"⏳ 正在充值 ({channel.upper()} 通道)...",
+        "channel": channel,
+    })
+
     import httpx
     try:
         if channel == "red":
@@ -6931,6 +7335,13 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             ok = data.get("success") or data.get("flag", False)
             if not ok:
                 msg = data.get("msg", "充值失败，请稍后重试")
+                broadcast_verify_event({
+                    "type": "progress", "source": "gpt",
+                    "vid": gpt_vid, "link": email or "GPT充值",
+                    "step": "result", "status": "failed", "success": False,
+                    "message": f"❌ {msg}",
+                    "channel": channel,
+                })
                 raise HTTPException(status_code=400, detail=msg)
         elif channel == "vip":
             # VIP channel: POST /redeem/submit
@@ -6938,6 +7349,13 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             ok = data.get("success", False) or data.get("code") == 200
             if not ok:
                 msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
+                broadcast_verify_event({
+                    "type": "progress", "source": "gpt",
+                    "vid": gpt_vid, "link": email or "GPT充值",
+                    "step": "result", "status": "failed", "success": False,
+                    "message": f"❌ {msg}",
+                    "channel": channel,
+                })
                 raise HTTPException(status_code=400, detail=msg)
         else:
             # SBS channel: POST /api/vip/r
@@ -6954,10 +7372,25 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 )
                 data = resp.json()
             if resp.status_code != 200 or data.get("code") != 1:
-                raise HTTPException(status_code=400, detail=data.get("message", "充值失败，请稍后重试"))
+                msg = data.get("message", "充值失败，请稍后重试")
+                broadcast_verify_event({
+                    "type": "progress", "source": "gpt",
+                    "vid": gpt_vid, "link": email or "GPT充值",
+                    "step": "result", "status": "failed", "success": False,
+                    "message": f"❌ {msg}",
+                    "channel": channel,
+                })
+                raise HTTPException(status_code=400, detail=msg)
     except HTTPException:
         raise
     except Exception as e:
+        broadcast_verify_event({
+            "type": "progress", "source": "gpt",
+            "vid": gpt_vid, "link": email or "GPT充值",
+            "step": "result", "status": "failed", "success": False,
+            "message": f"❌ 充值请求失败: {str(e)}",
+            "channel": channel,
+        })
         raise HTTPException(status_code=502, detail=f"充值请求失败: {str(e)}")
 
     # Success — deduct user credits
@@ -6976,6 +7409,15 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         (email, now, card_key)
     )
     conn.commit()
+
+    # SSE: success
+    broadcast_verify_event({
+        "type": "progress", "source": "gpt",
+        "vid": gpt_vid, "link": email or "GPT充值",
+        "step": "result", "status": "approved", "success": True,
+        "message": f"✅ 充值成功 ({channel.upper()})",
+        "channel": channel,
+    })
 
     return {"success": True, "message": "充值成功", "channel": channel}
 

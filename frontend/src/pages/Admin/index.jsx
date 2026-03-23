@@ -960,7 +960,14 @@ function PixelApiTab() {
     const [newKPixelCdkey, setNewKPixelCdkey] = useState('');
     const [kpixelSaving, setKpixelSaving] = useState(false);
     const [kpixelBalance, setKpixelBalance] = useState(null);
-    const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, gpt: false });
+
+    // VPixel config state
+    const [vpixelConfig, setVpixelConfig] = useState({ enabled: false, card: '', hasCard: false, baseUrl: 'http://1688ai.vip', creditCost: 1.5 });
+    const [newVPixelCard, setNewVPixelCard] = useState('');
+    const [vpixelSaving, setVpixelSaving] = useState(false);
+    const [vpixelQueue, setVpixelQueue] = useState(null);
+
+    const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, vpixel: false, gpt: false });
     const [pixelJobs, setPixelJobs] = useState([]);
     const [history, setHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -971,16 +978,18 @@ function PixelApiTab() {
     // Fetch status data
     const fetchStatus = async () => {
         try {
-            const [hRes, bRes, qRes, kbRes] = await Promise.all([
+            const [hRes, bRes, qRes, kbRes, vqRes] = await Promise.all([
                 fetch(`${API_BASE}/api/pixel/health`),
                 fetch(`${API_BASE}/api/pixel/balance`, { headers: authHeaders }).catch(() => null),
                 fetch(`${API_BASE}/api/pixel/queue`, { headers: authHeaders }).catch(() => null),
                 fetch(`${API_BASE}/api/kpixel/balance`, { method: 'POST', headers: authHeaders }).catch(() => null),
+                fetch(`${API_BASE}/api/vpixel/queue`).catch(() => null),
             ]);
             if (hRes.ok) setHealth(await hRes.json());
             if (bRes && bRes.ok) setBalance(await bRes.json());
             if (qRes && qRes.ok) setQueue(await qRes.json());
             if (kbRes && kbRes.ok) setKpixelBalance(await kbRes.json());
+            if (vqRes && vqRes.ok) setVpixelQueue(await vqRes.json());
             // Fetch manual service maintenance state
             try {
                 const smRes = await fetch(`${API_BASE}/api/service-status`);
@@ -1015,6 +1024,16 @@ function PixelApiTab() {
             }
         } catch (e) {
             console.warn('KPixel config fetch error:', e);
+        }
+        // Fetch VPixel config
+        try {
+            const res3 = await fetch(`${API_BASE}/api/vpixel/config`, { headers: authHeaders });
+            if (res3.ok) {
+                const data3 = await res3.json();
+                setVpixelConfig(data3);
+            }
+        } catch (e) {
+            console.warn('VPixel config fetch error:', e);
         }
     };
 
@@ -1055,7 +1074,7 @@ function PixelApiTab() {
         es.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.source !== 'pixel' && data.source !== 'kpixel') return;
+                if (data.source !== 'pixel' && data.source !== 'kpixel' && data.source !== 'vpixel' && data.source !== 'gpt') return;
 
                 setPixelJobs(prev => {
                     const jobId = data.vid || '';
@@ -1068,7 +1087,7 @@ function PixelApiTab() {
                         status = 'submitted';
                     }
 
-                    const isKPixel = data.source === 'kpixel';
+                    const isKPixel = data.source === 'kpixel' || data.source === 'vpixel' || data.source === 'gpt';
 
                     const entry = {
                         id: existingIdx >= 0 ? prev[existingIdx].id : Date.now() + Math.random(),
@@ -1237,6 +1256,25 @@ function PixelApiTab() {
                             </div>
                         </div>
                     </div>
+
+                    {/* VPixel Status */}
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>🔮 VPixel</div>
+                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <div className="stat-card card" style={{ borderLeft: `3px solid ${vpixelConfig.enabled ? '#10b981' : '#dc2626'}` }}>
+                            <div className="stat-icon">{vpixelConfig.enabled && vpixelConfig.hasCard ? '🟢' : '🔴'}</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{vpixelConfig.enabled && vpixelConfig.hasCard ? 'Online' : (vpixelConfig.enabled ? '未配置卡密' : 'Disabled')}</span>
+                                <span className="stat-label">API 状态</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card" style={{ borderLeft: '3px solid #10b981' }}>
+                            <div className="stat-icon">📋</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{vpixelQueue?.queue ?? vpixelQueue?.data ?? '-'}</span>
+                                <span className="stat-label">队列中</span>
+                            </div>
+                        </div>
+                    </div>
                     {/* Ready devices */}
                     {health?.devices?.ready !== undefined && (
                         <div className="stats-grid">
@@ -1301,6 +1339,24 @@ function PixelApiTab() {
                                 </span>
                             )}
                         </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>VPixel API:</span>
+                            <span style={{
+                                padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                background: vpixelConfig.enabled ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
+                                color: vpixelConfig.enabled ? '#16a34a' : '#dc2626',
+                            }}>
+                                {vpixelConfig.enabled ? '已启用' : '未启用'}
+                            </span>
+                            {vpixelConfig.hasCard && (
+                                <span style={{
+                                    padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                    background: 'rgba(16,185,129,0.1)', color: '#10b981',
+                                }}>
+                                    卡密: {vpixelConfig.card || '***'}
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Manual service maintenance toggles */}
@@ -1308,7 +1364,8 @@ function PixelApiTab() {
                         <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 服务维护开关</div>
                         {[
                             { key: 'upixel', label: '📦 普通验证 (UPixel)', desc: '关闭后用户无法使用普通验证' },
-                            { key: 'kpixel', label: '⚡ 高级验证 (KPixel)', desc: '关闭后用户无法使用高级验证' },
+                            { key: 'kpixel', label: '⚡ 高级验证 (KPixel)', desc: '关闭后用户无法通过 KPixel 高级验证' },
+                            { key: 'vpixel', label: '🔮 高级验证 (VPixel)', desc: '关闭后用户无法通过 VPixel 高级验证' },
                             { key: 'gpt', label: '🤖 ChatGPT 充值', desc: '关闭后用户无法使用 GPT 充值' },
                         ].map(s => (
                             <div key={s.key} style={{
@@ -1660,6 +1717,64 @@ function PixelApiTab() {
                             }
                         }} disabled={kpixelSaving}>
                         {kpixelSaving ? '⏳ 保存中...' : '💾 保存 KPixel 配置'}
+                    </button>
+
+                    {/* VPixel Config */}
+                    <h4 style={{ marginTop: 'var(--spacing-xl)', marginBottom: 'var(--spacing-md)', borderTop: '1px solid var(--border-primary)', paddingTop: 'var(--spacing-lg)' }}>🔮 VPixel 配置（与 KPixel 共享高级验证通道）</h4>
+                    <div style={{ display: 'grid', gap: 'var(--spacing-md)' }}>
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                <span>🔮</span>
+                                <strong>启用 VPixel</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: vpixelConfig.enabled ? '#16a34a' : '#dc2626' }}>
+                                        {vpixelConfig.enabled ? '🟢 已启用' : '🔴 未启用'}
+                                    </span>
+                                    <input type="checkbox" checked={vpixelConfig.enabled}
+                                        onChange={e => setVpixelConfig({ ...vpixelConfig, enabled: e.target.checked })} />
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                                卡密 {vpixelConfig.hasCard && <span style={{ color: '#16a34a', fontWeight: 600 }}>（已配置: {vpixelConfig.card}）</span>}
+                            </label>
+                            <input className="input" type="password"
+                                value={newVPixelCard}
+                                onChange={e => setNewVPixelCard(e.target.value)}
+                                placeholder={vpixelConfig.hasCard ? '留空保持不变' : '输入卡密...'}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                    <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-md)' }}
+                        onClick={async () => {
+                            if (!token) { alert('未登录'); return; }
+                            setVpixelSaving(true);
+                            try {
+                                const body = { enabled: vpixelConfig.enabled };
+                                if (newVPixelCard.trim()) body.card = newVPixelCard.trim();
+                                const res = await fetch(`${API_BASE}/api/vpixel/config`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify(body),
+                                });
+                                if (res.ok) {
+                                    alert('✅ VPixel 配置已保存');
+                                    setNewVPixelCard('');
+                                    await fetchConfig();
+                                } else {
+                                    let errMsg = `HTTP ${res.status}`;
+                                    try { const err = await res.json(); errMsg = err.detail || errMsg; } catch {}
+                                    alert('保存失败: ' + errMsg);
+                                }
+                            } catch (e) {
+                                alert('保存失败: ' + e.message);
+                            } finally {
+                                setVpixelSaving(false);
+                            }
+                        }} disabled={vpixelSaving}>
+                        {vpixelSaving ? '⏳ 保存中...' : '💾 保存 VPixel 配置'}
                     </button>
                 </div>
             )}

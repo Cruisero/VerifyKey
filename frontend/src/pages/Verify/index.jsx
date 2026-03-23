@@ -212,7 +212,7 @@ export default function Verify() {
             .filter(Boolean);
     };
 
-    // Submit a single account — routes to UPixel or KPixel based on tier
+    // Submit a single account — routes to UPixel or KPixel/VPixel based on tier
     const submitOneJob = async (account, resultId) => {
         const isKPixel = verifyTier === 'pro';
         const apiUrl = isKPixel ? `${API_BASE}/api/kpixel/jobs` : `${API_BASE}/api/pixel/jobs`;
@@ -242,6 +242,7 @@ export default function Verify() {
 
             const data = await resp.json();
             const jobId = data.job_id || String(data.task_id || '');
+            const jobSource = data.source || (isKPixel ? 'kpixel' : 'pixel');
 
             // Update with job ID and start polling
             setResults(prev => prev.map(r =>
@@ -249,15 +250,20 @@ export default function Verify() {
                     ...r,
                     jobId,
                     tier: verifyTier,
+                    source: jobSource,
                     message: `⏳ 已提交，排队中...`,
                     queuePosition: data.queue_position >= 0 ? data.queue_position : -1,
                     estimatedWait: data.estimated_wait_seconds,
                 } : r
             ));
 
-            // Start polling this job
+            // Start polling this job based on source
             if (isKPixel) {
-                pollKPixelJob(jobId, resultId);
+                // Both KPixel and VPixel use same poll format (KPixel-compatible)
+                const statusUrl = jobSource === 'vpixel'
+                    ? `${API_BASE}/api/vpixel/jobs/${jobId}/status`
+                    : `${API_BASE}/api/kpixel/jobs/${jobId}/status`;
+                pollKPixelJob(jobId, resultId, statusUrl);
             } else {
                 pollJob(jobId, resultId);
             }
@@ -269,11 +275,12 @@ export default function Verify() {
         }
     };
 
-    // Poll KPixel job status
-    const pollKPixelJob = (taskId, resultId) => {
+    // Poll KPixel/VPixel job status (same response format)
+    const pollKPixelJob = (taskId, resultId, statusUrl) => {
+        const url = statusUrl || `${API_BASE}/api/kpixel/jobs/${taskId}/status`;
         const intervalId = setInterval(async () => {
             try {
-                const resp = await fetch(`${API_BASE}/api/kpixel/jobs/${taskId}/status`, { method: 'POST' });
+                const resp = await fetch(url, { method: 'POST' });
                 if (!resp.ok) return;
                 const data = await resp.json();
                 if (!data.success) return;
@@ -665,11 +672,48 @@ export default function Verify() {
                                     <ul className="guide-checklist">
                                         <li>
                                             <span className="check-icon required">🔐</span>
-                                            <span><strong>2FA 验证：</strong>必须开启，并设置好 Google Authenticator</span>
+                                            <span><strong>2FA 验证：</strong>必须开启，并设置好 Google Authenticator
+                                                <a href="https://www.notion.so/2FA-32cfb1c3c17c807e83bdcb371212e287?source=copy_link"
+                                                    target="_blank" rel="noopener noreferrer"
+                                                    style={{
+                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                        fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                        marginLeft: '6px', verticalAlign: 'middle',
+                                                    }}
+                                                >查看教程 ▸</a>
+                                            </span>
                                         </li>
                                         <li>
                                             <span className="check-icon required">🌍</span>
-                                            <span><strong>地区要求：</strong>需在支持区域内</span>
+                                            <span>
+                                                <strong>地区要求：</strong>需在支持区域内
+                                                <button
+                                                    onClick={(e) => { e.preventDefault(); document.querySelector('.region-popover').classList.toggle('show'); document.querySelector('.region-backdrop').classList.toggle('show'); }}
+                                                    style={{
+                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                        fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                                                        marginLeft: '6px', verticalAlign: 'middle',
+                                                    }}
+                                                >查看支持地区 ▸</button>
+                                                <div className="region-backdrop" onClick={() => { document.querySelector('.region-popover').classList.remove('show'); document.querySelector('.region-backdrop').classList.remove('show'); }} />
+                                                <div className="region-popover">
+                                                    <div className="region-popover-title">
+                                                        <span>🌍 支持的国家和地区</span>
+                                                        <small>共 33 个</small>
+                                                    </div>
+                                                    <div className="region-tags-grid">
+                                                        {['🇦🇺 澳洲','🇦🇹 奥地利','🇧🇪 比利时','🇨🇦 加拿大','🇨🇿 捷克','🇩🇰 丹麦','🇪🇪 爱沙尼亚','🇫🇮 芬兰',
+                                                          '🇫🇷 法国','🇩🇪 德国','🇭🇺 匈牙利','🇮🇳 印度','🇮🇪 爱尔兰','🇮🇹 意大利','🇯🇵 日本','🇱🇻 拉脱维亚',
+                                                          '🇱🇹 立陶宛','🇲🇾 马来西亚','🇲🇽 墨西哥','🇳🇱 荷兰','🇳🇴 挪威','🇵🇱 波兰','🇵🇹 葡萄牙','🇷🇴 罗马尼亚',
+                                                          '🇸🇬 新加坡','🇸🇰 斯洛伐克','🇸🇮 斯洛维尼亚','🇪🇸 西班牙','🇸🇪 瑞典','🇨🇭 瑞士','🇹🇼 台湾','🇬🇧 英国','🇺🇸 美国'
+                                                        ].map((c, i) => (
+                                                            <span key={i} className="region-tag">{c}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </span>
                                         </li>
                                         <li>
                                             <span className="check-icon required">👨‍👩‍👦</span>

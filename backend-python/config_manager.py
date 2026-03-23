@@ -269,6 +269,7 @@ DEFAULT_CONFIG = {
     "serviceMaintenance": {
         "upixel": False,
         "kpixel": False,
+        "vpixel": False,
         "gpt": False
     },
     
@@ -290,6 +291,14 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "cdkey": "",  # K-XXXX... format
         "baseUrl": "https://2key.kckc1818.com/openapi.php",
+        "creditCost": 1.5
+    },
+    
+    # VPixel API (Google One via 1688ai.vip) — 与 KPixel 共享 "高级验证" 通道
+    "vpixelApi": {
+        "enabled": False,
+        "card": "",           # 卡密 code
+        "baseUrl": "http://1688ai.vip",
         "creditCost": 1.5
     },
     

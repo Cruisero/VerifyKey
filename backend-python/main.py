@@ -6494,13 +6494,13 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     bal_data = resp.json()
                     remaining = bal_data.get("remaining_uses", bal_data.get("balance", 0))
                     if not remaining or remaining <= 0:
-                        logging.warning("[ProTier] KPixel balance is 0, marking unavailable")
+                        print("[ProTier] KPixel balance is 0, marking unavailable")
                         kpixel_available = False
                 else:
-                    logging.warning(f"[ProTier] KPixel balance check failed: HTTP {resp.status_code}")
+                    print(f"[ProTier] KPixel balance check failed: HTTP {resp.status_code}")
                     kpixel_available = False
         except Exception as e:
-            logging.warning(f"[ProTier] KPixel balance check error: {e}")
+            print(f"[ProTier] KPixel balance check error: {e}")
             kpixel_available = False
 
     if not kpixel_available and not vpixel_available:

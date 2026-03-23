@@ -6507,7 +6507,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     # We rely on the submit response to detect quota issues and fallback to KPixel.
 
     if not kpixel_available and not vpixel_available:
-        raise HTTPException(status_code=503, detail="高级验证 API 未启用或未配置")
+        raise HTTPException(status_code=503, detail="服务端错误，请稍后重试")
 
     credit_cost = kpixel_cfg.get("creditCost", 1.5) if kpixel_available else vpixel_cfg.get("creditCost", 1.5)
 
@@ -6568,13 +6568,15 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     print(f"[ProTier] VPixel submit failed ({data.get('message')}), falling back to KPixel")
                     use_vpixel = False  # fall through to KPixel below
                 else:
-                    raise HTTPException(status_code=400, detail=data.get("message", "VPixel 提交失败"))
+                    print(f"[ProTier] VPixel submit error: {data.get('message')}")
+                    raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
         except httpx.HTTPError as e:
             if kpixel_available:
                 print(f"[ProTier] VPixel connection failed ({e}), falling back to KPixel")
                 use_vpixel = False
             else:
-                raise HTTPException(status_code=502, detail=f"无法连接 VPixel API: {str(e)}")
+                print(f"[ProTier] VPixel connection error: {e}")
+                raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
     if not use_vpixel:
         # ---- Route to KPixel ----
@@ -6601,10 +6603,12 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     "source": "kpixel",
                 }
             else:
-                raise HTTPException(status_code=400, detail=data.get("message", "KPixel 提交失败"))
+                print(f"[ProTier] KPixel submit error: {data.get('message')}")
+                raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
         except httpx.HTTPError as e:
-            raise HTTPException(status_code=502, detail=f"无法连接 KPixel API: {str(e)}")
+            print(f"[ProTier] KPixel connection error: {e}")
+            raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
 
 

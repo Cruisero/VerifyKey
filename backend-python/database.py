@@ -118,6 +118,7 @@ def init_db():
         # Schema migrations for existing databases
         _add_vid_column_to_bot_verify_log(conn)
         _add_via_column_to_verification_history(conn)
+        _add_channel_column_to_gpt_keys(conn)
 
         conn.commit()
         _initialized = True
@@ -242,6 +243,19 @@ def _add_via_column_to_verification_history(conn: sqlite3.Connection):
             print("[DB] Added 'via' column to verification_history table")
     except Exception as e:
         print(f"[DB] Error adding via column: {e}")
+
+
+def _add_channel_column_to_gpt_keys(conn: sqlite3.Connection):
+    """Add channel column to gpt_keys if it doesn't exist yet."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(gpt_keys)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "channel" not in columns:
+            conn.execute("ALTER TABLE gpt_keys ADD COLUMN channel TEXT DEFAULT 'sbs'")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_gk_channel_status ON gpt_keys(channel, status)")
+            print("[DB] Added 'channel' column to gpt_keys table")
+    except Exception as e:
+        print(f"[DB] Error adding channel column: {e}")
 
 
 # ========== Backup Functions ==========

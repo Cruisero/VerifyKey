@@ -6427,20 +6427,67 @@ async def kpixel_update_config(request: Request, authorization: Optional[str] = 
 
 
 # ==============================================================
-# GPT Recharge — Card Key Pool + Proxy
+# GPT Recharge — Dual Channel Card Key Pool + Proxy
+# ==============================================================
+# Channel "sbs" → chong.databrain.sbs  (old)
+# Channel "red" → redeemgpt.com        (new)
 # ==============================================================
 
-GPT_RECHARGE_BASE = "https://chong.databrain.sbs"
+GPT_SBS_RECHARGE_BASE = "https://chong.databrain.sbs"
+GPT_RED_RECHARGE_BASE = "https://gpt.86gamestore.com/api"
+GPT_RED_ORIGIN = "https://redeemgpt.com"
 GPT_RECHARGE_COST = 2.0  # CDK points per successful recharge
+GPT_CHANNELS = ("sbs", "red")
 
 import uuid as _uuid
+import asyncio as _asyncio
 
 def _gpt_sign():
-    """Generate a sign value (UUID v4) matching the external API's expectation."""
+    """Generate a sign value (UUID v4) matching the SBS API's expectation."""
     return str(_uuid.uuid4())
 
 
-# --- Admin: Add card keys in bulk ---
+def _red_api_check(card_key: str) -> dict:
+    """Validate a RED channel card key via curl_cffi (bypasses Cloudflare)."""
+    from curl_cffi import requests as curl_requests
+    import random
+    imp = random.choice(["chrome110", "chrome100"])
+    session = curl_requests.Session(impersonate=imp)
+    resp = session.post(
+        f"{GPT_RED_RECHARGE_BASE}/check",
+        json={"cdkey": card_key},
+        headers={
+            "accept": "application/json, text/plain, */*",
+            "content-type": "application/json",
+            "origin": GPT_RED_ORIGIN,
+            "referer": f"{GPT_RED_ORIGIN}/",
+        },
+        timeout=30,
+    )
+    return resp.json()
+
+
+def _red_api_activate(card_key: str, session_info: str) -> dict:
+    """Submit RED channel recharge via curl_cffi (bypasses Cloudflare)."""
+    from curl_cffi import requests as curl_requests
+    import random
+    imp = random.choice(["chrome110", "chrome100"])
+    session = curl_requests.Session(impersonate=imp)
+    resp = session.post(
+        f"{GPT_RED_RECHARGE_BASE}/activate",
+        json={"cdkey": card_key, "session_info": session_info, "force": 1},
+        headers={
+            "accept": "application/json, text/plain, */*",
+            "content-type": "application/json",
+            "origin": GPT_RED_ORIGIN,
+            "referer": f"{GPT_RED_ORIGIN}/",
+        },
+        timeout=60,
+    )
+    return resp.json()
+
+
+# --- Admin: Add card keys in bulk (with external API validation) ---
 @app.post("/api/gpt-keys/add")
 async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -6452,24 +6499,79 @@ async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(N
 
     body = await request.json()
     keys_text = body.get("keys", "")
+    channel = body.get("channel", "sbs").strip().lower()
+    if channel not in GPT_CHANNELS:
+        channel = "sbs"
     keys = [k.strip() for k in keys_text.strip().split("\n") if k.strip()]
     if not keys:
         raise HTTPException(status_code=400, detail="没有有效的卡密")
 
+    import httpx
     conn = database.get_connection()
     now = datetime.now().isoformat()
-    added = 0
-    for key in keys:
-        try:
-            conn.execute(
-                "INSERT INTO gpt_keys (card_key, status, created_at) VALUES (?, 'available', ?)",
-                (key, now)
-            )
-            added += 1
-        except Exception:
-            pass  # duplicate key, skip
+    valid_count = 0
+    invalid_count = 0
+    duplicate_count = 0
+    results = []  # per-key results
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for key in keys:
+            # Check for duplicates first
+            existing = conn.execute("SELECT id FROM gpt_keys WHERE card_key=?", (key,)).fetchone()
+            if existing:
+                duplicate_count += 1
+                results.append({"key": key, "status": "duplicate", "msg": "已存在"})
+                continue
+
+            # Validate against external API
+            try:
+                if channel == "red":
+                    data = await _asyncio.to_thread(_red_api_check, key)
+                    ok = data.get("success") or data.get("flag", False)
+                    msg = data.get("msg", "")
+                    gift = (data.get("data") or {}).get("gift_name", "") if ok else ""
+                else:
+                    resp = await client.post(
+                        f"{GPT_SBS_RECHARGE_BASE}/api/vip/c",
+                        json={"cdk": key, "sign": _gpt_sign(), "timestamp": int(datetime.now().timestamp() * 1000)}
+                    )
+                    data = resp.json()
+                    ok = resp.status_code == 200 and data.get("code") == 1
+                    msg = data.get("message", "")
+                    gift = data.get("data", "") if ok else ""
+            except Exception as e:
+                ok = False
+                msg = f"验证请求失败: {str(e)}"
+                gift = ""
+
+            status = "available" if ok else "invalid"
+            try:
+                conn.execute(
+                    "INSERT INTO gpt_keys (card_key, status, created_at, channel) VALUES (?, ?, ?, ?)",
+                    (key, status, now, channel)
+                )
+            except Exception:
+                duplicate_count += 1
+                results.append({"key": key, "status": "duplicate", "msg": "已存在"})
+                continue
+
+            if ok:
+                valid_count += 1
+                results.append({"key": key, "status": "valid", "msg": gift or "验证通过"})
+            else:
+                invalid_count += 1
+                results.append({"key": key, "status": "invalid", "msg": msg or "验证失败"})
+
     conn.commit()
-    return {"success": True, "added": added, "total_input": len(keys)}
+    return {
+        "success": True,
+        "valid": valid_count,
+        "invalid": invalid_count,
+        "duplicate": duplicate_count,
+        "total_input": len(keys),
+        "channel": channel,
+        "results": results,
+    }
 
 
 # --- Admin: List card keys ---
@@ -6501,7 +6603,16 @@ async def gpt_keys_stats(authorization: Optional[str] = Header(None)):
     total = conn.execute("SELECT COUNT(*) FROM gpt_keys").fetchone()[0]
     available = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='available'").fetchone()[0]
     used = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='used'").fetchone()[0]
-    return {"total": total, "available": available, "used": used}
+
+    # Per-channel stats
+    channels = {}
+    for ch in GPT_CHANNELS:
+        ch_total = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE channel=?", (ch,)).fetchone()[0]
+        ch_avail = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE channel=? AND status='available'", (ch,)).fetchone()[0]
+        ch_used = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE channel=? AND status='used'", (ch,)).fetchone()[0]
+        channels[ch] = {"total": ch_total, "available": ch_avail, "used": ch_used}
+
+    return {"total": total, "available": available, "used": used, "channels": channels}
 
 
 # --- Admin: Delete a card key ---
@@ -6520,105 +6631,139 @@ async def gpt_keys_delete(key_id: int, authorization: Optional[str] = Header(Non
     return {"success": True}
 
 
-# --- User: Exchange CDK points for a card key ---
+# --- User: Exchange CDK points for a card key (with channel failover) ---
 @app.post("/api/gpt/exchange")
-async def gpt_exchange(request: Request):
-    body = await request.json()
-    cdk_code = body.get("cdk", "").strip()
-    if not cdk_code:
-        raise HTTPException(status_code=400, detail="请输入 CDK")
+async def gpt_exchange(request: Request, authorization: Optional[str] = Header(None)):
+    # Auth via JWT token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
 
-    # Validate CDK has enough points
-    cdk_info = cdk_manager.validate_cdk(cdk_code)
-    if not cdk_info.get("valid"):
-        raise HTTPException(status_code=400, detail="CDK 无效")
-    remaining = cdk_info.get("remaining", 0)
-    if remaining < GPT_RECHARGE_COST:
-        raise HTTPException(status_code=400, detail=f"CDK 积分不足（需要 {GPT_RECHARGE_COST} 积分，剩余 {remaining}）")
+    # Check credits (verify_token returns full user dict with 'id' and 'credits')
+    user_id = user.get("id")
+    credits = user.get("credits", 0)
+    if credits < GPT_RECHARGE_COST:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_RECHARGE_COST} 积分，剩余 {credits}）")
 
-    # Pick an available key from pool
+    # Pick an available key — try any channel, failover automatically
     conn = database.get_connection()
-    row = conn.execute("SELECT id, card_key FROM gpt_keys WHERE status='available' LIMIT 1").fetchone()
+    row = conn.execute("SELECT id, card_key, channel FROM gpt_keys WHERE status='available' LIMIT 1").fetchone()
     if not row:
         raise HTTPException(status_code=400, detail="暂无可用卡密，请联系管理员")
 
-    key_id, card_key = row["id"], row["card_key"]
+    key_id, card_key, channel = row["id"], row["card_key"], row["channel"] or "sbs"
 
-    # Mark key as reserved (but don't deduct CDK yet — deduct on successful recharge)
+    # Mark key as reserved
     now = datetime.now().isoformat()
     conn.execute(
         "UPDATE gpt_keys SET status='reserved', used_by_cdk=?, used_at=? WHERE id=?",
-        (cdk_code, now, key_id)
+        (f"user:{user_id}", now, key_id)
     )
     conn.commit()
 
-    # Call external API to validate the card key
+    # Validate card key via external API based on channel
     import httpx
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{GPT_RECHARGE_BASE}/api/vip/c",
-                json={"cdk": card_key, "sign": _gpt_sign(), "timestamp": int(datetime.now().timestamp() * 1000)}
-            )
-            data = resp.json()
+        if channel == "red":
+            data = await _asyncio.to_thread(_red_api_check, card_key)
+            ok = data.get("success") or data.get("flag", False)
+            if not ok:
+                msg = data.get("msg", "卡密验证失败")
+                conn.execute("UPDATE gpt_keys SET status='invalid' WHERE id=?", (key_id,))
+                conn.commit()
+                raise HTTPException(status_code=400, detail=msg)
+            gift_info = data.get("data", {})
+            masked = gift_info.get("gift_name", "")
+        else:
+            # SBS channel
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{GPT_SBS_RECHARGE_BASE}/api/vip/c",
+                    json={"cdk": card_key, "sign": _gpt_sign(), "timestamp": int(datetime.now().timestamp() * 1000)}
+                )
+                data = resp.json()
+            if resp.status_code != 200 or data.get("code") != 1:
+                conn.execute("UPDATE gpt_keys SET status='invalid' WHERE id=?", (key_id,))
+                conn.commit()
+                raise HTTPException(status_code=400, detail=data.get("message", "卡密验证失败"))
+            masked = data.get("data", "")
+    except HTTPException:
+        raise
     except Exception as e:
-        # Rollback reservation
         conn.execute("UPDATE gpt_keys SET status='available', used_by_cdk='', used_at='' WHERE id=?", (key_id,))
         conn.commit()
         raise HTTPException(status_code=502, detail=f"外部 API 错误: {str(e)}")
 
-    if resp.status_code != 200 or data.get("code") != 1:
-        # Key invalid — mark as failed
-        conn.execute("UPDATE gpt_keys SET status='invalid' WHERE id=?", (key_id,))
-        conn.commit()
-        raise HTTPException(status_code=400, detail=data.get("message", "卡密验证失败"))
-
     return {
         "success": True,
         "card_key": card_key,
-        "masked": data.get("data", ""),
+        "masked": masked,
         "key_id": key_id,
+        "channel": channel,
     }
 
 
-# --- User: Recharge (proxy to external API) ---
+# --- User: Recharge (proxy to external API, route by channel) ---
 @app.post("/api/gpt/recharge")
-async def gpt_recharge(request: Request):
-    body = await request.json()
-    cdk_code = body.get("cdk", "").strip()
-    card_key = body.get("card_key", "").strip()
-    account = body.get("account", "").strip()
-    email = body.get("email", "").strip()
+async def gpt_recharge(request: Request, authorization: Optional[str] = Header(None)):
+    # Auth via JWT token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    user_id = user.get("id")
 
-    if not cdk_code or not card_key or not account:
+    body = await request.json()
+    card_key = body.get("card_key", "").strip()
+    account = body.get("account", "").strip()  # session JSON or extracted account
+    email = body.get("email", "").strip()
+    channel = body.get("channel", "sbs").strip().lower()
+
+    if not card_key or not account:
         raise HTTPException(status_code=400, detail="参数不完整")
 
-    # Call external recharge API
     import httpx
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                f"{GPT_RECHARGE_BASE}/api/vip/r",
-                json={
-                    "cdk": card_key,
-                    "account": account,
-                    "type": "gpt",
-                    "sign": _gpt_sign(),
-                    "timestamp": int(datetime.now().timestamp() * 1000),
-                }
-            )
-            data = resp.json()
+        if channel == "red":
+            # RED channel: curl_cffi bypasses Cloudflare
+            data = await _asyncio.to_thread(_red_api_activate, card_key, account)
+            ok = data.get("success") or data.get("flag", False)
+            if not ok:
+                msg = data.get("msg", "充值失败，请稍后重试")
+                raise HTTPException(status_code=400, detail=msg)
+        else:
+            # SBS channel: POST /api/vip/r
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    f"{GPT_SBS_RECHARGE_BASE}/api/vip/r",
+                    json={
+                        "cdk": card_key,
+                        "account": account,
+                        "type": "gpt",
+                        "sign": _gpt_sign(),
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                    }
+                )
+                data = resp.json()
+            if resp.status_code != 200 or data.get("code") != 1:
+                raise HTTPException(status_code=400, detail=data.get("message", "充值失败，请稍后重试"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"充值请求失败: {str(e)}")
 
-    if resp.status_code != 200 or data.get("code") != 1:
-        raise HTTPException(status_code=400, detail=data.get("message", "充值失败，请稍后重试"))
-
-    # Success — deduct CDK points
-    result = cdk_manager.use_cdk(cdk_code, GPT_RECHARGE_COST)
-    if not result.get("success"):
-        # Recharge succeeded but CDK deduction failed — log but don't fail the user
-        print(f"[GPT Recharge] WARNING: CDK deduction failed for {cdk_code}: {result.get('message')}")
+    # Success — deduct user credits
+    try:
+        result = auth.deduct_credits(user_id, int(GPT_RECHARGE_COST))
+        if not result:
+            print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id} (insufficient credits?)")
+    except Exception as e:
+        print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id}: {e}")
 
     # Mark card key as used
     conn = database.get_connection()
@@ -6629,7 +6774,7 @@ async def gpt_recharge(request: Request):
     )
     conn.commit()
 
-    return {"success": True, "message": "充值成功"}
+    return {"success": True, "message": "充值成功", "channel": channel}
 
 
 if __name__ == "__main__":

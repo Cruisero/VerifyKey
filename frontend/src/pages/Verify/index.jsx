@@ -56,6 +56,7 @@ export default function Verify() {
     const [gptRecharging, setGptRecharging] = useState(false);
     const [gptSuccess, setGptSuccess] = useState(false);
     const [gptResultMsg, setGptResultMsg] = useState('');
+    const [gptChannel, setGptChannel] = useState('sbs');
 
     // Submission mode: 'single' | 'batch'
     const [submitMode, setSubmitMode] = useState('single');
@@ -1124,6 +1125,7 @@ export default function Verify() {
                                                             return;
                                                         }
                                                         setGptCardKey(exData.card_key);
+                                                        setGptChannel(exData.channel || 'sbs');
                                                         const reRes = await fetch(`${API_BASE}/api/gpt/recharge`, {
                                                             method: 'POST',
                                                             headers: {
@@ -1134,6 +1136,7 @@ export default function Verify() {
                                                                 card_key: exData.card_key,
                                                                 account: gptSession,
                                                                 email: gptEmail,
+                                                                channel: exData.channel || 'sbs',
                                                             }),
                                                         });
                                                         const reData = await reRes.json();

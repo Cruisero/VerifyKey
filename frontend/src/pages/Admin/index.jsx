@@ -686,11 +686,12 @@ function GptKeysTab() {
     const token = user?.token || localStorage.getItem('verifykey-token');
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
-    const [stats, setStats] = useState({ total: 0, available: 0, used: 0 });
+    const [stats, setStats] = useState({ total: 0, available: 0, used: 0, channels: {} });
     const [keys, setKeys] = useState([]);
     const [newKeys, setNewKeys] = useState('');
     const [adding, setAdding] = useState(false);
     const [addResult, setAddResult] = useState(null);
+    const [addChannel, setAddChannel] = useState('sbs');
 
     const fetchStats = async () => {
         try {
@@ -718,19 +719,19 @@ function GptKeysTab() {
         try {
             const res = await fetch(`${API_BASE}/api/gpt-keys/add`, {
                 method: 'POST', headers: authHeaders,
-                body: JSON.stringify({ keys: newKeys }),
+                body: JSON.stringify({ keys: newKeys, channel: addChannel }),
             });
             const data = await res.json();
             if (res.ok) {
-                setAddResult(`✅ 成功添加 ${data.added} 个卡密（输入 ${data.total_input} 个）`);
+                setAddResult(data);
                 setNewKeys('');
                 fetchStats();
                 fetchKeys();
             } else {
-                setAddResult(`❌ ${data.detail}`);
+                setAddResult({ error: data.detail || '添加失败' });
             }
         } catch (e) {
-            setAddResult(`❌ ${e.message}`);
+            setAddResult({ error: e.message });
         } finally {
             setAdding(false);
         }
@@ -756,12 +757,21 @@ function GptKeysTab() {
         return <span style={{ padding: '2px 10px', borderRadius: '8px', background: s.bg, color: s.color, fontWeight: 600, fontSize: '12px' }}>{s.text}</span>;
     };
 
+    const channelBadge = (ch) => {
+        const isRed = ch === 'red';
+        return <span style={{
+            padding: '2px 8px', borderRadius: '8px', fontWeight: 600, fontSize: '11px',
+            background: isRed ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
+            color: isRed ? '#dc2626' : '#3b82f6',
+        }}>{isRed ? 'RED' : 'SBS'}</span>;
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                 {[
-                    { label: '总卡密', value: stats.total, icon: '🎟️', color: '#7c5cfc' },
+                    { label: '总卡密', value: stats.total, icon: '🎫️', color: '#7c5cfc' },
                     { label: '可用', value: stats.available, icon: '✅', color: '#10b981' },
                     { label: '已使用', value: stats.used, icon: '📋', color: '#6b7280' },
                 ].map(({ label, value, icon, color }) => (
@@ -776,31 +786,101 @@ function GptKeysTab() {
                 ))}
             </div>
 
+            {/* Per-channel stats */}
+            {stats.channels && Object.keys(stats.channels).length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                    {Object.entries(stats.channels).map(([ch, s]) => (
+                        <div key={ch} style={{
+                            background: 'var(--bg-primary)', border: '1px solid var(--border-primary)',
+                            borderRadius: '10px', padding: '14px 18px',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{
+                                    padding: '3px 10px', borderRadius: '8px', fontWeight: 700, fontSize: '12px',
+                                    background: ch === 'red' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)',
+                                    color: ch === 'red' ? '#dc2626' : '#3b82f6',
+                                }}>{ch.toUpperCase()}</span>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>通道</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '16px', fontSize: '13px' }}>
+                                <span>可用 <strong style={{ color: '#10b981' }}>{s.available}</strong></span>
+                                <span>已用 <strong>{s.used}</strong></span>
+                                <span>总计 <strong>{s.total}</strong></span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Add Keys */}
             <div className="card" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600 }}>
-                    ➕ 批量添加卡密
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>➕ 批量添加卡密</span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                        {['sbs', 'red'].map(ch => (
+                            <button key={ch} onClick={() => setAddChannel(ch)} style={{
+                                padding: '4px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                                fontWeight: 600, fontSize: '12px',
+                                background: addChannel === ch
+                                    ? (ch === 'red' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)')
+                                    : 'var(--bg-secondary)',
+                                color: addChannel === ch
+                                    ? (ch === 'red' ? '#dc2626' : '#3b82f6')
+                                    : 'var(--text-tertiary)',
+                            }}>{ch.toUpperCase()}</button>
+                        ))}
+                    </div>
                 </div>
                 <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <textarea
                         className="input textarea"
                         style={{ minHeight: '100px', fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: '13px' }}
-                        placeholder="每行一个卡密..."
+                        placeholder={`每行一个 ${addChannel.toUpperCase()} 通道卡密...`}
                         value={newKeys}
                         onChange={e => setNewKeys(e.target.value)}
                     />
                     {addResult && (
-                        <div style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
-                            background: addResult.startsWith('✅') ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
-                            color: addResult.startsWith('✅') ? '#059669' : '#dc2626'
-                        }}>{addResult}</div>
+                        <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-primary)' }}>
+                            {addResult.error ? (
+                                <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', color: '#dc2626', fontSize: '13px', fontWeight: 500 }}>
+                                    ❌ {addResult.error}
+                                </div>
+                            ) : (
+                                <>
+                                    <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', fontSize: '13px', fontWeight: 600, display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                                        <span>输入 {addResult.total_input} 个</span>
+                                        {addResult.valid > 0 && <span style={{ color: '#059669' }}>✅ 有效 {addResult.valid}</span>}
+                                        {addResult.invalid > 0 && <span style={{ color: '#dc2626' }}>❌ 无效 {addResult.invalid}</span>}
+                                        {addResult.duplicate > 0 && <span style={{ color: '#d97706' }}>⚠️ 重复 {addResult.duplicate}</span>}
+                                    </div>
+                                    {addResult.results && addResult.results.length > 0 && (
+                                        <div style={{ maxHeight: '150px', overflow: 'auto', fontSize: '12px' }}>
+                                            {addResult.results.map((r, i) => (
+                                                <div key={i} style={{
+                                                    padding: '6px 14px', borderTop: '1px solid var(--border-primary)',
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                    background: r.status === 'valid' ? 'rgba(16,185,129,0.04)' : r.status === 'invalid' ? 'rgba(239,68,68,0.04)' : 'rgba(245,158,11,0.04)',
+                                                }}>
+                                                    <span style={{ fontFamily: "'SF Mono', monospace", maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.key}</span>
+                                                    <span style={{
+                                                        color: r.status === 'valid' ? '#059669' : r.status === 'invalid' ? '#dc2626' : '#d97706',
+                                                        fontWeight: 500,
+                                                    }}>{r.status === 'valid' ? '✅' : r.status === 'invalid' ? '❌' : '⚠️'} {r.msg}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     )}
                     <button
                         className="btn btn-primary"
                         disabled={adding || !newKeys.trim()}
                         onClick={handleAdd}
                     >
-                        {adding ? '添加中...' : `添加 (${newKeys.split('\n').filter(l => l.trim()).length} 个)`}
+                        {adding ? '🔄 验证并添加中...' : `添加到 ${addChannel.toUpperCase()} (${newKeys.split('\n').filter(l => l.trim()).length} 个)`}
                     </button>
                 </div>
             </div>
@@ -816,9 +896,10 @@ function GptKeysTab() {
                         <thead>
                             <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
                                 <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>卡密</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600 }}>状态</th>
+                                <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>通道</th>
+                                <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>状态</th>
                                 <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>使用邮箱</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600 }}>操作</th>
+                                <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>操作</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -827,7 +908,8 @@ function GptKeysTab() {
                                     <td style={{ padding: '10px 16px', fontFamily: "'SF Mono', monospace", maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {k.card_key}
                                     </td>
-                                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>{statusBadge(k.status)}</td>
+                                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>{channelBadge(k.channel)}</td>
+                                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>{statusBadge(k.status)}</td>
                                     <td style={{ padding: '10px 16px', color: k.used_email ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
                                         {k.used_email || '-'}
                                     </td>
@@ -6874,7 +6956,7 @@ export default function Admin() {
                                         value={newRule.intervalMinutes}
                                         onChange={(e) => setNewRule(prev => ({ ...prev, intervalMinutes: Math.max(1, parseInt(e.target.value) || 5) }))}
                                         className="input"
-                                        style={{ width: '65px', textAlign: 'center' }}
+                                        style={{ width: '80px', textAlign: 'center' }}
                                     />
                                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>分钟 添加</span>
                                     <input
@@ -6884,7 +6966,7 @@ export default function Admin() {
                                         value={newRule.count}
                                         onChange={(e) => setNewRule(prev => ({ ...prev, count: Math.max(1, parseInt(e.target.value) || 1) }))}
                                         className="input"
-                                        style={{ width: '55px', textAlign: 'center' }}
+                                        style={{ width: '80px', textAlign: 'center' }}
                                     />
                                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>条 成功率</span>
                                     <input
@@ -6894,7 +6976,7 @@ export default function Admin() {
                                         value={newRule.successRate}
                                         onChange={(e) => setNewRule(prev => ({ ...prev, successRate: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) }))}
                                         className="input"
-                                        style={{ width: '55px', textAlign: 'center' }}
+                                        style={{ width: '80px', textAlign: 'center' }}
                                     />
                                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>%  时效</span>
                                     <input
@@ -6905,7 +6987,7 @@ export default function Admin() {
                                         value={newRule.durationHours}
                                         onChange={(e) => setNewRule(prev => ({ ...prev, durationHours: Math.max(0, parseFloat(e.target.value) || 0) }))}
                                         className="input"
-                                        style={{ width: '65px', textAlign: 'center' }}
+                                        style={{ width: '80px', textAlign: 'center' }}
                                     />
                                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>小时</span>
                                     <button

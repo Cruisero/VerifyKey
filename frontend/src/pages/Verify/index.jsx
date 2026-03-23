@@ -1039,7 +1039,7 @@ export default function Verify() {
                                                         <div className="result-info">
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(result.email)}</span>
-                                                                {result.stage !== undefined && result.totalStages && (
+                                                                {result.tier !== 'pro' && result.stage !== undefined && result.totalStages && (
                                                                     <span className="result-stage-badge">
                                                                         {result.stage}/{result.totalStages}
                                                                     </span>

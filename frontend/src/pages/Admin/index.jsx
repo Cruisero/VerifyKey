@@ -1270,7 +1270,7 @@ function PixelApiTab() {
                         <div className="stat-card card" style={{ borderLeft: '3px solid #10b981' }}>
                             <div className="stat-icon">📋</div>
                             <div className="stat-info">
-                                <span className="stat-value">{vpixelQueue?.queue ?? vpixelQueue?.data ?? '-'}</span>
+                                <span className="stat-value">{vpixelQueue?.data?.total ?? vpixelQueue?.queue ?? '-'}</span>
                                 <span className="stat-label">队列中</span>
                             </div>
                         </div>

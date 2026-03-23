@@ -6474,6 +6474,35 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     kpixel_available = kpixel_cfg["enabled"] and kpixel_cfg["cdkey"]
     vpixel_available = vpixel_cfg["enabled"] and vpixel_cfg["card"]
 
+    # Check service maintenance flags
+    import config_manager as _cfg_mgr
+    _maint = _cfg_mgr.get_config().get("serviceMaintenance", {})
+    if _maint.get("kpixel"):
+        kpixel_available = False
+    if _maint.get("vpixel"):
+        vpixel_available = False
+
+    # Real-time KPixel balance check — skip if 0 balance
+    if kpixel_available:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.post(kpixel_cfg.get("baseUrl", ""), json={
+                    "action": "get_balance",
+                    "cdkey": kpixel_cfg.get("cdkey", ""),
+                })
+                if resp.status_code == 200:
+                    bal_data = resp.json()
+                    remaining = bal_data.get("remaining_uses", bal_data.get("balance", 0))
+                    if not remaining or remaining <= 0:
+                        logging.warning("[ProTier] KPixel balance is 0, marking unavailable")
+                        kpixel_available = False
+                else:
+                    logging.warning(f"[ProTier] KPixel balance check failed: HTTP {resp.status_code}")
+                    kpixel_available = False
+        except Exception as e:
+            logging.warning(f"[ProTier] KPixel balance check error: {e}")
+            kpixel_available = False
+
     if not kpixel_available and not vpixel_available:
         raise HTTPException(status_code=503, detail="高级验证 API 未启用或未配置")
 

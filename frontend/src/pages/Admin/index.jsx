@@ -115,7 +115,7 @@ function TelegramBotTab() {
                             status: entryStatus,
                             message: data.message || '',
                             vid: data.vid || '',
-                            via: data.via || data.botType || '',
+                            via: data.via || data.botType || data.source || '',
                             timestamp: new Date().toISOString()
                         };
 
@@ -783,54 +783,7 @@ function GptKeysTab() {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Per-channel maintenance toggles */}
-            <div className="card" style={{ padding: 'var(--spacing-md)' }}>
-                <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 GPT 通道维护开关</div>
-                {[
-                    { key: 'gpt_sbs', label: '🔵 SBS 通道', desc: 'chong.databrain.sbs' },
-                    { key: 'gpt_red', label: '🔴 RED 通道', desc: 'redeemgpt.com' },
-                    { key: 'gpt_vip', label: '🟣 VIP 通道', desc: 'shop.gptai.vip' },
-                ].map(s => (
-                    <div key={s.key} style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '10px 0', borderBottom: '1px solid var(--border-primary)',
-                    }}>
-                        <div>
-                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{s.label}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{s.desc}</div>
-                        </div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                            <span style={{
-                                fontSize: '11px', fontWeight: 600,
-                                color: gptMaint[s.key] ? '#dc2626' : '#16a34a',
-                            }}>
-                                {gptMaint[s.key] ? '维护中' : '正常'}
-                            </span>
-                            <input
-                                type="checkbox"
-                                checked={!!gptMaint[s.key]}
-                                onChange={async (e) => {
-                                    const val = e.target.checked;
-                                    setGptMaint(prev => ({ ...prev, [s.key]: val }));
-                                    try {
-                                        await fetch(`${API_BASE}/api/service-status`, {
-                                            method: 'POST',
-                                            headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ [s.key]: val }),
-                                        });
-                                    } catch (err) {
-                                        console.warn('GPT maint toggle failed:', err);
-                                        setGptMaint(prev => ({ ...prev, [s.key]: !val }));
-                                    }
-                                }}
-                            />
-                        </label>
-                    </div>
-                ))}
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
-                    💡 开启的通道会轮询使用，维护中的通道在充值时会跳过
-                </div>
-            </div>
+
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                 {[
@@ -997,6 +950,55 @@ function GptKeysTab() {
                             )}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            {/* Per-channel maintenance toggles */}
+            <div className="card" style={{ padding: 'var(--spacing-md)' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 GPT 通道维护开关</div>
+                {[
+                    { key: 'gpt_sbs', label: '🔵 SBS 通道', desc: 'chong.databrain.sbs' },
+                    { key: 'gpt_red', label: '🔴 RED 通道', desc: 'redeemgpt.com' },
+                    { key: 'gpt_vip', label: '🟣 VIP 通道', desc: 'shop.gptai.vip' },
+                ].map(s => (
+                    <div key={s.key} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '10px 0', borderBottom: '1px solid var(--border-primary)',
+                    }}>
+                        <div>
+                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{s.label}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{s.desc}</div>
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                            <span style={{
+                                fontSize: '11px', fontWeight: 600,
+                                color: gptMaint[s.key] ? '#dc2626' : '#16a34a',
+                            }}>
+                                {gptMaint[s.key] ? '维护中' : '正常'}
+                            </span>
+                            <input
+                                type="checkbox"
+                                checked={!!gptMaint[s.key]}
+                                onChange={async (e) => {
+                                    const val = e.target.checked;
+                                    setGptMaint(prev => ({ ...prev, [s.key]: val }));
+                                    try {
+                                        await fetch(`${API_BASE}/api/service-status`, {
+                                            method: 'POST',
+                                            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ [s.key]: val }),
+                                        });
+                                    } catch (err) {
+                                        console.warn('GPT maint toggle failed:', err);
+                                        setGptMaint(prev => ({ ...prev, [s.key]: !val }));
+                                    }
+                                }}
+                            />
+                        </label>
+                    </div>
+                ))}
+                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
+                    💡 开启的通道会轮询使用，维护中的通道在充值时会跳过
                 </div>
             </div>
         </div>
@@ -3431,15 +3433,23 @@ export default function Admin() {
                                                             background: '#f59e0b', color: '#fff', fontWeight: 600,
                                                         }}>处理中</span>
                                                     )}
-                                                    {r.via && (
-                                                        <span style={{
-                                                            fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
-                                                            background: r.via.includes('getgem') ? '#6366F1' : r.via.includes('fallback') ? '#f59e0b' : '#0088cc',
-                                                            color: '#fff', fontWeight: 500,
-                                                        }}>
-                                                            {r.via.includes('fallback') ? '🔄 ' : ''}{r.via}
-                                                        </span>
-                                                    )}
+                                                    {r.via && (() => {
+                                                        const viaColors = {
+                                                            pixel: { bg: '#059669', label: 'UPixel' },
+                                                            kpixel: { bg: '#7c5cfc', label: 'KPixel' },
+                                                            vpixel: { bg: '#0891b2', label: 'VPixel' },
+                                                            gpt: { bg: '#d97706', label: 'GPT' },
+                                                        };
+                                                        const vc = viaColors[r.via] || null;
+                                                        const bg = vc ? vc.bg : r.via.includes('getgem') ? '#6366F1' : r.via.includes('fallback') ? '#f59e0b' : '#0088cc';
+                                                        const label = vc ? vc.label : (r.via.includes('fallback') ? '🔄 ' : '') + r.via;
+                                                        return (
+                                                            <span style={{
+                                                                fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
+                                                                background: bg, color: '#fff', fontWeight: 500,
+                                                            }}>{label}</span>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>

@@ -333,7 +333,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             message: status === 'Running'
-                                ? `🔄 运行中... ${message}`
+                                ? `🔄 ${message || '运行中...'}`
                                 : `⏳ 排队中...`,
                             stageLabel: status === 'Running' ? '运行中' : '排队中',
                         } : r

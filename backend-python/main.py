@@ -6503,25 +6503,8 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
             print(f"[ProTier] KPixel balance check error: {e}")
             kpixel_available = False
 
-    # Real-time VPixel balance check — skip if 0 quota
-    if vpixel_available:
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(
-                    f"{vpixel_cfg['baseUrl']}/tasks/get_queue_up",
-                    headers={"Content-Type": "application/json"},
-                )
-                if resp.status_code == 200:
-                    vq_data = resp.json()
-                    vq_info = vq_data.get("data", {})
-                    remaining = vq_info.get("remaining", vq_info.get("total", -1))
-                    if remaining == 0:
-                        print("[ProTier] VPixel quota is 0, marking unavailable")
-                        vpixel_available = False
-                else:
-                    print(f"[ProTier] VPixel balance check failed: HTTP {resp.status_code}")
-        except Exception as e:
-            print(f"[ProTier] VPixel balance check error: {e}")
+    # Note: VPixel has no balance API — get_queue_up returns queue length, not credits.
+    # We rely on the submit response to detect quota issues and fallback to KPixel.
 
     if not kpixel_available and not vpixel_available:
         raise HTTPException(status_code=503, detail="高级验证 API 未启用或未配置")

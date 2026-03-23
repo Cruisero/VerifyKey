@@ -293,12 +293,24 @@ export default function Verify() {
     // Poll KPixel/VPixel job status (same response format)
     const pollKPixelJob = (taskId, resultId, statusUrl) => {
         const url = statusUrl || `${API_BASE}/api/kpixel/jobs/${taskId}/status`;
+        let failCount = 0;
         const intervalId = setInterval(async () => {
             try {
                 const resp = await fetch(url, { method: 'POST' });
                 if (!resp.ok) return;
                 const data = await resp.json();
-                if (!data.success) return;
+                if (!data.success) {
+                    failCount++;
+                    if (failCount >= 20) {
+                        clearInterval(intervalId);
+                        delete pollingRefs.current[resultId];
+                        setResults(prev => prev.map(r =>
+                            r.id === resultId ? { ...r, status: 'failed', message: '❌ 任务超时或已丢失' } : r
+                        ));
+                    }
+                    return;
+                }
+                failCount = 0;
 
                 const info = data.data || {};
                 const status = info.status || '';

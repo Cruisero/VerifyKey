@@ -31,6 +31,21 @@ const ERROR_DESCRIPTIONS = {
     UNKNOWN_ERROR: '未知错误',
 };
 
+// Sanitize error messages to hide supplier info from users
+const sanitizeError = (msg) => {
+    if (!msg || typeof msg !== 'string') return '操作失败，请稍后重试';
+    // Check if the error code has a known description
+    if (ERROR_DESCRIPTIONS[msg]) return ERROR_DESCRIPTIONS[msg];
+    // Strip supplier references
+    const blocked = /pixel|iqless|kckc|1688ai|vpixel|kpixel|upixel|api\s*key|cdkey|X-API/i;
+    if (blocked.test(msg)) return '服务暂时不可用，请稍后重试';
+    // Keep user-relevant messages (Chinese messages are usually safe)
+    if (/积分|余额|登录|过期|参数|不足|未启用|未配置|密码|验证|账号|邮箱/.test(msg)) return msg;
+    // Generic long English errors → hide
+    if (msg.length > 60 && /[a-zA-Z]/.test(msg)) return '操作失败，请稍后重试';
+    return msg;
+};
+
 export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
@@ -233,9 +248,9 @@ export default function Verify() {
 
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-                const errMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+                const rawMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
                 setResults(prev => prev.map(r =>
-                    r.id === resultId ? { ...r, status: 'failed', message: `❌ ${errMsg}` } : r
+                    r.id === resultId ? { ...r, status: 'failed', message: `❌ ${sanitizeError(rawMsg)}` } : r
                 ));
                 return;
             }
@@ -309,7 +324,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'failed',
-                            message: `❌ ${message || '验证失败'}`,
+                            message: `❌ ${sanitizeError(message) || '验证失败'}`,
                         } : r
                     ));
                 } else {
@@ -367,7 +382,7 @@ export default function Verify() {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
                     const error = data.error || 'UNKNOWN_ERROR';
-                    const errorDesc = ERROR_DESCRIPTIONS[error] || error;
+                    const errorDesc = ERROR_DESCRIPTIONS[error] || sanitizeError(error);
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
                             ...r,
@@ -1193,7 +1208,7 @@ export default function Verify() {
                                                         });
                                                         const exData = await exRes.json();
                                                         if (!exRes.ok || !exData.success) {
-                                                            setGptError(exData.detail || '卡密兑换失败');
+                                                            setGptError(sanitizeError(exData.detail) || '卡密兑换失败');
                                                             setGptRecharging(false);
                                                             return;
                                                         }
@@ -1218,10 +1233,10 @@ export default function Verify() {
                                                             setGptResultMsg('充值成功！');
                                                             await refreshUser();
                                                         } else {
-                                                            setGptError(reData.detail || '充值失败，请稍后重试');
+                                                            setGptError(sanitizeError(reData.detail) || '充值失败，请稍后重试');
                                                         }
                                                     } catch (e) {
-                                                        setGptError(e.message);
+                                                        setGptError(sanitizeError(e.message));
                                                     } finally {
                                                         setGptRecharging(false);
                                                     }

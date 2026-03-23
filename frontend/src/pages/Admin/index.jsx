@@ -1103,6 +1103,7 @@ function PixelApiTab() {
                         elapsed: data.elapsed || 0,
                         timestamp: new Date().toISOString(),
                         source: data.source || 'pixel',
+                        channel: data.channel || (existingIdx >= 0 ? prev[existingIdx].channel : ''),
                     };
 
                     if (existingIdx >= 0) {
@@ -1455,7 +1456,24 @@ function PixelApiTab() {
                                     }}>{sc.icon}</div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                {/* Source badge */}
+                                                {(() => {
+                                                    const srcMap = {
+                                                        pixel: { label: 'UPixel', bg: 'rgba(16,185,129,0.12)', color: '#059669' },
+                                                        kpixel: { label: 'KPixel', bg: 'rgba(124,92,252,0.12)', color: '#7c5cfc' },
+                                                        vpixel: { label: 'VPixel', bg: 'rgba(6,182,212,0.12)', color: '#0891b2' },
+                                                        gpt: { label: `GPT${job.channel ? '-' + job.channel.toUpperCase() : ''}`, bg: 'rgba(245,158,11,0.12)', color: '#d97706' },
+                                                    };
+                                                    const s = srcMap[job.source] || srcMap.pixel;
+                                                    return (
+                                                        <span style={{
+                                                            fontSize: '10px', fontWeight: 700, padding: '1px 6px',
+                                                            borderRadius: '4px', background: s.bg, color: s.color,
+                                                            letterSpacing: '0.3px', lineHeight: '18px', whiteSpace: 'nowrap',
+                                                        }}>{s.label}</span>
+                                                    );
+                                                })()}
                                                 <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
                                                     {maskEmail(job.email)}
                                                 </span>

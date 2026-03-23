@@ -6503,6 +6503,26 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
             print(f"[ProTier] KPixel balance check error: {e}")
             kpixel_available = False
 
+    # Real-time VPixel balance check — skip if 0 quota
+    if vpixel_available:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(
+                    f"{vpixel_cfg['baseUrl']}/tasks/get_queue_up",
+                    headers={"Content-Type": "application/json"},
+                )
+                if resp.status_code == 200:
+                    vq_data = resp.json()
+                    vq_info = vq_data.get("data", {})
+                    remaining = vq_info.get("remaining", vq_info.get("total", -1))
+                    if remaining == 0:
+                        print("[ProTier] VPixel quota is 0, marking unavailable")
+                        vpixel_available = False
+                else:
+                    print(f"[ProTier] VPixel balance check failed: HTTP {resp.status_code}")
+        except Exception as e:
+            print(f"[ProTier] VPixel balance check error: {e}")
+
     if not kpixel_available and not vpixel_available:
         raise HTTPException(status_code=503, detail="高级验证 API 未启用或未配置")
 
@@ -6562,13 +6582,13 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
             else:
                 # VPixel failed, try KPixel as fallback if available
                 if kpixel_available:
-                    logging.warning(f"[ProTier] VPixel submit failed ({data.get('message')}), falling back to KPixel")
+                    print(f"[ProTier] VPixel submit failed ({data.get('message')}), falling back to KPixel")
                     use_vpixel = False  # fall through to KPixel below
                 else:
                     raise HTTPException(status_code=400, detail=data.get("message", "VPixel 提交失败"))
         except httpx.HTTPError as e:
             if kpixel_available:
-                logging.warning(f"[ProTier] VPixel connection failed ({e}), falling back to KPixel")
+                print(f"[ProTier] VPixel connection failed ({e}), falling back to KPixel")
                 use_vpixel = False
             else:
                 raise HTTPException(status_code=502, detail=f"无法连接 VPixel API: {str(e)}")

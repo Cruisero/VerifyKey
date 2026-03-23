@@ -101,6 +101,16 @@ def init_db():
                 used_at TEXT DEFAULT ''
             );
 
+            CREATE TABLE IF NOT EXISTS vpixel_cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_key TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL DEFAULT 'available',
+                used_by_email TEXT DEFAULT '',
+                used_by_user INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT '',
+                used_at TEXT DEFAULT ''
+            );
+
             CREATE INDEX IF NOT EXISTS idx_vh_status ON verification_history(status);
             CREATE INDEX IF NOT EXISTS idx_vh_timestamp ON verification_history(timestamp);
             CREATE INDEX IF NOT EXISTS idx_vh_vid ON verification_history(verification_id);
@@ -108,6 +118,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_cdk_status ON cdkeys(status);
             CREATE INDEX IF NOT EXISTS idx_bs_bot_ts ON bot_stats(bot_id, timestamp);
             CREATE INDEX IF NOT EXISTS idx_gk_status ON gpt_keys(status);
+            CREATE INDEX IF NOT EXISTS idx_vpc_status ON vpixel_cards(status);
         """)
 
         # Migrate existing JSON data

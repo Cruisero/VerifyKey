@@ -5899,18 +5899,23 @@ async def get_service_status():
         vpixel_reason = "管理员手动维护中"
     elif not vpixel_cfg.get("enabled"):
         vpixel_reason = "未启用"
-    elif not vpixel_cfg.get("card"):
-        vpixel_reason = "未配置卡密"
     else:
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{vpixel_cfg.get('baseUrl', 'http://1688ai.vip')}/tasks/get_queue_up")
-                if resp.status_code == 200:
-                    vpixel_ok = True
-                else:
-                    vpixel_reason = "API 离线"
-        except Exception:
-            vpixel_reason = "无法连接 API"
+        # Check card pool for available cards
+        _vpc_count = database.get_connection().execute(
+            "SELECT COUNT(*) FROM vpixel_cards WHERE status='available'"
+        ).fetchone()[0]
+        if _vpc_count == 0:
+            vpixel_reason = "无可用卡密"
+        else:
+            try:
+                async with httpx.AsyncClient(timeout=5) as client:
+                    resp = await client.get(f"{vpixel_cfg.get('baseUrl', 'http://1688ai.vip')}/tasks/get_queue_up")
+                    if resp.status_code == 200:
+                        vpixel_ok = True
+                    else:
+                        vpixel_reason = "API 离线"
+            except Exception:
+                vpixel_reason = "无法连接 API"
 
     # Combined pro-tier availability: available if EITHER KPixel or VPixel is up
     pro_available = kpixel_ok or vpixel_ok
@@ -6472,7 +6477,16 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     vpixel_cfg = _get_vpixel_config()
 
     kpixel_available = kpixel_cfg["enabled"] and kpixel_cfg["cdkey"]
-    vpixel_available = vpixel_cfg["enabled"] and vpixel_cfg["card"]
+    # VPixel: check card pool for available cards
+    vpixel_available = vpixel_cfg["enabled"]
+    _vpixel_card_row = None
+    if vpixel_available:
+        _vpc_conn = database.get_connection()
+        _vpixel_card_row = _vpc_conn.execute(
+            "SELECT id, card_key FROM vpixel_cards WHERE status='available' LIMIT 1"
+        ).fetchone()
+        if not _vpixel_card_row:
+            vpixel_available = False
 
     # Check service maintenance flags
     import config_manager as _cfg_mgr
@@ -6534,15 +6548,26 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     # else: use kpixel (default)
 
     if use_vpixel:
-        # ---- Route to VPixel ----
+        # ---- Route to VPixel (pick card from pool) ----
+        vpc_id = _vpixel_card_row["id"]
+        vpc_card = _vpixel_card_row["card_key"]
         account_line = f"{request.email}--{request.password}--{request.twofa}"
         from datetime import datetime as _dt
+
+        # Reserve the card immediately
+        _vpc_conn = database.get_connection()
+        _vpc_conn.execute(
+            "UPDATE vpixel_cards SET status='reserved', used_by_email=?, used_by_user=?, used_at=? WHERE id=? AND status='available'",
+            (request.email, user_id, _dt.now().isoformat(), vpc_id),
+        )
+        _vpc_conn.commit()
+
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
                     f"{vpixel_cfg['baseUrl']}/tasks/submit",
                     json={
-                        "card": vpixel_cfg["card"],
+                        "card": vpc_card,
                         "accounts": [account_line],
                         "timestamp": _dt.utcnow().isoformat() + "Z",
                     },
@@ -6550,10 +6575,13 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                 )
             data = resp.json()
             if data.get("success"):
+                # Mark card as used
+                _vpc_conn.execute("UPDATE vpixel_cards SET status='used' WHERE id=?", (vpc_id,))
+                _vpc_conn.commit()
                 import time as _t
                 poll_id = f"vp_{int(_t.time())}_{request.email[:8]}"
                 task = asyncio.create_task(
-                    _vpixel_poll_job(vpixel_cfg["card"], account_line, request.email, user_id, vpixel_cfg)
+                    _vpixel_poll_job(vpc_card, account_line, request.email, user_id, vpixel_cfg)
                 )
                 _vpixel_polling_tasks[poll_id] = task
                 return {
@@ -6563,14 +6591,20 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     "source": "vpixel",
                 }
             else:
+                # VPixel failed — mark card as invalid
+                _vpc_conn.execute("UPDATE vpixel_cards SET status='invalid' WHERE id=?", (vpc_id,))
+                _vpc_conn.commit()
                 # VPixel failed, try KPixel as fallback if available
                 if kpixel_available:
-                    print(f"[ProTier] VPixel submit failed ({data.get('message')}), falling back to KPixel")
+                    print(f"[ProTier] VPixel submit failed ({data.get('message')}), card {vpc_card} invalid, falling back to KPixel")
                     use_vpixel = False  # fall through to KPixel below
                 else:
                     print(f"[ProTier] VPixel submit error: {data.get('message')}")
                     raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
         except httpx.HTTPError as e:
+            # Connection error — release card back to available
+            _vpc_conn.execute("UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE id=?", (vpc_id,))
+            _vpc_conn.commit()
             if kpixel_available:
                 print(f"[ProTier] VPixel connection failed ({e}), falling back to KPixel")
                 use_vpixel = False
@@ -7001,6 +7035,65 @@ async def vpixel_update_config(request: Request, authorization: Optional[str] = 
     if result:
         return {"success": True}
     raise HTTPException(status_code=500, detail="保存失败")
+
+
+# ---------- VPixel Card Pool Management ----------
+
+@app.post("/api/vpixel/cards")
+async def vpixel_cards_add(request: Request, authorization: Optional[str] = Header(None)):
+    """Batch-add VPixel cards (admin only)."""
+    _verify_admin_token(authorization)
+    body = await request.json()
+    keys_raw = body.get("keys", "")
+    keys = [k.strip() for k in keys_raw.strip().split("\n") if k.strip()]
+    if not keys:
+        raise HTTPException(status_code=400, detail="请输入至少一个卡密")
+
+    from datetime import datetime
+    conn = database.get_connection()
+    added, skipped = 0, 0
+    for key in keys:
+        existing = conn.execute("SELECT id FROM vpixel_cards WHERE card_key=?", (key,)).fetchone()
+        if existing:
+            skipped += 1
+            continue
+        conn.execute(
+            "INSERT INTO vpixel_cards (card_key, status, created_at) VALUES (?, ?, ?)",
+            (key, "available", datetime.now().isoformat()),
+        )
+        added += 1
+    conn.commit()
+    return {"success": True, "added": added, "skipped": skipped}
+
+
+@app.get("/api/vpixel/cards")
+async def vpixel_cards_list(authorization: Optional[str] = Header(None)):
+    """List all VPixel cards (admin only)."""
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    rows = conn.execute("SELECT * FROM vpixel_cards ORDER BY id DESC").fetchall()
+    return {"keys": [dict(r) for r in rows]}
+
+
+@app.get("/api/vpixel/cards/stats")
+async def vpixel_cards_stats(authorization: Optional[str] = Header(None)):
+    """Get VPixel card stats (admin only)."""
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    total = conn.execute("SELECT COUNT(*) FROM vpixel_cards").fetchone()[0]
+    available = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available'").fetchone()[0]
+    used = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='used'").fetchone()[0]
+    return {"total": total, "available": available, "used": used}
+
+
+@app.delete("/api/vpixel/cards/{card_id}")
+async def vpixel_cards_delete(card_id: int, authorization: Optional[str] = Header(None)):
+    """Delete a VPixel card (admin only)."""
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    conn.execute("DELETE FROM vpixel_cards WHERE id=?", (card_id,))
+    conn.commit()
+    return {"success": True}
 
 
 # ==============================================================

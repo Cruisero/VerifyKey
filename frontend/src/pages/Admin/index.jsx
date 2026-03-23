@@ -1031,6 +1031,11 @@ function PixelApiTab() {
     const [newVPixelCard, setNewVPixelCard] = useState('');
     const [vpixelSaving, setVpixelSaving] = useState(false);
     const [vpixelQueue, setVpixelQueue] = useState(null);
+    // VPixel card pool
+    const [vpixelCards, setVpixelCards] = useState([]);
+    const [vpixelCardStats, setVpixelCardStats] = useState({ total: 0, available: 0, used: 0 });
+    const [vpixelNewCards, setVpixelNewCards] = useState('');
+    const [vpixelAddingCards, setVpixelAddingCards] = useState(false);
 
     const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, vpixel: false });
     const [pixelJobs, setPixelJobs] = useState([]);
@@ -1099,6 +1104,17 @@ function PixelApiTab() {
             }
         } catch (e) {
             console.warn('VPixel config fetch error:', e);
+        }
+        // Fetch VPixel card pool
+        try {
+            const [cRes, sRes] = await Promise.all([
+                fetch(`${API_BASE}/api/vpixel/cards`, { headers: authHeaders }),
+                fetch(`${API_BASE}/api/vpixel/cards/stats`, { headers: authHeaders }),
+            ]);
+            if (cRes.ok) { const d = await cRes.json(); setVpixelCards(d.keys || []); }
+            if (sRes.ok) { const d = await sRes.json(); setVpixelCardStats(d); }
+        } catch (e) {
+            console.warn('VPixel cards fetch error:', e);
         }
     };
 
@@ -1813,51 +1829,139 @@ function PixelApiTab() {
                                         {vpixelConfig.enabled ? '🟢 已启用' : '🔴 未启用'}
                                     </span>
                                     <input type="checkbox" checked={vpixelConfig.enabled}
-                                        onChange={e => setVpixelConfig({ ...vpixelConfig, enabled: e.target.checked })} />
+                                        onChange={async e => {
+                                            const val = e.target.checked;
+                                            setVpixelConfig({ ...vpixelConfig, enabled: val });
+                                            try {
+                                                await fetch(`${API_BASE}/api/vpixel/config`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                                    body: JSON.stringify({ enabled: val }),
+                                                });
+                                            } catch {}
+                                        }} />
                                 </label>
                             </div>
                         </div>
-                        <div>
-                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                                卡密 {vpixelConfig.hasCard && <span style={{ color: '#16a34a', fontWeight: 600 }}>（已配置: {vpixelConfig.card}）</span>}
-                            </label>
-                            <input className="input" type="password"
-                                value={newVPixelCard}
-                                onChange={e => setNewVPixelCard(e.target.value)}
-                                placeholder={vpixelConfig.hasCard ? '留空保持不变' : '输入卡密...'}
-                                style={{ width: '100%' }}
-                            />
+                    </div>
+
+                    {/* VPixel Card Pool Stats */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginTop: '16px' }}>
+                        {[
+                            { emoji: '🎫', value: vpixelCardStats.total, label: '总卡密', color: '#6366f1' },
+                            { emoji: '✅', value: vpixelCardStats.available, label: '可用', color: '#16a34a' },
+                            { emoji: '📦', value: vpixelCardStats.used, label: '已使用', color: '#9ca3af' },
+                        ].map((s, i) => (
+                            <div key={i} className="card" style={{ padding: '16px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '20px' }}>{s.emoji}</div>
+                                <div style={{ fontSize: '24px', fontWeight: 700, color: s.color }}>{s.value}</div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{s.label}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* VPixel Batch Add Cards */}
+                    <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: '16px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>📝 批量添加 VPixel 卡密</div>
+                        <textarea
+                            className="input"
+                            value={vpixelNewCards}
+                            onChange={e => setVpixelNewCards(e.target.value)}
+                            placeholder="每行一个卡密，例如：\nABTHQDTMXKLA2F3L\nXYZ123ABC456DEF7"
+                            rows={4}
+                            style={{ width: '100%', fontFamily: 'monospace', fontSize: '13px' }}
+                        />
+                        <button
+                            className="btn btn-primary"
+                            style={{ marginTop: '8px' }}
+                            disabled={vpixelAddingCards || !vpixelNewCards.trim()}
+                            onClick={async () => {
+                                setVpixelAddingCards(true);
+                                try {
+                                    const res = await fetch(`${API_BASE}/api/vpixel/cards`, {
+                                        method: 'POST',
+                                        headers: authHeaders,
+                                        body: JSON.stringify({ keys: vpixelNewCards }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        alert(`✅ 添加 ${data.added} 个，跳过 ${data.skipped} 个重复`);
+                                        setVpixelNewCards('');
+                                        // Refresh cards
+                                        const [cRes, sRes] = await Promise.all([
+                                            fetch(`${API_BASE}/api/vpixel/cards`, { headers: authHeaders }),
+                                            fetch(`${API_BASE}/api/vpixel/cards/stats`, { headers: authHeaders }),
+                                        ]);
+                                        if (cRes.ok) { const d = await cRes.json(); setVpixelCards(d.keys || []); }
+                                        if (sRes.ok) { const d = await sRes.json(); setVpixelCardStats(d); }
+                                    }
+                                } catch (e) { alert('添加失败: ' + e.message); }
+                                finally { setVpixelAddingCards(false); }
+                            }}
+                        >
+                            {vpixelAddingCards ? '⏳ 添加中...' : `添加卡密 (${vpixelNewCards.split('\n').filter(l => l.trim()).length} 个)`}
+                        </button>
+                    </div>
+
+                    {/* VPixel Card List */}
+                    <div className="card" style={{ overflow: 'hidden', marginTop: '16px' }}>
+                        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>📋 VPixel 卡密列表</span>
+                            <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{vpixelCards.length} 条记录</span>
+                        </div>
+                        <div style={{ overflow: 'auto', maxHeight: '300px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                <thead>
+                                    <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>卡密</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'center' }}>状态</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>使用邮箱</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'center' }}>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {vpixelCards.map(k => (
+                                        <tr key={k.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                                            <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{k.card_key}</td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                <span style={{
+                                                    fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600,
+                                                    background: k.status === 'available' ? '#dcfce7' : k.status === 'used' ? '#f3f4f6' : '#fef2f2',
+                                                    color: k.status === 'available' ? '#16a34a' : k.status === 'used' ? '#6b7280' : '#dc2626',
+                                                }}>{k.status === 'available' ? '可用' : k.status === 'used' ? '已使用' : k.status === 'reserved' ? '使用中' : '无效'}</span>
+                                            </td>
+                                            <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{k.used_by_email || '-'}</td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                <button
+                                                    onClick={async () => {
+                                                        await fetch(`${API_BASE}/api/vpixel/cards/${k.id}`, { method: 'DELETE', headers: authHeaders });
+                                                        setVpixelCards(prev => prev.filter(c => c.id !== k.id));
+                                                        setVpixelCardStats(prev => ({
+                                                            ...prev,
+                                                            total: prev.total - 1,
+                                                            available: k.status === 'available' ? prev.available - 1 : prev.available,
+                                                            used: k.status === 'used' ? prev.used - 1 : prev.used,
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        background: 'none', border: 'none', color: '#dc2626',
+                                                        cursor: 'pointer', fontSize: '12px', fontWeight: 500
+                                                    }}
+                                                >🗑️</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {vpixelCards.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                                                暂无卡密，请先添加
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                    <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-md)' }}
-                        onClick={async () => {
-                            if (!token) { alert('未登录'); return; }
-                            setVpixelSaving(true);
-                            try {
-                                const body = { enabled: vpixelConfig.enabled };
-                                if (newVPixelCard.trim()) body.card = newVPixelCard.trim();
-                                const res = await fetch(`${API_BASE}/api/vpixel/config`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                    body: JSON.stringify(body),
-                                });
-                                if (res.ok) {
-                                    alert('✅ VPixel 配置已保存');
-                                    setNewVPixelCard('');
-                                    await fetchConfig();
-                                } else {
-                                    let errMsg = `HTTP ${res.status}`;
-                                    try { const err = await res.json(); errMsg = err.detail || errMsg; } catch {}
-                                    alert('保存失败: ' + errMsg);
-                                }
-                            } catch (e) {
-                                alert('保存失败: ' + e.message);
-                            } finally {
-                                setVpixelSaving(false);
-                            }
-                        }} disabled={vpixelSaving}>
-                        {vpixelSaving ? '⏳ 保存中...' : '💾 保存 VPixel 配置'}
-                    </button>
                 </div>
             )}
         </div>

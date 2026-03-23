@@ -301,7 +301,7 @@ export default function Verify() {
                 const data = await resp.json();
                 if (!data.success) {
                     failCount++;
-                    if (failCount >= 20) {
+                    if (failCount >= 200) {
                         clearInterval(intervalId);
                         delete pollingRefs.current[resultId];
                         setResults(prev => prev.map(r =>

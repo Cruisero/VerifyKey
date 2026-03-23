@@ -692,6 +692,7 @@ function GptKeysTab() {
     const [adding, setAdding] = useState(false);
     const [addResult, setAddResult] = useState(null);
     const [addChannel, setAddChannel] = useState('sbs');
+    const [gptMaint, setGptMaint] = useState({ gpt_sbs: false, gpt_red: false, gpt_vip: false });
 
     const fetchStats = async () => {
         try {
@@ -710,7 +711,21 @@ function GptKeysTab() {
         } catch (e) { console.error(e); }
     };
 
-    useEffect(() => { fetchStats(); fetchKeys(); }, []);
+    const fetchGptMaint = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/service-status`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.manual) setGptMaint({
+                    gpt_sbs: data.manual.gpt_sbs || false,
+                    gpt_red: data.manual.gpt_red || false,
+                    gpt_vip: data.manual.gpt_vip || false,
+                });
+            }
+        } catch {}
+    };
+
+    useEffect(() => { fetchStats(); fetchKeys(); fetchGptMaint(); }, []);
 
     const handleAdd = async () => {
         if (!newKeys.trim()) return;
@@ -768,6 +783,54 @@ function GptKeysTab() {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Per-channel maintenance toggles */}
+            <div className="card" style={{ padding: 'var(--spacing-md)' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 GPT 通道维护开关</div>
+                {[
+                    { key: 'gpt_sbs', label: '🔵 SBS 通道', desc: 'chong.databrain.sbs' },
+                    { key: 'gpt_red', label: '🔴 RED 通道', desc: 'redeemgpt.com' },
+                    { key: 'gpt_vip', label: '🟣 VIP 通道', desc: 'shop.gptai.vip' },
+                ].map(s => (
+                    <div key={s.key} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '10px 0', borderBottom: '1px solid var(--border-primary)',
+                    }}>
+                        <div>
+                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{s.label}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{s.desc}</div>
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                            <span style={{
+                                fontSize: '11px', fontWeight: 600,
+                                color: gptMaint[s.key] ? '#dc2626' : '#16a34a',
+                            }}>
+                                {gptMaint[s.key] ? '维护中' : '正常'}
+                            </span>
+                            <input
+                                type="checkbox"
+                                checked={!!gptMaint[s.key]}
+                                onChange={async (e) => {
+                                    const val = e.target.checked;
+                                    setGptMaint(prev => ({ ...prev, [s.key]: val }));
+                                    try {
+                                        await fetch(`${API_BASE}/api/service-status`, {
+                                            method: 'POST',
+                                            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ [s.key]: val }),
+                                        });
+                                    } catch (err) {
+                                        console.warn('GPT maint toggle failed:', err);
+                                        setGptMaint(prev => ({ ...prev, [s.key]: !val }));
+                                    }
+                                }}
+                            />
+                        </label>
+                    </div>
+                ))}
+                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
+                    💡 开启的通道会轮询使用，维护中的通道在充值时会跳过
+                </div>
+            </div>
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                 {[
@@ -967,7 +1030,7 @@ function PixelApiTab() {
     const [vpixelSaving, setVpixelSaving] = useState(false);
     const [vpixelQueue, setVpixelQueue] = useState(null);
 
-    const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, vpixel: false, gpt: false });
+    const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, vpixel: false });
     const [pixelJobs, setPixelJobs] = useState([]);
     const [history, setHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -1367,7 +1430,6 @@ function PixelApiTab() {
                             { key: 'upixel', label: '📦 普通验证 (UPixel)', desc: '关闭后用户无法使用普通验证' },
                             { key: 'kpixel', label: '⚡ 高级验证 (KPixel)', desc: '关闭后用户无法通过 KPixel 高级验证' },
                             { key: 'vpixel', label: '🔮 高级验证 (VPixel)', desc: '关闭后用户无法通过 VPixel 高级验证' },
-                            { key: 'gpt', label: '🤖 ChatGPT 充值', desc: '关闭后用户无法使用 GPT 充值' },
                         ].map(s => (
                             <div key={s.key} style={{
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',

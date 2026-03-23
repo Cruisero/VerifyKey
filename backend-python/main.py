@@ -5922,32 +5922,37 @@ async def get_service_status():
         else:
             pro_reason = kpixel_reason or vpixel_reason
 
-    # --- GPT auto-detect ---
-    gpt_ok = False
-    gpt_reason = ""
-    if manual.get("gpt"):
-        gpt_reason = "管理员手动维护中"
-    else:
-        try:
-            conn = database.get_connection()
-            avail = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='available'").fetchone()[0]
-            if avail > 0:
-                gpt_ok = True
-            else:
-                gpt_reason = "无可用卡密"
-        except Exception:
-            gpt_reason = "数据库查询失败"
+    # --- GPT per-channel auto-detect ---
+    gpt_channels_status = {}
+    for ch in ("sbs", "red", "vip"):
+        maint_key = f"gpt_{ch}"
+        if manual.get(maint_key):
+            gpt_channels_status[ch] = {"available": False, "reason": "管理员手动维护中"}
+        else:
+            try:
+                conn = database.get_connection()
+                avail = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='available' AND channel=?", (ch,)).fetchone()[0]
+                if avail > 0:
+                    gpt_channels_status[ch] = {"available": True, "reason": ""}
+                else:
+                    gpt_channels_status[ch] = {"available": False, "reason": "无可用卡密"}
+            except Exception:
+                gpt_channels_status[ch] = {"available": False, "reason": "数据库查询失败"}
+    gpt_ok = any(c["available"] for c in gpt_channels_status.values())
+    gpt_reason = "" if gpt_ok else "所有充值通道不可用"
 
     return {
         "upixel": {"available": upixel_ok, "reason": upixel_reason},
         "kpixel": {"available": pro_available, "reason": pro_reason,
                    "kpixelUp": kpixel_ok, "vpixelUp": vpixel_ok},
-        "gpt": {"available": gpt_ok, "reason": gpt_reason},
+        "gpt": {"available": gpt_ok, "reason": gpt_reason, "channels": gpt_channels_status},
         "manual": {
             "upixel": manual.get("upixel", False),
             "kpixel": manual.get("kpixel", False),
             "vpixel": manual.get("vpixel", False),
-            "gpt": manual.get("gpt", False),
+            "gpt_sbs": manual.get("gpt_sbs", False),
+            "gpt_red": manual.get("gpt_red", False),
+            "gpt_vip": manual.get("gpt_vip", False),
         }
     }
 
@@ -5968,7 +5973,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "vpixel", "gpt"):
+    for key in ("upixel", "kpixel", "vpixel", "gpt_sbs", "gpt_red", "gpt_vip"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -7226,9 +7231,21 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
     if credits < GPT_RECHARGE_COST:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_RECHARGE_COST} 积分，剩余 {credits}）")
 
-    # Pick an available key — try any channel, failover automatically
+    # Pick an available key — skip channels under maintenance, round-robin
     conn = database.get_connection()
-    row = conn.execute("SELECT id, card_key, channel FROM gpt_keys WHERE status='available' LIMIT 1").fetchone()
+    import config_manager as _cfg_mgr
+    _maint = _cfg_mgr.get_config().get("serviceMaintenance", {})
+    excluded_channels = [ch for ch in GPT_CHANNELS if _maint.get(f"gpt_{ch}")]
+    if len(excluded_channels) == len(GPT_CHANNELS):
+        raise HTTPException(status_code=503, detail="所有充值通道维护中")
+    placeholders = ",".join("?" for _ in excluded_channels) if excluded_channels else None
+    if excluded_channels:
+        row = conn.execute(
+            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel NOT IN ({placeholders}) LIMIT 1",
+            excluded_channels
+        ).fetchone()
+    else:
+        row = conn.execute("SELECT id, card_key, channel FROM gpt_keys WHERE status='available' LIMIT 1").fetchone()
     if not row:
         raise HTTPException(status_code=400, detail="暂无可用卡密，请联系管理员")
 

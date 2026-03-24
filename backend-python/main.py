@@ -4059,8 +4059,49 @@ async def override_verification_by_vid(request: VidOverrideRequest):
         "success": request.status == "pass",
         "message": override_msg,
     })
-    
-    return {"ok": True, "vid": request.vid, "status": request.status}
+
+    # Credit handling: check existing record for cdk field
+    credit_message = ""
+    if existing:
+        old_status = existing["status"]
+        cdk_field = ""
+        cdk_row = conn.execute("SELECT cdk FROM verification_history WHERE id = ?", (existing["id"],)).fetchone()
+        if cdk_row:
+            cdk_field = cdk_row["cdk"] or ""
+
+        if cdk_field and cdk_field.startswith("user:"):
+            # User credit system
+            try:
+                uid = int(cdk_field.split(":")[1])
+                # Determine credit cost based on VID prefix
+                vid = request.vid or ""
+                if vid.startswith("yp_"):
+                    cost = 1.0
+                elif vid.startswith("vp_"):
+                    cost = 1.5
+                elif vid.startswith("kp_"):
+                    cost = 1.5
+                else:
+                    cost = 1.0
+
+                if request.status == "pass" and old_status != "pass":
+                    auth.deduct_credits(uid, cost)
+                    credit_message = f"已扣除用户 {uid} 积分 {cost}"
+                elif request.status == "failed" and old_status == "pass":
+                    auth.update_credits(uid, cost)
+                    credit_message = f"已返还用户 {uid} 积分 {cost}"
+            except Exception as e:
+                credit_message = f"积分操作失败: {e}"
+        elif cdk_field and cdk_field != "__BOT_INTERNAL__":
+            # CDK-based system
+            if request.status == "pass" and old_status != "pass":
+                result = cdk_manager.use_cdk(cdk_field, 1)
+                credit_message = f"CDK {cdk_field}: {result['message']}"
+            elif request.status == "failed" and old_status == "pass":
+                result = cdk_manager.refund_cdk(cdk_field, 1)
+                credit_message = f"CDK {cdk_field}: {result['message']}"
+
+    return {"ok": True, "vid": request.vid, "status": request.status, "creditMessage": credit_message}
 
 
 @app.delete("/api/verify/history")

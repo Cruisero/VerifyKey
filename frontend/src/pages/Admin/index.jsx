@@ -1377,6 +1377,25 @@ function PixelApiTab() {
                             </div>
                         </div>
                     </div>
+
+                    {/* YPixel Status */}
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>🌐 YPixel (普通)</div>
+                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <div className="stat-card card" style={{ borderLeft: `3px solid ${ypixelConfig.enabled && ypixelCardStats.available > 0 ? '#0ea5e9' : '#dc2626'}` }}>
+                            <div className="stat-icon">{ypixelConfig.enabled && ypixelCardStats.available > 0 ? '🟢' : '🔴'}</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{ypixelConfig.enabled ? (ypixelCardStats.available > 0 ? 'Online' : '无可用卡密') : 'Disabled'}</span>
+                                <span className="stat-label">API 状态</span>
+                            </div>
+                        </div>
+                        <div className="stat-card card" style={{ borderLeft: '3px solid #0ea5e9' }}>
+                            <div className="stat-icon">🎫</div>
+                            <div className="stat-info">
+                                <span className="stat-value">{ypixelCardStats.available} / {ypixelCardStats.total}</span>
+                                <span className="stat-label">卡密 (可用/总数)</span>
+                            </div>
+                        </div>
+                    </div>
                     {/* Ready devices */}
                     {health?.devices?.ready !== undefined && (
                         <div className="stats-grid">
@@ -1459,13 +1478,30 @@ function PixelApiTab() {
                                 </span>
                             )}
                         </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>YPixel API:</span>
+                            <span style={{
+                                padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                background: ypixelConfig.enabled ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
+                                color: ypixelConfig.enabled ? '#16a34a' : '#dc2626',
+                            }}>
+                                {ypixelConfig.enabled ? '已启用' : '未启用'}
+                            </span>
+                            <span style={{
+                                padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                                background: 'rgba(14,165,233,0.1)', color: '#0ea5e9',
+                            }}>
+                                卡密: {ypixelCardStats.available}/{ypixelCardStats.total}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Manual service maintenance toggles */}
                     <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
                         <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 服务维护开关</div>
                         {[
-                            { key: 'upixel', label: '📦 普通验证 (UPixel)', desc: '关闭后用户无法使用普通验证' },
+                            { key: 'upixel', label: '📦 普通验证 (UPixel)', desc: '关闭后用户无法使用 UPixel 普通验证' },
+                            { key: 'ypixel', label: '🌐 普通验证 (YPixel)', desc: '关闭后用户无法使用 YPixel 普通验证' },
                             { key: 'kpixel', label: '⚡ 高级验证 (KPixel)', desc: '关闭后用户无法通过 KPixel 高级验证' },
                             { key: 'vpixel', label: '🔮 高级验证 (VPixel)', desc: '关闭后用户无法通过 VPixel 高级验证' },
                         ].map(s => (

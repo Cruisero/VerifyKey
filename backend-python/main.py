@@ -6063,6 +6063,8 @@ def _run_alert_check():
                     b_data = b_resp.json()
                     bal = b_data.get("balance", b_data.get("credits", 0))
                     if not bal or bal <= 0:
+                        alerts.append({"service": "UPixel", "status": "余额耗尽", "reason": f"当前余额: {bal}"})
+                    elif bal <= 10:
                         alerts.append({"service": "UPixel", "status": "余额不足", "reason": f"当前余额: {bal}"})
                 else:
                     alerts.append({"service": "UPixel", "status": "异常", "reason": "无法查询余额"})
@@ -6097,6 +6099,8 @@ def _run_alert_check():
             avail = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available'").fetchone()[0]
             if avail == 0:
                 alerts.append({"service": "VPixel", "status": "卡密耗尽", "reason": "可用卡密: 0"})
+            elif avail <= 3:
+                alerts.append({"service": "VPixel", "status": "卡密不足", "reason": f"可用卡密: {avail}"})
         except Exception:
             alerts.append({"service": "VPixel", "status": "异常", "reason": "数据库查询失败"})
 
@@ -6108,6 +6112,8 @@ def _run_alert_check():
             avail = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available'").fetchone()[0]
             if avail == 0:
                 alerts.append({"service": "YPixel", "status": "卡密耗尽", "reason": "可用卡密: 0"})
+            elif avail <= 3:
+                alerts.append({"service": "YPixel", "status": "卡密不足", "reason": f"可用卡密: {avail}"})
         except Exception:
             alerts.append({"service": "YPixel", "status": "异常", "reason": "数据库查询失败"})
 

@@ -22,7 +22,7 @@ def _generate_code() -> str:
     return f"VK-{parts[0]}-{parts[1]}-{parts[2]}"
 
 
-def generate_cdks(count: int, quota: int, note: str = "") -> List[str]:
+def generate_cdks(count: int, quota: float, note: str = "") -> List[str]:
     """
     Generate batch of CDK codes.
     

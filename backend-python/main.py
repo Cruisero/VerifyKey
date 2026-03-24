@@ -7089,6 +7089,13 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                     })
                     break
                 elif mapped_status == "failed":
+                    # Release the card back to available
+                    try:
+                        conn = database.get_connection()
+                        conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+                        conn.commit()
+                    except Exception:
+                        pass
                     verification_history.log_verification("failed", poll_id, f"VPixel 失败: {result_msg}", cdk=f"user:{user_id}")
                     _vpixel_job_status[poll_id] = {"status": "Failed", "message": result_msg or "验证失败", "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
@@ -7102,10 +7109,39 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                     })
                     break
 
+            else:
+                # Loop exhausted — timeout, release the card
+                try:
+                    conn = database.get_connection()
+                    conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+                    conn.commit()
+                except Exception:
+                    pass
+                _vpixel_job_status[poll_id] = {"status": "Failed", "message": "轮询超时", "elapsed": 600}
+                broadcast_verify_event({
+                    "type": "progress", "source": "vpixel",
+                    "vid": poll_id, "link": email,
+                    "step": "result", "status": "failed", "success": False,
+                    "message": "❌ 轮询超时",
+                })
+
     except asyncio.CancelledError:
-        pass
+        # Release card on cancellation
+        try:
+            conn = database.get_connection()
+            conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+            conn.commit()
+        except Exception:
+            pass
     except Exception as e:
         logging.error(f"[VPixel] Poll error for {email}: {e}")
+        # Release card on error
+        try:
+            conn = database.get_connection()
+            conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+            conn.commit()
+        except Exception:
+            pass
         _vpixel_job_status[poll_id] = {"status": "Failed", "message": f"轮询错误: {str(e)}", "elapsed": 0}
         broadcast_verify_event({
             "type": "progress", "source": "vpixel",
@@ -7410,6 +7446,13 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
 
                 # Task completed but account failed, or task itself failed
                 elif task_status in ("completed", "done") and acct_status in ("failed", "error"):
+                    # Release card back to available
+                    try:
+                        conn = database.get_connection()
+                        conn.execute("UPDATE ypixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card_key,))
+                        conn.commit()
+                    except Exception:
+                        pass
                     err_msg = message or "验证失败"
                     verification_history.log_verification("failed", poll_id, f"YPixel 失败: {err_msg}", cdk=f"user:{user_id}")
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
@@ -7423,6 +7466,13 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     break
 
                 elif task_status in ("failed", "error"):
+                    # Release card back to available
+                    try:
+                        conn = database.get_connection()
+                        conn.execute("UPDATE ypixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card_key,))
+                        conn.commit()
+                    except Exception:
+                        pass
                     err_msg = message or "任务失败"
                     verification_history.log_verification("failed", poll_id, f"YPixel 失败: {err_msg}", cdk=f"user:{user_id}")
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
@@ -7451,13 +7501,36 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                         "elapsed": round(elapsed, 1),
                     })
             else:
-                # Timed out
+                # Timed out — release card
+                try:
+                    conn = database.get_connection()
+                    conn.execute("UPDATE ypixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card_key,))
+                    conn.commit()
+                except Exception:
+                    pass
                 _ypixel_job_status[poll_id] = {"status": "Failed", "message": "任务超时", "elapsed": round(time.time() - start_time, 1)}
+                broadcast_verify_event({
+                    "type": "progress", "source": "ypixel",
+                    "vid": poll_id, "link": email,
+                    "step": "result", "status": "failed", "success": False,
+                    "message": "❌ 任务超时",
+                })
 
     except asyncio.CancelledError:
-        pass
+        try:
+            conn = database.get_connection()
+            conn.execute("UPDATE ypixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card_key,))
+            conn.commit()
+        except Exception:
+            pass
     except Exception as e:
         logging.error(f"[YPixel] Poll error for {email}: {e}")
+        try:
+            conn = database.get_connection()
+            conn.execute("UPDATE ypixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card_key,))
+            conn.commit()
+        except Exception:
+            pass
         _ypixel_job_status[poll_id] = {"status": "Failed", "message": f"轮询错误", "elapsed": 0}
     finally:
         _ypixel_polling_tasks.pop(poll_id, None)

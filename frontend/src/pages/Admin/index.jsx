@@ -2371,6 +2371,10 @@ export default function Admin() {
     const [emailSaving, setEmailSaving] = useState(false);
     const [emailSaved, setEmailSaved] = useState(false);
     const [siteUrl, setSiteUrl] = useState('');
+    // Alert notification state
+    const [alertConfig, setAlertConfig] = useState({ enabled: false, email: '', cooldownMinutes: 60 });
+    const [alertSaving, setAlertSaving] = useState(false);
+    const [alertTesting, setAlertTesting] = useState(false);
 
     // User management state
     const [users, setUsers] = useState([]);
@@ -3139,6 +3143,11 @@ export default function Admin() {
                 if (data.siteUrl) {
                     setSiteUrl(data.siteUrl);
                 }
+                // Load alert config
+                try {
+                    const alertRes = await fetch(`${API_BASE}/api/alerts/config`, { headers: authHeaders });
+                    if (alertRes.ok) { setAlertConfig(await alertRes.json()); }
+                } catch {}
                 // Load region mode setting
                 if (data.aiGenerator?.regionMode) {
                     setRegionMode(data.aiGenerator.regionMode);
@@ -7894,6 +7903,93 @@ export default function Admin() {
                                     >
                                         {emailSaving ? '保存中...' : '保存邮箱配置'}
                                     </button>
+                                </div>
+                            </div>
+
+                            {/* Alert Notification Card */}
+                            <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: 'linear-gradient(135deg, #fecaca 0%, #fca5a5 100%)',
+                                    borderBottom: '1px solid #f87171',
+                                    display: 'flex', alignItems: 'center', gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '20px' }}>🔔</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: '#991b1b' }}>警报通知</h3>
+                                    <span style={{ fontSize: '12px', color: '#b91c1c', marginLeft: 'auto' }}>API 异常时自动发送邮件</span>
+                                </div>
+                                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={alertConfig.enabled}
+                                            onChange={e => setAlertConfig(p => ({ ...p, enabled: e.target.checked }))}
+                                            style={{ accentColor: '#ef4444', width: 18, height: 18 }} />
+                                        <span style={{ fontWeight: 600, color: alertConfig.enabled ? '#16a34a' : '#64748b' }}>
+                                            {alertConfig.enabled ? '🟢 已启用警报' : '🔴 未启用警报'}
+                                        </span>
+                                    </label>
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <div style={{ flex: 2 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>收件邮箱</label>
+                                            <input className="input" value={alertConfig.email || ''}
+                                                onChange={e => setAlertConfig(p => ({ ...p, email: e.target.value }))}
+                                                placeholder="admin@example.com"
+                                                style={{ width: '100%', boxSizing: 'border-box' }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>冷却时间(分钟)</label>
+                                            <input className="input" type="number" value={alertConfig.cooldownMinutes || 60}
+                                                onChange={e => setAlertConfig(p => ({ ...p, cooldownMinutes: parseInt(e.target.value) || 60 }))}
+                                                style={{ width: '100%', boxSizing: 'border-box' }} />
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+                                        监控项目：UPixel 离线/余额不足 · KPixel 离线/余额不足 · VPixel 卡密耗尽 · GPT 通道卡密耗尽<br/>
+                                        检查间隔：每 5 分钟 · 同一问题在冷却期内不重复通知
+                                    </div>
+                                </div>
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                    padding: '16px 20px', borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)'
+                                }}>
+                                    <button
+                                        onClick={async () => {
+                                            setAlertTesting(true);
+                                            try {
+                                                const res = await fetch(`${API_BASE}/api/alerts/test`, { method: 'POST', headers: authHeaders });
+                                                const d = await res.json();
+                                                alert(res.ok ? `✅ ${d.message}` : `❌ ${d.detail}`);
+                                            } catch (e) { alert('发送失败: ' + e.message); }
+                                            finally { setAlertTesting(false); }
+                                        }}
+                                        disabled={alertTesting || !alertConfig.email}
+                                        style={{
+                                            padding: '8px 20px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                                            cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#64748b',
+                                            background: '#fff'
+                                        }}
+                                    >{alertTesting ? '发送中...' : '📨 发送测试'}</button>
+                                    <button
+                                        onClick={async () => {
+                                            setAlertSaving(true);
+                                            try {
+                                                const res = await fetch(`${API_BASE}/api/alerts/config`, {
+                                                    method: 'POST', headers: authHeaders,
+                                                    body: JSON.stringify(alertConfig),
+                                                });
+                                                if (res.ok) alert('✅ 警报配置已保存');
+                                                else alert('保存失败');
+                                            } catch (e) { alert('保存失败: ' + e.message); }
+                                            finally { setAlertSaving(false); }
+                                        }}
+                                        disabled={alertSaving}
+                                        style={{
+                                            padding: '8px 24px', borderRadius: '8px', border: 'none',
+                                            cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#fff',
+                                            background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                                            boxShadow: '0 2px 8px rgba(239,68,68,0.3)'
+                                        }}
+                                    >{alertSaving ? '保存中...' : '保存警报配置'}</button>
                                 </div>
                             </div>
 

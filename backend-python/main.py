@@ -1953,6 +1953,12 @@ async def startup_event():
             for vid, info in active.items():
                 asyncio.create_task(_resume_getgem_poll(vid, info["taskId"], info.get("cdk", "")))
 
+    # Start email alert monitor
+    try:
+        start_alert_monitor()
+    except Exception as e:
+        print(f"[Startup] Alert monitor error: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -5988,6 +5994,175 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
         return {"success": True, "serviceMaintenance": sm}
     else:
         raise HTTPException(status_code=500, detail="保存失败")
+
+
+# ============================================================
+# Email Alert Monitor — background thread checks service health
+# ============================================================
+
+import threading
+import time as _time_mod
+
+_alert_cooldowns = {}  # key -> last_sent_timestamp
+
+def _run_alert_check():
+    """Single pass: check all services and send alert email if issues found."""
+    import config_manager as _acm
+    import email_service
+
+    alert_cfg = email_service.get_alert_config()
+    if not alert_cfg.get("enabled") or not alert_cfg.get("email"):
+        return
+
+    cooldown_sec = int(alert_cfg.get("cooldownMinutes", 60)) * 60
+    config = _acm.get_config()
+    manual = config.get("serviceMaintenance", {})
+    alerts = []
+
+    # --- UPixel ---
+    upixel_cfg = config.get("pixelApi", {})
+    if upixel_cfg.get("enabled") and upixel_cfg.get("apiKey") and not manual.get("upixel"):
+        try:
+            import httpx as _hx
+            resp = _hx.get(f"{upixel_cfg.get('baseUrl', '')}/api/health", timeout=5)
+            if resp.status_code != 200:
+                alerts.append({"service": "UPixel", "status": "离线", "reason": "API 无响应"})
+            else:
+                b_resp = _hx.get(
+                    f"{upixel_cfg.get('baseUrl', '')}/api/balance",
+                    headers={"Authorization": f"Bearer {upixel_cfg.get('apiKey', '')}"},
+                    timeout=5,
+                )
+                if b_resp.status_code == 200:
+                    b_data = b_resp.json()
+                    bal = b_data.get("balance", b_data.get("credits", 0))
+                    if not bal or bal <= 0:
+                        alerts.append({"service": "UPixel", "status": "余额不足", "reason": f"当前余额: {bal}"})
+                else:
+                    alerts.append({"service": "UPixel", "status": "异常", "reason": "无法查询余额"})
+        except Exception as e:
+            alerts.append({"service": "UPixel", "status": "离线", "reason": f"连接失败"})
+
+    # --- KPixel ---
+    kpixel_cfg = config.get("kpixelApi", {})
+    if kpixel_cfg.get("enabled") and kpixel_cfg.get("cdkey") and not manual.get("kpixel"):
+        try:
+            import httpx as _hx
+            resp = _hx.post(
+                kpixel_cfg.get("baseUrl", ""),
+                json={"action": "get_balance", "cdkey": kpixel_cfg.get("cdkey", "")},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                remaining = data.get("remaining_uses", data.get("balance", 0))
+                if not remaining or remaining <= 0:
+                    alerts.append({"service": "KPixel", "status": "余额不足", "reason": f"剩余: {remaining}"})
+            else:
+                alerts.append({"service": "KPixel", "status": "离线", "reason": f"HTTP {resp.status_code}"})
+        except Exception:
+            alerts.append({"service": "KPixel", "status": "离线", "reason": "连接失败"})
+
+    # --- VPixel card pool ---
+    vpixel_cfg = config.get("vpixelApi", {})
+    if vpixel_cfg.get("enabled") and not manual.get("vpixel"):
+        try:
+            conn = database.get_connection()
+            avail = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available'").fetchone()[0]
+            if avail == 0:
+                alerts.append({"service": "VPixel", "status": "卡密耗尽", "reason": "可用卡密: 0"})
+        except Exception:
+            alerts.append({"service": "VPixel", "status": "异常", "reason": "数据库查询失败"})
+
+    # --- GPT channels ---
+    for ch_name, ch_label in [("sbs", "GPT-SBS"), ("red", "GPT-RED"), ("vip", "GPT-VIP")]:
+        if manual.get(f"gpt_{ch_name}"):
+            continue
+        try:
+            conn = database.get_connection()
+            avail = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='available' AND channel=?", (ch_name,)).fetchone()[0]
+            if avail == 0:
+                alerts.append({"service": ch_label, "status": "卡密耗尽", "reason": "可用卡密: 0"})
+        except Exception:
+            pass
+
+    if not alerts:
+        return
+
+    # Apply cooldown
+    now = _time_mod.time()
+    new_alerts = []
+    for a in alerts:
+        key = f"{a['service']}:{a['status']}"
+        last_sent = _alert_cooldowns.get(key, 0)
+        if now - last_sent >= cooldown_sec:
+            new_alerts.append(a)
+            _alert_cooldowns[key] = now
+
+    if not new_alerts:
+        return
+
+    print(f"[AlertMonitor] Sending alert for {len(new_alerts)} issues to {alert_cfg['email']}")
+    email_service.send_alert_email(alert_cfg["email"], new_alerts)
+
+
+def _alert_monitor_loop():
+    """Background thread: run alert checks every 5 minutes."""
+    _time_mod.sleep(30)
+    while True:
+        try:
+            _run_alert_check()
+        except Exception as e:
+            print(f"[AlertMonitor] Error: {e}")
+        _time_mod.sleep(300)
+
+
+def start_alert_monitor():
+    """Start the alert monitor background thread."""
+    t = threading.Thread(target=_alert_monitor_loop, daemon=True, name="alert-monitor")
+    t.start()
+    print("[AlertMonitor] Background alert monitor started (interval: 5min)")
+
+
+@app.get("/api/alerts/config")
+async def alerts_get_config(authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    import email_service
+    return email_service.get_alert_config()
+
+
+@app.post("/api/alerts/config")
+async def alerts_update_config(request: Request, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    body = await request.json()
+    import config_manager
+    updates = {}
+    if "enabled" in body:
+        updates["enabled"] = bool(body["enabled"])
+    if "email" in body:
+        updates["email"] = body["email"]
+    if "cooldownMinutes" in body:
+        updates["cooldownMinutes"] = int(body["cooldownMinutes"])
+    result = config_manager.update_config({"alertConfig": updates})
+    if result:
+        return {"success": True}
+    raise HTTPException(status_code=500, detail="保存失败")
+
+
+@app.post("/api/alerts/test")
+async def alerts_send_test(authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    import email_service
+    alert_cfg = email_service.get_alert_config()
+    to = alert_cfg.get("email", "")
+    if not to:
+        raise HTTPException(status_code=400, detail="未配置警报邮箱")
+    ok = email_service.send_alert_email(to, [
+        {"service": "测试", "status": "测试警报", "reason": "这是一封测试邮件，确认警报通知正常工作。"},
+    ])
+    if ok:
+        return {"success": True, "message": f"测试邮件已发送到 {to}"}
+    raise HTTPException(status_code=500, detail="发送失败，请检查 SMTP 配置")
 
 
 # ========== Pixel API Proxy Routes (Google One via iqless.icu) ==========

@@ -148,3 +148,80 @@ def send_reset_email(to_email: str, reset_link: str) -> bool:
     </html>
     """
     return send_email(to_email, "OnePASS - 重置您的密码", html)
+
+
+def get_alert_config():
+    """Get alert notification configuration from config.json"""
+    import config_manager
+    config = config_manager.get_config()
+    return config.get("alertConfig", {"enabled": False, "email": "", "cooldownMinutes": 60})
+
+
+def send_alert_email(to_email: str, alerts: list) -> bool:
+    """Send system alert email with list of service issues.
+    
+    alerts: list of dicts like [{"service": "KPixel", "status": "离线", "reason": "无法连接 API"}]
+    """
+    if not alerts:
+        return False
+
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    rows_html = ""
+    for a in alerts:
+        rows_html += f"""
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0f0f5;font-weight:600;color:#1a1a2e;">{a['service']}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0f0f5;">
+                <span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;
+                    background:#fef2f2;color:#dc2626;">⚠ {a['status']}</span>
+            </td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0f0f5;color:#64748b;font-size:13px;">{a['reason']}</td>
+        </tr>"""
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin:0;padding:0;background:#f4f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:40px 0;">
+        <tr><td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.06);overflow:hidden;">
+            <!-- Header -->
+            <tr><td style="background:linear-gradient(135deg,#ef4444,#dc2626);padding:28px 40px;text-align:center;">
+              <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;letter-spacing:1px;">🚨 OnePASS 系统警报</h1>
+              <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">{now}</p>
+            </td></tr>
+            <!-- Body -->
+            <tr><td style="padding:28px 32px;">
+              <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e;line-height:1.6;">
+                以下服务检测到异常，请及时处理：
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #f0f0f5;border-radius:10px;overflow:hidden;font-size:14px;">
+                <thead>
+                    <tr style="background:#f8fafc;">
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:12px;text-transform:uppercase;">服务</th>
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:12px;text-transform:uppercase;">状态</th>
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:12px;text-transform:uppercase;">详情</th>
+                    </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+              </table>
+              <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;line-height:1.6;">
+                此警报邮件由 OnePASS 系统自动发送。同一问题在冷却期内不会重复通知。
+              </p>
+            </td></tr>
+            <!-- Footer -->
+            <tr><td style="padding:16px 32px;background:#fafafa;text-align:center;border-top:1px solid #f0f0f5;">
+              <p style="margin:0;font-size:12px;color:#b0b0c0;">© OnePASS · 系统监控警报 · 请勿回复</p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    subject = f"🚨 OnePASS 警报: {len(alerts)} 个服务异常"
+    return send_email(to_email, subject, html)

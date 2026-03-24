@@ -1066,20 +1066,9 @@ export default function Verify() {
                                                         <div className="result-info">
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(result.email)}</span>
-                                                                {result.source === 'pixel' && result.tier !== 'pro' && result.stage !== undefined && result.totalStages > 0 && (
-                                                                    <span className="result-stage-badge">
-                                                                        {result.stage}/{result.totalStages}
-                                                                    </span>
-                                                                )}
+
                                                             </div>
-                                                            {result.source === 'pixel' && result.status === 'processing' && result.totalStages > 0 && (
-                                                                <div className="stage-progress-bar">
-                                                                    <div
-                                                                        className="stage-progress-fill"
-                                                                        style={{ width: `${(result.stage / result.totalStages) * 100}%` }}
-                                                                    />
-                                                                </div>
-                                                            )}
+
                                                             <span className="result-message">
                                                                 {(result.message || '处理中...').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, '')}
                                                             </span>

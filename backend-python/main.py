@@ -6987,6 +6987,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
     Also writes to _vpixel_job_status cache for frontend polling.
     """
     import time
+    import logging
     base_url = vpixel_cfg["baseUrl"]
     credit_cost = vpixel_cfg.get("creditCost", 1.5)
     start_time = time.time()

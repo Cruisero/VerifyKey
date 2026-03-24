@@ -291,8 +291,8 @@ export default function Verify() {
                 const statusUrl = jobSource === 'vpixel'
                     ? `${API_BASE}/api/vpixel/jobs/${jobId}/status`
                     : jobSource === 'ypixel'
-                    ? `${API_BASE}/api/ypixel/jobs/${jobId}/status`
-                    : `${API_BASE}/api/kpixel/jobs/${jobId}/status`;
+                        ? `${API_BASE}/api/ypixel/jobs/${jobId}/status`
+                        : `${API_BASE}/api/kpixel/jobs/${jobId}/status`;
                 pollKPixelJob(jobId, resultId, statusUrl);
             } else {
                 pollJob(jobId, resultId);
@@ -736,10 +736,10 @@ export default function Verify() {
                                                         <small>共 33 个</small>
                                                     </div>
                                                     <div className="region-tags-grid">
-                                                        {['🇦🇺 澳洲','🇦🇹 奥地利','🇧🇪 比利时','🇨🇦 加拿大','🇨🇿 捷克','🇩🇰 丹麦','🇪🇪 爱沙尼亚','🇫🇮 芬兰',
-                                                          '🇫🇷 法国','🇩🇪 德国','🇭🇺 匈牙利','🇮🇳 印度','🇮🇪 爱尔兰','🇮🇹 意大利','🇯🇵 日本','🇱🇻 拉脱维亚',
-                                                          '🇱🇹 立陶宛','🇲🇾 马来西亚','🇲🇽 墨西哥','🇳🇱 荷兰','🇳🇴 挪威','🇵🇱 波兰','🇵🇹 葡萄牙','🇷🇴 罗马尼亚',
-                                                          '🇸🇬 新加坡','🇸🇰 斯洛伐克','🇸🇮 斯洛维尼亚','🇪🇸 西班牙','🇸🇪 瑞典','🇨🇭 瑞士','🇹🇼 台湾','🇬🇧 英国','🇺🇸 美国'
+                                                        {['🇦🇺 澳洲', '🇦🇹 奥地利', '🇧🇪 比利时', '🇨🇦 加拿大', '🇨🇿 捷克', '🇩🇰 丹麦', '🇪🇪 爱沙尼亚', '🇫🇮 芬兰',
+                                                            '🇫🇷 法国', '🇩🇪 德国', '🇭🇺 匈牙利', '🇮🇳 印度', '🇮🇪 爱尔兰', '🇮🇹 意大利', '🇯🇵 日本', '🇱🇻 拉脱维亚',
+                                                            '🇱🇹 立陶宛', '🇲🇾 马来西亚', '🇲🇽 墨西哥', '🇳🇱 荷兰', '🇳🇴 挪威', '🇵🇱 波兰', '🇵🇹 葡萄牙', '🇷🇴 罗马尼亚',
+                                                            '🇸🇬 新加坡', '🇸🇰 斯洛伐克', '🇸🇮 斯洛维尼亚', '🇪🇸 西班牙', '🇸🇪 瑞典', '🇨🇭 瑞士', '🇹🇼 台湾', '🇬🇧 英国', '🇺🇸 美国'
                                                         ].map((c, i) => (
                                                             <span key={i} className="region-tag">{c}</span>
                                                         ))}
@@ -1010,7 +1010,7 @@ export default function Verify() {
                                                                 <span className="result-id">{maskEmail(item.email)}</span>
                                                             </div>
                                                             <span className="result-message">
-                                                                {(item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, '') || (item.status === 'success' ? '验证成功' : '验证失败')}
+                                                                {(item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '') || (item.status === 'success' ? '验证成功' : '验证失败')}
                                                             </span>
                                                             {item.status === 'success' && item.url && (
                                                                 <div className="result-url-row">

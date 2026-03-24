@@ -268,7 +268,7 @@ export default function Home() {
 
                 {/* How it Works */}
                 <section className="steps-section">
-                    <h2 className="section-title">使用流程</h2>
+
                     <div className="steps-list">
                         <div className="step-item">
                             <div className="step-number">1</div>

@@ -437,11 +437,12 @@
 
     .steps-list {
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
     }
 
     .step-item {
         max-width: 100%;
+        width: 100%;
     }
 }
 

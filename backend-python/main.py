@@ -6284,6 +6284,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
         "link": email,
         "step": "submitted",
         "message": "任务已提交，等待设备处理...",
+        "userId": f"user:{user_id}" if user_id else "",
     })
 
     try:
@@ -6632,6 +6633,7 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
         "link": email,
         "step": "submitted",
         "message": "任务已提交，等待设备处理...",
+        "userId": f"user:{user_id}" if user_id else "",
     })
 
     try:
@@ -7423,6 +7425,7 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
         "type": "progress", "source": "ypixel",
         "vid": poll_id, "link": email,
         "step": "submitted", "message": "任务已提交，等待处理...",
+        "userId": f"user:{user_id}" if user_id else "",
     })
 
     try:
@@ -8141,6 +8144,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         "step": "submitted",
         "message": f"⏳ 正在充值 ({channel.upper()} 通道)...",
         "channel": channel,
+        "userId": f"user:{user_id}" if user_id else "",
     })
 
     import httpx

@@ -628,6 +628,7 @@
 @media (max-width: 768px) {
     .header-content {
         padding: var(--spacing-sm) var(--spacing-md);
+        gap: var(--spacing-sm);
     }
 
     .nav {
@@ -638,13 +639,67 @@
         display: none;
     }
 
+    .logo-img {
+        display: none;
+    }
+
+    .header-actions {
+        gap: var(--spacing-xs);
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .header-credits-pill {
+        padding: 4px 8px;
+        font-size: 11px;
+        gap: 3px;
+    }
+
     .header-credits-pill .credits-pill-amount {
         max-width: 50px;
     }
 
+    .header-credits-pill .credits-pill-label {
+        display: none;
+    }
+
+    .header-invite-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
+
+    .lang-toggle,
+    .theme-toggle {
+        width: 34px;
+        height: 34px;
+        font-size: 0.8rem;
+    }
+
+    .user-trigger {
+        width: 32px;
+        height: 32px;
+    }
+
+    .user-avatar-small {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+    }
+
+    .credits-popover {
+        position: fixed;
+        right: 12px;
+        left: 12px;
+        top: 60px;
+        width: auto;
+    }
+
     .invite-popover {
-        width: 280px;
-        right: -40px;
+        position: fixed;
+        right: 12px;
+        left: 12px;
+        top: 60px;
+        width: auto;
     }
 
     .footer-content {

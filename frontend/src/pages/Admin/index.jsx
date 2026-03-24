@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import { useLang } from '../../stores/LanguageContext';
@@ -671,6 +671,328 @@ function TelegramBotTab() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+// ============================================================
+// Live Task Monitor Component (SSE Real-time)
+// ============================================================
+function LiveTaskMonitor() {
+    const { user } = useAuth();
+    const token = user?.token || localStorage.getItem('verifykey-token');
+    const [tasks, setTasks] = useState([]);
+    const [filter, setFilter] = useState('all'); // 'all' | 'gemini' | 'gpt'
+    const esRef = useRef(null);
+
+    // Error code descriptions (same as user-facing)
+    const ERROR_DESCRIPTIONS = {
+        INTERNAL_ERROR: '系统内部错误',
+        DEVICE_UNAVAILABLE: '设备不可用',
+        DEVICE_PREP_FAILED: '设备准备失败',
+        PROXY_ERROR: '代理连接错误',
+        PASSKEY_BLOCKED: '账号要求 Passkey 验证',
+        CAPTCHA: '遇到人机验证',
+        ACCOUNT_DISABLED: '账号已被停用/锁定',
+        INVALID_EMAIL: '邮箱地址无效',
+        WRONG_PASSWORD: '密码错误',
+        TOTP_ERROR: 'TOTP 验证码错误',
+        NO_AUTHENTICATOR: '账号未启用 TOTP 验证器',
+        SIGNIN_PAGE_FAILED: '登录页面加载失败',
+        TWOFACTOR_PAGE_ERROR: '两步验证页面异常',
+        GOOGLE_LOGIN_ERROR: 'Google 登录异常',
+        GOOGLE_ONE_UNAVAILABLE: '该账号不可使用 Google One',
+        URL_CAPTURE_FAILED: '链接获取失败',
+        SIGNIN_FAILED: '登录失败',
+        ACCOUNT_NOT_DETECTED: '未检测到账号',
+        BROWSER_LOGIN_FAILED: '浏览器登录失败',
+        UNKNOWN_ERROR: '未知错误',
+    };
+
+    // Source label mapping
+    const sourceLabels = {
+        pixel: 'UPixel', kpixel: 'KPixel', ypixel: 'YPixel',
+        vpixel: 'VPixel', gpt: 'GPT充值',
+    };
+
+    const isGeminiSource = (src) => ['pixel', 'kpixel', 'ypixel', 'vpixel'].includes(src);
+
+    useEffect(() => {
+        if (!token) return;
+        const sseUrl = `${API_BASE}/api/admin/verify-stream?authorization=Bearer ${token}`;
+        const es = new EventSource(sseUrl);
+        esRef.current = es;
+
+        es.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                // Only process progress events from pixel/kpixel/ypixel/vpixel/gpt sources
+                if (data.type === 'progress' && data.source) {
+                    const vid = data.vid || '';
+                    const source = data.source || '';
+                    if (!['pixel', 'kpixel', 'ypixel', 'vpixel', 'gpt'].includes(source)) return;
+
+                    setTasks(prev => {
+                        const key = vid || `${source}_${data.link}_${Date.now()}`;
+                        const existingIdx = prev.findIndex(t => t.vid === key);
+
+                        // Determine status
+                        let status = 'processing';
+                        if (data.step === 'result') {
+                            status = data.success ? 'success' : 'failed';
+                        } else if (data.step === 'submitted') {
+                            status = 'submitted';
+                        }
+
+                        const entry = {
+                            vid: key,
+                            source,
+                            email: data.link || '',
+                            status,
+                            message: data.message || '',
+                            step: data.step || '',
+                            stage: data.stage || 0,
+                            totalStages: data.totalStages || 0,
+                            stageLabel: data.stageLabel || '',
+                            queuePosition: data.queuePosition ?? -1,
+                            elapsed: data.elapsed || 0,
+                            url: data.url || '',
+                            error: data.error || '',
+                            channel: data.channel || '',
+                            userId: data.userId || '',
+                            timestamp: existingIdx >= 0 ? prev[existingIdx].timestamp : new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                        };
+
+                        if (existingIdx >= 0) {
+                            const updated = [...prev];
+                            updated[existingIdx] = { ...updated[existingIdx], ...entry };
+                            return updated;
+                        } else {
+                            return [entry, ...prev].slice(0, 200);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('LiveMonitor SSE parse error:', err);
+            }
+        };
+
+        es.onerror = () => { /* auto-reconnect */ };
+
+        return () => { es.close(); };
+    }, [token]);
+
+    // Filter tasks
+    const filteredTasks = tasks.filter(t => {
+        if (filter === 'gemini') return isGeminiSource(t.source);
+        if (filter === 'gpt') return t.source === 'gpt';
+        return true;
+    });
+
+    // Stats
+    const stats = {
+        total: filteredTasks.length,
+        processing: filteredTasks.filter(t => t.status === 'processing' || t.status === 'submitted').length,
+        success: filteredTasks.filter(t => t.status === 'success').length,
+        failed: filteredTasks.filter(t => t.status === 'failed').length,
+    };
+
+    const formatElapsed = (s) => s > 0 ? `${Math.round(s)}s` : '';
+    const formatTs = (ts) => ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+
+    // Build display message — same as user-facing, stripped of leading emojis
+    const getDisplayMessage = (t) => {
+        let msg = (t.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
+        if (!msg) {
+            if (t.status === 'success') msg = '验证成功';
+            else if (t.status === 'failed') msg = ERROR_DESCRIPTIONS[t.error] || t.error || '验证失败';
+            else if (t.status === 'submitted') msg = '已提交，排队中...';
+            else msg = '处理中...';
+        }
+        return msg;
+    };
+
+    // Build private info line
+    const getPrivateInfo = (t) => {
+        const parts = [];
+        parts.push(`source: ${sourceLabels[t.source] || t.source}`);
+        if (t.userId) parts.push(`user: ${t.userId}`);
+        if (t.channel) parts.push(`channel: ${t.channel.toUpperCase()}`);
+        if (t.error && t.error !== t.message) parts.push(`error_code: ${t.error}`);
+        return `(${parts.join(' · ')})`;
+    };
+
+    // Source badge color
+    const sourceBadge = (src) => {
+        const colors = {
+            pixel: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' },
+            kpixel: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed' },
+            ypixel: { bg: 'rgba(245,158,11,0.1)', color: '#d97706' },
+            vpixel: { bg: 'rgba(236,72,153,0.1)', color: '#db2777' },
+            gpt: { bg: 'rgba(16,185,129,0.1)', color: '#059669' },
+        };
+        const c = colors[src] || colors.pixel;
+        return (
+            <span style={{
+                padding: '2px 8px', borderRadius: '8px', fontWeight: 600, fontSize: '11px',
+                background: c.bg, color: c.color, marginLeft: '8px',
+            }}>{sourceLabels[src] || src}</span>
+        );
+    };
+
+    return (
+        <div className="tab-content">
+            {/* Filter Buttons */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {[{ id: 'all', label: '全部', icon: '📋' }, { id: 'gemini', label: 'Gemini 验证', icon: '📡' }, { id: 'gpt', label: 'GPT 充值', icon: '🤖' }].map(f => (
+                    <button key={f.id}
+                        className={`btn btn-sm ${filter === f.id ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setFilter(f.id)}
+                    >{f.icon} {f.label}</button>
+                ))}
+                <button className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }}
+                    onClick={() => setTasks([])}
+                >🗑️ 清空</button>
+            </div>
+
+            {/* Stats Header */}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px',
+                fontSize: '14px', flexWrap: 'wrap', padding: '12px 16px',
+                background: 'var(--bg-secondary)', borderRadius: '10px',
+                border: '1px solid var(--border-primary)',
+            }}>
+                <span>共 <strong>{stats.total}</strong> 条</span>
+                <span>|</span>
+                <span style={{ color: '#f59e0b', fontWeight: 600 }}>
+                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b', marginRight: '4px', animation: stats.processing > 0 ? 'pulse 1.5s ease-in-out infinite' : 'none' }} />
+                    {stats.processing} 处理中
+                </span>
+                <span style={{ color: '#16a34a', fontWeight: 600 }}>{stats.success} 成功</span>
+                <span style={{ color: '#dc2626', fontWeight: 600 }}>{stats.failed} 失败</span>
+            </div>
+
+            {/* Task List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '75vh', overflowY: 'auto' }}>
+                {filteredTasks.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '48px', marginBottom: '12px' }}>📺</div>
+                        <p style={{ fontSize: '15px' }}>等待用户提交任务...</p>
+                        <p style={{ fontSize: '13px', marginTop: '6px', color: 'var(--text-tertiary)' }}>用户在前端提交 Gemini 验证或 GPT 充值后，任务将实时出现在这里</p>
+                    </div>
+                )}
+                {filteredTasks.map(t => {
+                    const isActive = t.status === 'processing' || t.status === 'submitted';
+                    const isSuccess = t.status === 'success';
+                    const isFailed = t.status === 'failed';
+
+                    const statusColors = {
+                        submitted: { bg: 'rgba(59,130,246,0.06)', border: 'rgba(59,130,246,0.15)', accent: '#3b82f6' },
+                        processing: { bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)', accent: '#f59e0b' },
+                        success: { bg: 'rgba(22,163,74,0.06)', border: 'rgba(22,163,74,0.15)', accent: '#16a34a' },
+                        failed: { bg: 'rgba(220,38,38,0.06)', border: 'rgba(220,38,38,0.15)', accent: '#dc2626' },
+                    };
+                    const sc = statusColors[t.status] || statusColors.processing;
+
+                    // Progress bar for UPixel (has stage/totalStages)
+                    const showProgress = t.source === 'pixel' && t.totalStages > 0 && isActive;
+                    const progressPct = showProgress ? Math.min(Math.round((t.stage / t.totalStages) * 100), 100) : 0;
+
+                    return (
+                        <div key={t.vid} style={{
+                            display: 'flex', alignItems: 'flex-start', gap: '14px',
+                            padding: '14px 18px', borderRadius: '12px',
+                            background: sc.bg, border: `1px solid ${sc.border}`,
+                            transition: 'all 0.2s ease',
+                        }}>
+                            {/* Status Icon */}
+                            <div style={{
+                                width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                                background: sc.accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: '#fff', fontSize: '14px', fontWeight: 700, marginTop: '2px',
+                                ...(isActive ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
+                            }}>
+                                {isSuccess ? '✓' : isFailed ? '✕' : t.status === 'submitted' ? '◌' : '◎'}
+                            </div>
+
+                            {/* Content */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                {/* Top Row: Email + Source Badge */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                                            {t.email}
+                                        </span>
+                                        {sourceBadge(t.source)}
+                                        {isActive && (
+                                            <span style={{
+                                                fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
+                                                background: sc.accent, color: '#fff', fontWeight: 600,
+                                            }}>
+                                                {t.status === 'submitted' ? '已提交' : '处理中'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                        {formatTs(t.updatedAt || t.timestamp)}
+                                    </span>
+                                </div>
+
+                                {/* Progress Message — same as user-facing */}
+                                <div style={{ fontSize: '13px', fontWeight: 600, color: sc.accent, marginTop: '4px', wordBreak: 'break-all' }}>
+                                    {getDisplayMessage(t)}
+                                </div>
+
+                                {/* UPixel Progress Bar */}
+                                {showProgress && (
+                                    <div style={{ marginTop: '6px' }}>
+                                        <div style={{
+                                            height: '4px', borderRadius: '2px', background: 'rgba(0,0,0,0.08)',
+                                            overflow: 'hidden',
+                                        }}>
+                                            <div style={{
+                                                width: `${progressPct}%`, height: '100%',
+                                                background: sc.accent, borderRadius: '2px',
+                                                transition: 'width 0.5s ease',
+                                            }} />
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                            [{t.stage}/{t.totalStages}] {t.stageLabel}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Success URL */}
+                                {isSuccess && t.url && (
+                                    <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <a href={t.url} target="_blank" rel="noopener noreferrer"
+                                            style={{ fontSize: '13px', color: '#6366f1', wordBreak: 'break-all', textDecoration: 'none' }}
+                                        >🔗 {t.url}</a>
+                                        <button
+                                            style={{
+                                                background: 'rgba(99,102,241,0.1)', border: 'none', borderRadius: '6px',
+                                                padding: '2px 8px', cursor: 'pointer', fontSize: '12px', color: '#6366f1',
+                                            }}
+                                            onClick={() => navigator.clipboard.writeText(t.url)}
+                                        >📋</button>
+                                    </div>
+                                )}
+
+                                {/* Private Info (parenthesized) */}
+                                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px', fontFamily: "'SF Mono', 'Menlo', monospace" }}>
+                                    {getPrivateInfo(t)}
+                                </div>
+
+                                {/* Elapsed Time */}
+                                {t.elapsed > 0 && (
+                                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'inline-block' }}>⏱️ {formatElapsed(t.elapsed)}</span>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -3619,6 +3941,7 @@ export default function Admin() {
 
     const tabs = [
         { id: 'overview', label: t('tabOverview'), icon: '📊' },
+        { id: 'live-monitor', label: '实时监控', icon: '📺' },
         { id: 'pixel-api', label: 'Pixel API', icon: '📡' },
         { id: 'gpt-recharge', label: 'GPT 充值', icon: '🤖' },
         { id: 'cdk', label: t('tabCdk'), icon: '🔑' },
@@ -8278,6 +8601,10 @@ export default function Admin() {
                         </div>
                     )
                 }
+
+                {activeTab === 'live-monitor' && (
+                    <LiveTaskMonitor />
+                )}
 
                 {activeTab === 'pixel-api' && (
                     <PixelApiTab />

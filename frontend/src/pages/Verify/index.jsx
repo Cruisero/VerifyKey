@@ -999,23 +999,39 @@ export default function Verify() {
                                             </div>
                                         ) : (
                                             <div className="results-list">
-                                                {historyData.map((item) => (
-                                                    <div key={item.id} className={`result-item ${item.status}`}>
+                                                {historyData.map((item) => {
+                                                    let displayStatus = item.status === 'pass' ? 'success' : item.status;
+                                                    let displayMsg = item.message || '';
+                                                    let displayUrl = item.url;
+                                                    if (!displayUrl) {
+                                                        const urlMatch = displayMsg.match(/(https?:\/\/[^\s]+)/);
+                                                        if (urlMatch) {
+                                                            displayUrl = urlMatch[1];
+                                                            displayMsg = displayMsg.replace(displayUrl, '').trim();
+                                                        }
+                                                    }
+                                                    displayMsg = displayMsg.replace(/^[A-Za-z]*Pixel\s*(成功|失败)?[:：]?\s*/i, '').trim();
+                                                    displayMsg = displayMsg.replace(/^Google One URL:?\s*/i, '').trim();
+                                                    displayMsg = displayMsg.replace(/^获取成功[:：]?\s*/i, '').trim();
+                                                    displayMsg = displayMsg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
+                                                    
+                                                    return (
+                                                    <div key={item.id} className={`result-item ${displayStatus}`}>
                                                         <div className="result-status">
-                                                            {item.status === 'success' && <span className="status-icon success">✓</span>}
-                                                            {item.status === 'failed' && <span className="status-icon failed">✕</span>}
+                                                            {displayStatus === 'success' && <span className="status-icon success">✓</span>}
+                                                            {displayStatus === 'failed' && <span className="status-icon failed">✕</span>}
                                                         </div>
                                                         <div className="result-info">
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(item.email)}</span>
                                                             </div>
                                                             <span className="result-message">
-                                                                {(item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '') || (item.status === 'success' ? t('verifySuccess') : t('verifyFailed'))}
+                                                                {displayMsg || (displayStatus === 'success' ? t('verifySuccess') : t('verifyFailed'))}
                                                             </span>
-                                                            {item.status === 'success' && item.url && (
+                                                            {displayStatus === 'success' && displayUrl && (
                                                                 <div className="result-url-row">
-                                                                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        🔗 {item.url.length > 60 ? item.url.slice(0, 57) + '...' : item.url}
+                                                                    <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="result-url-link">
+                                                                        🔗 {displayUrl.length > 60 ? displayUrl.slice(0, 57) + '...' : displayUrl}
                                                                     </a>
                                                                     <button
                                                                         className="copy-url-btn"
@@ -1036,7 +1052,7 @@ export default function Verify() {
                                                             </span>
                                                         </div>
                                                     </div>
-                                                ))}
+                                                )})}
                                             </div>
                                         )
                                     ) : (
@@ -1305,23 +1321,27 @@ export default function Verify() {
                                             </div>
                                         ) : (
                                             <div className="results-list">
-                                                {gptHistoryData.map((item) => (
-                                                    <div key={item.id} className={`result-item ${item.status === 'pass' ? 'success' : 'failed'}`}>
+                                                {gptHistoryData.map((item) => {
+                                                    let displayStatus = item.status === 'pass' || item.status === 'success' ? 'success' : 'failed';
+                                                    let displayMsg = (item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
+                                                    
+                                                    return (
+                                                    <div key={item.id} className={`result-item ${displayStatus}`}>
                                                         <div className="result-status">
-                                                            {item.status === 'pass' && <span className="status-icon success">✓</span>}
-                                                            {item.status !== 'pass' && <span className="status-icon failed">✕</span>}
+                                                            {displayStatus === 'success' && <span className="status-icon success">✓</span>}
+                                                            {displayStatus !== 'success' && <span className="status-icon failed">✕</span>}
                                                         </div>
                                                         <div className="result-info">
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{item.email || 'ChatGPT'}</span>
                                                             </div>
-                                                            <span className="result-message">{item.message || (item.status === 'pass' ? t('rechargeSuccess') : t('rechargeFailed'))}</span>
+                                                            <span className="result-message">{displayMsg || (displayStatus === 'success' ? t('rechargeSuccess') : t('rechargeFailed'))}</span>
                                                         </div>
                                                         <div className="result-meta">
                                                             <span className="result-time">{formatTime(item.timestamp)}</span>
                                                         </div>
                                                     </div>
-                                                ))}
+                                                )})}
                                             </div>
                                         )
                                     ) : (

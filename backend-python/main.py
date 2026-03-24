@@ -14,6 +14,7 @@ import json
 import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime
+import logging
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request, Query
 from fastapi.middleware.cors import CORSMiddleware

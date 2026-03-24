@@ -120,8 +120,8 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Don't render until we know maintenance status
-  if (!maintenanceLoaded) return null;
+  // Render immediately — default maintenance state is { enabled: false }
+  // Once the API responds, React re-renders automatically if maintenance is on
 
   return (
     <LanguageProvider>

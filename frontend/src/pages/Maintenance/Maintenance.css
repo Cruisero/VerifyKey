@@ -31,7 +31,7 @@
 .maintenance-orb {
     position: absolute;
     border-radius: 50%;
-    filter: blur(120px);
+    filter: blur(60px);
     opacity: 0.15;
     animation: orbFloat 12s ease-in-out infinite;
 }

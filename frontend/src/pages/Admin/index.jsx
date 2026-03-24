@@ -4073,8 +4073,9 @@ export default function Admin() {
                             <button className="btn btn-sm btn-secondary" style={{ fontSize: '12px', color: '#ef4444' }} onClick={async () => {
                                 if (!window.confirm('确定要清空所有概览统计数据吗？此操作不可撤销。')) return;
                                 try {
-                                    const res = await fetch(`${API_BASE}/api/admin/reset-overview-stats`, { method: 'POST', headers: authHeaders });
-                                    if (res.ok) { alert('已清空'); fetchBotStats(); }
+                                    const tk = user?.token || localStorage.getItem('verifykey-token');
+                                    const res = await fetch(`${API_BASE}/api/admin/reset-overview-stats`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` } });
+                                    if (res.ok) { alert('已清空'); fetchSiteStats(); }
                                     else alert('清空失败');
                                 } catch (e) { alert('错误: ' + e.message); }
                             }}>🗑️ 清空数据</button>

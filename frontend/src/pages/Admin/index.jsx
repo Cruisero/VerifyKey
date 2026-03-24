@@ -1623,120 +1623,135 @@ function PixelApiTab() {
             {/* ===== Status Section ===== */}
             {activeSection === 'status' && (
                 <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--spacing-sm)' }}>
-                        <button className="btn btn-sm btn-secondary" onClick={fetchStatus}>🔄 刷新</button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>📡 Pixel API 状态</span>
+                        <button className="btn btn-sm btn-secondary" onClick={fetchStatus} style={{ padding: '2px 10px', fontSize: '12px' }}>🔄 刷新</button>
                     </div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📡 UPixel (标准)</div>
-                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        {/* API Status */}
-                        <div className="stat-card card" style={{ borderLeft: `3px solid ${health?.status === 'ok' || health?.status === 'healthy' ? '#16a34a' : '#dc2626'}` }}>
-                            <div className="stat-icon">{health?.status === 'ok' || health?.status === 'healthy' ? '🟢' : '🔴'}</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{health?.status === 'ok' || health?.status === 'healthy' ? 'Online' : (health?.status || 'Unknown')}</span>
-                                <span className="stat-label">API 状态</span>
-                            </div>
-                        </div>
-                        {/* Devices */}
-                        <div className="stat-card card primary">
-                            <div className="stat-icon">📱</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{health?.devices?.connected ?? health?.connected_devices ?? '-'} / {health?.devices?.total ?? health?.total_devices ?? '-'}</span>
-                                <span className="stat-label">设备 (在线/总数)</span>
-                            </div>
-                        </div>
-                        {/* Balance */}
-                        <div className="stat-card card success">
-                            <div className="stat-icon">💰</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{balance?.balance ?? balance?.credits ?? '-'}</span>
-                                <span className="stat-label">API 余额</span>
-                            </div>
-                        </div>
-                        {/* Queue */}
-                        <div className="stat-card card warning">
-                            <div className="stat-icon">📋</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{queue?.queued ?? queue?.queue_length ?? queue?.pending ?? '-'}</span>
-                                <span className="stat-label">队列中</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* KPixel Status */}
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>⚡ KPixel (Pro)</div>
-                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <div className="stat-card card" style={{ borderLeft: `3px solid ${kpixelBalance && !kpixelBalance.error ? '#7c3aed' : '#dc2626'}` }}>
-                            <div className="stat-icon">{kpixelBalance && !kpixelBalance.error ? '🟢' : '🔴'}</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{kpixelBalance && !kpixelBalance.error ? 'Online' : (kpixelConfig.enabled ? 'Error' : 'Disabled')}</span>
-                                <span className="stat-label">API 状态</span>
-                            </div>
-                        </div>
-                        <div className="stat-card card" style={{ borderLeft: '3px solid #7c3aed' }}>
-                            <div className="stat-icon">💎</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{kpixelBalance?.remaining_uses ?? kpixelBalance?.balance ?? '-'}</span>
-                                <span className="stat-label">API 余额</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* VPixel Status */}
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>🔮 VPixel</div>
-                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <div className="stat-card card" style={{ borderLeft: `3px solid ${vpixelConfig.enabled ? '#10b981' : '#dc2626'}` }}>
-                            <div className="stat-icon">{vpixelConfig.enabled && vpixelConfig.hasCard ? '🟢' : '🔴'}</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{vpixelConfig.enabled && vpixelConfig.hasCard ? 'Online' : (vpixelConfig.enabled ? '未配置卡密' : 'Disabled')}</span>
-                                <span className="stat-label">API 状态</span>
-                            </div>
-                        </div>
-                        <div className="stat-card card" style={{ borderLeft: '3px solid #10b981' }}>
-                            <div className="stat-icon">📋</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{vpixelQueue?.data?.total ?? vpixelQueue?.queue ?? '-'}</span>
-                                <span className="stat-label">队列中</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* YPixel Status */}
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>🌐 YPixel (普通)</div>
-                    <div className="stats-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <div className="stat-card card" style={{ borderLeft: `3px solid ${ypixelConfig.enabled && ypixelCardStats.available > 0 ? '#0ea5e9' : '#dc2626'}` }}>
-                            <div className="stat-icon">{ypixelConfig.enabled && ypixelCardStats.available > 0 ? '🟢' : '🔴'}</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{ypixelConfig.enabled ? (ypixelCardStats.available > 0 ? 'Online' : '无可用卡密') : 'Disabled'}</span>
-                                <span className="stat-label">API 状态</span>
-                            </div>
-                        </div>
-                        <div className="stat-card card" style={{ borderLeft: '3px solid #0ea5e9' }}>
-                            <div className="stat-icon">🎫</div>
-                            <div className="stat-info">
-                                <span className="stat-value">{ypixelCardStats.available} / {ypixelCardStats.total}</span>
-                                <span className="stat-label">卡密 (可用/总数)</span>
-                            </div>
-                        </div>
-                    </div>
-                    {/* Ready devices */}
-                    {health?.devices?.ready !== undefined && (
-                        <div className="stats-grid">
-                            <div className="stat-card card info">
-                                <div className="stat-icon">✅</div>
-                                <div className="stat-info">
-                                    <span className="stat-value">{health.devices.ready}</span>
-                                    <span className="stat-label">就绪设备</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                        {/* UPixel Card */}
+                        {(() => {
+                            const isOnline = health?.status === 'ok' || health?.status === 'healthy';
+                            const accent = isOnline ? '#16a34a' : '#dc2626';
+                            return (
+                                <div style={{
+                                    borderRadius: '10px', padding: '12px 14px',
+                                    background: 'var(--bg-card)', border: '1px solid var(--border-primary)',
+                                    borderLeft: `3px solid ${accent}`,
+                                    display: 'flex', flexDirection: 'column', gap: '6px',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{
+                                            width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+                                            background: accent,
+                                            boxShadow: `0 0 6px ${accent}66`,
+                                        }} />
+                                        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>📦 UPixel</span>
+                                        <span style={{
+                                            fontSize: '10px', fontWeight: 600, padding: '1px 7px', borderRadius: '8px', marginLeft: 'auto',
+                                            background: isOnline ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
+                                            color: accent,
+                                        }}>{isOnline ? 'Online' : (health?.status || '—')}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+                                        <span>📱 设备 {health?.devices?.connected ?? '-'}/{health?.devices?.total ?? '-'}</span>
+                                        <span style={{ color: '#d97706', fontWeight: 600 }}>💰 余额 {balance?.balance ?? balance?.credits ?? '-'}</span>
+                                        <span>📋 队列 {queue?.queued ?? queue?.queue_length ?? '-'}</span>
+                                        {health?.devices?.ready !== undefined && <span>✅ 就绪 {health.devices.ready}</span>}
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="stat-card card">
-                                <div className="stat-icon">⏱️</div>
-                                <div className="stat-info">
-                                    <span className="stat-value">{queue?.active ?? queue?.running ?? '-'}</span>
-                                    <span className="stat-label">执行中</span>
+                            );
+                        })()}
+                        {/* KPixel Card */}
+                        {(() => {
+                            const isOnline = kpixelBalance && !kpixelBalance.error;
+                            const accent = isOnline ? '#7c3aed' : '#dc2626';
+                            return (
+                                <div style={{
+                                    borderRadius: '10px', padding: '12px 14px',
+                                    background: 'var(--bg-card)', border: '1px solid var(--border-primary)',
+                                    borderLeft: `3px solid ${accent}`,
+                                    display: 'flex', flexDirection: 'column', gap: '6px',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{
+                                            width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+                                            background: accent,
+                                            boxShadow: `0 0 6px ${accent}66`,
+                                        }} />
+                                        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>⚡ KPixel Pro</span>
+                                        <span style={{
+                                            fontSize: '10px', fontWeight: 600, padding: '1px 7px', borderRadius: '8px', marginLeft: 'auto',
+                                            background: isOnline ? 'rgba(124,58,237,0.1)' : 'rgba(220,38,38,0.1)',
+                                            color: accent,
+                                        }}>{isOnline ? 'Online' : (kpixelConfig.enabled ? 'Error' : 'Disabled')}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                        <span style={{ color: '#7c3aed', fontWeight: 600 }}>💎 余额 {kpixelBalance?.remaining_uses ?? kpixelBalance?.balance ?? '-'}</span>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    )}
+                            );
+                        })()}
+                        {/* VPixel Card */}
+                        {(() => {
+                            const isOnline = vpixelConfig.enabled && vpixelConfig.hasCard;
+                            const accent = isOnline ? '#10b981' : '#dc2626';
+                            return (
+                                <div style={{
+                                    borderRadius: '10px', padding: '12px 14px',
+                                    background: 'var(--bg-card)', border: '1px solid var(--border-primary)',
+                                    borderLeft: `3px solid ${accent}`,
+                                    display: 'flex', flexDirection: 'column', gap: '6px',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{
+                                            width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+                                            background: accent,
+                                            boxShadow: `0 0 6px ${accent}66`,
+                                        }} />
+                                        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>🔮 VPixel</span>
+                                        <span style={{
+                                            fontSize: '10px', fontWeight: 600, padding: '1px 7px', borderRadius: '8px', marginLeft: 'auto',
+                                            background: isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(220,38,38,0.1)',
+                                            color: accent,
+                                        }}>{isOnline ? 'Online' : (vpixelConfig.enabled ? '未配置' : 'Disabled')}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                        <span>📋 队列 {vpixelQueue?.data?.total ?? vpixelQueue?.queue ?? '-'}</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        {/* YPixel Card */}
+                        {(() => {
+                            const isOnline = ypixelConfig.enabled && ypixelCardStats.available > 0;
+                            const accent = isOnline ? '#0ea5e9' : '#dc2626';
+                            return (
+                                <div style={{
+                                    borderRadius: '10px', padding: '12px 14px',
+                                    background: 'var(--bg-card)', border: '1px solid var(--border-primary)',
+                                    borderLeft: `3px solid ${accent}`,
+                                    display: 'flex', flexDirection: 'column', gap: '6px',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{
+                                            width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+                                            background: accent,
+                                            boxShadow: `0 0 6px ${accent}66`,
+                                        }} />
+                                        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>🌐 YPixel</span>
+                                        <span style={{
+                                            fontSize: '10px', fontWeight: 600, padding: '1px 7px', borderRadius: '8px', marginLeft: 'auto',
+                                            background: isOnline ? 'rgba(14,165,233,0.1)' : 'rgba(220,38,38,0.1)',
+                                            color: accent,
+                                        }}>{ypixelConfig.enabled ? (isOnline ? 'Online' : '无卡密') : 'Disabled'}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                        <span style={{ color: '#0ea5e9', fontWeight: 600 }}>🎫 卡密 {ypixelCardStats.available}/{ypixelCardStats.total}</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
                     {/* Config status */}
                     <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

@@ -1066,13 +1066,13 @@ export default function Verify() {
                                                         <div className="result-info">
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(result.email)}</span>
-                                                                {result.tier !== 'pro' && result.stage !== undefined && result.totalStages && (
+                                                                {result.source === 'pixel' && result.tier !== 'pro' && result.stage !== undefined && result.totalStages > 0 && (
                                                                     <span className="result-stage-badge">
                                                                         {result.stage}/{result.totalStages}
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            {result.status === 'processing' && result.totalStages > 0 && (
+                                                            {result.source === 'pixel' && result.status === 'processing' && result.totalStages > 0 && (
                                                                 <div className="stage-progress-bar">
                                                                     <div
                                                                         className="stage-progress-fill"

@@ -7359,11 +7359,24 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     continue
 
                 elapsed = time.time() - start_time
-                status = data.get("status", "")
-                result_url = data.get("result", data.get("link", data.get("url", "")))
-                message = data.get("message", "")
+                task_status = data.get("status", "")
 
-                if status in ("success", "completed", "done"):
+                # Extract per-account data from the accounts array
+                accounts = data.get("accounts", [])
+                acct = None
+                for a in accounts:
+                    if a.get("email", "").lower() == email.lower():
+                        acct = a
+                        break
+                if not acct and accounts:
+                    acct = accounts[0]  # fallback to first account
+
+                acct_status = acct.get("status", "") if acct else ""
+                result_url = (acct.get("result_link", "") or acct.get("result", "")) if acct else ""
+                message = (acct.get("message", "") or data.get("message", "")) if acct else data.get("message", "")
+
+                # Task completed and account succeeded
+                if task_status in ("completed", "done") and acct_status == "success":
                     # Deduct credits
                     if user_id:
                         try:
@@ -7393,8 +7406,22 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     })
                     break
 
-                elif status in ("failed", "error"):
+                # Task completed but account failed, or task itself failed
+                elif task_status in ("completed", "done") and acct_status in ("failed", "error"):
                     err_msg = message or "验证失败"
+                    verification_history.log_verification("failed", poll_id, f"YPixel 失败: {err_msg}", cdk=f"user:{user_id}")
+                    _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "ypixel",
+                        "vid": poll_id, "link": email,
+                        "step": "result", "status": "failed", "success": False,
+                        "message": f"❌ {err_msg}",
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+
+                elif task_status in ("failed", "error"):
+                    err_msg = message or "任务失败"
                     verification_history.log_verification("failed", poll_id, f"YPixel 失败: {err_msg}", cdk=f"user:{user_id}")
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
@@ -7408,17 +7435,17 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
 
                 else:
                     # pending / processing
-                    progress_msg = message or ("运行中..." if status in ("processing", "running") else "排队中...")
+                    progress_msg = message or ("运行中..." if task_status in ("processing", "running") else "排队中...")
                     _ypixel_job_status[poll_id] = {
-                        "status": "Running" if status in ("processing", "running") else "Pending",
+                        "status": "Running" if task_status in ("processing", "running") else "Pending",
                         "message": progress_msg, "elapsed": round(elapsed, 1),
                     }
                     broadcast_verify_event({
                         "type": "progress", "source": "ypixel",
                         "vid": poll_id, "link": email,
                         "step": "processing",
-                        "status": "running" if status in ("processing", "running") else "queued",
-                        "message": f"🔄 {progress_msg}" if status in ("processing", "running") else f"⏳ {progress_msg}",
+                        "status": "running" if task_status in ("processing", "running") else "queued",
+                        "message": f"🔄 {progress_msg}" if task_status in ("processing", "running") else f"⏳ {progress_msg}",
                         "elapsed": round(elapsed, 1),
                     })
             else:

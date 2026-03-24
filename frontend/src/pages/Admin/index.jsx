@@ -1037,6 +1037,13 @@ function PixelApiTab() {
     const [vpixelNewCards, setVpixelNewCards] = useState('');
     const [vpixelAddingCards, setVpixelAddingCards] = useState(false);
 
+    // YPixel config state
+    const [ypixelConfig, setYpixelConfig] = useState({ enabled: false, baseUrl: 'https://pixel.yh-mo.xyz', creditCost: 1.0 });
+    const [ypixelCards, setYpixelCards] = useState([]);
+    const [ypixelCardStats, setYpixelCardStats] = useState({ total: 0, available: 0, used: 0 });
+    const [ypixelNewCards, setYpixelNewCards] = useState('');
+    const [ypixelAddingCards, setYpixelAddingCards] = useState(false);
+
     const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, vpixel: false });
     const [pixelJobs, setPixelJobs] = useState([]);
     const [history, setHistory] = useState([]);
@@ -1115,6 +1122,19 @@ function PixelApiTab() {
             if (sRes.ok) { const d = await sRes.json(); setVpixelCardStats(d); }
         } catch (e) {
             console.warn('VPixel cards fetch error:', e);
+        }
+        // Fetch YPixel config + cards
+        try {
+            const ycfg = await fetch(`${API_BASE}/api/ypixel/config`, { headers: authHeaders });
+            if (ycfg.ok) setYpixelConfig(await ycfg.json());
+            const [ycRes, ysRes] = await Promise.all([
+                fetch(`${API_BASE}/api/ypixel/cards`, { headers: authHeaders }),
+                fetch(`${API_BASE}/api/ypixel/cards/stats`, { headers: authHeaders }),
+            ]);
+            if (ycRes.ok) { const d = await ycRes.json(); setYpixelCards(d.keys || []); }
+            if (ysRes.ok) { const d = await ysRes.json(); setYpixelCardStats(d); }
+        } catch (e) {
+            console.warn('YPixel config fetch error:', e);
         }
     };
 
@@ -1952,6 +1972,149 @@ function PixelApiTab() {
                                         </tr>
                                     ))}
                                     {vpixelCards.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                                                暂无卡密，请先添加
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* YPixel Config */}
+                    <h4 style={{ marginTop: 'var(--spacing-xl)', marginBottom: 'var(--spacing-md)', borderTop: '1px solid var(--border-primary)', paddingTop: 'var(--spacing-lg)' }}>🌐 YPixel 配置（普通验证通道）</h4>
+                    <div style={{ display: 'grid', gap: 'var(--spacing-md)' }}>
+                        <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                <span>🌐</span>
+                                <strong>启用 YPixel</strong>
+                                <label style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ color: ypixelConfig.enabled ? '#16a34a' : '#dc2626' }}>
+                                        {ypixelConfig.enabled ? '🟢 已启用' : '🔴 未启用'}
+                                    </span>
+                                    <input type="checkbox" checked={ypixelConfig.enabled}
+                                        onChange={async e => {
+                                            const val = e.target.checked;
+                                            setYpixelConfig({ ...ypixelConfig, enabled: val });
+                                            try {
+                                                await fetch(`${API_BASE}/api/ypixel/config`, {
+                                                    method: 'POST', headers: authHeaders,
+                                                    body: JSON.stringify({ enabled: val }),
+                                                });
+                                            } catch {}
+                                        }} />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* YPixel Card Pool Stats */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginTop: '16px' }}>
+                        {[
+                            { emoji: '🎫', value: ypixelCardStats.total, label: '总卡密', color: '#6366f1' },
+                            { emoji: '✅', value: ypixelCardStats.available, label: '可用', color: '#16a34a' },
+                            { emoji: '📦', value: ypixelCardStats.used, label: '已使用', color: '#9ca3af' },
+                        ].map((s, i) => (
+                            <div key={i} className="card" style={{ padding: '16px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '20px' }}>{s.emoji}</div>
+                                <div style={{ fontSize: '24px', fontWeight: 700, color: s.color }}>{s.value}</div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{s.label}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* YPixel Batch Add Cards */}
+                    <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: '16px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>📝 批量添加 YPixel 卡密</div>
+                        <textarea
+                            className="input"
+                            value={ypixelNewCards}
+                            onChange={e => setYpixelNewCards(e.target.value)}
+                            placeholder={"每行一个卡密，例如：\n2028-8139-5D2A-5095-3D51"}
+                            rows={4}
+                            style={{ width: '100%', fontFamily: 'monospace', fontSize: '13px' }}
+                        />
+                        <button
+                            className="btn btn-primary"
+                            style={{ marginTop: '8px' }}
+                            disabled={ypixelAddingCards || !ypixelNewCards.trim()}
+                            onClick={async () => {
+                                setYpixelAddingCards(true);
+                                try {
+                                    const res = await fetch(`${API_BASE}/api/ypixel/cards`, {
+                                        method: 'POST', headers: authHeaders,
+                                        body: JSON.stringify({ keys: ypixelNewCards }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        alert(`✅ 添加 ${data.added} 个，跳过 ${data.skipped} 个重复`);
+                                        setYpixelNewCards('');
+                                        const [cRes, sRes] = await Promise.all([
+                                            fetch(`${API_BASE}/api/ypixel/cards`, { headers: authHeaders }),
+                                            fetch(`${API_BASE}/api/ypixel/cards/stats`, { headers: authHeaders }),
+                                        ]);
+                                        if (cRes.ok) { const d = await cRes.json(); setYpixelCards(d.keys || []); }
+                                        if (sRes.ok) { const d = await sRes.json(); setYpixelCardStats(d); }
+                                    }
+                                } catch (e) { alert('添加失败: ' + e.message); }
+                                finally { setYpixelAddingCards(false); }
+                            }}
+                        >
+                            {ypixelAddingCards ? '⏳ 添加中...' : `添加卡密 (${ypixelNewCards.split('\n').filter(l => l.trim()).length} 个)`}
+                        </button>
+                    </div>
+
+                    {/* YPixel Card List */}
+                    <div className="card" style={{ overflow: 'hidden', marginTop: '16px' }}>
+                        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>📋 YPixel 卡密列表</span>
+                            <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{ypixelCards.length} 条记录</span>
+                        </div>
+                        <div style={{ overflow: 'auto', maxHeight: '300px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                <thead>
+                                    <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>卡密</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'center' }}>状态</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>使用邮箱</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'center' }}>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {ypixelCards.map(k => (
+                                        <tr key={k.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                                            <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{k.card_key}</td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                <span style={{
+                                                    fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600,
+                                                    background: k.status === 'available' ? '#dcfce7' : k.status === 'used' ? '#f3f4f6' : '#fef2f2',
+                                                    color: k.status === 'available' ? '#16a34a' : k.status === 'used' ? '#6b7280' : '#dc2626',
+                                                }}>{k.status === 'available' ? '可用' : k.status === 'used' ? '已使用' : k.status === 'reserved' ? '使用中' : '无效'}</span>
+                                            </td>
+                                            <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{k.used_by_email || '-'}</td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                <button
+                                                    onClick={async () => {
+                                                        await fetch(`${API_BASE}/api/ypixel/cards/${k.id}`, { method: 'DELETE', headers: authHeaders });
+                                                        setYpixelCards(prev => prev.filter(c => c.id !== k.id));
+                                                        setYpixelCardStats(prev => ({
+                                                            ...prev,
+                                                            total: prev.total - 1,
+                                                            available: k.status === 'available' ? prev.available - 1 : prev.available,
+                                                            used: k.status === 'used' ? prev.used - 1 : prev.used,
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        background: 'none', border: 'none', color: '#dc2626',
+                                                        cursor: 'pointer', fontSize: '12px', fontWeight: 500
+                                                    }}
+                                                >🗑️</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {ypixelCards.length === 0 && (
                                         <tr>
                                             <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
                                                 暂无卡密，请先添加

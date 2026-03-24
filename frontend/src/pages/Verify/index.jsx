@@ -227,14 +227,28 @@ export default function Verify() {
             .filter(Boolean);
     };
 
-    // Submit a single account — routes to UPixel or KPixel/VPixel based on tier
+    // Submit a single account — routes to UPixel, YPixel, or KPixel/VPixel based on tier
     const submitOneJob = async (account, resultId) => {
         const isKPixel = verifyTier === 'pro';
-        const apiUrl = isKPixel ? `${API_BASE}/api/kpixel/jobs` : `${API_BASE}/api/pixel/jobs`;
+
+        // Standard tier: prefer UPixel, fallback to YPixel
+        let apiUrl, payload, jobSourceDefault;
+        if (isKPixel) {
+            apiUrl = `${API_BASE}/api/kpixel/jobs`;
+            payload = { email: account.email, password: account.password, twofa: account.totp_secret };
+            jobSourceDefault = 'kpixel';
+        } else if (!serviceStatus?.upixel?.available && serviceStatus?.upixel?.ypixelUp) {
+            // UPixel down, YPixel up → use YPixel
+            apiUrl = `${API_BASE}/api/ypixel/jobs`;
+            payload = { email: account.email, password: account.password, twofa: account.totp_secret || '', recovery_email: account.backupEmail || '' };
+            jobSourceDefault = 'ypixel';
+        } else {
+            apiUrl = `${API_BASE}/api/pixel/jobs`;
+            payload = { email: account.email, password: account.password, totp_secret: account.totp_secret };
+            jobSourceDefault = 'pixel';
+        }
+
         const token = getToken();
-        const payload = isKPixel
-            ? { email: account.email, password: account.password, twofa: account.totp_secret }
-            : { email: account.email, password: account.password, totp_secret: account.totp_secret };
 
         try {
             const resp = await fetch(apiUrl, {
@@ -257,7 +271,7 @@ export default function Verify() {
 
             const data = await resp.json();
             const jobId = data.job_id || String(data.task_id || '');
-            const jobSource = data.source || (isKPixel ? 'kpixel' : 'pixel');
+            const jobSource = data.source || jobSourceDefault;
 
             // Update with job ID and start polling
             setResults(prev => prev.map(r =>
@@ -273,10 +287,11 @@ export default function Verify() {
             ));
 
             // Start polling this job based on source
-            if (isKPixel) {
-                // Both KPixel and VPixel use same poll format (KPixel-compatible)
+            if (jobSource === 'kpixel' || jobSource === 'vpixel' || jobSource === 'ypixel') {
                 const statusUrl = jobSource === 'vpixel'
                     ? `${API_BASE}/api/vpixel/jobs/${jobId}/status`
+                    : jobSource === 'ypixel'
+                    ? `${API_BASE}/api/ypixel/jobs/${jobId}/status`
                     : `${API_BASE}/api/kpixel/jobs/${jobId}/status`;
                 pollKPixelJob(jobId, resultId, statusUrl);
             } else {
@@ -804,11 +819,14 @@ export default function Verify() {
                                     <div className="tier-tabs">
                                         <button
                                             className={`tier-tab ${verifyTier === 'standard' ? 'active' : ''}`}
-                                            onClick={() => !serviceStatus?.upixel || serviceStatus.upixel.available ? setVerifyTier('standard') : null}
-                                            style={serviceStatus?.upixel?.available === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                            onClick={() => {
+                                                const stdAvail = serviceStatus?.upixel?.standardAvailable !== false;
+                                                if (stdAvail) setVerifyTier('standard');
+                                            }}
+                                            style={serviceStatus?.upixel?.standardAvailable === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                         >
                                             📦 普通验证 <span className="tier-cost">1 积分</span>
-                                            {serviceStatus?.upixel?.available === false && (
+                                            {serviceStatus?.upixel?.standardAvailable === false && (
                                                 <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>🔧 维护中</span>
                                             )}
                                         </button>

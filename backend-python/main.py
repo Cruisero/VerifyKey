@@ -5933,6 +5933,29 @@ async def get_service_status():
         else:
             pro_reason = kpixel_reason or vpixel_reason
 
+    # --- YPixel auto-detect ---
+    ypixel_ok = False
+    ypixel_reason = ""
+    ypixel_cfg = config.get("ypixelApi", {})
+    if manual.get("ypixel"):
+        ypixel_reason = "管理员手动维护中"
+    elif not ypixel_cfg.get("enabled"):
+        ypixel_reason = "未启用"
+    else:
+        try:
+            _ypc_count = database.get_connection().execute(
+                "SELECT COUNT(*) FROM ypixel_cards WHERE status='available'"
+            ).fetchone()[0]
+            if _ypc_count == 0:
+                ypixel_reason = "无可用卡密"
+            else:
+                ypixel_ok = True
+        except Exception:
+            ypixel_reason = "数据库查询失败"
+
+    # Combined standard-tier: available if EITHER UPixel or YPixel is up
+    standard_available = upixel_ok or ypixel_ok
+
     # --- GPT per-channel auto-detect ---
     gpt_channels_status = {}
     for ch in ("sbs", "red", "vip"):
@@ -5953,7 +5976,9 @@ async def get_service_status():
     gpt_reason = "" if gpt_ok else "所有充值通道不可用"
 
     return {
-        "upixel": {"available": upixel_ok, "reason": upixel_reason},
+        "upixel": {"available": upixel_ok, "reason": upixel_reason,
+                   "ypixelUp": ypixel_ok, "standardAvailable": standard_available},
+        "ypixel": {"available": ypixel_ok, "reason": ypixel_reason},
         "kpixel": {"available": pro_available, "reason": pro_reason,
                    "kpixelUp": kpixel_ok, "vpixelUp": vpixel_ok},
         "gpt": {"available": gpt_ok, "reason": gpt_reason, "channels": gpt_channels_status},
@@ -5961,6 +5986,7 @@ async def get_service_status():
             "upixel": manual.get("upixel", False),
             "kpixel": manual.get("kpixel", False),
             "vpixel": manual.get("vpixel", False),
+            "ypixel": manual.get("ypixel", False),
             "gpt_sbs": manual.get("gpt_sbs", False),
             "gpt_red": manual.get("gpt_red", False),
             "gpt_vip": manual.get("gpt_vip", False),
@@ -5984,7 +6010,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "vpixel", "gpt_sbs", "gpt_red", "gpt_vip"):
+    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -6073,6 +6099,17 @@ def _run_alert_check():
                 alerts.append({"service": "VPixel", "status": "卡密耗尽", "reason": "可用卡密: 0"})
         except Exception:
             alerts.append({"service": "VPixel", "status": "异常", "reason": "数据库查询失败"})
+
+    # --- YPixel card pool ---
+    ypixel_cfg = config.get("ypixelApi", {})
+    if ypixel_cfg.get("enabled") and not manual.get("ypixel"):
+        try:
+            conn = database.get_connection()
+            avail = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available'").fetchone()[0]
+            if avail == 0:
+                alerts.append({"service": "YPixel", "status": "卡密耗尽", "reason": "可用卡密: 0"})
+        except Exception:
+            alerts.append({"service": "YPixel", "status": "异常", "reason": "数据库查询失败"})
 
     # --- GPT channels ---
     for ch_name, ch_label in [("sbs", "GPT-SBS"), ("red", "GPT-RED"), ("vip", "GPT-VIP")]:
@@ -7267,6 +7304,314 @@ async def vpixel_cards_delete(card_id: int, authorization: Optional[str] = Heade
     _verify_admin_token(authorization)
     conn = database.get_connection()
     conn.execute("DELETE FROM vpixel_cards WHERE id=?", (card_id,))
+    conn.commit()
+    return {"success": True}
+
+
+# ==============================================================
+# YPixel — Standard-tier verification via pixel.yh-mo.xyz
+# ==============================================================
+
+_ypixel_job_status = {}   # poll_id -> {status, message, elapsed, url}
+_ypixel_polling_tasks = {}   # poll_id -> asyncio.Task
+
+def _get_ypixel_config():
+    import config_manager
+    cfg = config_manager.get_config().get("ypixelApi", {})
+    return {
+        "enabled": cfg.get("enabled", False),
+        "baseUrl": cfg.get("baseUrl", "https://pixel.yh-mo.xyz"),
+        "creditCost": cfg.get("creditCost", 1.0),
+    }
+
+
+async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int, ypixel_cfg: dict, poll_id: str):
+    """Background task: poll YPixel task status until completion."""
+    import time
+    base_url = ypixel_cfg["baseUrl"]
+    credit_cost = ypixel_cfg.get("creditCost", 1.0)
+    start_time = time.time()
+
+    _ypixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": 0}
+
+    broadcast_verify_event({
+        "type": "progress", "source": "ypixel",
+        "vid": poll_id, "link": email,
+        "step": "submitted", "message": "任务已提交，等待处理...",
+    })
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            for _ in range(180):  # max ~15 min (180 * 5s)
+                await asyncio.sleep(5)
+                try:
+                    resp = await client.get(f"{base_url}/api/task/{task_id}")
+                    if resp.status_code != 200:
+                        continue
+                    data = resp.json()
+                except Exception:
+                    continue
+
+                elapsed = time.time() - start_time
+                status = data.get("status", "")
+                result_url = data.get("result", data.get("link", data.get("url", "")))
+                message = data.get("message", "")
+
+                if status in ("success", "completed", "done"):
+                    # Deduct credits
+                    if user_id:
+                        try:
+                            auth.deduct_credits(user_id, credit_cost)
+                            logging.info(f"[YPixel] Deducted {credit_cost} credits from user {user_id}")
+                        except Exception as e:
+                            logging.warning(f"[YPixel] Credit deduction failed: {e}")
+                    # Mark card as used
+                    try:
+                        conn = database.get_connection()
+                        conn.execute(
+                            "UPDATE ypixel_cards SET status='used', used_by_email=?, used_at=? WHERE card_key=?",
+                            (email, __import__('datetime').datetime.now().isoformat(), card_key),
+                        )
+                        conn.commit()
+                    except Exception:
+                        pass
+                    display_msg = result_url or message or "验证成功"
+                    verification_history.log_verification("pass", poll_id, f"YPixel 成功: {display_msg}", cdk=f"user:{user_id}")
+                    _ypixel_job_status[poll_id] = {"status": "Success", "message": display_msg, "elapsed": round(elapsed, 1), "url": result_url}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "ypixel",
+                        "vid": poll_id, "link": email,
+                        "step": "result", "status": "approved", "success": True,
+                        "message": f"✅ {display_msg}",
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+
+                elif status in ("failed", "error"):
+                    err_msg = message or "验证失败"
+                    verification_history.log_verification("failed", poll_id, f"YPixel 失败: {err_msg}", cdk=f"user:{user_id}")
+                    _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
+                    broadcast_verify_event({
+                        "type": "progress", "source": "ypixel",
+                        "vid": poll_id, "link": email,
+                        "step": "result", "status": "failed", "success": False,
+                        "message": f"❌ {err_msg}",
+                        "elapsed": round(elapsed, 1),
+                    })
+                    break
+
+                else:
+                    # pending / processing
+                    progress_msg = message or ("运行中..." if status in ("processing", "running") else "排队中...")
+                    _ypixel_job_status[poll_id] = {
+                        "status": "Running" if status in ("processing", "running") else "Pending",
+                        "message": progress_msg, "elapsed": round(elapsed, 1),
+                    }
+                    broadcast_verify_event({
+                        "type": "progress", "source": "ypixel",
+                        "vid": poll_id, "link": email,
+                        "step": "processing",
+                        "status": "running" if status in ("processing", "running") else "queued",
+                        "message": f"🔄 {progress_msg}" if status in ("processing", "running") else f"⏳ {progress_msg}",
+                        "elapsed": round(elapsed, 1),
+                    })
+            else:
+                # Timed out
+                _ypixel_job_status[poll_id] = {"status": "Failed", "message": "任务超时", "elapsed": round(time.time() - start_time, 1)}
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logging.error(f"[YPixel] Poll error for {email}: {e}")
+        _ypixel_job_status[poll_id] = {"status": "Failed", "message": f"轮询错误", "elapsed": 0}
+    finally:
+        _ypixel_polling_tasks.pop(poll_id, None)
+
+
+@app.post("/api/ypixel/jobs/{poll_id}/status")
+async def ypixel_get_job_status(poll_id: str):
+    """Get YPixel job status from in-memory cache."""
+    status_entry = _ypixel_job_status.get(poll_id)
+    if not status_entry:
+        return {"success": False, "message": "Job not found"}
+    return {
+        "success": True,
+        "data": {
+            "status": status_entry.get("status", "Pending"),
+            "message": status_entry.get("message", ""),
+            "elapsed": status_entry.get("elapsed", 0),
+        }
+    }
+
+
+class YPixelJobRequest(BaseModel):
+    email: str
+    password: str
+    twofa: str = ""
+    recovery_email: str = ""
+
+
+@app.post("/api/ypixel/jobs")
+async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[str] = Header(None)):
+    """Submit a YPixel job — picks a card from pool, posts to pixel.yh-mo.xyz."""
+    ypixel_cfg = _get_ypixel_config()
+    if not ypixel_cfg["enabled"]:
+        raise HTTPException(status_code=503, detail="服务端错误")
+
+    credit_cost = ypixel_cfg.get("creditCost", 1.0)
+
+    # Auth
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    user_id = user.get("id")
+    credits = user.get("credits", 0)
+    if credits < credit_cost:
+        raise HTTPException(status_code=400, detail="服务端错误")
+
+    # Pick an available card from pool
+    conn = database.get_connection()
+    card_row = conn.execute("SELECT id, card_key FROM ypixel_cards WHERE status='available' ORDER BY id ASC LIMIT 1").fetchone()
+    if not card_row:
+        raise HTTPException(status_code=503, detail="服务端错误")
+    card_id = card_row["id"]
+    card_key = card_row["card_key"]
+
+    # Reserve the card
+    conn.execute("UPDATE ypixel_cards SET status='reserved', used_by_email=? WHERE id=?", (request.email, card_id))
+    conn.commit()
+
+    # Format account line: email----password----recovery_email----2fa
+    parts = [request.email, request.password]
+    parts.append(request.recovery_email or "")
+    parts.append(request.twofa or "")
+    account_line = "----".join(parts)
+
+    # Submit to YPixel API
+    import time as _t
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{ypixel_cfg['baseUrl']}/api/submit-task",
+                json={"card_key": card_key, "accounts_text": account_line},
+                headers={"Content-Type": "application/json"},
+            )
+        data = resp.json()
+
+        if resp.status_code == 200 and (data.get("task_id") or data.get("success")):
+            task_id = str(data.get("task_id", ""))
+            poll_id = f"yp_{int(_t.time())}_{request.email[:8]}"
+
+            task = asyncio.create_task(
+                _ypixel_poll_job(task_id, card_key, request.email, user_id, ypixel_cfg, poll_id)
+            )
+            _ypixel_polling_tasks[poll_id] = task
+
+            return {
+                "job_id": poll_id,
+                "task_id": poll_id,
+                "status": "queued",
+                "source": "ypixel",
+            }
+        else:
+            # Submit failed — mark card as invalid
+            conn.execute("UPDATE ypixel_cards SET status='invalid' WHERE id=?", (card_id,))
+            conn.commit()
+            err_msg = data.get("message", data.get("error", "提交失败"))
+            raise HTTPException(status_code=400, detail="服务端错误")
+
+    except httpx.HTTPError as e:
+        # Connection error — release card back
+        conn.execute("UPDATE ypixel_cards SET status='available', used_by_email='' WHERE id=?", (card_id,))
+        conn.commit()
+        raise HTTPException(status_code=502, detail="服务端错误")
+
+
+# --- YPixel Config ---
+
+@app.get("/api/ypixel/config")
+async def ypixel_get_config(authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    cfg = _get_ypixel_config()
+    return {
+        "enabled": cfg["enabled"],
+        "baseUrl": cfg["baseUrl"],
+        "creditCost": cfg["creditCost"],
+    }
+
+
+@app.post("/api/ypixel/config")
+async def ypixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    import config_manager
+    body = await request.json()
+    updates = {}
+    if "enabled" in body:
+        updates["enabled"] = bool(body["enabled"])
+    if "baseUrl" in body:
+        updates["baseUrl"] = body["baseUrl"]
+    if "creditCost" in body:
+        updates["creditCost"] = float(body["creditCost"])
+    result = config_manager.update_config({"ypixelApi": updates})
+    if result:
+        return {"success": True}
+    raise HTTPException(status_code=500, detail="保存失败")
+
+
+# --- YPixel Card Pool Management ---
+
+@app.post("/api/ypixel/cards")
+async def ypixel_cards_add(request: Request, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    body = await request.json()
+    keys_raw = body.get("keys", "")
+    keys = [k.strip() for k in keys_raw.strip().split("\n") if k.strip()]
+    if not keys:
+        raise HTTPException(status_code=400, detail="请输入至少一个卡密")
+
+    from datetime import datetime
+    conn = database.get_connection()
+    added, skipped = 0, 0
+    for key in keys:
+        existing = conn.execute("SELECT id FROM ypixel_cards WHERE card_key=?", (key,)).fetchone()
+        if existing:
+            skipped += 1
+            continue
+        conn.execute(
+            "INSERT INTO ypixel_cards (card_key, status, created_at) VALUES (?, ?, ?)",
+            (key, "available", datetime.now().isoformat()),
+        )
+        added += 1
+    conn.commit()
+    return {"success": True, "added": added, "skipped": skipped}
+
+
+@app.get("/api/ypixel/cards")
+async def ypixel_cards_list(authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    rows = conn.execute("SELECT * FROM ypixel_cards ORDER BY id DESC").fetchall()
+    return {"keys": [dict(r) for r in rows]}
+
+
+@app.get("/api/ypixel/cards/stats")
+async def ypixel_cards_stats(authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    total = conn.execute("SELECT COUNT(*) FROM ypixel_cards").fetchone()[0]
+    available = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available'").fetchone()[0]
+    used = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='used'").fetchone()[0]
+    return {"total": total, "available": available, "used": used}
+
+
+@app.delete("/api/ypixel/cards/{card_id}")
+async def ypixel_cards_delete(card_id: int, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    conn.execute("DELETE FROM ypixel_cards WHERE id=?", (card_id,))
     conn.commit()
     return {"success": True}
 

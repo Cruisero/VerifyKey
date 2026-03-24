@@ -89,9 +89,9 @@ export default function Verify() {
     const [results, setResults] = useState([]);
     const [statusData, setStatusData] = useState([]);
     const [showHistory, setShowHistory] = useState(false);
-    const [historyData, setHistoryData] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('verifykey-history') || '[]'); } catch { return []; }
-    });
+    const [historyData, setHistoryData] = useState([]);
+    const [showGptHistory, setShowGptHistory] = useState(false);
+    const [gptHistoryData, setGptHistoryData] = useState([]);
     const [hoveredItem, setHoveredItem] = useState(null);
 
     // Tips inline state (loaded from config)
@@ -517,40 +517,42 @@ export default function Verify() {
 
     // Save completed results to history
     useEffect(() => {
-        const completed = results.filter(r => r.status === 'success' || r.status === 'failed');
-        if (completed.length === 0) return;
-        setHistoryData(prev => {
-            const existingIds = new Set(prev.map(h => h.id));
-            const newEntries = completed.filter(r => !existingIds.has(r.id)).map(r => ({
-                id: r.id, email: r.email, status: r.status, message: r.message,
-                url: r.url || '', elapsed: r.elapsed || 0, timestamp: r.timestamp || Date.now(),
-            }));
-            if (newEntries.length === 0) return prev;
-            const updated = [...newEntries, ...prev].slice(0, 100);
-            localStorage.setItem('verifykey-history', JSON.stringify(updated));
-            return updated;
-        });
+        // no-op: history is now fetched from API
     }, [results]);
+
+    // Fetch user history from API
+    const fetchUserHistory = useCallback(async (type) => {
+        const token = getToken();
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/user/verify-history`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const all = data.history || [];
+                if (type === 'pixel') {
+                    setHistoryData(all.filter(h => h.type === 'pixel'));
+                } else if (type === 'gpt') {
+                    setGptHistoryData(all.filter(h => h.type === 'gpt'));
+                } else {
+                    setHistoryData(all.filter(h => h.type === 'pixel'));
+                    setGptHistoryData(all.filter(h => h.type === 'gpt'));
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to fetch user history:', e);
+        }
+    }, [getToken]);
 
     const clearHistory = () => {
         setHistoryData([]);
-        localStorage.removeItem('verifykey-history');
+        setShowHistory(false);
     };
 
-    const handleExport = () => {
-        const successResults = results.filter(r => r.status === 'success');
-        const text = successResults.map(r => {
-            let line = r.email;
-            if (r.url) line += '\n' + r.url;
-            return line;
-        }).join('\n\n');
-        const blob = new Blob([text], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `pixel-results-${Date.now()}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
+    const clearGptHistory = () => {
+        setGptHistoryData([]);
+        setShowGptHistory(false);
     };
 
     const getStatusBadge = () => {
@@ -963,27 +965,22 @@ export default function Verify() {
                                     <div className="panel-actions">
                                         <button
                                             className={`btn btn-sm ${showHistory ? 'btn-primary' : 'btn-secondary'}`}
-                                            onClick={() => setShowHistory(!showHistory)}
+                                            onClick={() => {
+                                                const next = !showHistory;
+                                                setShowHistory(next);
+                                                if (next) fetchUserHistory('pixel');
+                                            }}
                                         >
                                             {showHistory ? '← 返回' : '📜 历史'}
                                         </button>
                                         {showHistory ? (
                                             <button className="btn btn-sm btn-secondary" onClick={clearHistory} disabled={historyData.length === 0}>
-                                                清除历史
+                                                清除
                                             </button>
                                         ) : (
-                                            <>
-                                                <button className="btn btn-sm btn-secondary" onClick={handleClear}>
-                                                    清除
-                                                </button>
-                                                <button
-                                                    className="btn btn-sm btn-secondary"
-                                                    onClick={handleExport}
-                                                    disabled={results.filter(r => r.status === 'success').length === 0}
-                                                >
-                                                    导出
-                                                </button>
-                                            </>
+                                            <button className="btn btn-sm btn-secondary" onClick={handleClear}>
+                                                清除
+                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -1273,43 +1270,93 @@ export default function Verify() {
                             <div className="panel results-panel card">
                                 <div className="panel-header">
                                     <div className="panel-title">
-                                        <span className="panel-icon">📋</span>
-                                        <span>充值结果</span>
+                                        <span className="panel-icon">{showGptHistory ? '📜' : '📋'}</span>
+                                        <span>{showGptHistory ? '充值历史' : '充值结果'}</span>
+                                        {showGptHistory && <span className="result-count">({gptHistoryData.length})</span>}
+                                    </div>
+                                    <div className="panel-actions">
+                                        <button
+                                            className={`btn btn-sm ${showGptHistory ? 'btn-primary' : 'btn-secondary'}`}
+                                            onClick={() => {
+                                                const next = !showGptHistory;
+                                                setShowGptHistory(next);
+                                                if (next) fetchUserHistory('gpt');
+                                            }}
+                                        >
+                                            {showGptHistory ? '← 返回' : '📜 历史'}
+                                        </button>
+                                        {showGptHistory && (
+                                            <button className="btn btn-sm btn-secondary" onClick={clearGptHistory} disabled={gptHistoryData.length === 0}>
+                                                清除
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="panel-body">
-                                    {!gptSuccess && !gptRecharging && !gptResultMsg && (
-                                        <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-tertiary)' }}>
-                                            <p>📡 粘贴 ChatGPT Session 信息后点击充值按钮</p>
-                                            <p style={{ fontSize: '13px', marginTop: '8px' }}>⚠️ 请确保 ChatGPT 已登录，充值成功后扣除 2 积分</p>
-                                        </div>
-                                    )}
-                                    {gptRecharging && (
-                                        <div style={{ textAlign: 'center', padding: '32px' }}>
-                                            <span className="loading-spinner"></span>
-                                            <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>充值进行中，请稍候...</p>
-                                        </div>
-                                    )}
-                                    {gptSuccess && (
-                                        <div style={{ textAlign: 'center', padding: '24px' }}>
-                                            <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
-                                            <h3 style={{ color: '#059669', marginBottom: '8px' }}>充值成功！</h3>
-                                            <p style={{ color: 'var(--text-secondary)' }}>账号 <strong>{gptEmail}</strong> 已成功充值 ChatGPT Plus</p>
-                                            <button
-                                                className="btn btn-primary"
-                                                style={{ marginTop: '16px' }}
-                                                onClick={() => {
-                                                    setGptSession('');
-                                                    setGptEmail('');
-                                                    setGptSuccess(false);
-                                                    setGptResultMsg('');
-                                                    setGptError('');
-                                                    setGptCardKey('');
-                                                }}
-                                            >
-                                                继续充值
-                                            </button>
-                                        </div>
+                                    {showGptHistory ? (
+                                        gptHistoryData.length === 0 ? (
+                                            <div className="empty-results">
+                                                <div className="empty-icon">📜</div>
+                                                <p>暂无充值记录</p>
+                                                <p className="empty-hint">充值完成后的结果会显示在这里</p>
+                                            </div>
+                                        ) : (
+                                            <div className="results-list">
+                                                {gptHistoryData.map((item) => (
+                                                    <div key={item.id} className={`result-item ${item.status === 'pass' ? 'success' : 'failed'}`}>
+                                                        <div className="result-status">
+                                                            {item.status === 'pass' && <span className="status-icon success">✓</span>}
+                                                            {item.status !== 'pass' && <span className="status-icon failed">✕</span>}
+                                                        </div>
+                                                        <div className="result-info">
+                                                            <div className="result-main-row">
+                                                                <span className="result-id">{item.email || 'ChatGPT'}</span>
+                                                            </div>
+                                                            <span className="result-message">{item.message || (item.status === 'pass' ? '充值成功' : '充值失败')}</span>
+                                                        </div>
+                                                        <div className="result-meta">
+                                                            <span className="result-time">{formatTime(item.timestamp)}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )
+                                    ) : (
+                                        <>
+                                            {!gptSuccess && !gptRecharging && !gptResultMsg && (
+                                                <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-tertiary)' }}>
+                                                    <p>📡 粘贴 ChatGPT Session 信息后点击充值按钮</p>
+                                                    <p style={{ fontSize: '13px', marginTop: '8px' }}>⚠️ 请确保 ChatGPT 已登录，充值成功后扣除 2 积分</p>
+                                                </div>
+                                            )}
+                                            {gptRecharging && (
+                                                <div style={{ textAlign: 'center', padding: '32px' }}>
+                                                    <span className="loading-spinner"></span>
+                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>充值进行中，请稍候...</p>
+                                                </div>
+                                            )}
+                                            {gptSuccess && (
+                                                <div style={{ textAlign: 'center', padding: '24px' }}>
+                                                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
+                                                    <h3 style={{ color: '#059669', marginBottom: '8px' }}>充值成功！</h3>
+                                                    <p style={{ color: 'var(--text-secondary)' }}>账号 <strong>{gptEmail}</strong> 已成功充值 ChatGPT Plus</p>
+                                                    <button
+                                                        className="btn btn-primary"
+                                                        style={{ marginTop: '16px' }}
+                                                        onClick={() => {
+                                                            setGptSession('');
+                                                            setGptEmail('');
+                                                            setGptSuccess(false);
+                                                            setGptResultMsg('');
+                                                            setGptError('');
+                                                            setGptCardKey('');
+                                                        }}
+                                                    >
+                                                        继续充值
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>

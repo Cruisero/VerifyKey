@@ -230,3 +230,35 @@ def get_history_by_cdk(cdk_code: str) -> List[Dict]:
         }
         for r in cursor.fetchall()
     ]
+
+
+def get_history_by_user(user_id: int, limit: int = 50) -> List[Dict]:
+    """Get verification history for a specific user (via cdk='user:{id}' field).
+    
+    Args:
+        user_id: The user's numeric ID
+        limit: Max number of records to return (default 50)
+    
+    Returns:
+        List of verification records, newest first
+    """
+    conn = database.get_connection()
+    cdk_tag = f"user:{user_id}"
+    cursor = conn.execute(
+        "SELECT id, status, verification_id, message, cdk, timestamp, via "
+        "FROM verification_history WHERE cdk = ? ORDER BY rowid DESC LIMIT ?",
+        (cdk_tag, limit)
+    )
+    return [
+        {
+            "id": r["id"],
+            "status": r["status"],
+            "verificationId": r["verification_id"],
+            "message": r["message"],
+            "cdk": r["cdk"],
+            "via": r["via"] if "via" in r.keys() else "",
+            "timestamp": r["timestamp"]
+        }
+        for r in cursor.fetchall()
+    ]
+

@@ -3927,6 +3927,57 @@ async def get_verification_history_endpoint():
     }
 
 
+@app.get("/api/user/verify-history")
+async def get_user_verification_history(authorization: Optional[str] = Header(None)):
+    """Get verification & GPT recharge history for the logged-in user (max 50 records)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期")
+
+    user_id = user.get("id")
+    cdk_tag = f"user:{user_id}"
+
+    # 1) Pixel verification history
+    pixel_records = verification_history.get_history_by_user(user_id, limit=50)
+    pixel_items = [
+        {
+            "id": r["id"],
+            "type": "pixel",
+            "status": r["status"],  # pass / failed
+            "email": "",  # email is not stored in verification_history
+            "message": (r.get("message") or "").replace("❌", "").replace("✅", "").strip(),
+            "timestamp": r["timestamp"],
+        }
+        for r in pixel_records
+    ]
+
+    # 2) GPT recharge history (from gpt_keys table)
+    conn = database.get_connection()
+    gpt_rows = conn.execute(
+        "SELECT card_key, status, used_email, used_at, channel FROM gpt_keys WHERE used_by_cdk = ? ORDER BY id DESC LIMIT 50",
+        (cdk_tag,)
+    ).fetchall()
+    gpt_items = [
+        {
+            "id": f"gpt_{row['card_key'][:8]}",
+            "type": "gpt",
+            "status": "pass" if row["status"] == "used" else "failed",
+            "email": row["used_email"] or "",
+            "message": f"ChatGPT 充值{'成功' if row['status'] == 'used' else '失败'} ({(row['channel'] or 'sbs').upper()})",
+            "timestamp": row["used_at"] or "",
+        }
+        for row in gpt_rows
+    ]
+
+    # 3) Merge and sort by timestamp descending, limit 50
+    all_items = pixel_items + gpt_items
+    all_items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return {"history": all_items[:50]}
+
+
 @app.get("/api/admin/verify-history")
 async def get_admin_verification_history(authorization: Optional[str] = Header(None)):
     """Get full verification history with all fields (admin only)"""

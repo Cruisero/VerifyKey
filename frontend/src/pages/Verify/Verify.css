@@ -780,7 +780,8 @@
 }
 
 .status-grid.three-rows {
-    max-height: 12px;
+    max-height: 27px;
+    /* 2 rows: 12px + 3px gap + 12px */
     overflow: hidden;
 }
 

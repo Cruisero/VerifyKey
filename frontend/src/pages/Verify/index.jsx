@@ -1063,7 +1063,7 @@ export default function Verify() {
                                                             </div>
 
                                                             <span className="result-message">
-                                                                {(result.message || '处理中...').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒\s]+/, '')}
+                                                                {(result.message || '处理中...').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
                                                             </span>
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">

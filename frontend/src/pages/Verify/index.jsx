@@ -322,16 +322,24 @@ export default function Verify() {
                 if (status === 'Success') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
+                    const resultUrl = info.url || '';
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
                             ...r,
                             status: 'success',
                             message: `✅ ${message || '验证成功'}`,
+                            url: resultUrl,
                             stageLabel: 'DONE',
                             totalStages: 0,
                         } : r
                     ));
-                    setCdkRemaining(prev => Math.max(0, prev - 1.5));
+                    // Deduct appropriate credits based on source
+                    setResults(prev => {
+                        const result = prev.find(r => r.id === resultId);
+                        const cost = result?.source === 'ypixel' ? 1.0 : 1.5;
+                        setCdkRemaining(p => Math.max(0, p - cost));
+                        return prev;
+                    });
                 } else if (status === 'Failed') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
@@ -472,6 +480,7 @@ export default function Verify() {
         setVerifyStatus('processing');
 
         // Create result items
+        const isYPixelRoute = verifyTier !== 'pro' && !serviceStatus?.upixel?.available && serviceStatus?.upixel?.ypixelUp;
         const resultItems = accounts.map((acc, i) => ({
             id: Date.now() + i,
             email: acc.email,
@@ -479,11 +488,11 @@ export default function Verify() {
             timestamp: new Date().toISOString(),
             message: '⏳ 提交中...',
             stage: 0,
-            totalStages: verifyTier === 'pro' ? 0 : 8,
+            totalStages: (verifyTier === 'pro' || isYPixelRoute) ? 0 : 8,
             stageLabel: '',
             url: '',
             jobId: '',
-            source: verifyTier === 'pro' ? 'kpixel' : 'pixel',
+            source: verifyTier === 'pro' ? 'kpixel' : (isYPixelRoute ? 'ypixel' : 'pixel'),
         }));
         setResults(prev => [...resultItems, ...prev]);
 

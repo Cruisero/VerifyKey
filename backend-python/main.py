@@ -7334,6 +7334,7 @@ def _get_ypixel_config():
 async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int, ypixel_cfg: dict, poll_id: str):
     """Background task: poll YPixel task status until completion."""
     import time
+    import logging
     base_url = ypixel_cfg["baseUrl"]
     credit_cost = ypixel_cfg.get("creditCost", 1.0)
     start_time = time.time()
@@ -7473,6 +7474,7 @@ async def ypixel_get_job_status(poll_id: str):
             "status": status_entry.get("status", "Pending"),
             "message": status_entry.get("message", ""),
             "elapsed": status_entry.get("elapsed", 0),
+            "url": status_entry.get("url", ""),
         }
     }
 

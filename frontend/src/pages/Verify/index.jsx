@@ -333,13 +333,6 @@ export default function Verify() {
                             totalStages: 0,
                         } : r
                     ));
-                    // Deduct appropriate credits based on source
-                    setResults(prev => {
-                        const result = prev.find(r => r.id === resultId);
-                        const cost = result?.source === 'ypixel' ? 1.0 : 1.5;
-                        setCdkRemaining(p => Math.max(0, p - cost));
-                        return prev;
-                    });
                 } else if (status === 'Failed') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];

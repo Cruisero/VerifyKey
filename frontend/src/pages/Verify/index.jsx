@@ -1434,10 +1434,7 @@ export default function Verify() {
                                     )}
                                 </div>
 
-                                <div className="cdk-redeem-hint">
-                                    <span>💡</span>
-                                    <span dangerouslySetInnerHTML={{ __html: t('cdkRedeemHint').replace('<a>', '<a href="https://haodongxi.shop" target="_blank" rel="noopener noreferrer">').replace('</a>', '</a>') }} />
-                                </div>
+
                             </div>
                         </div>
                     )}

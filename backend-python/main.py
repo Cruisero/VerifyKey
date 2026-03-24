@@ -3501,6 +3501,17 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
         
     return stats
 
+@app.post("/api/admin/reset-overview-stats")
+async def reset_overview_stats(authorization: Optional[str] = Header(None)):
+    """Reset all overview statistics (verification history + bot stats)."""
+    _verify_admin_token(authorization)
+    import verification_history
+    deleted = verification_history.clear_history()
+    # Also clear bot_stats sliding window
+    for bot_id in list(bot_stats_tracker._records.keys()):
+        bot_stats_tracker.clear(bot_id)
+    return {"ok": True, "deleted": deleted}
+
 @app.get("/api/admin/bot-orders")
 async def get_bot_orders(authorization: Optional[str] = Header(None)):
     """Get all bot crypto payment orders."""

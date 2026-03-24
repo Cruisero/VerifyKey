@@ -7,43 +7,28 @@ import './Verify.css';
 // API base URL
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3002' : '';
 
-// Error code descriptions
-const ERROR_DESCRIPTIONS = {
-    INTERNAL_ERROR: '系统内部错误',
-    DEVICE_UNAVAILABLE: '设备不可用',
-    DEVICE_PREP_FAILED: '设备准备失败',
-    PROXY_ERROR: '代理连接错误',
-    PASSKEY_BLOCKED: '账号要求 Passkey 验证',
-    CAPTCHA: '遇到人机验证',
-    ACCOUNT_DISABLED: '账号已被停用/锁定',
-    INVALID_EMAIL: '邮箱地址无效',
-    WRONG_PASSWORD: '密码错误',
-    TOTP_ERROR: 'TOTP 验证码错误',
-    NO_AUTHENTICATOR: '账号未启用 TOTP 验证器',
-    SIGNIN_PAGE_FAILED: '登录页面加载失败',
-    TWOFACTOR_PAGE_ERROR: '两步验证页面异常',
-    GOOGLE_LOGIN_ERROR: 'Google 登录异常',
-    GOOGLE_ONE_UNAVAILABLE: '该账号不可使用 Google One',
-    URL_CAPTURE_FAILED: '链接获取失败',
-    SIGNIN_FAILED: '登录失败',
-    ACCOUNT_NOT_DETECTED: '未检测到账号',
-    BROWSER_LOGIN_FAILED: '浏览器登录失败',
-    UNKNOWN_ERROR: '未知错误',
-};
-
-// Sanitize error messages to hide supplier info from users
-const sanitizeError = (msg) => {
-    if (!msg || typeof msg !== 'string') return '操作失败，请稍后重试';
-    // Check if the error code has a known description
-    if (ERROR_DESCRIPTIONS[msg]) return ERROR_DESCRIPTIONS[msg];
-    // Strip supplier references
-    const blocked = /pixel|iqless|kckc|1688ai|vpixel|kpixel|upixel|api\s*key|cdkey|X-API/i;
-    if (blocked.test(msg)) return '服务暂时不可用，请稍后重试';
-    // Keep user-relevant messages (Chinese messages are usually safe)
-    if (/积分|余额|登录|过期|参数|不足|未启用|未配置|密码|验证|账号|邮箱/.test(msg)) return msg;
-    // Generic long English errors → hide
-    if (msg.length > 60 && /[a-zA-Z]/.test(msg)) return '操作失败，请稍后重试';
-    return msg;
+// Error code → i18n key mapping
+const ERROR_KEY_MAP = {
+    INTERNAL_ERROR: 'errInternalError',
+    DEVICE_UNAVAILABLE: 'errDeviceUnavailable',
+    DEVICE_PREP_FAILED: 'errDevicePrepFailed',
+    PROXY_ERROR: 'errProxyError',
+    PASSKEY_BLOCKED: 'errPasskeyBlocked',
+    CAPTCHA: 'errCaptcha',
+    ACCOUNT_DISABLED: 'errAccountDisabled',
+    INVALID_EMAIL: 'errInvalidEmail',
+    WRONG_PASSWORD: 'errWrongPassword',
+    TOTP_ERROR: 'errTotpError',
+    NO_AUTHENTICATOR: 'errNoAuthenticator',
+    SIGNIN_PAGE_FAILED: 'errSigninPageFailed',
+    TWOFACTOR_PAGE_ERROR: 'errTwofactorPageError',
+    GOOGLE_LOGIN_ERROR: 'errGoogleLoginError',
+    GOOGLE_ONE_UNAVAILABLE: 'errGoogleOneUnavailable',
+    URL_CAPTURE_FAILED: 'errUrlCaptureFailed',
+    SIGNIN_FAILED: 'errSigninFailed',
+    ACCOUNT_NOT_DETECTED: 'errAccountNotDetected',
+    BROWSER_LOGIN_FAILED: 'errBrowserLoginFailed',
+    UNKNOWN_ERROR: 'errUnknownError',
 };
 
 export default function Verify() {
@@ -112,6 +97,22 @@ export default function Verify() {
 
     const { t, lang } = useLang();
 
+    // Build localized error descriptions
+    const ERROR_DESCRIPTIONS = Object.fromEntries(
+        Object.entries(ERROR_KEY_MAP).map(([code, key]) => [code, t(key)])
+    );
+
+    // Sanitize error messages to hide supplier info from users
+    const sanitizeError = (msg) => {
+        if (!msg || typeof msg !== 'string') return t('errGenericFailed');
+        if (ERROR_DESCRIPTIONS[msg]) return ERROR_DESCRIPTIONS[msg];
+        const blocked = /pixel|iqless|kckc|1688ai|vpixel|kpixel|upixel|api\s*key|cdkey|X-API/i;
+        if (blocked.test(msg)) return t('errServiceUnavailable');
+        if (/积分|余额|登录|过期|参数|不足|未启用|未配置|密码|验证|账号|邮箱|credits|balance|login|expired|password|verify|account|email/i.test(msg)) return msg;
+        if (msg.length > 60 && /[a-zA-Z]/.test(msg)) return t('errGenericFailed');
+        return msg;
+    };
+
     // Fetch verification history from API
     const fetchHistory = useCallback(async () => {
         try {
@@ -171,7 +172,7 @@ export default function Verify() {
         if (!cdkCode.trim()) return;
         const token = getToken();
         if (!token || !user) {
-            setCdkRedeemMsg('请先登录后再兑换积分');
+            setCdkRedeemMsg(t('cdkLoginFirst'));
             setCdkRedeemStatus('error');
             return;
         }
@@ -199,11 +200,11 @@ export default function Verify() {
                     setCdkRedeemStatus('');
                 }, 2000);
             } else {
-                setCdkRedeemMsg(data.detail || data.message || '兑换失败');
+                setCdkRedeemMsg(data.detail || data.message || t('cdkRedeemFailed'));
                 setCdkRedeemStatus('error');
             }
         } catch (e) {
-            setCdkRedeemMsg('网络错误，请稍后重试');
+            setCdkRedeemMsg(t('cdkNetworkError'));
             setCdkRedeemStatus('error');
         } finally {
             setCdkChecking(false);
@@ -280,7 +281,7 @@ export default function Verify() {
                     jobId,
                     tier: verifyTier,
                     source: jobSource,
-                    message: `⏳ 已提交，排队中...`,
+                    message: t('submitted'),
                     queuePosition: data.queue_position >= 0 ? data.queue_position : -1,
                     estimatedWait: data.estimated_wait_seconds,
                 } : r
@@ -327,7 +328,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'success',
-                            message: `✅ ${message || '验证成功'}`,
+                            message: `✅ ${message || t('verifySuccess')}`,
                             url: resultUrl,
                             stageLabel: 'DONE',
                             totalStages: 0,
@@ -340,7 +341,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'failed',
-                            message: `❌ ${sanitizeError(message) || '验证失败'}`,
+                            message: `❌ ${sanitizeError(message) || t('verifyFailed')}`,
                         } : r
                     ));
                 } else {
@@ -349,9 +350,9 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             message: status === 'Running'
-                                ? `🔄 ${message || '运行中...'}`
-                                : `⏳ 排队中...`,
-                            stageLabel: status === 'Running' ? '运行中' : '排队中',
+                                ? `🔄 ${message || t('running') + '...'}`
+                                : t('queueing'),
+                            stageLabel: status === 'Running' ? t('running') : t('queuePosition'),
                         } : r
                     ));
                 }
@@ -384,7 +385,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'success',
-                            message: '✅ 获取成功',
+                            message: t('fetchSuccess'),
                             url,
                             stage,
                             totalStages,
@@ -424,7 +425,7 @@ export default function Verify() {
                             estimatedWait: data.estimated_wait_seconds,
                             message: status === 'running'
                                 ? `🔄 [${stage}/${totalStages}] ${stageLabel}`
-                                : `⏳ 排队中 (位置: ${data.queue_position >= 0 ? data.queue_position : '-'})`,
+                                : t('queueWaiting').replace('{pos}', data.queue_position >= 0 ? data.queue_position : '-'),
                         } : r
                     ));
                 }
@@ -446,11 +447,11 @@ export default function Verify() {
     // Handle submit
     const handleVerify = async () => {
         if (!user) {
-            alert('请先登录后再提交验证');
+            alert(t('alertLoginFirst'));
             return;
         }
         if ((user.credits || 0) < tierCost) {
-            alert(`账户积分不足（需要 ${tierCost} 积分，当前 ${user.credits || 0}）`);
+            alert(t('alertInsufficientCredits').replace('{cost}', tierCost).replace('{current}', user.credits || 0));
             return;
         }
 
@@ -458,14 +459,14 @@ export default function Verify() {
 
         if (submitMode === 'single') {
             if (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim()) {
-                alert('请填写所有字段');
+                alert(t('alertFillAll'));
                 return;
             }
             accounts = [{ email: singleEmail.trim(), password: singlePassword.trim(), totp_secret: singleTotp.trim() }];
         } else {
             accounts = parseBatchInput(batchInput);
             if (accounts.length === 0) {
-                alert('请输入有效的账号信息，格式：邮箱----密码----2FA密钥');
+                alert(t('alertInvalidFormat'));
                 return;
             }
         }
@@ -479,7 +480,7 @@ export default function Verify() {
             email: acc.email,
             status: 'processing',
             timestamp: new Date().toISOString(),
-            message: '⏳ 提交中...',
+            message: `⏳ ${t('submitting')}`,
             stage: 0,
             totalStages: (verifyTier === 'pro' || isYPixelRoute) ? 0 : 8,
             stageLabel: '',
@@ -558,11 +559,11 @@ export default function Verify() {
     const getStatusBadge = () => {
         switch (verifyStatus) {
             case 'processing':
-                return <span className="badge badge-warning"><span className="pulse-dot"></span>提交中...</span>;
+                return <span className="badge badge-warning"><span className="pulse-dot"></span>{t('statusSubmitting')}</span>;
             case 'success':
-                return <span className="badge badge-success">✓ 完成</span>;
+                return <span className="badge badge-success">✓ {t('statusComplete')}</span>;
             default:
-                return <span className="badge badge-info">● 就绪</span>;
+                return <span className="badge badge-info">● {t('statusReady')}</span>;
         }
     };
 
@@ -603,10 +604,10 @@ export default function Verify() {
                 <div className="welcome-section">
                     <div className="welcome-content">
                         <h1 className="welcome-title">
-                            <span className="gradient-text">自助AI服务平台</span>
+                            <span className="gradient-text">{t('welcomeTitle')}</span>
                         </h1>
                         <p className="welcome-desc">
-                            根据提示提交 Google 账号信息，获取服务
+                            {t('welcomeDesc')}
                         </p>
                     </div>
                     <div className="quick-actions">
@@ -627,16 +628,16 @@ export default function Verify() {
                         onClick={() => setServiceTab('pixel')}
                     >
 
-                        <span>Gemini 验证</span>
+                        <span>{t('geminiVerify')}</span>
                     </button>
                     <button
                         className={`service-tab service-tab-gpt ${serviceTab === 'gpt' ? 'active' : ''}`}
                         onClick={() => setServiceTab('gpt')}
                     >
 
-                        <span>ChatGPT 充值</span>
+                        <span>{t('gptRecharge')}</span>
                         {serviceStatus?.gpt?.available === false && (
-                            <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 600, marginLeft: '6px' }}>🔧 维护中</span>
+                            <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 600, marginLeft: '6px' }}>{t('maintenance')}</span>
                         )}
                     </button>
                 </div>
@@ -645,7 +646,7 @@ export default function Verify() {
                 <div className="guide-toggle-bar" onClick={() => setShowGuide(!showGuide)}>
                     <span className="guide-toggle-label">
                         <span className="guide-toggle-icon">📖</span>
-                        使用教程 & 积分规则
+                        {t('guideToggle')}
                     </span>
                     <span className={`guide-toggle-arrow ${showGuide ? 'open' : ''}`}>▾</span>
                 </div>
@@ -656,41 +657,41 @@ export default function Verify() {
                         <div className="guide-card guide-card-credits">
                             <div className="guide-card-header">
                                 <span className="guide-card-icon">💰</span>
-                                <h3>积分规则 & 邀请奖励</h3>
+                                <h3>{t('creditsRulesTitle')}</h3>
                             </div>
                             <div className="guide-card-body">
                                 <div className="credits-price-grid">
                                     <div className="credits-price-item">
                                         <div className="credits-price-service">
                                             <span className="credits-dot gemini"></span>
-                                            Gemini 普通认证
+                                            {t('geminiStandard')}
                                         </div>
-                                        <span className="credits-price-val">-1 积分</span>
+                                        <span className="credits-price-val">-1 {t('credits')}</span>
                                     </div>
                                     <div className="credits-price-item">
                                         <div className="credits-price-service">
                                             <span className="credits-dot pro"></span>
-                                            Gemini 高级认证
+                                            {t('geminiPro')}
                                         </div>
-                                        <span className="credits-price-val">-1.5 积分</span>
+                                        <span className="credits-price-val">-1.5 {t('credits')}</span>
                                     </div>
                                     <div className="credits-price-item">
                                         <div className="credits-price-service">
                                             <span className="credits-dot gpt"></span>
-                                            ChatGPT 月度充值
+                                            {t('gptMonthly')}
                                         </div>
-                                        <span className="credits-price-val">-2 积分</span>
+                                        <span className="credits-price-val">-2 {t('credits')}</span>
                                     </div>
                                     <div className="credits-price-item invite">
                                         <div className="credits-price-service">
                                             <span className="credits-dot invite"></span>
-                                            邀请奖励
+                                            {t('inviteReward')}
                                         </div>
-                                        <span className="credits-price-val positive">+0.2 积分 / 人</span>
+                                        <span className="credits-price-val positive">{t('inviteRewardVal')}</span>
                                     </div>
                                 </div>
-                                <p className="guide-note warn">⚠️ 被邀请用户注册后需首次兑换卡密，邀请人才能获得奖励积分</p>
-                                <p className="guide-note" style={{ marginTop: '6px' }}>✨ 所有服务积分通用，可通过 CDK 兑换或邀请获取</p>
+                                <p className="guide-note warn">{t('inviteNote')}</p>
+                                <p className="guide-note" style={{ marginTop: '6px' }}>{t('creditsUniversal')}</p>
                             </div>
                         </div>
 
@@ -699,14 +700,14 @@ export default function Verify() {
                             <div className="guide-card guide-card-gemini">
                                 <div className="guide-card-header">
                                     <span className="guide-card-icon">📡</span>
-                                    <h3>Gemini 验证服务</h3>
+                                    <h3>{t('geminiServiceTitle')}</h3>
                                 </div>
                                 <div className="guide-card-body">
-                                    <p className="guide-desc">此服务为通过 Pixel 获取 <strong>Gemini Advanced 1 年 Pro 订阅</strong>，由 OnePASS 全自动完成。</p>
+                                    <p className="guide-desc" dangerouslySetInnerHTML={{ __html: t('geminiServiceDesc') }} />
                                     <ul className="guide-checklist">
                                         <li>
                                             <span className="check-icon required">🔐</span>
-                                            <span><strong>2FA 验证：</strong>必须开启，并设置好 Google Authenticator
+                                            <span><strong>{t('guide2faTitle')}</strong>{t('guide2faDesc')}
                                                 <a href="https://www.notion.so/2FA-32cfb1c3c17c807e83bdcb371212e287?source=copy_link"
                                                     target="_blank" rel="noopener noreferrer"
                                                     style={{
@@ -715,13 +716,13 @@ export default function Verify() {
                                                         fontSize: '11px', fontWeight: 600, textDecoration: 'none',
                                                         marginLeft: '6px', verticalAlign: 'middle',
                                                     }}
-                                                >查看教程 ▸</a>
+                                                >{t('guide2faTutorial')}</a>
                                             </span>
                                         </li>
                                         <li>
                                             <span className="check-icon required">🌍</span>
                                             <span>
-                                                <strong>地区要求：</strong>需在支持区域内
+                                                <strong>{t('guideRegion')}</strong>{t('guideRegionDesc')}
                                                 <button
                                                     onClick={(e) => { e.preventDefault(); document.querySelector('.region-popover').classList.toggle('show'); document.querySelector('.region-backdrop').classList.toggle('show'); }}
                                                     style={{
@@ -730,20 +731,20 @@ export default function Verify() {
                                                         fontSize: '11px', fontWeight: 600, cursor: 'pointer',
                                                         marginLeft: '6px', verticalAlign: 'middle',
                                                     }}
-                                                >查看支持地区 ▸</button>
+                                                >{t('guideRegionBtn')}</button>
                                                 <div className="region-backdrop" onClick={() => { document.querySelector('.region-popover').classList.remove('show'); document.querySelector('.region-backdrop').classList.remove('show'); }} />
                                                 <div className="region-popover">
                                                     <div className="region-popover-title">
-                                                        <span>🌍 支持的国家和地区</span>
-                                                        <small>共 33 个</small>
+                                                        <span>{t('guideRegionTitle')}</span>
+                                                        <small>{t('guideRegionCount')}</small>
                                                     </div>
                                                     <div className="region-tags-grid">
-                                                        {['🇦🇺 澳洲', '🇦🇹 奥地利', '🇧🇪 比利时', '🇨🇦 加拿大', '🇨🇿 捷克', '🇩🇰 丹麦', '🇪🇪 爱沙尼亚', '🇫🇮 芬兰',
-                                                            '🇫🇷 法国', '🇩🇪 德国', '🇭🇺 匈牙利', '🇮🇳 印度', '🇮🇪 爱尔兰', '🇮🇹 意大利', '🇯🇵 日本', '🇱🇻 拉脱维亚',
-                                                            '🇱🇹 立陶宛', '🇲🇾 马来西亚', '🇲🇽 墨西哥', '🇳🇱 荷兰', '🇳🇴 挪威', '🇵🇱 波兰', '🇵🇹 葡萄牙', '🇷🇴 罗马尼亚',
-                                                            '🇸🇬 新加坡', '🇸🇰 斯洛伐克', '🇸🇮 斯洛维尼亚', '🇪🇸 西班牙', '🇸🇪 瑞典', '🇨🇭 瑞士', '🇹🇼 台湾', '🇬🇧 英国', '🇺🇸 美国'
-                                                        ].map((c, i) => (
-                                                            <span key={i} className="region-tag">{c}</span>
+                                                        {['regionAustralia', 'regionAustria', 'regionBelgium', 'regionCanada', 'regionCzechia', 'regionDenmark', 'regionEstonia', 'regionFinland',
+                                                            'regionFrance', 'regionGermany', 'regionHungary', 'regionIndia', 'regionIreland', 'regionItaly', 'regionJapan', 'regionLatvia',
+                                                            'regionLithuania', 'regionMalaysia', 'regionMexico', 'regionNetherlands', 'regionNorway', 'regionPoland', 'regionPortugal', 'regionRomania',
+                                                            'regionSingapore', 'regionSlovakia', 'regionSlovenia', 'regionSpain', 'regionSweden', 'regionSwitzerland', 'regionTaiwan', 'regionUK', 'regionUS'
+                                                        ].map((key, i) => (
+                                                            <span key={i} className="region-tag">{t(key)}</span>
                                                         ))}
                                                     </div>
                                                 </div>
@@ -751,25 +752,25 @@ export default function Verify() {
                                         </li>
                                         <li>
                                             <span className="check-icon required">👨‍👩‍👦</span>
-                                            <span><strong>家庭组：</strong>必须退出，确保无订阅过</span>
+                                            <span><strong>{t('guideFamily')}</strong>{t('guideFamilyDesc')}</span>
                                         </li>
                                         <li>
                                             <span className="check-icon warn">💡</span>
-                                            <span><strong>账号建议：</strong>建议使用老号，新号极其容易封控，导致账号无法登录</span>
+                                            <span><strong>{t('guideAccount')}</strong>{t('guideAccountDesc')}</span>
                                         </li>
                                         <li>
                                             <span className="check-icon warn">🌐</span>
-                                            <span><strong>绑卡注意：</strong>绑卡时浏览器只能登录你要升级的账号，请先退出其他 Google 账号</span>
+                                            <span><strong>{t('guideBindCard')}</strong>{t('guideBindCardDesc')}</span>
                                         </li>
                                     </ul>
                                     <div className="guide-tier-info">
                                         <div className="tier-item">
-                                            <span className="tier-badge normal">普通</span>
-                                            <span>认证完成后需 <strong>自行绑卡</strong>，如无信用卡可往商城购买</span>
+                                            <span className="tier-badge normal">{t('tierNormal')}</span>
+                                            <span dangerouslySetInnerHTML={{ __html: t('tierNormalDesc') }} />
                                         </div>
                                         <div className="tier-item">
-                                            <span className="tier-badge pro">高级</span>
-                                            <span>一条龙服务，认证完成后 <strong>自动绑卡</strong></span>
+                                            <span className="tier-badge pro">{t('tierPro')}</span>
+                                            <span dangerouslySetInnerHTML={{ __html: t('tierProDesc') }} />
                                         </div>
                                     </div>
 
@@ -779,22 +780,22 @@ export default function Verify() {
                             <div className="guide-card guide-card-chatgpt">
                                 <div className="guide-card-header">
                                     <span className="guide-card-icon">🤖</span>
-                                    <h3>ChatGPT 充值服务</h3>
+                                    <h3>{t('gptServiceTitle')}</h3>
                                 </div>
                                 <div className="guide-card-body">
-                                    <p className="guide-desc">应用户需求，现推出 <strong>ChatGPT Plus 月度自动充值</strong>服务，产品无质保。</p>
+                                    <p className="guide-desc" dangerouslySetInnerHTML={{ __html: t('gptServiceDesc') }} />
                                     <ul className="guide-checklist">
                                         <li>
                                             <span className="check-icon success">✅</span>
-                                            <span>获取Session的前提是浏览器已经登陆ChatGPT</span>
+                                            <span>{t('gptGuide1')}</span>
                                         </li>
                                         <li>
                                             <span className="check-icon success">✅</span>
-                                            <span>新号 / 老号均可充值</span>
+                                            <span>{t('gptGuide2')}</span>
                                         </li>
                                         <li>
                                             <span className="check-icon success">✅</span>
-                                            <span>提前续费，时间会直接覆盖并非延续</span>
+                                            <span>{t('gptGuide3')}</span>
                                         </li>
                                     </ul>
                                 </div>
@@ -814,7 +815,7 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">📡</span>
-                                        <span>{verifyTier === 'pro' ? '高级提交-自动完成绑卡' : '普通提交-验证完成之后需自行绑卡'}</span>
+                                        <span>{verifyTier === 'pro' ? t('panelTitlePro') : t('panelTitleStandard')}</span>
                                     </div>
                                 </div>
 
@@ -829,9 +830,9 @@ export default function Verify() {
                                             }}
                                             style={serviceStatus?.upixel?.standardAvailable === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                         >
-                                            📦 普通验证 <span className="tier-cost">1 积分</span>
+                                            {t('tierStandardTab')} <span className="tier-cost">1 {t('credits')}</span>
                                             {serviceStatus?.upixel?.standardAvailable === false && (
-                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>🔧 维护中</span>
+                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
                                             )}
                                         </button>
                                         <button
@@ -839,9 +840,9 @@ export default function Verify() {
                                             onClick={() => !serviceStatus?.kpixel || serviceStatus.kpixel.available ? setVerifyTier('pro') : null}
                                             style={serviceStatus?.kpixel?.available === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                         >
-                                            ⚡ 高级验证 <span className="tier-cost">1.5 积分</span>
+                                            {t('tierProTab')} <span className="tier-cost">1.5 {t('credits')}</span>
                                             {serviceStatus?.kpixel?.available === false && (
-                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>🔧 维护中</span>
+                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
                                             )}
                                         </button>
                                     </div>
@@ -852,13 +853,13 @@ export default function Verify() {
                                             className={`submit-mode-tab ${submitMode === 'single' ? 'active' : ''}`}
                                             onClick={() => setSubmitMode('single')}
                                         >
-                                            <span className="tab-icon-sm">📝</span> 单个提交
+                                            <span className="tab-icon-sm">📝</span> {t('singleSubmit')}
                                         </button>
                                         <button
                                             className={`submit-mode-tab ${submitMode === 'batch' ? 'active' : ''}`}
                                             onClick={() => setSubmitMode('batch')}
                                         >
-                                            <span className="tab-icon-sm">📋</span> 批量提交
+                                            <span className="tab-icon-sm">📋</span> {t('batchSubmit')}
                                         </button>
                                     </div>
 
@@ -867,7 +868,7 @@ export default function Verify() {
                                         <div className="single-input-form">
                                             <div className="pixel-input-group">
                                                 <label className="pixel-input-label">
-                                                    <span className="label-icon">📧</span> 账号邮箱
+                                                    <span className="label-icon">📧</span> {t('emailLabel')}
                                                 </label>
                                                 <input
                                                     type="email"
@@ -881,7 +882,7 @@ export default function Verify() {
                                             </div>
                                             <div className="pixel-input-group">
                                                 <label className="pixel-input-label">
-                                                    <span className="label-icon">🔒</span> 账号密码
+                                                    <span className="label-icon">🔒</span> {t('passwordLabel')}
                                                 </label>
                                                 <input
                                                     type="password"
@@ -895,7 +896,7 @@ export default function Verify() {
                                             </div>
                                             <div className="pixel-input-group">
                                                 <label className="pixel-input-label">
-                                                    <span className="label-icon">🔑</span> 2FA 密钥
+                                                    <span className="label-icon">🔑</span> {t('totpLabel')}
                                                 </label>
                                                 <input
                                                     type="text"
@@ -915,13 +916,13 @@ export default function Verify() {
                                         <div className="batch-input-form">
                                             <textarea
                                                 className="input textarea verify-input"
-                                                placeholder={`邮箱----密码----辅助邮箱----2FA密钥\n或：邮箱----密码----2FA密钥\n\n示例：\ntest@gmail.com----password----backup@mail.com----JBSWY3DPEHPK3PXP\ntest@gmail.com----password----JBSWY3DPEHPK3PXP`}
+                                                placeholder={t('batchPlaceholder')}
                                                 value={batchInput}
                                                 onChange={e => setBatchInput(e.target.value)}
                                                 disabled={verifyStatus === 'processing'}
                                             />
                                             <div className="batch-count-hint">
-                                                已识别 <strong>{batchCount}</strong> 个账号
+                                                {t('batchRecognized')} <strong>{batchCount}</strong> {t('accountUnit')}
                                             </div>
                                         </div>
                                     )}
@@ -929,9 +930,9 @@ export default function Verify() {
                                     <div className="input-footer">
                                         <div className="input-info">
                                             <span className="id-count">
-                                                {submitMode === 'single' ? '1 个账号' : `${batchCount} 个账号`}
+                                                {submitMode === 'single' ? `1 ${t('accountUnit')}` : `${batchCount} ${t('accountUnit')}`}
                                             </span>
-                                            <span className="slots-info">剩余: {user ? `${typeof user.credits === 'number' ? user.credits.toFixed(1) : user.credits} 积分` : '未登录'}</span>
+                                            <span className="slots-info">{t('remaining')} {user ? `${typeof user.credits === 'number' ? user.credits.toFixed(1) : user.credits} ${t('credits')}` : t('notLoggedIn')}</span>
                                         </div>
 
                                         <div className="input-actions">
@@ -943,10 +944,10 @@ export default function Verify() {
                                                 {verifyStatus === 'processing' ? (
                                                     <>
                                                         <span className="loading-spinner small"></span>
-                                                        提交中...
+                                                        {t('submitting')}
                                                     </>
                                                 ) : (
-                                                    '🚀 提交验证'
+                                                    t('submitVerify')
                                                 )}
                                             </button>
                                         </div>
@@ -959,7 +960,7 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">{showHistory ? '📜' : '📋'}</span>
-                                        <span>{showHistory ? '历史记录' : '验证结果'}</span>
+                                        <span>{showHistory ? t('historyTitle') : t('verifyResults')}</span>
                                         <span className="result-count">({showHistory ? historyData.length : results.length})</span>
                                     </div>
                                     <div className="panel-actions">
@@ -971,15 +972,15 @@ export default function Verify() {
                                                 if (next) fetchUserHistory('pixel');
                                             }}
                                         >
-                                            {showHistory ? '← 返回' : '📜 历史'}
+                                            {showHistory ? t('backBtn') : t('historyBtn')}
                                         </button>
                                         {showHistory ? (
                                             <button className="btn btn-sm btn-secondary" onClick={clearHistory} disabled={historyData.length === 0}>
-                                                清除
+                                                {t('clearBtn')}
                                             </button>
                                         ) : (
                                             <button className="btn btn-sm btn-secondary" onClick={handleClear}>
-                                                清除
+                                                {t('clearBtn')}
                                             </button>
                                         )}
                                     </div>
@@ -991,8 +992,8 @@ export default function Verify() {
                                         historyData.length === 0 ? (
                                             <div className="empty-results">
                                                 <div className="empty-icon">📜</div>
-                                                <p>暂无历史记录</p>
-                                                <p className="empty-hint">提交完成后的结果会自动保存在这里</p>
+                                                <p>{t('noHistory')}</p>
+                                                <p className="empty-hint">{t('noHistoryHint')}</p>
                                             </div>
                                         ) : (
                                             <div className="results-list">
@@ -1007,7 +1008,7 @@ export default function Verify() {
                                                                 <span className="result-id">{maskEmail(item.email)}</span>
                                                             </div>
                                                             <span className="result-message">
-                                                                {(item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '') || (item.status === 'success' ? '验证成功' : '验证失败')}
+                                                                {(item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '') || (item.status === 'success' ? t('verifySuccess') : t('verifyFailed'))}
                                                             </span>
                                                             {item.status === 'success' && item.url && (
                                                                 <div className="result-url-row">
@@ -1017,7 +1018,7 @@ export default function Verify() {
                                                                     <button
                                                                         className="copy-url-btn"
                                                                         onClick={() => navigator.clipboard.writeText(item.url)}
-                                                                        title="复制链接"
+                                                                        title={t('copyLink')}
                                                                     >
                                                                         📋
                                                                     </button>
@@ -1029,7 +1030,7 @@ export default function Verify() {
                                                                 <span className="result-elapsed">{item.elapsed}s</span>
                                                             )}
                                                             <span className="result-time">
-                                                                {item.timestamp ? new Date(item.timestamp).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                                {item.timestamp ? new Date(item.timestamp).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -1041,8 +1042,8 @@ export default function Verify() {
                                         results.length === 0 ? (
                                             <div className="empty-results">
                                                 <div className="empty-icon">📭</div>
-                                                <p>暂无结果</p>
-                                                <p className="empty-hint">提交账号信息后，结果将显示在这里</p>
+                                                <p>{t('noResultsMsg')}</p>
+                                                <p className="empty-hint">{t('noResultsHintAlt')}</p>
                                             </div>
                                         ) : (
                                             <div className="results-list">
@@ -1060,7 +1061,7 @@ export default function Verify() {
                                                             </div>
 
                                                             <span className="result-message">
-                                                                {(result.message || '处理中...').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
+                                                                {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
                                                             </span>
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
@@ -1070,7 +1071,7 @@ export default function Verify() {
                                                                     <button
                                                                         className="copy-url-btn"
                                                                         onClick={() => navigator.clipboard.writeText(result.url)}
-                                                                        title="复制链接"
+                                                                        title={t('copyLink')}
                                                                     >
                                                                         📋
                                                                     </button>
@@ -1101,9 +1102,9 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">🤖</span>
-                                        <span>ChatGPT Plus 月度充值</span>
+                                        <span>{t('gptPanelTitle')}</span>
                                     </div>
-                                    <span className="gpt-cost-badge">⚡ 2 积分 / 次</span>
+                                    <span className="gpt-cost-badge">{t('gptCostBadge')}</span>
                                 </div>
                                 <div className="panel-body">
                                     <div className="gpt-panel-body-inner">
@@ -1114,7 +1115,7 @@ export default function Verify() {
                                                 <div className="gpt-session-header">
                                                     <div className="gpt-session-title">
                                                         <span>📋</span>
-                                                        <span>粘贴 ChatGPT Session</span>
+                                                        <span>{t('gptPasteSession')}</span>
                                                     </div>
                                                     <a
                                                         href="https://chatgpt.com/api/auth/session"
@@ -1122,15 +1123,15 @@ export default function Verify() {
                                                         rel="noopener noreferrer"
                                                         className="gpt-get-session-btn"
                                                     >
-                                                        🔗 获取 Session
+                                                        {t('gptGetSession')}
                                                     </a>
                                                 </div>
                                                 <div className="gpt-session-help">
-                                                    <span className="gpt-help-num">①</span> 在浏览器登录 ChatGPT
+                                                    <span className="gpt-help-num">①</span> {t('gptHelp1')}
                                                     <span className="gpt-help-sep">→</span>
-                                                    <span className="gpt-help-num">②</span> 点击上方「获取 Session」按钮
+                                                    <span className="gpt-help-num">②</span> {t('gptHelp2')}
                                                     <span className="gpt-help-sep">→</span>
-                                                    <span className="gpt-help-num">③</span> 复制内容粘贴到下方
+                                                    <span className="gpt-help-num">③</span> {t('gptHelp3')}
                                                 </div>
                                                 <textarea
                                                     className="gpt-session-textarea"
@@ -1160,7 +1161,7 @@ export default function Verify() {
                                                 />
                                                 {gptSessionError && (
                                                     <div className="gpt-parse-error">
-                                                        <span>⚠️</span> 无法识别账号，请确保粘贴了完整的 Session JSON
+                                                        <span>⚠️</span> {t('gptParseError')}
                                                     </div>
                                                 )}
                                             </div>
@@ -1173,7 +1174,7 @@ export default function Verify() {
                                                     {gptEmail.charAt(0).toUpperCase()}
                                                 </div>
                                                 <div className="gpt-account-info">
-                                                    <div className="gpt-account-label">已绑定 ChatGPT 账号</div>
+                                                    <div className="gpt-account-label">{t('gptAccountLinked')}</div>
                                                     <div className="gpt-account-email">{gptEmail}</div>
                                                 </div>
                                                 <button
@@ -1181,7 +1182,7 @@ export default function Verify() {
                                                     onClick={() => { setGptSession(''); setGptEmail(''); setGptSessionError(false); }}
                                                     disabled={gptRecharging}
                                                 >
-                                                    更换
+                                                    {t('gptChangeAccount')}
                                                 </button>
                                             </div>
                                         )}
@@ -1214,7 +1215,7 @@ export default function Verify() {
                                                         });
                                                         const exData = await exRes.json();
                                                         if (!exRes.ok || !exData.success) {
-                                                            setGptError(sanitizeError(exData.detail) || '卡密兑换失败');
+                                                            setGptError(sanitizeError(exData.detail) || t('gptCardExchangeFailed'));
                                                             setGptRecharging(false);
                                                             return;
                                                         }
@@ -1236,10 +1237,10 @@ export default function Verify() {
                                                         const reData = await reRes.json();
                                                         if (reRes.ok && reData.success) {
                                                             setGptSuccess(true);
-                                                            setGptResultMsg('充值成功！');
+                                                            setGptResultMsg(t('gptRechargeSuccess'));
                                                             await refreshUser();
                                                         } else {
-                                                            setGptError(sanitizeError(reData.detail) || '充值失败，请稍后重试');
+                                                            setGptError(sanitizeError(reData.detail) || t('gptRechargeFailed'));
                                                         }
                                                     } catch (e) {
                                                         setGptError(sanitizeError(e.message));
@@ -1249,9 +1250,9 @@ export default function Verify() {
                                                 }}
                                             >
                                                 {gptRecharging ? (
-                                                    <><span className="loading-spinner small"></span> 正在充值，请稍候...</>
+                                                    <><span className="loading-spinner small"></span> {t('gptRecharging')}</>
                                                 ) : (
-                                                    <>⚡ 开始充值</>
+                                                    <>{t('gptStartRecharge')}</>
                                                 )}
                                             </button>
                                         )}
@@ -1259,7 +1260,7 @@ export default function Verify() {
                                         {/* Insufficient points warning */}
                                         {user && (user.credits || 0) < 2 && !gptSuccess && (
                                             <div className="gpt-error-msg">
-                                                <span>⚠️</span> 积分不足，需要 2 积分，当前剩余 {user.credits || 0} 积分
+                                                <span>⚠️</span> {t('gptInsufficientCredits').replace('{credits}', user.credits || 0)}
                                             </div>
                                         )}
                                     </div>
@@ -1271,7 +1272,7 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">{showGptHistory ? '📜' : '📋'}</span>
-                                        <span>{showGptHistory ? '充值历史' : '充值结果'}</span>
+                                        <span>{showGptHistory ? t('gptRechargeHistoryTitle') : t('gptRechargeResultTitle')}</span>
                                         {showGptHistory && <span className="result-count">({gptHistoryData.length})</span>}
                                     </div>
                                     <div className="panel-actions">
@@ -1283,11 +1284,11 @@ export default function Verify() {
                                                 if (next) fetchUserHistory('gpt');
                                             }}
                                         >
-                                            {showGptHistory ? '← 返回' : '📜 历史'}
+                                            {showGptHistory ? t('backBtn') : t('historyBtn')}
                                         </button>
                                         {showGptHistory && (
                                             <button className="btn btn-sm btn-secondary" onClick={clearGptHistory} disabled={gptHistoryData.length === 0}>
-                                                清除
+                                                {t('clearBtn')}
                                             </button>
                                         )}
                                     </div>
@@ -1297,8 +1298,8 @@ export default function Verify() {
                                         gptHistoryData.length === 0 ? (
                                             <div className="empty-results">
                                                 <div className="empty-icon">📜</div>
-                                                <p>暂无充值记录</p>
-                                                <p className="empty-hint">充值完成后的结果会显示在这里</p>
+                                                <p>{t('gptNoHistory')}</p>
+                                                <p className="empty-hint">{t('gptNoHistoryHint')}</p>
                                             </div>
                                         ) : (
                                             <div className="results-list">
@@ -1312,7 +1313,7 @@ export default function Verify() {
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{item.email || 'ChatGPT'}</span>
                                                             </div>
-                                                            <span className="result-message">{item.message || (item.status === 'pass' ? '充值成功' : '充值失败')}</span>
+                                                            <span className="result-message">{item.message || (item.status === 'pass' ? t('rechargeSuccess') : t('rechargeFailed'))}</span>
                                                         </div>
                                                         <div className="result-meta">
                                                             <span className="result-time">{formatTime(item.timestamp)}</span>
@@ -1325,21 +1326,21 @@ export default function Verify() {
                                         <>
                                             {!gptSuccess && !gptRecharging && !gptResultMsg && (
                                                 <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-tertiary)' }}>
-                                                    <p>📡 粘贴 ChatGPT Session 信息后点击充值按钮</p>
-                                                    <p style={{ fontSize: '13px', marginTop: '8px' }}>⚠️ 请确保 ChatGPT 已登录，充值成功后扣除 2 积分</p>
+                                                    <p>{t('gptResultHint')}</p>
+                                                    <p style={{ fontSize: '13px', marginTop: '8px' }}>{t('gptResultNote')}</p>
                                                 </div>
                                             )}
                                             {gptRecharging && (
                                                 <div style={{ textAlign: 'center', padding: '32px' }}>
                                                     <span className="loading-spinner"></span>
-                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>充值进行中，请稍候...</p>
+                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>{t('gptRechargingMsg')}</p>
                                                 </div>
                                             )}
                                             {gptSuccess && (
                                                 <div style={{ textAlign: 'center', padding: '24px' }}>
                                                     <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
-                                                    <h3 style={{ color: '#059669', marginBottom: '8px' }}>充值成功！</h3>
-                                                    <p style={{ color: 'var(--text-secondary)' }}>账号 <strong>{gptEmail}</strong> 已成功充值 ChatGPT Plus</p>
+                                                    <h3 style={{ color: '#059669', marginBottom: '8px' }}>{t('gptSuccessTitle')}</h3>
+                                                    <p style={{ color: 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: t('gptSuccessDesc').replace('{email}', gptEmail) }} />
                                                     <button
                                                         className="btn btn-primary"
                                                         style={{ marginTop: '16px' }}
@@ -1352,7 +1353,7 @@ export default function Verify() {
                                                             setGptCardKey('');
                                                         }}
                                                     >
-                                                        继续充值
+                                                        {t('gptContinue')}
                                                     </button>
                                                 </div>
                                             )}
@@ -1369,7 +1370,7 @@ export default function Verify() {
                             onClick={() => setShowCdkInput(!showCdkInput)}
                         >
                             <span className="credits-action-icon">🎁</span>
-                            <span>兑换积分</span>
+                            <span>{t('redeemCredits')}</span>
                         </button>
                         <a
                             href="https://haodongxi.shop"
@@ -1378,7 +1379,7 @@ export default function Verify() {
                             rel="noopener noreferrer"
                         >
                             <span className="credits-action-icon">🛒</span>
-                            <span>购买积分</span>
+                            <span>{t('purchaseCredits')}</span>
                         </a>
                     </div>
 
@@ -1389,8 +1390,8 @@ export default function Verify() {
                                 <div className="cdk-redeem-glow"></div>
                                 <span className="cdk-redeem-icon">🎫</span>
                                 <div className="cdk-redeem-title-group">
-                                    <span className="cdk-redeem-title">兑换积分</span>
-                                    <span className="cdk-redeem-subtitle">输入 CDK 卡密，积分将充入您的账户</span>
+                                    <span className="cdk-redeem-title">{t('cdkRedeemTitle')}</span>
+                                    <span className="cdk-redeem-subtitle">{t('cdkRedeemSubtitle')}</span>
                                 </div>
                             </div>
                             <div className="cdk-redeem-body">
@@ -1419,7 +1420,7 @@ export default function Verify() {
                                                 onClick={handleRedeemCdk}
                                                 disabled={!cdkCode.trim()}
                                             >
-                                                兑换
+                                                {t('cdkRedeem')}
                                             </button>
                                         )}
                                     </div>
@@ -1433,7 +1434,7 @@ export default function Verify() {
 
                                 <div className="cdk-redeem-hint">
                                     <span>💡</span>
-                                    <span>从 <a href="https://haodongxi.shop" target="_blank" rel="noopener noreferrer">haodongxi.shop</a> 购买 CDK 卡密后在此兑换</span>
+                                    <span dangerouslySetInnerHTML={{ __html: t('cdkRedeemHint').replace('<a>', '<a href="https://haodongxi.shop" target="_blank" rel="noopener noreferrer">').replace('</a>', '</a>') }} />
                                 </div>
                             </div>
                         </div>
@@ -1500,9 +1501,9 @@ export default function Verify() {
                                         ))
                                     ) : (
                                         <>
-                                            <p>📡 提交 Google 账号信息（邮箱、密码、2FA密钥），系统将自动登录并获取 Google One 合作伙伴链接。</p>
-                                            <p>⚠️ 2FA 密钥必须是 Base32 编码的原始密钥（不是 6 位数字验证码）。</p>
-                                            <p>💰 一次消耗一个 CDK 配额，仅在任务成功后扣除。</p>
+                                            <p>{t('defaultTip1')}</p>
+                                            <p>{t('defaultTip2')}</p>
+                                            <p>{t('defaultTip3')}</p>
                                         </>
                                     )}
                                 </div>

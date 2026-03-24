@@ -286,6 +286,21 @@ def delete_cdk(code: str) -> bool:
         return cursor.rowcount > 0
 
 
+def batch_delete_cdks(codes: List[str]) -> int:
+    """Delete multiple CDKs at once. Returns the number of successfully deleted CDKs."""
+    if not codes:
+        return 0
+    conn = database.get_connection()
+    deleted = 0
+    with _lock:
+        for code in codes:
+            code = code.strip().upper()
+            cursor = conn.execute("DELETE FROM cdkeys WHERE UPPER(code) = ?", (code,))
+            deleted += cursor.rowcount
+        conn.commit()
+    return deleted
+
+
 def get_cdk_stats() -> Dict:
     """Get CDK statistics"""
     conn = database.get_connection()

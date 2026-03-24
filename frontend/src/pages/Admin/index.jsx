@@ -2496,6 +2496,8 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
     const [expandedCdk, setExpandedCdk] = useState(null);
     const [cdkHistory, setCdkHistory] = useState([]);
     const [cdkHistoryLoading, setCdkHistoryLoading] = useState(false);
+    const [selectedCdks, setSelectedCdks] = useState(new Set());
+    const [batchDeleting, setBatchDeleting] = useState(false);
 
     const fetchCDKs = async () => {
         try {
@@ -2551,9 +2553,48 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                 method: 'POST', headers: authHeaders,
                 body: JSON.stringify({ code })
             });
-            if (res.ok) await fetchCDKs();
+            if (res.ok) { setSelectedCdks(prev => { const next = new Set(prev); next.delete(code); return next; }); await fetchCDKs(); }
             else alert('删除失败');
         } catch (e) { alert('删除失败: ' + e.message); }
+    };
+
+    const handleBatchDelete = async () => {
+        if (selectedCdks.size === 0) return;
+        if (!confirm(`确定删除选中的 ${selectedCdks.size} 个 CDK？此操作不可恢复！`)) return;
+        setBatchDeleting(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/cdk/batch-delete`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ codes: Array.from(selectedCdks) })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setSelectedCdks(new Set());
+                await fetchCDKs();
+                alert(`✅ ${data.message}`);
+            } else {
+                const err = await res.json();
+                alert('批量删除失败: ' + (err.detail || '未知错误'));
+            }
+        } catch (e) { alert('批量删除失败: ' + e.message); }
+        finally { setBatchDeleting(false); }
+    };
+
+    const toggleSelectCdk = (code) => {
+        setSelectedCdks(prev => {
+            const next = new Set(prev);
+            if (next.has(code)) next.delete(code);
+            else next.add(code);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedCdks.size === filteredList.length) {
+            setSelectedCdks(new Set());
+        } else {
+            setSelectedCdks(new Set(filteredList.map(c => c.code)));
+        }
     };
 
     const handleConsume = async (code) => {
@@ -2674,9 +2715,9 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
             <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
                     <h3 style={{ fontSize: 'var(--text-lg)' }}>📋 CDK 列表 ({filteredList.length})</h3>
-                    <div style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
                         {['all', 'unused', 'active', 'used'].map(f => (
-                            <button key={f} className={`btn btn-sm ${cdkFilter === f ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCdkFilter(f)}>
+                            <button key={f} className={`btn btn-sm ${cdkFilter === f ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setCdkFilter(f); setSelectedCdks(new Set()); }}>
                                 {f === 'all' ? '全部' : f === 'unused' ? '未使用' : f === 'active' ? '使用中' : '已用完'}
                             </button>
                         ))}
@@ -2687,6 +2728,9 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                     <table className="data-table">
                         <thead>
                             <tr>
+                                <th style={{ width: '36px', textAlign: 'center' }}>
+                                    <input type="checkbox" checked={filteredList.length > 0 && selectedCdks.size === filteredList.length} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
+                                </th>
                                 <th>CDK 代码</th>
                                 <th>积分</th>
                                 <th>使用情况</th>
@@ -2699,7 +2743,10 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                         <tbody>
                             {filteredList.map(c => (
                                 <React.Fragment key={c.code}>
-                                    <tr>
+                                    <tr style={{ background: selectedCdks.has(c.code) ? 'rgba(99, 102, 241, 0.06)' : undefined }}>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <input type="checkbox" checked={selectedCdks.has(c.code)} onChange={() => toggleSelectCdk(c.code)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
+                                        </td>
                                         <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{c.code}</td>
                                         <td>{c.quota} 积分</td>
                                         <td>{c.used} / {c.quota}</td>
@@ -2725,7 +2772,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                     </tr>
                                     {expandedCdk === c.code && (
                                         <tr>
-                                            <td colSpan={7} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
+                                            <td colSpan={8} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
                                                 <div style={{ padding: '12px 20px' }}>
                                                     <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
                                                         📜 验证记录 ({cdkHistory.length})
@@ -2769,11 +2816,38 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                 </React.Fragment >
                             ))}
                             {filteredList.length === 0 && (
-                                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无 CDK 数据</td></tr>
+                                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无 CDK 数据</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
+                {/* Batch delete bar */}
+                {selectedCdks.size > 0 && (
+                    <div style={{
+                        marginTop: 'var(--spacing-md)',
+                        padding: '12px 16px',
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        borderRadius: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 'var(--spacing-md)',
+                    }}>
+                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>
+                            已选中 <strong style={{ color: 'var(--color-danger)' }}>{selectedCdks.size}</strong> 个 CDK
+                        </span>
+                        <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                            <button className="btn btn-sm btn-secondary" onClick={() => setSelectedCdks(new Set())}>
+                                取消选择
+                            </button>
+                            <button className="btn btn-sm" onClick={handleBatchDelete} disabled={batchDeleting}
+                                style={{ background: 'var(--color-danger)', color: '#fff', border: 'none' }}>
+                                {batchDeleting ? '⏳ 删除中...' : `🗑️ 批量删除 (${selectedCdks.size})`}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

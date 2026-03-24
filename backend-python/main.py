@@ -3828,6 +3828,28 @@ async def delete_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional
     return {"success": True, "message": "CDK 已删除"}
 
 
+class CDKBatchDeleteRequest(BaseModel):
+    codes: List[str]
+
+
+@app.post("/api/cdk/batch-delete")
+async def batch_delete_cdk_endpoint(request: CDKBatchDeleteRequest, authorization: Optional[str] = Header(None)):
+    """Batch delete CDKs (admin only)"""
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    
+    token = authorization.split(' ')[1]
+    user_data = auth.verify_token(token)
+    if not user_data or user_data.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if not request.codes:
+        raise HTTPException(status_code=400, detail="No codes provided")
+    
+    deleted = cdk_manager.batch_delete_cdks(request.codes)
+    return {"success": True, "deleted": deleted, "message": f"已删除 {deleted} 个 CDK"}
+
+
 @app.post("/api/cdk/consume")
 async def consume_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional[str] = Header(None)):
     """Manually consume 1 quota from a CDK (admin only)"""

@@ -3145,7 +3145,7 @@ export default function Admin() {
                 }
                 // Load alert config
                 try {
-                    const alertRes = await fetch(`${API_BASE}/api/alerts/config`, { headers: authHeaders });
+                    const alertRes = await fetch(`${API_BASE}/api/alerts/config`, { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } });
                     if (alertRes.ok) { setAlertConfig(await alertRes.json()); }
                 } catch {}
                 // Load region mode setting
@@ -7956,7 +7956,8 @@ export default function Admin() {
                                         onClick={async () => {
                                             setAlertTesting(true);
                                             try {
-                                                const res = await fetch(`${API_BASE}/api/alerts/test`, { method: 'POST', headers: authHeaders });
+                                                const _tk = user?.token || localStorage.getItem('verifykey-token');
+                                                const res = await fetch(`${API_BASE}/api/alerts/test`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_tk}` } });
                                                 const d = await res.json();
                                                 alert(res.ok ? `✅ ${d.message}` : `❌ ${d.detail}`);
                                             } catch (e) { alert('发送失败: ' + e.message); }
@@ -7973,8 +7974,9 @@ export default function Admin() {
                                         onClick={async () => {
                                             setAlertSaving(true);
                                             try {
+                                                const _tk = user?.token || localStorage.getItem('verifykey-token');
                                                 const res = await fetch(`${API_BASE}/api/alerts/config`, {
-                                                    method: 'POST', headers: authHeaders,
+                                                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_tk}` },
                                                     body: JSON.stringify(alertConfig),
                                                 });
                                                 if (res.ok) alert('✅ 警报配置已保存');

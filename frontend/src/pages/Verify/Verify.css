@@ -3057,8 +3057,8 @@
     top: 50%;
     transform: translate(-50%, -50%);
     z-index: 1000;
-    width: 420px;
-    max-width: 92vw;
+    width: 540px;
+    max-width: 94vw;
     max-height: 70vh;
     overflow-y: auto;
     padding: 20px;
@@ -3105,7 +3105,7 @@
 
 .region-tags-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: 6px;
 }
 
@@ -3147,10 +3147,10 @@
 
 @media (max-width: 480px) {
     .region-tags-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
     }
     .region-popover {
-        width: 340px;
+        width: 92vw;
     }
 }
 

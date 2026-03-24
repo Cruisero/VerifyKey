@@ -601,10 +601,10 @@ export default function Verify() {
                 <div className="welcome-section">
                     <div className="welcome-content">
                         <h1 className="welcome-title">
-                            <span className="gradient-text">Google One Console</span>
+                            <span className="gradient-text">自助AI服务平台</span>
                         </h1>
                         <p className="welcome-desc">
-                            提交 Google 账号信息，自动获取 Google One 合作伙伴试用链接
+                            根据提示提交 Google 账号信息，获取服务
                         </p>
                     </div>
                     <div className="quick-actions">
@@ -624,14 +624,14 @@ export default function Verify() {
                         className={`service-tab ${serviceTab === 'pixel' ? 'active' : ''}`}
                         onClick={() => setServiceTab('pixel')}
                     >
-                        <span className="service-tab-icon">📡</span>
+
                         <span>Gemini 验证</span>
                     </button>
                     <button
                         className={`service-tab service-tab-gpt ${serviceTab === 'gpt' ? 'active' : ''}`}
                         onClick={() => setServiceTab('gpt')}
                     >
-                        <span className="service-tab-icon">🤖</span>
+
                         <span>ChatGPT 充值</span>
                         {serviceStatus?.gpt?.available === false && (
                             <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 600, marginLeft: '6px' }}>🔧 维护中</span>

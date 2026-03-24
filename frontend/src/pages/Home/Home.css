@@ -389,17 +389,161 @@
     }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+    .home-container {
+        padding: var(--spacing-md) var(--spacing-md);
+    }
+
+    .hero-section {
+        min-height: auto;
+        padding: var(--spacing-md) 0;
+        gap: var(--spacing-lg);
+    }
+
+    /* Hide hero text on mobile — auth card is the star */
+    .hero-content {
+        order: 2;
+    }
+
+    .hero-badge {
+        display: none;
+    }
+
     .hero-title {
-        font-size: 2.5rem;
+        font-size: 1.8rem;
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .hero-logo {
+        max-width: 200px;
+        margin: 0 auto;
+    }
+
+    .hero-desc {
+        font-size: var(--text-sm);
+        line-height: 1.6;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .hero-stats {
+        gap: var(--spacing-lg);
+    }
+
+    .stat-value {
+        font-size: var(--text-xl);
+    }
+
+    /* Auth Card — tighter and full-width on mobile */
+    .auth-card {
+        max-width: 100%;
+        padding: var(--spacing-lg) var(--spacing-md);
+        border-radius: var(--radius-xl);
+    }
+
+    .auth-tabs {
+        margin-bottom: var(--spacing-md);
+    }
+
+    .auth-tab {
+        padding: var(--spacing-xs) var(--spacing-md);
+        font-size: var(--text-sm);
+    }
+
+    .auth-form {
+        gap: var(--spacing-sm);
+    }
+
+    .input-label {
+        font-size: var(--text-sm);
+    }
+
+    .auth-submit {
+        margin-top: var(--spacing-xs);
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    /* Features */
+    .features-section {
+        padding: var(--spacing-lg) 0;
     }
 
     .features-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-sm);
+    }
+
+    .feature-card {
+        padding: var(--spacing-md);
+    }
+
+    .feature-icon {
+        font-size: 1.8rem;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .feature-title {
+        font-size: var(--text-base);
+    }
+
+    .feature-desc {
+        font-size: var(--text-xs);
+    }
+
+    /* Steps */
+    .steps-section {
+        padding: var(--spacing-lg) 0;
+    }
+
+    .section-title {
+        font-size: var(--text-lg);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .step-item {
+        padding: var(--spacing-md);
+        gap: var(--spacing-sm);
+    }
+
+    .step-number {
+        width: 32px;
+        height: 32px;
+        font-size: var(--text-sm);
+    }
+
+    .step-content h3 {
+        font-size: var(--text-sm);
+    }
+
+    .step-content p {
+        font-size: var(--text-xs);
+    }
+
+    /* Forgot password modal */
+    .forgot-modal {
+        width: 90vw;
+        padding: 20px;
+    }
+}
+
+@media (max-width: 420px) {
+    .hero-title {
+        font-size: 1.5rem;
+    }
+
+    .hero-logo {
+        max-width: 160px;
     }
 
     .hero-stats {
         flex-direction: column;
-        gap: var(--spacing-md);
+        gap: var(--spacing-sm);
+    }
+
+    .auth-card {
+        padding: var(--spacing-md) var(--spacing-sm);
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
     }
 }

@@ -1452,10 +1452,6 @@ export default function Verify() {
                                         <span className="legend-dot failed"></span>
                                         {liveStats.failed} Failed
                                     </span>
-                                    <span className="legend-item">
-                                        <span className="legend-dot cancel"></span>
-                                        {liveStats.cancel} Cancel
-                                    </span>
                                 </div>
                                 {statusData.length > 0 && (
                                     <span className="status-updated-time">
@@ -1477,7 +1473,7 @@ export default function Verify() {
                                                     <span className="tooltip-status">
                                                         {item.status === 'pass' ? '✓ Pass' :
                                                             item.status === 'failed' ? '✕ Failed' :
-                                                                item.status === 'processing' ? '⏳ Processing' : '◷ Cancel'}
+                                                                '⏳ Processing'}
                                                     </span>
                                                     <span className="tooltip-time">{formatTime(item.timestamp)}</span>
                                                 </div>

@@ -7743,10 +7743,6 @@ export default function Admin() {
                                             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}></span>
                                             {historyStats.failed} Failed
                                         </span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
-                                            {historyStats.cancel} Cancel
-                                        </span>
                                     </div>
                                 </div>
                                 <div className="status-grid-container">

@@ -215,9 +215,11 @@ export default function Verify() {
     const parseBatchInput = (text) => {
         return text.split('\n')
             .map(line => line.trim())
-            .filter(line => line && line.includes('----'))
+            .filter(line => line && /-/.test(line))
             .map(line => {
-                const parts = line.split('----').map(p => p.trim());
+                // Normalize: collapse spaces around dashes (e.g. "- - -" → "---")
+                const normalized = line.replace(/\s*-\s*/g, '-');
+                const parts = normalized.split(/-+/).map(p => p.trim()).filter(Boolean);
                 if (parts.length === 4) {
                     return { email: parts[0], password: parts[1], backupEmail: parts[2], totp_secret: parts[3] };
                 } else if (parts.length === 3) {

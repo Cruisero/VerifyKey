@@ -9371,40 +9371,47 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
     if credits < GPT_RECHARGE_COST:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_RECHARGE_COST} 积分，剩余 {credits}）")
 
-    # Pick an available key — skip channels under maintenance, round-robin
-    conn = database.get_connection()
-    import config_manager as _cfg_mgr
-    _maint = _cfg_mgr.get_config().get("serviceMaintenance", {})
-    excluded_channels = [ch for ch in GPT_KEY_CHANNELS if _maint.get(f"gpt_{ch}")]
-    placeholders = ",".join("?" for _ in excluded_channels) if excluded_channels else None
-    key_placeholders = ",".join("?" for _ in GPT_KEY_CHANNELS)
-    key_channel_params = list(GPT_KEY_CHANNELS)
-    if excluded_channels and len(excluded_channels) < len(GPT_KEY_CHANNELS):
-        row = conn.execute(
-            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) AND channel NOT IN ({placeholders}) LIMIT 1",
-            key_channel_params + excluded_channels
-        ).fetchone()
-    elif not excluded_channels:
-        row = conn.execute(
-            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) LIMIT 1",
-            key_channel_params
-        ).fetchone()
-    else:
-        row = None
+    try:
+        # Pick an available key — skip channels under maintenance, round-robin
+        conn = database.get_connection()
+        import config_manager as _cfg_mgr
+        _cfg = _cfg_mgr.get_config() or {}
+        _maint = (_cfg.get("serviceMaintenance") or {})
+        excluded_channels = [ch for ch in GPT_KEY_CHANNELS if bool(_maint.get(f"gpt_{ch}"))]
+        placeholders = ",".join("?" for _ in excluded_channels) if excluded_channels else None
+        key_placeholders = ",".join("?" for _ in GPT_KEY_CHANNELS)
+        key_channel_params = list(GPT_KEY_CHANNELS)
+        if excluded_channels and len(excluded_channels) < len(GPT_KEY_CHANNELS):
+            row = conn.execute(
+                f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) AND channel NOT IN ({placeholders}) LIMIT 1",
+                key_channel_params + excluded_channels
+            ).fetchone()
+        elif not excluded_channels:
+            row = conn.execute(
+                f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) LIMIT 1",
+                key_channel_params
+            ).fetchone()
+        else:
+            row = None
 
-    # If key channels unavailable, fallback to TG bot channel (no card key required).
-    if not row:
-        if not _maint.get("gpt_tg") and _has_available_gptbot_account(_cfg_mgr.get_config()):
-            return {
-                "success": True,
-                "card_key": "",
-                "masked": "TG BOT",
-                "key_id": 0,
-                "channel": "tg",
-            }
-        if len(excluded_channels) == len(GPT_KEY_CHANNELS) and _maint.get("gpt_tg"):
-            raise HTTPException(status_code=503, detail="所有充值通道维护中")
-        raise HTTPException(status_code=400, detail="暂无可用充值通道，请联系管理员")
+        # If key channels unavailable, fallback to TG bot channel (no card key required).
+        if not row:
+            if not bool(_maint.get("gpt_tg")) and _has_available_gptbot_account(_cfg):
+                return {
+                    "success": True,
+                    "card_key": "",
+                    "masked": "TG BOT",
+                    "key_id": 0,
+                    "channel": "tg",
+                }
+            if len(excluded_channels) == len(GPT_KEY_CHANNELS) and bool(_maint.get("gpt_tg")):
+                raise HTTPException(status_code=503, detail="所有充值通道维护中")
+            raise HTTPException(status_code=400, detail="暂无可用充值通道，请联系管理员")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("[GPT Exchange] Unexpected error")
+        raise HTTPException(status_code=500, detail=f"GPT 兑换失败: {e}")
 
     key_id, card_key, channel = row["id"], row["card_key"], row["channel"] or "sbs"
 
@@ -9490,6 +9497,8 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         raise HTTPException(status_code=400, detail="参数不完整")
     if channel != "tg" and not card_key:
         raise HTTPException(status_code=400, detail="参数不完整")
+    if channel not in GPT_CHANNELS:
+        raise HTTPException(status_code=400, detail=f"无效通道: {channel}")
 
     import time as _gpt_time
     gpt_vid = f"gpt_{int(_gpt_time.time())}_{email[:8] if email else 'unknown'}"

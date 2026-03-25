@@ -3189,9 +3189,10 @@ export default function Admin() {
                         const existingIdx = prev.findIndex(l => l.verificationId === vid);
                         const existingEntry = existingIdx >= 0 ? prev[existingIdx] : null;
                         const existingIsTerminal = existingEntry && (existingEntry.status === 'pass' || existingEntry.status === 'failed');
+                        const canOverrideTerminal = Boolean(data.forceTerminalUpdate);
 
-                        // Once a VID is terminal, do not let later SSE events rewrite it.
-                        if (existingIsTerminal) {
+                        // Terminal entries stay frozen unless backend explicitly emits a compensation override.
+                        if (existingIsTerminal && !canOverrideTerminal) {
                             return prev;
                         }
 

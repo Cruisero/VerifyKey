@@ -1032,6 +1032,8 @@ function GptKeysTab({ config, setConfig }) {
     const [tgLoginHash, setTgLoginHash] = useState('');
     const [tgLoginPassword, setTgLoginPassword] = useState('');
     const [tgLoginMsg, setTgLoginMsg] = useState('');
+    const [gptCfgSaving, setGptCfgSaving] = useState(false);
+    const [gptCfgSaved, setGptCfgSaved] = useState(false);
 
     const fetchStats = async () => {
         try {
@@ -1248,6 +1250,49 @@ function GptKeysTab({ config, setConfig }) {
             console.error('Check connections failed:', e);
         } finally {
             setTgChecking(false);
+        }
+    };
+
+    const handleSaveGptTgConfig = async () => {
+        if (!token) {
+            alert('保存失败: 未登录');
+            return;
+        }
+        setGptCfgSaving(true);
+        try {
+            const payload = {
+                verification: {
+                    gptRechargeBot: {
+                        ...(config?.verification?.gptRechargeBot || {}),
+                        enabled: config?.verification?.gptRechargeBot?.enabled || false,
+                        targetBot: config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot',
+                        sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{accessToken}',
+                        timeout: Number(config?.verification?.gptRechargeBot?.timeout || 120),
+                        maxRetries: Number(config?.verification?.gptRechargeBot?.maxRetries || 5),
+                        processingKeywords: config?.verification?.gptRechargeBot?.processingKeywords || [],
+                        responseRules: config?.verification?.gptRechargeBot?.responseRules || [],
+                        cooldown: config?.verification?.gptRechargeBot?.cooldown || { keywords: ['COOLDOWN', 'RATE LIMIT', 'TOO MANY'], timePattern: '(\\d+)\\s*[MS]' },
+                    }
+                }
+            };
+            const res = await fetch(`${API_BASE}/api/config`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify(payload),
+            });
+            const text = await res.text();
+            let data = {};
+            try { data = text ? JSON.parse(text) : {}; } catch {}
+            if (!res.ok) {
+                alert(`保存失败: ${data.detail || data.error || text || `HTTP ${res.status}`}`);
+                return;
+            }
+            setGptCfgSaved(true);
+            setTimeout(() => setGptCfgSaved(false), 1800);
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        } finally {
+            setGptCfgSaving(false);
         }
     };
 
@@ -1669,15 +1714,26 @@ function GptKeysTab({ config, setConfig }) {
                     gap: '8px'
                 }}>
                     <span>🤖 GPT 充值 TG Bot · 响应规则</span>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0f766e', cursor: 'pointer' }}>
-                        <input
-                            type="checkbox"
-                            checked={config?.verification?.gptRechargeBot?.enabled || false}
-                            onChange={e => updateGptCfg({ enabled: e.target.checked })}
-                            style={{ width: '16px', height: '16px' }}
-                        />
-                        启用
-                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {gptCfgSaved && <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ 已保存</span>}
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleSaveGptTgConfig}
+                            disabled={gptCfgSaving}
+                            style={{ fontSize: '12px', padding: '5px 12px' }}
+                        >
+                            {gptCfgSaving ? '保存中...' : '保存配置'}
+                        </button>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0f766e', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={config?.verification?.gptRechargeBot?.enabled || false}
+                                onChange={e => updateGptCfg({ enabled: e.target.checked })}
+                                style={{ width: '16px', height: '16px' }}
+                            />
+                            启用
+                        </label>
+                    </div>
                 </div>
                 <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px 120px', gap: '8px' }}>
@@ -1697,9 +1753,9 @@ function GptKeysTab({ config, setConfig }) {
                             <input
                                 type="text"
                                 className="input"
-                                value={config?.verification?.gptRechargeBot?.sendFormat || '{account}'}
+                                value={config?.verification?.gptRechargeBot?.sendFormat || '{accessToken}'}
                                 onChange={e => updateGptCfg({ sendFormat: e.target.value })}
-                                placeholder="{account}"
+                                placeholder="{accessToken}"
                                 style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '12px' }}
                             />
                         </div>
@@ -1730,7 +1786,7 @@ function GptKeysTab({ config, setConfig }) {
                     </div>
 
                     <div style={{ marginTop: '-4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        这是无卡密 TG 通道。占位符支持: <code>{'{account}'}</code> <code>{'{email}'}</code>（兼容保留 <code>{'{card_key}'}</code>）。
+                        这是无卡密 TG 通道。占位符支持: <code>{'{accessToken}'}</code> <code>{'{account}'}</code> <code>{'{email}'}</code>（兼容保留 <code>{'{card_key}'}</code>）。
                     </div>
 
                     <div>
@@ -4649,7 +4705,7 @@ export default function Admin() {
                         ...(config?.verification?.gptRechargeBot || {}),
                         enabled: config?.verification?.gptRechargeBot?.enabled || false,
                         targetBot: config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot',
-                        sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{account}',
+                        sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{accessToken}',
                         timeout: Number(config?.verification?.gptRechargeBot?.timeout || 120),
                         maxRetries: Number(config?.verification?.gptRechargeBot?.maxRetries || 5),
                     },

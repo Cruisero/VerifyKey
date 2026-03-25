@@ -131,7 +131,7 @@ DEFAULT_CONFIG = {
         "gptRechargeBot": {
             "enabled": False,
             "targetBot": "@AutoRechargeProbot",
-            "sendFormat": "{account}",
+            "sendFormat": "{accessToken}",
             "processingKeywords": ["PROCESSING", "处理中", "WAIT", "⏳", "RUNNING"],
             "responseRules": [
                 {

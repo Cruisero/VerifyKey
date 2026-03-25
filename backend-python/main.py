@@ -8869,13 +8869,49 @@ def _get_gpt_tg_config() -> dict:
     return {
         "enabled": bool(cfg.get("enabled", False)),
         "targetBot": (cfg.get("targetBot") or "@AutoRechargeProbot").strip(),
-        "sendFormat": cfg.get("sendFormat") or "{account}",
+        "sendFormat": cfg.get("sendFormat") or "{accessToken}",
         "processingKeywords": cfg.get("processingKeywords") or ["PROCESSING", "处理中", "WAIT", "⏳", "RUNNING"],
         "responseRules": cfg.get("responseRules") or [],
         "cooldown": cfg.get("cooldown") or {"keywords": ["COOLDOWN", "RATE LIMIT", "TOO MANY"], "timePattern": r"(\d+)\s*[MS]"},
         "timeout": int(cfg.get("timeout", 120)),
         "maxRetries": int(cfg.get("maxRetries", 5)),
     }
+
+
+def _extract_access_token_from_session(session_text: str) -> str:
+    """Extract accessToken from user-submitted session payload.
+    Supports JSON payload and loose key-value text copied from browser devtools.
+    """
+    raw = (session_text or "").strip()
+    if not raw:
+        return ""
+
+    # 1) JSON payload path: account.accessToken
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            account_obj = obj.get("account")
+            if isinstance(account_obj, dict):
+                token = account_obj.get("accessToken")
+                if isinstance(token, str) and token.strip():
+                    return token.strip()
+            token = obj.get("accessToken")
+            if isinstance(token, str) and token.strip():
+                return token.strip()
+    except Exception:
+        pass
+
+    # 2) Fallback regex for loose text: accessToken "...." / accessToken: "...." / accessToken='....'
+    m = re.search(r'accessToken\s*[:=]?\s*["\']([^"\']+)["\']', raw, flags=re.IGNORECASE)
+    if m and m.group(1).strip():
+        return m.group(1).strip()
+
+    # 3) Fallback regex without quotes (stop at whitespace/newline)
+    m2 = re.search(r'accessToken\s*[:=]?\s*([A-Za-z0-9\-\._~\+/]+=*)', raw, flags=re.IGNORECASE)
+    if m2 and m2.group(1).strip():
+        return m2.group(1).strip()
+
+    return ""
 
 
 def _has_available_gptbot_account(config: Optional[dict] = None) -> bool:
@@ -8984,12 +9020,16 @@ async def _gpt_recharge_via_tg_bot(card_key: str, account: str, email: str):
     if not tg_manager.is_connected:
         return {"success": False, "status": "failed", "message": "TG 账号未连接"}
 
-    send_format = cfg.get("sendFormat", "{card_key}----{account}")
+    send_format = cfg.get("sendFormat", "{accessToken}")
+    access_token = _extract_access_token_from_session(account)
+    if "{accessToken}" in send_format and not access_token:
+        return {"success": False, "status": "failed", "message": "未从 session 信息中提取到 accessToken"}
     outbound = (
         send_format
         .replace("{card_key}", card_key)
         .replace("{account}", account)
         .replace("{email}", email or "")
+        .replace("{accessToken}", access_token)
     )
     max_retries = max(1, int(cfg.get("maxRetries", 5)))
 

@@ -321,10 +321,16 @@ export default function Verify() {
                 const info = data.data || {};
                 const status = info.status || '';
                 const message = info.message || '';
+                const source = statusUrl?.includes('/vpixel/')
+                    ? 'vpixel'
+                    : statusUrl?.includes('/ypixel/')
+                        ? 'ypixel'
+                        : 'kpixel';
 
                 if (status === 'Success') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
+                    await confirmRemoteSuccess(source, taskId);
                     const resultUrl = info.url || '';
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
@@ -336,6 +342,8 @@ export default function Verify() {
                             totalStages: 0,
                         } : r
                     ));
+                    await refreshUser();
+                    fetchUserHistory('pixel');
                 } else if (status === 'Failed') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
@@ -382,6 +390,7 @@ export default function Verify() {
                 if (status === 'success') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
+                    await confirmRemoteSuccess('pixel', jobId);
                     const url = data.url || '';
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
@@ -395,8 +404,9 @@ export default function Verify() {
                             elapsed: Math.round(elapsed),
                         } : r
                     ));
-                    setCdkRemaining(prev => Math.max(0, prev - 1));
+                    await refreshUser();
                     fetchHistory();
+                    fetchUserHistory('pixel');
                 } else if (status === 'failed') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
@@ -517,6 +527,28 @@ export default function Verify() {
         pollingRefs.current = {};
         setResults([]);
     };
+
+    const confirmRemoteSuccess = useCallback(async (source, jobId) => {
+        const token = getToken();
+        if (!token || !source || !jobId) return null;
+        const confirmUrl = source === 'pixel'
+            ? `${API_BASE}/api/pixel/jobs/${jobId}/confirm`
+            : source === 'vpixel'
+                ? `${API_BASE}/api/vpixel/jobs/${jobId}/confirm`
+                : source === 'ypixel'
+                    ? `${API_BASE}/api/ypixel/jobs/${jobId}/confirm`
+                    : `${API_BASE}/api/kpixel/jobs/${jobId}/confirm`;
+        try {
+            const resp = await fetch(confirmUrl, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return await resp.json().catch(() => null);
+        } catch (e) {
+            console.warn('confirm success failed:', e);
+            return null;
+        }
+    }, [getToken]);
 
     // Save completed results to history
     useEffect(() => {
@@ -1257,6 +1289,7 @@ export default function Verify() {
                                                             setGptSuccess(true);
                                                             setGptResultMsg(t('gptRechargeSuccess'));
                                                             await refreshUser();
+                                                            fetchUserHistory('gpt');
                                                         } else {
                                                             setGptError(sanitizeError(reData.detail) || t('gptRechargeFailed'));
                                                         }

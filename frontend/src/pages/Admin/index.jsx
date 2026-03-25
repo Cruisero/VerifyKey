@@ -3181,6 +3181,8 @@ export default function Admin() {
                     let entryStatus = 'processing';
                     if (data.step === 'result') {
                         entryStatus = data.success ? 'pass' : 'failed';
+                    } else if (data.step === 'submit_failed') {
+                        entryStatus = 'failed';
                     } else if (data.step === 'submitted') {
                         entryStatus = 'processing';
                     }
@@ -3210,6 +3212,10 @@ export default function Admin() {
                             userId: data.userId || (existingIdx >= 0 ? prev[existingIdx].userId : ''),
                             cardKey: data.cardKey || (existingIdx >= 0 ? prev[existingIdx].cardKey : ''),
                             channel: data.channel || (existingIdx >= 0 ? prev[existingIdx].channel : ''),
+                            requestStage: data.requestStage || (existingIdx >= 0 ? prev[existingIdx].requestStage : ''),
+                            httpStatus: data.httpStatus || (existingIdx >= 0 ? prev[existingIdx].httpStatus : ''),
+                            upstreamStatus: data.upstreamStatus || (existingIdx >= 0 ? prev[existingIdx].upstreamStatus : ''),
+                            refunded: typeof data.refunded === 'boolean' ? data.refunded : (existingIdx >= 0 ? prev[existingIdx].refunded : false),
                         };
                         if (existingIdx >= 0) {
                             const newLog = [...prev];
@@ -4249,6 +4255,7 @@ export default function Admin() {
                                 {verifyLog.map(r => {
                                     const isPass = r.status === 'pass';
                                     const isProcessing = r.status === 'processing';
+                                    const isSubmissionFailure = r.requestStage === 'submission' && r.status === 'failed';
                                     const vid = r.verificationId || '';
                                     const shortVid = vid.length > 20 ? `${vid.slice(0, 8)}...${vid.slice(-8)}` : vid;
                                     const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
@@ -4281,12 +4288,18 @@ export default function Admin() {
                                             }}>{icon}</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>VID: {shortVid}</span>
+                                                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{isSubmissionFailure ? `ATTEMPT: ${shortVid}` : `VID: ${shortVid}`}</span>
                                                     {isProcessing && (
                                                         <span style={{
                                                             fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
                                                             background: '#f59e0b', color: '#fff', fontWeight: 600,
                                                         }}>处理中</span>
+                                                    )}
+                                                    {isSubmissionFailure && (
+                                                        <span style={{
+                                                            fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
+                                                            background: '#dc2626', color: '#fff', fontWeight: 600,
+                                                        }}>提交失败</span>
                                                     )}
                                                     {r.via && (() => {
                                                         const viaColors = {
@@ -4314,17 +4327,21 @@ export default function Admin() {
                                                     {r.userId && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.userId}</span>}
                                                     {r.cdk && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.cdk}</span>}
                                                 </div>
-                                                {(method || cardKey || r.channel) && (
+                                                {(method || cardKey || r.channel || r.httpStatus || r.upstreamStatus || isSubmissionFailure || r.refunded) && (
                                                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                         {method && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>method: {method}</span>}
                                                         {r.channel && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>channel: {String(r.channel).toUpperCase()}</span>}
                                                         {cardKey && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>card: {shortCardKey}</span>}
+                                                        {isSubmissionFailure && <span style={{ background: 'rgba(220, 38, 38, 0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace', color: '#dc2626' }}>stage: submission</span>}
+                                                        {r.httpStatus ? <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>http: {r.httpStatus}</span> : null}
+                                                        {r.upstreamStatus ? <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>upstream: {r.upstreamStatus}</span> : null}
+                                                        {r.refunded ? <span style={{ background: 'rgba(22, 163, 74, 0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace', color: '#16a34a' }}>refunded</span> : null}
                                                     </div>
                                                 )}
                                             </div>
                                             {/* Manual override buttons - rightmost */}
                                             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', marginLeft: 'auto', alignSelf: 'center' }}>
-                                                {!isPass && (
+                                                {!isPass && !isSubmissionFailure && (
                                                     <button
                                                         title="手动标记为通过"
                                                         style={{
@@ -4360,7 +4377,7 @@ export default function Admin() {
                                                         }}
                                                     >✓ Pass</button>
                                                 )}
-                                                {(isPass || isProcessing) && (
+                                                {(isPass || isProcessing) && !isSubmissionFailure && (
                                                     <button
                                                         title="手动标记为失败"
                                                         style={{

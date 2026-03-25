@@ -233,21 +233,22 @@ export default function Verify() {
     // Submit a single account — routes to UPixel, YPixel, or KPixel/VPixel based on tier
     const submitOneJob = async (account, resultId) => {
         const isKPixel = verifyTier === 'pro';
+        const normalizedTotp = (account.totp_secret || '').replace(/\s+/g, '');
 
         // Standard tier: prefer UPixel, fallback to YPixel
         let apiUrl, payload, jobSourceDefault;
         if (isKPixel) {
             apiUrl = `${API_BASE}/api/kpixel/jobs`;
-            payload = { email: account.email, password: account.password, twofa: account.totp_secret };
+            payload = { email: account.email, password: account.password, twofa: normalizedTotp };
             jobSourceDefault = 'kpixel';
         } else if (!serviceStatus?.upixel?.available && serviceStatus?.upixel?.ypixelUp) {
             // UPixel down, YPixel up → use YPixel
             apiUrl = `${API_BASE}/api/ypixel/jobs`;
-            payload = { email: account.email, password: account.password, twofa: account.totp_secret || '', recovery_email: account.backupEmail || '' };
+            payload = { email: account.email, password: account.password, twofa: normalizedTotp, recovery_email: account.backupEmail || '' };
             jobSourceDefault = 'ypixel';
         } else {
             apiUrl = `${API_BASE}/api/pixel/jobs`;
-            payload = { email: account.email, password: account.password, totp_secret: account.totp_secret };
+            payload = { email: account.email, password: account.password, totp_secret: normalizedTotp };
             jobSourceDefault = 'pixel';
         }
 

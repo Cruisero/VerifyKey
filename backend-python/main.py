@@ -12,6 +12,7 @@ Features:
 import os
 import json
 import asyncio
+import re
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
@@ -326,6 +327,24 @@ def _build_verify_event_meta(source: str, email: str = "", user_id: int = 0, met
         "cardKey": card_key or "",
         "channel": channel or "",
     }
+
+
+def _broadcast_submit_failure(source: str, message: str, email: str = "", user_id: int = 0, method: str = "", http_status: int = 0, upstream_status: int = 0, refunded: bool = False, card_key: str = "", channel: str = ""):
+    attempt_id = f"submit_{source}_{uuid.uuid4().hex[:12]}"
+    broadcast_verify_event({
+        "type": "progress",
+        "vid": attempt_id,
+        "step": "submit_failed",
+        "status": "failed",
+        "success": False,
+        "message": message,
+        "requestStage": "submission",
+        "httpStatus": http_status or 0,
+        "upstreamStatus": upstream_status or http_status or 0,
+        "refunded": bool(refunded),
+        **_build_verify_event_meta(source, email, user_id, method, card_key, channel),
+    })
+    return attempt_id
 
 
 def broadcast_verify_event(event: dict):
@@ -6939,6 +6958,13 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     """Submit a Pixel API job — validates user credits, proxies to iqless.icu, starts background poller."""
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["enabled"] or not pixel_cfg["apiKey"]:
+        _broadcast_submit_failure(
+            "pixel",
+            "Pixel API 未启用或未配置 API Key",
+            email=request.email,
+            method="pixel_api",
+            http_status=503,
+        )
         raise HTTPException(status_code=503, detail="Pixel API 未启用或未配置 API Key")
 
     # Auth via JWT token
@@ -6961,10 +6987,11 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         "X-API-Key": pixel_cfg["apiKey"],
         "Content-Type": "application/json",
     }
+    normalized_totp_secret = re.sub(r"\s+", "", request.totp_secret or "")
     payload = {
         "email": request.email,
         "password": request.password,
-        "totp_secret": request.totp_secret,
+        "totp_secret": normalized_totp_secret,
         "priority": request.priority,
     }
 
@@ -6989,7 +7016,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 "estimated_wait_seconds": data.get("estimated_wait_seconds", 0),
             }
         else:
-            _refund_user_credits(user_id, 1.0, request.email, via="pixel_submit")
+            refund_result = _refund_user_credits(user_id, 1.0, request.email, via="pixel_submit")
             # Forward error from Pixel API
             try:
                 err = resp.json()
@@ -7003,10 +7030,30 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             except Exception:
                 msg = f"Pixel API 错误: HTTP {resp.status_code}"
                 code = ""
-            raise HTTPException(status_code=resp.status_code, detail=f"{code}: {msg}" if code else msg)
+            final_detail = f"{code}: {msg}" if code else msg
+            _broadcast_submit_failure(
+                "pixel",
+                final_detail,
+                email=request.email,
+                user_id=user_id,
+                method="pixel_api",
+                http_status=resp.status_code,
+                upstream_status=resp.status_code,
+                refunded=refund_result.get("refunded", False),
+            )
+            raise HTTPException(status_code=resp.status_code, detail=final_detail)
 
     except httpx.HTTPError as e:
-        _refund_user_credits(user_id, 1.0, request.email, via="pixel_submit")
+        refund_result = _refund_user_credits(user_id, 1.0, request.email, via="pixel_submit")
+        _broadcast_submit_failure(
+            "pixel",
+            f"无法连接 Pixel API: {str(e)}",
+            email=request.email,
+            user_id=user_id,
+            method="pixel_api",
+            http_status=502,
+            refunded=refund_result.get("refunded", False),
+        )
         raise HTTPException(status_code=502, detail=f"无法连接 Pixel API: {str(e)}")
 
 
@@ -7391,6 +7438,13 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     # We rely on the submit response to detect quota issues and fallback to KPixel.
 
     if not kpixel_available and not vpixel_available:
+        _broadcast_submit_failure(
+            "pro",
+            "服务端错误，请稍后重试",
+            email=request.email,
+            method="pro_submit",
+            http_status=503,
+        )
         raise HTTPException(status_code=503, detail="服务端错误，请稍后重试")
 
     credit_cost = kpixel_cfg.get("creditCost", 1.5) if kpixel_available else vpixel_cfg.get("creditCost", 1.5)
@@ -7409,6 +7463,8 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
 
     _deduct_user_credits_or_raise(user_id, credit_cost, f"积分不足（需要 {credit_cost} 积分）")
 
+    _deduct_user_credits_or_raise(user_id, credit_cost, f"积分不足（需要 {credit_cost} 积分）")
+
     # Round-robin: decide which service to use
     use_vpixel = False
     if kpixel_available and vpixel_available:
@@ -7418,8 +7474,6 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     elif vpixel_available:
         use_vpixel = True
     # else: use kpixel (default)
-
-    _deduct_user_credits_or_raise(user_id, credit_cost, f"积分不足（需要 {credit_cost} 积分）")
 
     if use_vpixel:
         # ---- Route to VPixel (pick card from pool) ----
@@ -7483,7 +7537,17 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     use_vpixel = False  # fall through to KPixel below
                 else:
                     print(f"[ProTier] VPixel submit error: {data.get('message')}")
-                    _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+                    refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+                    _broadcast_submit_failure(
+                        "vpixel",
+                        data.get("message", "VPixel 提交失败"),
+                        email=request.email,
+                        user_id=user_id,
+                        method="vpixel_card_pool",
+                        http_status=500,
+                        refunded=refund_result.get("refunded", False),
+                        card_key=vpc_card,
+                    )
                     raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
         except httpx.HTTPError as e:
             # Connection error — release card back to available
@@ -7494,7 +7558,17 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                 use_vpixel = False
             else:
                 print(f"[ProTier] VPixel connection error: {e}")
-                _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+                refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+                _broadcast_submit_failure(
+                    "vpixel",
+                    f"VPixel 连接失败: {str(e)}",
+                    email=request.email,
+                    user_id=user_id,
+                    method="vpixel_card_pool",
+                    http_status=502,
+                    refunded=refund_result.get("refunded", False),
+                    card_key=vpc_card,
+                )
                 raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
     if not use_vpixel:
@@ -7525,12 +7599,30 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                 }
             else:
                 print(f"[ProTier] KPixel submit error: {data.get('message')}")
-                _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+                refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+                _broadcast_submit_failure(
+                    "kpixel",
+                    data.get("message", "KPixel 提交失败"),
+                    email=request.email,
+                    user_id=user_id,
+                    method="kpixel_api",
+                    http_status=500,
+                    refunded=refund_result.get("refunded", False),
+                )
                 raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
         except httpx.HTTPError as e:
             print(f"[ProTier] KPixel connection error: {e}")
-            _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+            refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
+            _broadcast_submit_failure(
+                "kpixel",
+                f"KPixel 连接失败: {str(e)}",
+                email=request.email,
+                user_id=user_id,
+                method="kpixel_api",
+                http_status=502,
+                refunded=refund_result.get("refunded", False),
+            )
             raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
 
@@ -7963,6 +8055,14 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
     """Submit a VPixel job — validates user credits, posts to 1688ai.vip, starts background poller."""
     vpixel_cfg = _get_vpixel_config()
     if not vpixel_cfg["enabled"] or not vpixel_cfg["card"]:
+        _broadcast_submit_failure(
+            "vpixel",
+            "VPixel API 未启用或未配置卡密",
+            email=request.email,
+            method="vpixel_card_pool",
+            http_status=503,
+            card_key=vpixel_cfg.get("card", ""),
+        )
         raise HTTPException(status_code=503, detail="VPixel API 未启用或未配置卡密")
 
     credit_cost = vpixel_cfg.get("creditCost", 1.5)
@@ -8021,11 +8121,32 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
                 "source": "vpixel",
             }
         else:
-            _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
-            raise HTTPException(status_code=400, detail=data.get("message", "VPixel 提交失败"))
+            refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
+            failure_message = data.get("message", "VPixel 提交失败")
+            _broadcast_submit_failure(
+                "vpixel",
+                failure_message,
+                email=request.email,
+                user_id=user_id,
+                method="vpixel_card_pool",
+                http_status=400,
+                refunded=refund_result.get("refunded", False),
+                card_key=vpixel_cfg["card"],
+            )
+            raise HTTPException(status_code=400, detail=failure_message)
 
     except httpx.HTTPError as e:
-        _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
+        refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
+        _broadcast_submit_failure(
+            "vpixel",
+            f"无法连接 VPixel API: {str(e)}",
+            email=request.email,
+            user_id=user_id,
+            method="vpixel_card_pool",
+            http_status=502,
+            refunded=refund_result.get("refunded", False),
+            card_key=vpixel_cfg["card"],
+        )
         raise HTTPException(status_code=502, detail=f"无法连接 VPixel API: {str(e)}")
 
 
@@ -8429,6 +8550,13 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
     """Submit a YPixel job — picks a card from pool, posts to pixel.yh-mo.xyz."""
     ypixel_cfg = _get_ypixel_config()
     if not ypixel_cfg["enabled"]:
+        _broadcast_submit_failure(
+            "ypixel",
+            "YPixel 服务未启用",
+            email=request.email,
+            method="ypixel_card_pool",
+            http_status=503,
+        )
         raise HTTPException(status_code=503, detail="服务端错误")
 
     credit_cost = ypixel_cfg.get("creditCost", 1.0)
@@ -8449,6 +8577,14 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
     conn = database.get_connection()
     card_row = conn.execute("SELECT id, card_key FROM ypixel_cards WHERE status='available' AND remaining > 0 ORDER BY remaining DESC, id ASC LIMIT 1").fetchone()
     if not card_row:
+        _broadcast_submit_failure(
+            "ypixel",
+            "YPixel 无可用卡密",
+            email=request.email,
+            user_id=user_id,
+            method="ypixel_card_pool",
+            http_status=503,
+        )
         raise HTTPException(status_code=503, detail="服务端错误")
     card_id = card_row["id"]
     card_key = card_row["card_key"]
@@ -8506,14 +8642,34 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
             conn.execute("UPDATE ypixel_cards SET status='invalid' WHERE id=?", (card_id,))
             conn.commit()
             err_msg = data.get("message", data.get("error", "提交失败"))
-            _refund_user_credits(user_id, credit_cost, request.email, via="ypixel_submit")
+            refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="ypixel_submit")
+            _broadcast_submit_failure(
+                "ypixel",
+                err_msg,
+                email=request.email,
+                user_id=user_id,
+                method="ypixel_card_pool",
+                http_status=400,
+                refunded=refund_result.get("refunded", False),
+                card_key=card_key,
+            )
             raise HTTPException(status_code=400, detail="服务端错误")
 
     except httpx.HTTPError as e:
         # Connection error — release card back
         conn.execute("UPDATE ypixel_cards SET status='available', used_by_email='' WHERE id=?", (card_id,))
         conn.commit()
-        _refund_user_credits(user_id, credit_cost, request.email, via="ypixel_submit")
+        refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="ypixel_submit")
+        _broadcast_submit_failure(
+            "ypixel",
+            f"YPixel 连接失败: {str(e)}",
+            email=request.email,
+            user_id=user_id,
+            method="ypixel_card_pool",
+            http_status=502,
+            refunded=refund_result.get("refunded", False),
+            card_key=card_key,
+        )
         raise HTTPException(status_code=502, detail="服务端错误")
 
 
@@ -9055,13 +9211,17 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 msg = data.get("msg", "充值失败，请稍后重试")
                 _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
-                broadcast_verify_event({
-                    "type": "progress",
-                    "vid": gpt_vid,
-                    "step": "result", "status": "failed", "success": False,
-                    "message": f"❌ {msg}",
-                    **event_meta,
-                })
+                _broadcast_submit_failure(
+                    "gpt",
+                    msg,
+                    email=email or "GPT充值",
+                    user_id=user_id,
+                    method=f"gpt_{channel}",
+                    http_status=400,
+                    refunded=False,
+                    card_key=card_key,
+                    channel=channel,
+                )
                 raise HTTPException(status_code=400, detail=msg)
         elif channel == "vip":
             # VIP channel: POST /redeem/submit
@@ -9071,13 +9231,17 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
                 _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
-                broadcast_verify_event({
-                    "type": "progress",
-                    "vid": gpt_vid,
-                    "step": "result", "status": "failed", "success": False,
-                    "message": f"❌ {msg}",
-                    **event_meta,
-                })
+                _broadcast_submit_failure(
+                    "gpt",
+                    msg,
+                    email=email or "GPT充值",
+                    user_id=user_id,
+                    method=f"gpt_{channel}",
+                    http_status=400,
+                    refunded=False,
+                    card_key=card_key,
+                    channel=channel,
+                )
                 raise HTTPException(status_code=400, detail=msg)
         else:
             # SBS channel: POST /api/vip/r
@@ -9097,13 +9261,18 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 msg = data.get("message", "充值失败，请稍后重试")
                 _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
-                broadcast_verify_event({
-                    "type": "progress",
-                    "vid": gpt_vid,
-                    "step": "result", "status": "failed", "success": False,
-                    "message": f"❌ {msg}",
-                    **event_meta,
-                })
+                _broadcast_submit_failure(
+                    "gpt",
+                    msg,
+                    email=email or "GPT充值",
+                    user_id=user_id,
+                    method=f"gpt_{channel}",
+                    http_status=resp.status_code or 400,
+                    upstream_status=resp.status_code,
+                    refunded=False,
+                    card_key=card_key,
+                    channel=channel,
+                )
                 raise HTTPException(status_code=400, detail=msg)
     except HTTPException:
         raise
@@ -9111,13 +9280,17 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         _release_gpt_key(card_key)
         _complete_async_task("gpt", gpt_vid)
         failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
-        broadcast_verify_event({
-            "type": "progress",
-            "vid": gpt_vid,
-            "step": "result", "status": "failed", "success": False,
-            "message": f"❌ {failure_msg}",
-            **event_meta,
-        })
+        _broadcast_submit_failure(
+            "gpt",
+            failure_msg,
+            email=email or "GPT充值",
+            user_id=user_id,
+            method=f"gpt_{channel}",
+            http_status=502,
+            refunded=False,
+            card_key=card_key,
+            channel=channel,
+        )
         raise HTTPException(status_code=502, detail=failure_msg)
 
     # Success — deduct user credits

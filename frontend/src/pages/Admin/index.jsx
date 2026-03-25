@@ -1479,101 +1479,6 @@ function GptKeysTab({ config, setConfig }) {
                 </div>
             </div>
 
-            {/* GPT Recharge TG Bot Config */}
-            <div className="card" style={{ overflow: 'hidden' }}>
-                <div style={{
-                    padding: '16px 20px',
-                    borderBottom: '1px solid var(--border-primary)',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '8px'
-                }}>
-                    <span>🤖 GPT 充值 TG Bot</span>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0f766e', cursor: 'pointer' }}>
-                        <input
-                            type="checkbox"
-                            checked={config?.verification?.gptRechargeBot?.enabled || false}
-                            onChange={e => setConfig(prev => ({
-                                ...prev,
-                                verification: {
-                                    ...prev.verification || {},
-                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, enabled: e.target.checked }
-                                }
-                            }))}
-                            style={{ width: '16px', height: '16px' }}
-                        />
-                        启用
-                    </label>
-                </div>
-                <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr 120px 120px', gap: '10px' }}>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>目标 Bot</label>
-                        <input type="text" className="input"
-                            value={config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot'}
-                            onChange={e => setConfig(prev => ({
-                                ...prev,
-                                verification: {
-                                    ...prev.verification || {},
-                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, targetBot: e.target.value }
-                                }
-                            }))}
-                            placeholder="@AutoRechargeProbot"
-                            style={{ width: '100%', boxSizing: 'border-box' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>发送格式</label>
-                        <input type="text" className="input"
-                            value={config?.verification?.gptRechargeBot?.sendFormat || '{account}'}
-                            onChange={e => setConfig(prev => ({
-                                ...prev,
-                                verification: {
-                                    ...prev.verification || {},
-                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, sendFormat: e.target.value }
-                                }
-                            }))}
-                            placeholder="{account}"
-                            style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '12px' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>超时(秒)</label>
-                        <input type="number" className="input"
-                            value={config?.verification?.gptRechargeBot?.timeout ?? 120}
-                            onChange={e => setConfig(prev => ({
-                                ...prev,
-                                verification: {
-                                    ...prev.verification || {},
-                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, timeout: parseInt(e.target.value, 10) || 120 }
-                                }
-                            }))}
-                            min="30" max="600"
-                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>最大重试</label>
-                        <input type="number" className="input"
-                            value={config?.verification?.gptRechargeBot?.maxRetries ?? 5}
-                            onChange={e => setConfig(prev => ({
-                                ...prev,
-                                verification: {
-                                    ...prev.verification || {},
-                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, maxRetries: parseInt(e.target.value, 10) || 5 }
-                                }
-                            }))}
-                            min="1" max="20"
-                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
-                        />
-                    </div>
-                    <div style={{ gridColumn: '1 / -1', marginTop: '2px', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        这是无卡密 TG 通道。占位符支持: <code>{'{account}'}</code> <code>{'{email}'}</code>（兼容保留 <code>{'{card_key}'}</code>）。账号请在 TG Bot 页面给账号勾选 <strong>GPTBot</strong> 标签。
-                    </div>
-                </div>
-            </div>
-
             {/* GPT TG Account Pool */}
             <div className="card" style={{ overflow: 'hidden' }}>
                 <div style={{
@@ -1752,13 +1657,30 @@ function GptKeysTab({ config, setConfig }) {
                 )}
             </div>
 
-            {/* GPT TG Rules */}
+            {/* GPT TG Bot + Rules */}
             <div className="card" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 700 }}>
-                    🧩 GPT TG 响应规则
+                <div style={{
+                    padding: '16px 20px',
+                    borderBottom: '1px solid var(--border-primary)',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                }}>
+                    <span>🤖 GPT 充值 TG Bot · 响应规则</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0f766e', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={config?.verification?.gptRechargeBot?.enabled || false}
+                            onChange={e => updateGptCfg({ enabled: e.target.checked })}
+                            style={{ width: '16px', height: '16px' }}
+                        />
+                        启用
+                    </label>
                 </div>
                 <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px 120px', gap: '8px' }}>
                         <div>
                             <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>目标 Bot</label>
                             <input
@@ -1781,6 +1703,34 @@ function GptKeysTab({ config, setConfig }) {
                                 style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '12px' }}
                             />
                         </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>超时(秒)</label>
+                            <input
+                                type="number"
+                                className="input"
+                                value={config?.verification?.gptRechargeBot?.timeout ?? 120}
+                                onChange={e => updateGptCfg({ timeout: parseInt(e.target.value, 10) || 120 })}
+                                min="30"
+                                max="600"
+                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>最大重试</label>
+                            <input
+                                type="number"
+                                className="input"
+                                value={config?.verification?.gptRechargeBot?.maxRetries ?? 5}
+                                onChange={e => updateGptCfg({ maxRetries: parseInt(e.target.value, 10) || 5 })}
+                                min="1"
+                                max="20"
+                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ marginTop: '-4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        这是无卡密 TG 通道。占位符支持: <code>{'{account}'}</code> <code>{'{email}'}</code>（兼容保留 <code>{'{card_key}'}</code>）。
                     </div>
 
                     <div>

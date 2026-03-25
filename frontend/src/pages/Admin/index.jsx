@@ -3050,6 +3050,9 @@ export default function Admin() {
     const [usersLoading, setUsersLoading] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [editCredits, setEditCredits] = useState('');
+    const [historyUser, setHistoryUser] = useState(null);
+    const [userHistory, setUserHistory] = useState([]);
+    const [userHistoryLoading, setUserHistoryLoading] = useState(false);
 
     // Region mode state: 'global' (default) or 'us_only'
     const [regionMode, setRegionMode] = useState('global');
@@ -3184,6 +3187,14 @@ export default function Admin() {
 
                     setVerifyLog(prev => {
                         const existingIdx = prev.findIndex(l => l.verificationId === vid);
+                        const existingEntry = existingIdx >= 0 ? prev[existingIdx] : null;
+                        const existingIsTerminal = existingEntry && (existingEntry.status === 'pass' || existingEntry.status === 'failed');
+
+                        // Once a VID is terminal, do not let later SSE events rewrite it.
+                        if (existingIsTerminal) {
+                            return prev;
+                        }
+
                         const newEntry = {
                             id: existingIdx >= 0 ? prev[existingIdx].id : `sse-${Date.now()}-${Math.random()}`,
                             verificationId: vid,
@@ -3191,6 +3202,13 @@ export default function Admin() {
                             message: data.message || (entryStatus === 'processing' ? '处理中...' : ''),
                             timestamp: new Date().toISOString(),
                             cdk: existingIdx >= 0 ? prev[existingIdx].cdk : '',
+                            via: data.via || data.source || (existingIdx >= 0 ? prev[existingIdx].via : ''),
+                            source: data.source || (existingIdx >= 0 ? prev[existingIdx].source : ''),
+                            method: data.method || (existingIdx >= 0 ? prev[existingIdx].method : ''),
+                            submitEmail: data.submitEmail || data.link || (existingIdx >= 0 ? prev[existingIdx].submitEmail : ''),
+                            userId: data.userId || (existingIdx >= 0 ? prev[existingIdx].userId : ''),
+                            cardKey: data.cardKey || (existingIdx >= 0 ? prev[existingIdx].cardKey : ''),
+                            channel: data.channel || (existingIdx >= 0 ? prev[existingIdx].channel : ''),
                         };
                         if (existingIdx >= 0) {
                             const newLog = [...prev];
@@ -3215,6 +3233,12 @@ export default function Admin() {
                                     status,
                                     message: msg,
                                     via: res.via || res.botType || newLog[existingIdx].via || '',
+                                    source: res.source || newLog[existingIdx].source || '',
+                                    method: res.method || newLog[existingIdx].method || '',
+                                    submitEmail: res.submitEmail || res.link || newLog[existingIdx].submitEmail || '',
+                                    userId: res.userId || newLog[existingIdx].userId || '',
+                                    cardKey: res.cardKey || newLog[existingIdx].cardKey || '',
+                                    channel: res.channel || newLog[existingIdx].channel || '',
                                     timestamp: new Date().toISOString(),
                                 };
                             } else {
@@ -3224,6 +3248,12 @@ export default function Admin() {
                                     status,
                                     message: msg,
                                     via: res.via || res.botType || '',
+                                    source: res.source || '',
+                                    method: res.method || '',
+                                    submitEmail: res.submitEmail || res.link || '',
+                                    userId: res.userId || '',
+                                    cardKey: res.cardKey || '',
+                                    channel: res.channel || '',
                                     timestamp: new Date().toISOString(),
                                     cdk: data.cdkRemaining != null ? '' : '',
                                 });
@@ -3448,7 +3478,7 @@ export default function Admin() {
         }
     };
 
-    const handleUpdateCredits = async () => {
+    const handleUpdateUser = async () => {
         if (!editingUser) return;
         const credits = parseInt(editCredits);
         if (isNaN(credits) || credits < 0) {
@@ -3457,7 +3487,7 @@ export default function Admin() {
         }
         try {
             const token = user?.token || localStorage.getItem('verifykey-token');
-            const res = await fetch(`${API_BASE}/api/admin/users/${editingUser.id}/credits`, {
+            const res = await fetch(`${API_BASE}/api/admin/users/${editingUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ credits })
@@ -3466,10 +3496,35 @@ export default function Admin() {
                 setEditingUser(null);
                 fetchUsers();
             } else {
-                alert('修改失败');
+                const data = await res.json().catch(() => ({}));
+                alert(data.detail || '修改失败');
             }
         } catch (e) {
             alert('修改失败: ' + e.message);
+        }
+    };
+
+    const handleViewUserHistory = async (targetUser) => {
+        setHistoryUser(targetUser);
+        setUserHistory([]);
+        setUserHistoryLoading(true);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/users/${targetUser.id}/history`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                setUserHistory(data.history || []);
+            } else {
+                alert(data.detail || '加载历史失败');
+                setHistoryUser(null);
+            }
+        } catch (e) {
+            alert('加载历史失败: ' + e.message);
+            setHistoryUser(null);
+        } finally {
+            setUserHistoryLoading(false);
         }
     };
 
@@ -4196,6 +4251,11 @@ export default function Admin() {
                                     const vid = r.verificationId || '';
                                     const shortVid = vid.length > 20 ? `${vid.slice(0, 8)}...${vid.slice(-8)}` : vid;
                                     const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
+                                    const submitEmail = r.submitEmail || '';
+                                    const shortSubmitEmail = submitEmail && submitEmail.length > 48 ? `${submitEmail.slice(0, 45)}...` : submitEmail;
+                                    const method = r.method || '';
+                                    const cardKey = r.cardKey || '';
+                                    const shortCardKey = cardKey && cardKey.length > 24 ? `${cardKey.slice(0, 10)}...${cardKey.slice(-8)}` : cardKey;
                                     const bgColor = isProcessing ? 'rgba(245, 158, 11, 0.06)' : isPass ? 'rgba(22, 163, 74, 0.06)' : 'rgba(220, 38, 38, 0.06)';
                                     const borderColor = isProcessing ? 'rgba(245, 158, 11, 0.15)' : isPass ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)';
                                     const iconBg = isProcessing ? '#f59e0b' : isPass ? '#16a34a' : '#dc2626';
@@ -4232,6 +4292,7 @@ export default function Admin() {
                                                             pixel: { bg: '#059669', label: 'UPixel' },
                                                             kpixel: { bg: '#7c5cfc', label: 'KPixel' },
                                                             vpixel: { bg: '#0891b2', label: 'VPixel' },
+                                                            ypixel: { bg: '#d97706', label: 'YPixel' },
                                                             gpt: { bg: '#d97706', label: 'GPT' },
                                                         };
                                                         const vc = viaColors[r.via] || null;
@@ -4248,8 +4309,17 @@ export default function Admin() {
                                                 {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                     <span>{ts}</span>
+                                                    {submitEmail && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>📧 {shortSubmitEmail}</span>}
+                                                    {r.userId && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.userId}</span>}
                                                     {r.cdk && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.cdk}</span>}
                                                 </div>
+                                                {(method || cardKey || r.channel) && (
+                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                        {method && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>method: {method}</span>}
+                                                        {r.channel && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>channel: {String(r.channel).toUpperCase()}</span>}
+                                                        {cardKey && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>card: {shortCardKey}</span>}
+                                                    </div>
+                                                )}
                                             </div>
                                             {/* Manual override buttons - rightmost */}
                                             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', marginLeft: 'auto', alignSelf: 'center' }}>
@@ -4430,6 +4500,11 @@ export default function Admin() {
                                                         onClick={() => { setEditingUser(u); setEditCredits(String(u.credits ?? 0)); }}>
                                                         编辑
                                                     </button>
+                                                    <button className="btn btn-sm btn-secondary"
+                                                        style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '6px' }}
+                                                        onClick={() => handleViewUserHistory(u)}>
+                                                        历史
+                                                    </button>
                                                     {u.role !== 'admin' && (
                                                         <button
                                                             className={`btn btn-sm ${(!u.status || u.status === 'active') ? 'btn-outline' : 'btn-primary'}`}
@@ -4446,9 +4521,9 @@ export default function Admin() {
                             </table>
                         </div>
 
-                        {/* Edit Credits Modal */}
+                        {/* Edit User Modal */}
                         {editingUser && (
-                            <div onClick={() => setEditingUser(null)} style={{
+                            <div onClick={() => { setEditingUser(null); }} style={{
                                 position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
                             }}>
@@ -4470,15 +4545,86 @@ export default function Admin() {
                                         />
                                     </div>
                                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                        <button className="btn" onClick={() => setEditingUser(null)}
+                                        <button className="btn" onClick={() => { setEditingUser(null); }}
                                             style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
                                             取消
                                         </button>
-                                        <button className="btn btn-primary" onClick={handleUpdateCredits}
+                                        <button className="btn btn-primary" onClick={handleUpdateUser}
                                             style={{ padding: '8px 24px', borderRadius: '8px', fontWeight: 600 }}>
                                             保存
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* User History Modal */}
+                        {historyUser && (
+                            <div onClick={() => setHistoryUser(null)} style={{
+                                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+                            }}>
+                                <div onClick={e => e.stopPropagation()} style={{
+                                    background: 'var(--bg-card, #fff)', borderRadius: '16px', padding: '24px',
+                                    width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflow: 'auto',
+                                    boxShadow: '0 20px 60px rgba(0,0,0,0.15)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '16px' }}>
+                                        <div>
+                                            <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700 }}>📜 用户历史提交</h3>
+                                            <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                                                {historyUser.username || historyUser.email} (ID: {historyUser.id})
+                                            </p>
+                                        </div>
+                                        <button className="btn" onClick={() => setHistoryUser(null)}
+                                            style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                                            关闭
+                                        </button>
+                                    </div>
+
+                                    {userHistoryLoading ? (
+                                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>加载中...</div>
+                                    ) : userHistory.length === 0 ? (
+                                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>暂无历史记录</div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            {userHistory.map(item => {
+                                                const isPass = item.status === 'pass';
+                                                const isFailed = item.status === 'failed';
+                                                const badgeBg = item.type === 'gpt' ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : '#059669');
+                                                return (
+                                                    <div key={item.id} style={{
+                                                        border: '1px solid var(--border-primary)',
+                                                        borderRadius: '12px',
+                                                        padding: '14px 16px',
+                                                        background: isPass ? 'rgba(22,163,74,0.04)' : isFailed ? 'rgba(220,38,38,0.04)' : 'var(--bg-card)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.verificationId || item.id}</span>
+                                                                <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', background: badgeBg, color: '#fff', fontWeight: 600 }}>
+                                                                    {(item.type || item.via || 'task').toUpperCase()}
+                                                                </span>
+                                                                <span style={{ fontSize: '12px', color: isPass ? '#16a34a' : isFailed ? '#dc2626' : '#64748b', fontWeight: 600 }}>
+                                                                    {isPass ? '成功' : isFailed ? '失败' : item.status}
+                                                                </span>
+                                                            </div>
+                                                            <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                                                {item.timestamp ? new Date(item.timestamp).toLocaleString('zh-CN', { hour12: false }) : '-'}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
+                                                            <div><strong>提交信息：</strong>{item.submitInfo || item.email || item.verificationId || '未记录'}</div>
+                                                            {item.email && <div><strong>邮箱：</strong>{item.email}</div>}
+                                                            {item.cardKey && <div><strong>卡密：</strong><code>{item.cardKey}</code></div>}
+                                                            {item.via && <div><strong>方法：</strong>{item.via}</div>}
+                                                            {item.message && <div><strong>结果：</strong>{item.message}</div>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -8773,4 +8919,3 @@ export default function Admin() {
         </div >
     );
 }
-

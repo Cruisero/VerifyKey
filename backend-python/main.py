@@ -247,6 +247,7 @@ async def _resume_getgem_poll(vid: str, task_id: str, cdk: str):
 
 # ========== Admin SSE Event Bus ==========
 _admin_sse_subscribers: list = []  # list of asyncio.Queue for connected admin clients
+_terminal_verify_events: dict = {}  # vid -> {"status": "pass"|"failed", "timestamp": float}
 
 # ========== Manual Override Signal ==========
 # VID → {"status": "pass"|"failed", "timestamp": float}
@@ -279,9 +280,71 @@ def consume_manual_override(vid: str):
             return entry["status"]
     return None
 
+
+def _normalize_terminal_status(status: str):
+    value = (status or "").lower()
+    if value in ("pass", "success", "approved"):
+        return "pass"
+    if value in ("failed", "fail", "error", "rejected", "cancel", "cancelled", "canceled", "timeout"):
+        return "failed"
+    return None
+
+
+def _remember_terminal_verify_event(vid: str, status: str):
+    normalized = _normalize_terminal_status(status)
+    if not vid or not normalized:
+        return
+    import time
+    _terminal_verify_events[vid] = {"status": normalized, "timestamp": time.time()}
+
+    cutoff = time.time() - (24 * 60 * 60)
+    expired = [key for key, value in _terminal_verify_events.items() if value.get("timestamp", 0) < cutoff]
+    for key in expired:
+        _terminal_verify_events.pop(key, None)
+
+
+def _has_terminal_verify_event(vid: str):
+    if not vid:
+        return False
+    entry = _terminal_verify_events.get(vid)
+    if not entry:
+        return False
+    import time
+    if time.time() - entry.get("timestamp", 0) > 24 * 60 * 60:
+        _terminal_verify_events.pop(vid, None)
+        return False
+    return True
+
+
+def _build_verify_event_meta(source: str, email: str = "", user_id: int = 0, method: str = "", card_key: str = "", channel: str = ""):
+    return {
+        "source": source,
+        "link": email or "",
+        "submitEmail": email or "",
+        "userId": f"user:{user_id}" if user_id else "",
+        "method": method or source,
+        "cardKey": card_key or "",
+        "channel": channel or "",
+    }
+
+
 def broadcast_verify_event(event: dict):
     """Broadcast a verification event to all connected admin SSE subscribers."""
     import json as _json_bc
+
+    if event.get("type") == "progress":
+        vid = event.get("vid", "")
+        if _has_terminal_verify_event(vid):
+            return
+        if event.get("step") == "result":
+            final_status = "pass" if event.get("success") else (event.get("status") or "failed")
+            _remember_terminal_verify_event(vid, final_status)
+    elif event.get("type") == "done":
+        for result in event.get("results", []) or []:
+            vid = result.get("verificationId") or result.get("vid") or ""
+            final_status = "pass" if result.get("success") else (result.get("status") or "failed")
+            _remember_terminal_verify_event(vid, final_status)
+
     for q in _admin_sse_subscribers:
         try:
             q.put_nowait(event)
@@ -1838,6 +1901,99 @@ async def update_user_credits_endpoint(user_id: int, request: Request, authoriza
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
     return {"success": True, "credits": int(credits)}
+
+
+@app.post("/api/admin/users/{user_id}")
+async def update_user_admin_endpoint(user_id: int, request: Request, authorization: str = Header(None)):
+    """Update user editable fields (admin only)."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    admin = auth.verify_token(token)
+    if not admin or admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    data = await request.json()
+    credits = data.get("credits")
+    password = (data.get("password") or "").strip()
+
+    if credits is None or not isinstance(credits, (int, float)):
+        raise HTTPException(status_code=400, detail="Invalid credits value")
+    if int(credits) < 0:
+        raise HTTPException(status_code=400, detail="Credits must be >= 0")
+    if password and len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    success = auth.update_user_credits_admin(user_id, int(credits))
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    password_updated = False
+    if password:
+        password_updated = auth.reset_password(user_id, password)
+
+    return {"success": True, "credits": int(credits), "passwordUpdated": password_updated}
+
+
+@app.get("/api/admin/users/{user_id}/history")
+async def get_admin_user_history_endpoint(user_id: int, authorization: str = Header(None)):
+    """Get combined verification/recharge history for a specific user (admin only)."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    admin = auth.verify_token(token)
+    if not admin or admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    target_user = auth.get_user_by_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    cdk_tag = f"user:{user_id}"
+
+    pixel_records = verification_history.get_history_by_user(user_id, limit=100)
+    pixel_items = [
+        {
+            "id": r["id"],
+            "type": "pixel",
+            "status": r["status"],
+            "verificationId": r.get("verificationId", ""),
+            "email": "",
+            "submitInfo": r.get("verificationId", ""),
+            "message": (r.get("message") or "").replace("❌", "").replace("✅", "").strip(),
+            "via": r.get("via", ""),
+            "cdk": r.get("cdk", ""),
+            "timestamp": r["timestamp"],
+        }
+        for r in pixel_records
+    ]
+
+    conn = database.get_connection()
+    gpt_rows = conn.execute(
+        "SELECT id, card_key, status, used_email, used_at, channel FROM gpt_keys WHERE used_by_cdk = ? ORDER BY id DESC LIMIT 100",
+        (cdk_tag,)
+    ).fetchall()
+    gpt_items = [
+        {
+            "id": f"gpt_{row['id']}",
+            "type": "gpt",
+            "status": "pass" if row["status"] == "used" else "failed",
+            "verificationId": f"gpt_{row['card_key'][:8]}",
+            "email": row["used_email"] or "",
+            "submitInfo": row["used_email"] or "",
+            "message": f"ChatGPT 充值{'成功' if row['status'] == 'used' else '失败'} ({(row['channel'] or 'sbs').upper()})",
+            "via": "gpt",
+            "cdk": cdk_tag,
+            "cardKey": row["card_key"],
+            "channel": row["channel"] or "sbs",
+            "timestamp": row["used_at"] or "",
+        }
+        for row in gpt_rows
+    ]
+
+    all_items = pixel_items + gpt_items
+    all_items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return {"user": target_user, "history": all_items[:100]}
 
 
 # ============ DOCUMENT CAPTURE ROUTES ============
@@ -4178,6 +4334,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     row2 = cursor2.fetchone()
     if row2 and row2["verificationId"]:
         set_manual_override(row2["verificationId"], request.status)
+        _remember_terminal_verify_event(row2["verificationId"], request.status)
     # Broadcast the update via SSE so admin page refreshes
     broadcast_verify_event({"type": "history_updated", "id": record_id, "status": request.status})
     return {"updated": True, "id": record_id, "status": request.status, "cdkMessage": cdk_message}
@@ -6450,6 +6607,10 @@ def _get_user_verification_row(verification_id: str, user_id: int):
     ).fetchone()
 
 
+def _is_terminal_history_status(status: str) -> bool:
+    return (status or "").lower() in ("pass", "failed")
+
+
 def _upsert_user_verification_result(verification_id: str, user_id: int, status: str, message: str, via: str = ""):
     if not verification_id or not user_id:
         return {"updated": False, "status": status}
@@ -6477,8 +6638,13 @@ def _upsert_user_verification_result(verification_id: str, user_id: int, status:
 
 def _finalize_user_success(verification_id: str, user_id: int, cost: float, message: str, via: str = ""):
     existing = _get_user_verification_row(verification_id, user_id)
-    if existing and existing["status"] == "pass":
-        return {"finalized": True, "deducted": False, "already_done": True}
+    if existing and _is_terminal_history_status(existing["status"]):
+        return {
+            "finalized": existing["status"] == "pass",
+            "deducted": False,
+            "already_done": True,
+            "status": existing["status"],
+        }
 
     deducted = False
     if user_id:
@@ -6498,8 +6664,12 @@ def _finalize_user_success(verification_id: str, user_id: int, cost: float, mess
 
 def _finalize_user_failure(verification_id: str, user_id: int, message: str, via: str = ""):
     existing = _get_user_verification_row(verification_id, user_id)
-    if existing and existing["status"] == "pass":
-        return {"finalized": False, "status": "pass"}
+    if existing and _is_terminal_history_status(existing["status"]):
+        return {
+            "finalized": existing["status"] == "failed",
+            "status": existing["status"],
+            "already_done": True,
+        }
     return _upsert_user_verification_result(verification_id, user_id, "failed", message, via=via)
 
 
@@ -6564,14 +6734,16 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     card_key = payload.get("card_key", "")
     email = payload.get("email", "")
     channel = payload.get("channel", "sbs")
+    user_id = int(payload.get("user_id", 0) or 0)
+    event_meta = _build_verify_event_meta("gpt", email or "GPT充值", user_id, f"gpt_{channel}", card_key, channel)
     _release_gpt_key(card_key)
     broadcast_verify_event({
-        "type": "progress", "source": "gpt",
-        "vid": task_id, "link": email or "GPT充值",
+        "type": "progress",
         "step": "result", "status": "failed", "success": False,
         "message": "❌ 充值任务因服务重启中断，已恢复为失败",
-        "channel": channel,
         "recovered": True,
+        "vid": task_id,
+        **event_meta,
     })
     _complete_async_task("gpt", task_id)
 
@@ -6582,16 +6754,15 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
     base_url = pixel_cfg["baseUrl"]
     headers = {"X-API-Key": pixel_cfg["apiKey"]}
     start_time = time.time()
+    event_meta = _build_verify_event_meta("pixel", email, user_id, "pixel_api")
 
     # Broadcast initial submitted event
     broadcast_verify_event({
         "type": "progress",
-        "source": "pixel",
         "vid": job_id,
-        "link": email,
         "step": "submitted",
         "message": "任务已提交，等待设备处理...",
-        "userId": f"user:{user_id}" if user_id else "",
+        **event_meta,
     })
 
     try:
@@ -6603,14 +6774,13 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
-                        "source": "pixel",
                         "vid": job_id,
-                        "link": email,
                         "step": "result",
                         "status": "failed",
                         "success": False,
                         "message": "❌ 轮询超时",
                         "elapsed": round(time.time() - start_time, 1),
+                        **event_meta,
                     })
                     break
 
@@ -6640,9 +6810,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 broadcast_verify_event({
                     "type": "progress",
-                    "source": "pixel",
                     "vid": job_id,
-                    "link": email,
                     "step": "processing" if status in ("queued", "running") else "result",
                     "status": status,
                     "stage": stage,
@@ -6651,6 +6819,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     "queuePosition": queue_pos,
                     "message": msg,
                     "elapsed": round(elapsed, 1),
+                    **event_meta,
                 })
 
                 if status == "success":
@@ -6660,15 +6829,14 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     # Broadcast final result
                     broadcast_verify_event({
                         "type": "progress",
-                        "source": "pixel",
                         "vid": job_id,
-                        "link": email,
                         "step": "result",
                         "status": "approved",
                         "success": True,
                         "message": f"✅ 获取成功",
                         "url": url,
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
 
@@ -6678,15 +6846,14 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
-                        "source": "pixel",
                         "vid": job_id,
-                        "link": email,
                         "step": "result",
                         "status": "failed",
                         "success": False,
                         "message": f"❌ {error}",
                         "error": error,
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
 
@@ -6699,13 +6866,12 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
         _complete_async_task("pixel", job_id)
         broadcast_verify_event({
             "type": "progress",
-            "source": "pixel",
             "vid": job_id,
-            "link": email,
             "step": "result",
             "status": "failed",
             "success": False,
             "message": f"❌ 轮询错误: {str(e)}",
+            **event_meta,
         })
     finally:
         _pixel_polling_tasks.pop(job_id, None)
@@ -6982,15 +7148,14 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
     cdkey = kpixel_cfg["cdkey"]
     credit_cost = kpixel_cfg.get("creditCost", 1.5)
     start_time = time.time()
+    event_meta = _build_verify_event_meta("kpixel", email, user_id, "kpixel_api")
 
     broadcast_verify_event({
         "type": "progress",
-        "source": "kpixel",
         "vid": str(task_id),
-        "link": email,
         "step": "submitted",
         "message": "任务已提交，等待设备处理...",
-        "userId": f"user:{user_id}" if user_id else "",
+        **event_meta,
     })
 
     try:
@@ -7001,12 +7166,13 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
                     _finalize_user_failure(str(task_id), user_id, "KPixel 失败: 轮询超时", via="kpixel")
                     _complete_async_task("kpixel", str(task_id))
                     broadcast_verify_event({
-                        "type": "progress", "source": "kpixel",
-                        "vid": str(task_id), "link": email,
+                        "type": "progress",
+                        "vid": str(task_id),
                         "step": "result", "status": "failed",
                         "success": False,
                         "message": "❌ 轮询超时",
                         "elapsed": round(time.time() - start_time, 1),
+                        **event_meta,
                     })
                     break
 
@@ -7033,43 +7199,47 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
                 # Map status for SSE
                 if status == "Pending":
                     broadcast_verify_event({
-                        "type": "progress", "source": "kpixel",
-                        "vid": str(task_id), "link": email,
+                        "type": "progress",
+                        "vid": str(task_id),
                         "step": "processing", "status": "queued",
                         "message": "⏳ 排队中...",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                 elif status == "Running":
                     broadcast_verify_event({
-                        "type": "progress", "source": "kpixel",
-                        "vid": str(task_id), "link": email,
+                        "type": "progress",
+                        "vid": str(task_id),
                         "step": "processing", "status": "running",
                         "message": f"🔄 运行中... {message}" if message else "🔄 运行中...",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                 elif status == "Success":
                     _finalize_user_success(str(task_id), user_id, credit_cost, f"KPixel 成功: {message}", via="kpixel")
                     _complete_async_task("kpixel", str(task_id))
                     broadcast_verify_event({
-                        "type": "progress", "source": "kpixel",
-                        "vid": str(task_id), "link": email,
+                        "type": "progress",
+                        "vid": str(task_id),
                         "step": "result", "status": "approved",
                         "success": True,
                         "message": f"✅ {message}" if message else "✅ 验证成功",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
                 elif status == "Failed":
                     _finalize_user_failure(str(task_id), user_id, f"KPixel 失败: {message}", via="kpixel")
                     _complete_async_task("kpixel", str(task_id))
                     broadcast_verify_event({
-                        "type": "progress", "source": "kpixel",
-                        "vid": str(task_id), "link": email,
+                        "type": "progress",
+                        "vid": str(task_id),
                         "step": "result", "status": "failed",
                         "success": False,
                         "message": f"❌ {message}" if message else "❌ 验证失败",
                         "error": message,
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
 
@@ -7081,11 +7251,12 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
         _finalize_user_failure(str(task_id), user_id, f"KPixel 失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="kpixel")
         _complete_async_task("kpixel", str(task_id))
         broadcast_verify_event({
-            "type": "progress", "source": "kpixel",
-            "vid": str(task_id), "link": email,
+            "type": "progress",
+            "vid": str(task_id),
             "step": "result", "status": "failed",
             "success": False,
             "message": f"❌ 轮询错误: {str(e)}",
+            **event_meta,
         })
     finally:
         _kpixel_polling_tasks.pop(task_id, None)
@@ -7450,17 +7621,17 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
     base_url = vpixel_cfg["baseUrl"]
     credit_cost = vpixel_cfg.get("creditCost", 1.5)
     start_time = time.time()
+    event_meta = _build_verify_event_meta("vpixel", email, user_id, "vpixel_card_pool", card)
 
     # Init status cache
     _vpixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": 0}
 
     broadcast_verify_event({
         "type": "progress",
-        "source": "vpixel",
         "vid": poll_id,
-        "link": email,
         "step": "submitted",
         "message": "任务已提交，等待设备处理...",
+        **event_meta,
     })
 
     STATUS_MAP = {1: "queued", 2: "running", 3: "success", 4: "failed"}
@@ -7480,11 +7651,12 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                     _complete_async_task("vpixel", poll_id)
                     _vpixel_job_status[poll_id] = {"status": "Failed", "message": "轮询超时", "elapsed": round(time.time() - start_time, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "vpixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "result", "status": "failed", "success": False,
                         "message": "❌ 轮询超时",
                         "elapsed": round(time.time() - start_time, 1),
+                        **event_meta,
                     })
                     break
 
@@ -7514,11 +7686,12 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                     # Account not yet in results, still waiting
                     _vpixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": round(time.time() - start_time, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "vpixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "processing", "status": "queued",
                         "message": "⏳ 排队中...",
                         "elapsed": round(time.time() - start_time, 1),
+                        **event_meta,
                     })
                     continue
 
@@ -7530,32 +7703,35 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                 if mapped_status == "queued":
                     _vpixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "vpixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "processing", "status": "queued",
                         "message": "⏳ 排队中...",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                 elif mapped_status == "running":
                     _vpixel_job_status[poll_id] = {"status": "Running", "message": result_msg or "运行中...", "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "vpixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "processing", "status": "running",
                         "message": f"🔄 运行中... {result_msg}" if result_msg else "🔄 运行中...",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                 elif mapped_status == "success":
                     _finalize_user_success(poll_id, user_id, credit_cost, f"VPixel 成功: {result_msg}", via="vpixel")
                     _complete_async_task("vpixel", poll_id)
                     _vpixel_job_status[poll_id] = {"status": "Success", "message": result_msg or "验证成功", "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "vpixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "result", "status": "approved",
                         "success": True,
                         "message": f"✅ {result_msg}" if result_msg else "✅ 验证成功",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
                 elif mapped_status == "failed":
@@ -7570,13 +7746,14 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                     _complete_async_task("vpixel", poll_id)
                     _vpixel_job_status[poll_id] = {"status": "Failed", "message": result_msg or "验证失败", "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "vpixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "result", "status": "failed",
                         "success": False,
                         "message": f"❌ {result_msg}" if result_msg else "❌ 验证失败",
                         "error": result_msg,
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
 
@@ -7603,11 +7780,12 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
         _complete_async_task("vpixel", poll_id)
         _vpixel_job_status[poll_id] = {"status": "Failed", "message": f"轮询错误: {str(e)}", "elapsed": 0}
         broadcast_verify_event({
-            "type": "progress", "source": "vpixel",
-            "vid": poll_id, "link": email,
+            "type": "progress",
+            "vid": poll_id,
             "step": "result", "status": "failed",
             "success": False,
             "message": f"❌ 轮询错误: {str(e)}",
+            **event_meta,
         })
     finally:
         _vpixel_polling_tasks.pop(poll_id, None)
@@ -7884,14 +8062,15 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
     base_url = ypixel_cfg["baseUrl"]
     credit_cost = ypixel_cfg.get("creditCost", 1.0)
     start_time = time.time()
+    event_meta = _build_verify_event_meta("ypixel", email, user_id, "ypixel_card_pool", card_key)
 
     _ypixel_job_status[poll_id] = {"status": "Pending", "message": "排队中...", "elapsed": 0}
 
     broadcast_verify_event({
-        "type": "progress", "source": "ypixel",
-        "vid": poll_id, "link": email,
+        "type": "progress",
+        "vid": poll_id,
         "step": "submitted", "message": "任务已提交，等待处理...",
-        "userId": f"user:{user_id}" if user_id else "",
+        **event_meta,
     })
 
     try:
@@ -7909,11 +8088,12 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     _complete_async_task("ypixel", poll_id)
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": "任务超时", "elapsed": round(time.time() - start_time, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "ypixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "result", "status": "failed", "success": False,
                         "message": "❌ 任务超时",
                         "elapsed": round(time.time() - start_time, 1),
+                        **event_meta,
                     })
                     break
 
@@ -7966,11 +8146,12 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     display_msg = result_url or message or "验证成功"
                     _ypixel_job_status[poll_id] = {"status": "Success", "message": display_msg, "elapsed": round(elapsed, 1), "url": result_url}
                     broadcast_verify_event({
-                        "type": "progress", "source": "ypixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "result", "status": "approved", "success": True,
                         "message": f"✅ {display_msg}",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
 
@@ -7988,11 +8169,12 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     _complete_async_task("ypixel", poll_id)
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "ypixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "result", "status": "failed", "success": False,
                         "message": f"❌ {err_msg}",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
 
@@ -8009,11 +8191,12 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     _complete_async_task("ypixel", poll_id)
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
-                        "type": "progress", "source": "ypixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "result", "status": "failed", "success": False,
                         "message": f"❌ {err_msg}",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
                     break
 
@@ -8025,12 +8208,13 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                         "message": progress_msg, "elapsed": round(elapsed, 1),
                     }
                     broadcast_verify_event({
-                        "type": "progress", "source": "ypixel",
-                        "vid": poll_id, "link": email,
+                        "type": "progress",
+                        "vid": poll_id,
                         "step": "processing",
                         "status": "running" if task_status in ("processing", "running") else "queued",
                         "message": f"🔄 {progress_msg}" if task_status in ("processing", "running") else f"⏳ {progress_msg}",
                         "elapsed": round(elapsed, 1),
+                        **event_meta,
                     })
 
     except asyncio.CancelledError:
@@ -8728,13 +8912,13 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     })
 
     # SSE: submitted
+    event_meta = _build_verify_event_meta("gpt", email or "GPT充值", user_id, f"gpt_{channel}", card_key, channel)
     broadcast_verify_event({
-        "type": "progress", "source": "gpt",
-        "vid": gpt_vid, "link": email or "GPT充值",
+        "type": "progress",
+        "vid": gpt_vid,
         "step": "submitted",
         "message": f"⏳ 正在充值 ({channel.upper()} 通道)...",
-        "channel": channel,
-        "userId": f"user:{user_id}" if user_id else "",
+        **event_meta,
     })
 
     import httpx
@@ -8748,11 +8932,11 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
                 broadcast_verify_event({
-                    "type": "progress", "source": "gpt",
-                    "vid": gpt_vid, "link": email or "GPT充值",
+                    "type": "progress",
+                    "vid": gpt_vid,
                     "step": "result", "status": "failed", "success": False,
                     "message": f"❌ {msg}",
-                    "channel": channel,
+                    **event_meta,
                 })
                 raise HTTPException(status_code=400, detail=msg)
         elif channel == "vip":
@@ -8764,11 +8948,11 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
                 broadcast_verify_event({
-                    "type": "progress", "source": "gpt",
-                    "vid": gpt_vid, "link": email or "GPT充值",
+                    "type": "progress",
+                    "vid": gpt_vid,
                     "step": "result", "status": "failed", "success": False,
                     "message": f"❌ {msg}",
-                    "channel": channel,
+                    **event_meta,
                 })
                 raise HTTPException(status_code=400, detail=msg)
         else:
@@ -8790,11 +8974,11 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
                 broadcast_verify_event({
-                    "type": "progress", "source": "gpt",
-                    "vid": gpt_vid, "link": email or "GPT充值",
+                    "type": "progress",
+                    "vid": gpt_vid,
                     "step": "result", "status": "failed", "success": False,
                     "message": f"❌ {msg}",
-                    "channel": channel,
+                    **event_meta,
                 })
                 raise HTTPException(status_code=400, detail=msg)
     except HTTPException:
@@ -8804,11 +8988,11 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         _complete_async_task("gpt", gpt_vid)
         failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
         broadcast_verify_event({
-            "type": "progress", "source": "gpt",
-            "vid": gpt_vid, "link": email or "GPT充值",
+            "type": "progress",
+            "vid": gpt_vid,
             "step": "result", "status": "failed", "success": False,
             "message": f"❌ {failure_msg}",
-            "channel": channel,
+            **event_meta,
         })
         raise HTTPException(status_code=502, detail=failure_msg)
 
@@ -8832,11 +9016,11 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
 
     # SSE: success
     broadcast_verify_event({
-        "type": "progress", "source": "gpt",
-        "vid": gpt_vid, "link": email or "GPT充值",
+        "type": "progress",
+        "vid": gpt_vid,
         "step": "result", "status": "approved", "success": True,
         "message": f"✅ 充值成功 ({channel.upper()})",
-        "channel": channel,
+        **event_meta,
     })
 
     return {"success": True, "message": "充值成功", "channel": channel}

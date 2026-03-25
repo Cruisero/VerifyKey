@@ -1598,6 +1598,32 @@ function GptKeysTab({ config, setConfig }) {
                 <div style={{ padding: '12px 20px', fontSize: '12px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-primary)' }}>
                     这里可直接管理 GPT 充值账号池（添加、登录、检测连接、启用并发、GPTBot 分配）。
                 </div>
+                <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>目标 Bot</label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot'}
+                                onChange={e => updateGptCfg({ targetBot: e.target.value })}
+                                placeholder="@AutoRechargeProbot"
+                                style={{ width: '100%', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>发送格式</label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={config?.verification?.gptRechargeBot?.sendFormat || '{account}'}
+                                onChange={e => updateGptCfg({ sendFormat: e.target.value })}
+                                placeholder="{account}"
+                                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '12px' }}
+                            />
+                        </div>
+                    </div>
+                </div>
                 {tgShowAdd && (
                     <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '8px' }}>

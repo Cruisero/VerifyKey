@@ -132,6 +132,7 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "targetBot": "@AutoRechargeProbot",
             "sendFormat": "{accessToken}",
+            "botFirstFallbackToKey": False,
             "preCommandEnabled": True,
             "preCommand": "⚡ 激活plus母号",
             "preCommandTimeout": 45,

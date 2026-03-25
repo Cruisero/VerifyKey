@@ -14,6 +14,7 @@ import json
 import asyncio
 import re
 import contextlib
+import time
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
@@ -37,6 +38,8 @@ import verification_history
 from bot_stats import bot_stats_tracker
 from node_health_monitor import node_health_monitor
 import database
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -8870,6 +8873,7 @@ def _get_gpt_tg_config() -> dict:
         "enabled": bool(cfg.get("enabled", False)),
         "targetBot": (cfg.get("targetBot") or "@AutoRechargeProbot").strip(),
         "sendFormat": cfg.get("sendFormat") or "{accessToken}",
+        "botFirstFallbackToKey": bool(cfg.get("botFirstFallbackToKey", False)),
         "preCommandEnabled": bool(cfg.get("preCommandEnabled", True)),
         "preCommand": (cfg.get("preCommand") or "⚡ 激活plus母号").strip(),
         "preCommandTimeout": int(cfg.get("preCommandTimeout", 45)),
@@ -9109,6 +9113,36 @@ def _release_gpt_key(card_key: str):
         (card_key,),
     )
     conn.commit()
+
+
+def _reserve_any_gpt_key_for_user(user_id: int, excluded_channels: Optional[List[str]] = None) -> Optional[dict]:
+    """Reserve one available key for user (used for TG->card fallback)."""
+    conn = database.get_connection()
+    excluded_channels = excluded_channels or []
+    key_placeholders = ",".join("?" for _ in GPT_KEY_CHANNELS)
+    key_channel_params = list(GPT_KEY_CHANNELS)
+    if excluded_channels and len(excluded_channels) < len(GPT_KEY_CHANNELS):
+        placeholders = ",".join("?" for _ in excluded_channels)
+        row = conn.execute(
+            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) AND channel NOT IN ({placeholders}) LIMIT 1",
+            key_channel_params + excluded_channels,
+        ).fetchone()
+    elif excluded_channels:
+        row = None
+    else:
+        row = conn.execute(
+            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) LIMIT 1",
+            key_channel_params,
+        ).fetchone()
+    if not row:
+        return None
+    now = datetime.now().isoformat()
+    conn.execute(
+        "UPDATE gpt_keys SET status='reserved', used_by_cdk=?, used_at=? WHERE id=?",
+        (f"user:{user_id}", now, row["id"]),
+    )
+    conn.commit()
+    return {"id": row["id"], "card_key": row["card_key"], "channel": row["channel"] or "sbs"}
 
 def _gpt_sign():
     """Generate a sign value (UUID v4) matching the SBS API's expectation."""
@@ -9377,6 +9411,22 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
         import config_manager as _cfg_mgr
         _cfg = _cfg_mgr.get_config() or {}
         _maint = (_cfg.get("serviceMaintenance") or {})
+        _tg_cfg = _get_gpt_tg_config()
+
+        # Bot-first strategy: prefer TG as primary channel when enabled by config.
+        if (
+            _tg_cfg.get("botFirstFallbackToKey")
+            and not bool(_maint.get("gpt_tg"))
+            and _has_available_gptbot_account(_cfg)
+        ):
+            return {
+                "success": True,
+                "card_key": "",
+                "masked": "TG BOT",
+                "key_id": 0,
+                "channel": "tg",
+            }
+
         excluded_channels = [ch for ch in GPT_KEY_CHANNELS if bool(_maint.get(f"gpt_{ch}"))]
         placeholders = ",".join("?" for _ in excluded_channels) if excluded_channels else None
         key_placeholders = ",".join("?" for _ in GPT_KEY_CHANNELS)
@@ -9492,6 +9542,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     account = body.get("account", "").strip()  # session JSON or extracted account
     email = body.get("email", "").strip()
     channel = body.get("channel", "sbs").strip().lower()
+    tg_cfg = _get_gpt_tg_config()
 
     if not account:
         raise HTTPException(status_code=400, detail="参数不完整")
@@ -9566,22 +9617,128 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         elif channel == "tg":
             data = await _gpt_recharge_via_tg_bot(card_key, account, email)
             if not data.get("success"):
-                msg = data.get("message", "TG BOT 充值失败")
-                if card_key:
-                    _release_gpt_key(card_key)
-                _complete_async_task("gpt", gpt_vid)
-                _broadcast_submit_failure(
-                    "gpt",
-                    msg,
-                    email=email or "GPT充值",
-                    user_id=user_id,
-                    method=f"gpt_{channel}",
-                    http_status=400,
-                    refunded=False,
-                    card_key=card_key,
-                    channel=channel,
-                )
-                raise HTTPException(status_code=400, detail=msg)
+                # Optional compensation: bot-first mode can auto-fallback to key channel before failing user.
+                can_fallback_to_key = bool(tg_cfg.get("botFirstFallbackToKey"))
+                if can_fallback_to_key:
+                    import config_manager as _cfg_mgr
+                    _cfg = _cfg_mgr.get_config() or {}
+                    _maint = (_cfg.get("serviceMaintenance") or {})
+                    excluded_channels = [ch for ch in GPT_KEY_CHANNELS if bool(_maint.get(f"gpt_{ch}"))]
+                    reserved = _reserve_any_gpt_key_for_user(user_id, excluded_channels)
+                    if reserved:
+                        card_key = reserved["card_key"]
+                        channel = reserved["channel"]
+                        broadcast_verify_event({
+                            "type": "progress",
+                            "vid": gpt_vid,
+                            "step": "processing",
+                            "message": f"⚠️ TG 通道失败，自动切换到卡密通道 ({channel.upper()})...",
+                            **event_meta,
+                        })
+                        # Continue below into key-channel branch by falling through to next loop iteration block.
+                        if channel == "red":
+                            data = await _asyncio.to_thread(_red_api_activate, card_key, account)
+                            ok = data.get("success") or data.get("flag", False)
+                            if not ok:
+                                msg = data.get("msg", "充值失败，请稍后重试")
+                                if card_key:
+                                    _release_gpt_key(card_key)
+                                _complete_async_task("gpt", gpt_vid)
+                                _broadcast_submit_failure(
+                                    "gpt",
+                                    msg,
+                                    email=email or "GPT充值",
+                                    user_id=user_id,
+                                    method=f"gpt_{channel}",
+                                    http_status=400,
+                                    refunded=False,
+                                    card_key=card_key,
+                                    channel=channel,
+                                )
+                                raise HTTPException(status_code=400, detail=msg)
+                        elif channel == "vip":
+                            data = await _vip_api_submit(card_key, account)
+                            ok = data.get("success", False) or data.get("code") == 200
+                            if not ok:
+                                msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
+                                if card_key:
+                                    _release_gpt_key(card_key)
+                                _complete_async_task("gpt", gpt_vid)
+                                _broadcast_submit_failure(
+                                    "gpt",
+                                    msg,
+                                    email=email or "GPT充值",
+                                    user_id=user_id,
+                                    method=f"gpt_{channel}",
+                                    http_status=400,
+                                    refunded=False,
+                                    card_key=card_key,
+                                    channel=channel,
+                                )
+                                raise HTTPException(status_code=400, detail=msg)
+                        else:
+                            async with httpx.AsyncClient(timeout=60) as client:
+                                resp = await client.post(
+                                    f"{GPT_SBS_RECHARGE_BASE}/api/vip/r",
+                                    json={
+                                        "cdk": card_key,
+                                        "account": account,
+                                        "type": "gpt",
+                                        "sign": _gpt_sign(),
+                                        "timestamp": int(datetime.now().timestamp() * 1000),
+                                    }
+                                )
+                                data = resp.json()
+                            if resp.status_code != 200 or data.get("code") != 1:
+                                msg = data.get("message", "充值失败，请稍后重试")
+                                if card_key:
+                                    _release_gpt_key(card_key)
+                                _complete_async_task("gpt", gpt_vid)
+                                _broadcast_submit_failure(
+                                    "gpt",
+                                    msg,
+                                    email=email or "GPT充值",
+                                    user_id=user_id,
+                                    method=f"gpt_{channel}",
+                                    http_status=resp.status_code or 400,
+                                    upstream_status=resp.status_code,
+                                    refunded=False,
+                                    card_key=card_key,
+                                    channel=channel,
+                                )
+                                raise HTTPException(status_code=400, detail=msg)
+                    else:
+                        msg = f"{data.get('message', 'TG BOT 充值失败')}（且无可用卡密通道）"
+                        _complete_async_task("gpt", gpt_vid)
+                        _broadcast_submit_failure(
+                            "gpt",
+                            msg,
+                            email=email or "GPT充值",
+                            user_id=user_id,
+                            method=f"gpt_tg",
+                            http_status=400,
+                            refunded=False,
+                            card_key=card_key,
+                            channel="tg",
+                        )
+                        raise HTTPException(status_code=400, detail=msg)
+                else:
+                    msg = data.get("message", "TG BOT 充值失败")
+                    if card_key:
+                        _release_gpt_key(card_key)
+                    _complete_async_task("gpt", gpt_vid)
+                    _broadcast_submit_failure(
+                        "gpt",
+                        msg,
+                        email=email or "GPT充值",
+                        user_id=user_id,
+                        method=f"gpt_{channel}",
+                        http_status=400,
+                        refunded=False,
+                        card_key=card_key,
+                        channel=channel,
+                    )
+                    raise HTTPException(status_code=400, detail=msg)
         else:
             # SBS channel: POST /api/vip/r
             async with httpx.AsyncClient(timeout=60) as client:

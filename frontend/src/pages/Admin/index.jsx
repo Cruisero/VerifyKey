@@ -1267,6 +1267,7 @@ function GptKeysTab({ config, setConfig }) {
                         enabled: config?.verification?.gptRechargeBot?.enabled || false,
                         targetBot: config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot',
                         sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{accessToken}',
+                        botFirstFallbackToKey: config?.verification?.gptRechargeBot?.botFirstFallbackToKey === true,
                         preCommandEnabled: config?.verification?.gptRechargeBot?.preCommandEnabled !== false,
                         preCommand: config?.verification?.gptRechargeBot?.preCommand || '⚡ 激活plus母号',
                         preCommandTimeout: Number(config?.verification?.gptRechargeBot?.preCommandTimeout || 45),
@@ -1822,6 +1823,16 @@ function GptKeysTab({ config, setConfig }) {
                             />
                         </div>
                     </div>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={config?.verification?.gptRechargeBot?.botFirstFallbackToKey === true}
+                            onChange={e => updateGptCfg({ botFirstFallbackToKey: e.target.checked })}
+                            style={{ width: '16px', height: '16px' }}
+                        />
+                        GPT BOT 作为第一通道，失败后自动切换卡密通道（不立即返回失败）
+                    </label>
 
                     <div style={{ marginTop: '-4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
                         这是无卡密 TG 通道。占位符支持: <code>{'{accessToken}'}</code> <code>{'{account}'}</code> <code>{'{email}'}</code>（兼容保留 <code>{'{card_key}'}</code>）。
@@ -4745,6 +4756,7 @@ export default function Admin() {
                         enabled: config?.verification?.gptRechargeBot?.enabled || false,
                         targetBot: config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot',
                         sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{accessToken}',
+                        botFirstFallbackToKey: config?.verification?.gptRechargeBot?.botFirstFallbackToKey === true,
                         preCommandEnabled: config?.verification?.gptRechargeBot?.preCommandEnabled !== false,
                         preCommand: config?.verification?.gptRechargeBot?.preCommand || '⚡ 激活plus母号',
                         preCommandTimeout: Number(config?.verification?.gptRechargeBot?.preCommandTimeout || 45),

@@ -6070,7 +6070,7 @@ async def get_service_status():
     else:
         try:
             _ypc_count = database.get_connection().execute(
-                "SELECT COUNT(*) FROM ypixel_cards WHERE status='available'"
+                "SELECT COUNT(*) FROM ypixel_cards WHERE status='available' AND remaining > 0"
             ).fetchone()[0]
             if _ypc_count == 0:
                 ypixel_reason = "无可用卡密"
@@ -6235,7 +6235,7 @@ def _run_alert_check():
     if ypixel_cfg.get("enabled") and not manual.get("ypixel"):
         try:
             conn = database.get_connection()
-            avail = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available'").fetchone()[0]
+            avail = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available' AND remaining > 0").fetchone()[0]
             if avail == 0:
                 alerts.append({"service": "YPixel", "status": "卡密耗尽", "reason": "可用卡密: 0"})
             elif avail <= 3:
@@ -7551,13 +7551,19 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                             logging.info(f"[YPixel] Deducted {credit_cost} credits from user {user_id}")
                         except Exception as e:
                             logging.warning(f"[YPixel] Credit deduction failed: {e}")
-                    # Mark card as used
+                    # Decrement card remaining quota
                     try:
                         conn = database.get_connection()
                         conn.execute(
-                            "UPDATE ypixel_cards SET status='used', used_by_email=?, used_at=? WHERE card_key=?",
+                            "UPDATE ypixel_cards SET remaining = MAX(remaining - 1, 0), used_by_email=?, used_at=? WHERE card_key=?",
                             (email, __import__('datetime').datetime.now().isoformat(), card_key),
                         )
+                        # Check if remaining is now 0 → mark as used; otherwise release back to available
+                        row = conn.execute("SELECT remaining FROM ypixel_cards WHERE card_key=?", (card_key,)).fetchone()
+                        if row and row[0] <= 0:
+                            conn.execute("UPDATE ypixel_cards SET status='used' WHERE card_key=?", (card_key,))
+                        else:
+                            conn.execute("UPDATE ypixel_cards SET status='available' WHERE card_key=?", (card_key,))
                         conn.commit()
                     except Exception:
                         pass
@@ -7712,7 +7718,7 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
 
     # Pick an available card from pool
     conn = database.get_connection()
-    card_row = conn.execute("SELECT id, card_key FROM ypixel_cards WHERE status='available' ORDER BY id ASC LIMIT 1").fetchone()
+    card_row = conn.execute("SELECT id, card_key FROM ypixel_cards WHERE status='available' AND remaining > 0 ORDER BY remaining DESC, id ASC LIMIT 1").fetchone()
     if not card_row:
         raise HTTPException(status_code=503, detail="服务端错误")
     card_id = card_row["id"]
@@ -7889,7 +7895,7 @@ async def ypixel_cards_stats(authorization: Optional[str] = Header(None)):
     _verify_admin_token(authorization)
     conn = database.get_connection()
     total = conn.execute("SELECT COUNT(*) FROM ypixel_cards").fetchone()[0]
-    available = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available'").fetchone()[0]
+    available = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available' AND remaining > 0").fetchone()[0]
     used = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='used'").fetchone()[0]
     return {"total": total, "available": available, "used": used}
 

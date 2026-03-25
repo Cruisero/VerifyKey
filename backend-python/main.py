@@ -7139,8 +7139,8 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            for _ in range(120):  # max ~10 min (120 * 5s)
-                await asyncio.sleep(5)
+            for _ in range(120):  # max ~60 min (120 * 30s)
+                await asyncio.sleep(30)
                 try:
                     resp = await client.get(
                         f"{base_url}/tasks/card/{card}",
@@ -7245,7 +7245,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                     conn.commit()
                 except Exception:
                     pass
-                _vpixel_job_status[poll_id] = {"status": "Failed", "message": "轮询超时", "elapsed": 600}
+                _vpixel_job_status[poll_id] = {"status": "Failed", "message": "轮询超时", "elapsed": 3600}
                 broadcast_verify_event({
                     "type": "progress", "source": "vpixel",
                     "vid": poll_id, "link": email,

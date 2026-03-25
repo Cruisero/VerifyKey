@@ -8870,6 +8870,9 @@ def _get_gpt_tg_config() -> dict:
         "enabled": bool(cfg.get("enabled", False)),
         "targetBot": (cfg.get("targetBot") or "@AutoRechargeProbot").strip(),
         "sendFormat": cfg.get("sendFormat") or "{accessToken}",
+        "preCommandEnabled": bool(cfg.get("preCommandEnabled", True)),
+        "preCommand": (cfg.get("preCommand") or "⚡ 激活plus母号").strip(),
+        "preCommandTimeout": int(cfg.get("preCommandTimeout", 45)),
         "processingKeywords": cfg.get("processingKeywords") or ["PROCESSING", "处理中", "WAIT", "⏳", "RUNNING"],
         "responseRules": cfg.get("responseRules") or [],
         "cooldown": cfg.get("cooldown") or {"keywords": ["COOLDOWN", "RATE LIMIT", "TOO MANY"], "timePattern": r"(\d+)\s*[MS]"},
@@ -9013,6 +9016,37 @@ async def _send_gpt_tg_and_wait(client, bot_username: str, outbound: str, cfg: d
             client.remove_event_handler(handler, events.MessageEdited)
 
 
+async def _send_tg_and_wait_any_reply(client, bot_username: str, outbound: str, timeout: int = 45) -> Optional[str]:
+    """Send a TG message and wait for the next bot reply text."""
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    bot_name = bot_username.lstrip("@")
+
+    async def handler(event):
+        if future.done():
+            return
+        reply_text = event.message.text or event.message.message or ""
+        if not reply_text:
+            reply_text = event.message.caption or ""
+        if not reply_text:
+            return
+        future.set_result(reply_text)
+
+    client.add_event_handler(handler, events.NewMessage(from_users=bot_name))
+    client.add_event_handler(handler, events.MessageEdited(from_users=bot_name))
+    try:
+        await client.send_message(bot_name, outbound)
+        text = await asyncio.wait_for(future, timeout=max(10, int(timeout or 45)))
+        return text
+    except asyncio.TimeoutError:
+        return None
+    finally:
+        with contextlib.suppress(Exception):
+            client.remove_event_handler(handler, events.NewMessage)
+        with contextlib.suppress(Exception):
+            client.remove_event_handler(handler, events.MessageEdited)
+
+
 async def _gpt_recharge_via_tg_bot(card_key: str, account: str, email: str):
     cfg = _get_gpt_tg_config()
     if not cfg.get("enabled"):
@@ -9045,6 +9079,18 @@ async def _gpt_recharge_via_tg_bot(card_key: str, account: str, email: str):
         acc_id, client = pool_item
         lock = _get_gpt_tg_lock(acc_id)
         async with lock:
+            # Optional pre-command flow: e.g. "⚡ 激活plus母号" -> wait reply -> then send accessToken
+            if cfg.get("preCommandEnabled") and "{accessToken}" in send_format:
+                pre_cmd = (cfg.get("preCommand") or "").strip()
+                if pre_cmd:
+                    pre_reply = await _send_tg_and_wait_any_reply(
+                        client,
+                        cfg.get("targetBot", "@AutoRechargeProbot"),
+                        pre_cmd,
+                        int(cfg.get("preCommandTimeout", 45)),
+                    )
+                    if not pre_reply:
+                        return {"success": False, "status": "timeout", "message": "预指令发送后无响应"}
             result = await _send_gpt_tg_and_wait(client, cfg.get("targetBot", "@AutoRechargeProbot"), outbound, cfg)
 
         result["account_id"] = acc_id

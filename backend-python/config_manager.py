@@ -132,6 +132,9 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "targetBot": "@AutoRechargeProbot",
             "sendFormat": "{accessToken}",
+            "preCommandEnabled": True,
+            "preCommand": "⚡ 激活plus母号",
+            "preCommandTimeout": 45,
             "processingKeywords": ["PROCESSING", "处理中", "WAIT", "⏳", "RUNNING"],
             "responseRules": [
                 {

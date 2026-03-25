@@ -1267,6 +1267,9 @@ function GptKeysTab({ config, setConfig }) {
                         enabled: config?.verification?.gptRechargeBot?.enabled || false,
                         targetBot: config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot',
                         sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{accessToken}',
+                        preCommandEnabled: config?.verification?.gptRechargeBot?.preCommandEnabled !== false,
+                        preCommand: config?.verification?.gptRechargeBot?.preCommand || '⚡ 激活plus母号',
+                        preCommandTimeout: Number(config?.verification?.gptRechargeBot?.preCommandTimeout || 45),
                         timeout: Number(config?.verification?.gptRechargeBot?.timeout || 120),
                         maxRetries: Number(config?.verification?.gptRechargeBot?.maxRetries || 5),
                         processingKeywords: config?.verification?.gptRechargeBot?.processingKeywords || [],
@@ -1785,8 +1788,44 @@ function GptKeysTab({ config, setConfig }) {
                         </div>
                     </div>
 
+                    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 120px', gap: '8px', alignItems: 'end' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={config?.verification?.gptRechargeBot?.preCommandEnabled !== false}
+                                onChange={e => updateGptCfg({ preCommandEnabled: e.target.checked })}
+                                style={{ width: '16px', height: '16px' }}
+                            />
+                            预指令流程
+                        </label>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>预发送指令</label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={config?.verification?.gptRechargeBot?.preCommand || '⚡ 激活plus母号'}
+                                onChange={e => updateGptCfg({ preCommand: e.target.value })}
+                                placeholder="⚡ 激活plus母号"
+                                style={{ width: '100%', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>预指令超时</label>
+                            <input
+                                type="number"
+                                className="input"
+                                value={config?.verification?.gptRechargeBot?.preCommandTimeout ?? 45}
+                                onChange={e => updateGptCfg({ preCommandTimeout: parseInt(e.target.value, 10) || 45 })}
+                                min="10"
+                                max="300"
+                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                            />
+                        </div>
+                    </div>
+
                     <div style={{ marginTop: '-4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
                         这是无卡密 TG 通道。占位符支持: <code>{'{accessToken}'}</code> <code>{'{account}'}</code> <code>{'{email}'}</code>（兼容保留 <code>{'{card_key}'}</code>）。
+                        启用“预指令流程”后，将先发送预指令（例如“⚡ 激活plus母号”），收到回复后再发送发送格式内容。
                     </div>
 
                     <div>
@@ -4706,6 +4745,9 @@ export default function Admin() {
                         enabled: config?.verification?.gptRechargeBot?.enabled || false,
                         targetBot: config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot',
                         sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{accessToken}',
+                        preCommandEnabled: config?.verification?.gptRechargeBot?.preCommandEnabled !== false,
+                        preCommand: config?.verification?.gptRechargeBot?.preCommand || '⚡ 激活plus母号',
+                        preCommandTimeout: Number(config?.verification?.gptRechargeBot?.preCommandTimeout || 45),
                         timeout: Number(config?.verification?.gptRechargeBot?.timeout || 120),
                         maxRetries: Number(config?.verification?.gptRechargeBot?.maxRetries || 5),
                     },

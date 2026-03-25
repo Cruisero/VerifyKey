@@ -7811,20 +7811,69 @@ async def ypixel_cards_add(request: Request, authorization: Optional[str] = Head
         raise HTTPException(status_code=400, detail="请输入至少一个卡密")
 
     from datetime import datetime
+    ypixel_cfg = _get_ypixel_config()
+    base_url = ypixel_cfg.get("baseUrl", "https://pixel.yh-mo.xyz")
+
     conn = database.get_connection()
-    added, skipped = 0, 0
-    for key in keys:
-        existing = conn.execute("SELECT id FROM ypixel_cards WHERE card_key=?", (key,)).fetchone()
-        if existing:
-            skipped += 1
-            continue
-        conn.execute(
-            "INSERT INTO ypixel_cards (card_key, status, created_at) VALUES (?, ?, ?)",
-            (key, "available", datetime.now().isoformat()),
-        )
-        added += 1
+    valid_count = 0
+    invalid_count = 0
+    duplicate_count = 0
+    results = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for key in keys:
+            # Check for duplicates first
+            existing = conn.execute("SELECT id FROM ypixel_cards WHERE card_key=?", (key,)).fetchone()
+            if existing:
+                duplicate_count += 1
+                results.append({"key": key, "status": "duplicate", "msg": "已存在"})
+                continue
+
+            # Validate against YPixel API
+            remaining = 0
+            total_count = 0
+            try:
+                resp = await client.post(
+                    f"{base_url}/api/verify-card",
+                    json={"card_key": key},
+                    headers={"Content-Type": "application/json"},
+                )
+                data = resp.json()
+                ok = data.get("valid", False)
+                remaining = data.get("remaining", 0)
+                total_count = data.get("total_count", 0)
+                msg = data.get("message", "")
+            except Exception as e:
+                ok = False
+                msg = f"验证请求失败: {str(e)}"
+
+            status = "available" if ok else "invalid"
+            try:
+                conn.execute(
+                    "INSERT INTO ypixel_cards (card_key, status, created_at, remaining, total_count) VALUES (?, ?, ?, ?, ?)",
+                    (key, status, datetime.now().isoformat(), remaining, total_count),
+                )
+            except Exception:
+                duplicate_count += 1
+                results.append({"key": key, "status": "duplicate", "msg": "已存在"})
+                continue
+
+            if ok:
+                valid_count += 1
+                results.append({"key": key, "status": "valid", "msg": msg or "验证通过", "remaining": remaining, "total_count": total_count})
+            else:
+                invalid_count += 1
+                results.append({"key": key, "status": "invalid", "msg": msg or "验证失败"})
+
     conn.commit()
-    return {"success": True, "added": added, "skipped": skipped}
+    return {
+        "success": True,
+        "valid": valid_count,
+        "invalid": invalid_count,
+        "duplicate": duplicate_count,
+        "total_input": len(keys),
+        "results": results,
+    }
 
 
 @app.get("/api/ypixel/cards")

@@ -141,6 +141,7 @@ def init_db():
         _add_vid_column_to_bot_verify_log(conn)
         _add_via_column_to_verification_history(conn)
         _add_channel_column_to_gpt_keys(conn)
+        _add_quota_columns_to_ypixel_cards(conn)
 
         conn.commit()
         _initialized = True
@@ -278,6 +279,21 @@ def _add_channel_column_to_gpt_keys(conn: sqlite3.Connection):
             print("[DB] Added 'channel' column to gpt_keys table")
     except Exception as e:
         print(f"[DB] Error adding channel column: {e}")
+
+
+def _add_quota_columns_to_ypixel_cards(conn: sqlite3.Connection):
+    """Add remaining and total_count columns to ypixel_cards if they don't exist."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(ypixel_cards)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "remaining" not in columns:
+            conn.execute("ALTER TABLE ypixel_cards ADD COLUMN remaining INTEGER DEFAULT 0")
+            print("[DB] Added 'remaining' column to ypixel_cards table")
+        if "total_count" not in columns:
+            conn.execute("ALTER TABLE ypixel_cards ADD COLUMN total_count INTEGER DEFAULT 0")
+            print("[DB] Added 'total_count' column to ypixel_cards table")
+    except Exception as e:
+        print(f"[DB] Error adding quota columns to ypixel_cards: {e}")
 
 
 # ========== Backup Functions ==========

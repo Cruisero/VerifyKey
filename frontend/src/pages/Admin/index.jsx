@@ -1365,6 +1365,7 @@ function PixelApiTab() {
     const [ypixelCardStats, setYpixelCardStats] = useState({ total: 0, available: 0, used: 0 });
     const [ypixelNewCards, setYpixelNewCards] = useState('');
     const [ypixelAddingCards, setYpixelAddingCards] = useState(false);
+    const [ypixelAddResult, setYpixelAddResult] = useState(null);
 
     const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, vpixel: false });
     const [pixelJobs, setPixelJobs] = useState([]);
@@ -2409,12 +2410,58 @@ function PixelApiTab() {
                             rows={4}
                             style={{ width: '100%', fontFamily: 'monospace', fontSize: '13px' }}
                         />
+                        {ypixelAddResult && (
+                            <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-primary)', marginTop: '10px' }}>
+                                {ypixelAddResult.error ? (
+                                    <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', color: '#dc2626', fontSize: '13px', fontWeight: 500 }}>
+                                        ❌ {ypixelAddResult.error}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', fontSize: '13px', fontWeight: 600, display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                                            <span>输入 {ypixelAddResult.total_input} 个</span>
+                                            {ypixelAddResult.valid > 0 && <span style={{ color: '#059669' }}>✅ 有效 {ypixelAddResult.valid}</span>}
+                                            {ypixelAddResult.invalid > 0 && <span style={{ color: '#dc2626' }}>❌ 无效 {ypixelAddResult.invalid}</span>}
+                                            {ypixelAddResult.duplicate > 0 && <span style={{ color: '#d97706' }}>⚠️ 重复 {ypixelAddResult.duplicate}</span>}
+                                        </div>
+                                        {ypixelAddResult.results && ypixelAddResult.results.length > 0 && (
+                                            <div style={{ maxHeight: '200px', overflow: 'auto', fontSize: '12px' }}>
+                                                {ypixelAddResult.results.map((r, i) => (
+                                                    <div key={i} style={{
+                                                        padding: '6px 14px', borderTop: '1px solid var(--border-primary)',
+                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                        background: r.status === 'valid' ? 'rgba(16,185,129,0.04)' : r.status === 'invalid' ? 'rgba(239,68,68,0.04)' : 'rgba(245,158,11,0.04)',
+                                                    }}>
+                                                        <span style={{ fontFamily: "'SF Mono', monospace", maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.key}</span>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                            {r.status === 'valid' && r.remaining !== undefined && (
+                                                                <span style={{
+                                                                    padding: '1px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
+                                                                    background: 'rgba(14,165,233,0.1)', color: '#0ea5e9',
+                                                                }}>
+                                                                    额度 {r.remaining}/{r.total_count}
+                                                                </span>
+                                                            )}
+                                                            <span style={{
+                                                                color: r.status === 'valid' ? '#059669' : r.status === 'invalid' ? '#dc2626' : '#d97706',
+                                                                fontWeight: 500,
+                                                            }}>{r.status === 'valid' ? '✅' : r.status === 'invalid' ? '❌' : '⚠️'} {r.msg}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
                         <button
                             className="btn btn-primary"
                             style={{ marginTop: '8px' }}
                             disabled={ypixelAddingCards || !ypixelNewCards.trim()}
                             onClick={async () => {
                                 setYpixelAddingCards(true);
+                                setYpixelAddResult(null);
                                 try {
                                     const res = await fetch(`${API_BASE}/api/ypixel/cards`, {
                                         method: 'POST', headers: authHeaders,
@@ -2422,7 +2469,7 @@ function PixelApiTab() {
                                     });
                                     const data = await res.json();
                                     if (data.success) {
-                                        alert(`✅ 添加 ${data.added} 个，跳过 ${data.skipped} 个重复`);
+                                        setYpixelAddResult(data);
                                         setYpixelNewCards('');
                                         const [cRes, sRes] = await Promise.all([
                                             fetch(`${API_BASE}/api/ypixel/cards`, { headers: authHeaders }),
@@ -2430,12 +2477,14 @@ function PixelApiTab() {
                                         ]);
                                         if (cRes.ok) { const d = await cRes.json(); setYpixelCards(d.keys || []); }
                                         if (sRes.ok) { const d = await sRes.json(); setYpixelCardStats(d); }
+                                    } else {
+                                        setYpixelAddResult({ error: data.detail || '添加失败' });
                                     }
-                                } catch (e) { alert('添加失败: ' + e.message); }
+                                } catch (e) { setYpixelAddResult({ error: e.message }); }
                                 finally { setYpixelAddingCards(false); }
                             }}
                         >
-                            {ypixelAddingCards ? '⏳ 添加中...' : `添加卡密 (${ypixelNewCards.split('\n').filter(l => l.trim()).length} 个)`}
+                            {ypixelAddingCards ? '🔄 验证并添加中...' : `添加卡密 (${ypixelNewCards.split('\n').filter(l => l.trim()).length} 个)`}
                         </button>
                     </div>
 
@@ -2451,6 +2500,7 @@ function PixelApiTab() {
                                     <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
                                         <th style={{ padding: '8px 12px', textAlign: 'left' }}>卡密</th>
                                         <th style={{ padding: '8px 12px', textAlign: 'center' }}>状态</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'center' }}>额度</th>
                                         <th style={{ padding: '8px 12px', textAlign: 'left' }}>使用邮箱</th>
                                         <th style={{ padding: '8px 12px', textAlign: 'center' }}>操作</th>
                                     </tr>
@@ -2465,6 +2515,15 @@ function PixelApiTab() {
                                                     background: k.status === 'available' ? '#dcfce7' : k.status === 'used' ? '#f3f4f6' : '#fef2f2',
                                                     color: k.status === 'available' ? '#16a34a' : k.status === 'used' ? '#6b7280' : '#dc2626',
                                                 }}>{k.status === 'available' ? '可用' : k.status === 'used' ? '已使用' : k.status === 'reserved' ? '使用中' : '无效'}</span>
+                                            </td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                {(k.remaining != null && k.total_count != null) ? (
+                                                    <span style={{
+                                                        fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600,
+                                                        background: k.remaining > 0 ? 'rgba(14,165,233,0.1)' : 'rgba(107,114,128,0.1)',
+                                                        color: k.remaining > 0 ? '#0ea5e9' : '#9ca3af',
+                                                    }}>{k.remaining}/{k.total_count}</span>
+                                                ) : '-'}
                                             </td>
                                             <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}>{k.used_by_email || '-'}</td>
                                             <td style={{ padding: '8px 12px', textAlign: 'center' }}>
@@ -2489,7 +2548,7 @@ function PixelApiTab() {
                                     ))}
                                     {ypixelCards.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                                            <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
                                                 暂无卡密，请先添加
                                             </td>
                                         </tr>

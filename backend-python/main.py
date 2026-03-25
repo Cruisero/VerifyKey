@@ -9553,6 +9553,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
 
     import time as _gpt_time
     gpt_vid = f"gpt_{int(_gpt_time.time())}_{email[:8] if email else 'unknown'}"
+    cdk_label = f"user:{user_id}" if user_id else ""
     _register_async_task("gpt", gpt_vid, {
         "user_id": user_id,
         "email": email,
@@ -9570,6 +9571,12 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         **event_meta,
     })
 
+    def _log_gpt_final(status: str, message: str):
+        try:
+            verification_history.log_verification(status, gpt_vid, message, cdk=cdk_label, via="gpt")
+        except Exception as _e:
+            logger.warning(f"[GPT Recharge] Failed to persist {status} record for {gpt_vid}: {_e}")
+
     import httpx
     try:
         if channel == "red":
@@ -9578,6 +9585,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             ok = data.get("success") or data.get("flag", False)
             if not ok:
                 msg = data.get("msg", "充值失败，请稍后重试")
+                _log_gpt_final("failed", msg)
                 if card_key:
                     _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
@@ -9599,6 +9607,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             ok = data.get("success", False) or data.get("code") == 200
             if not ok:
                 msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
+                _log_gpt_final("failed", msg)
                 if card_key:
                     _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
@@ -9641,6 +9650,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                             ok = data.get("success") or data.get("flag", False)
                             if not ok:
                                 msg = data.get("msg", "充值失败，请稍后重试")
+                                _log_gpt_final("failed", msg)
                                 if card_key:
                                     _release_gpt_key(card_key)
                                 _complete_async_task("gpt", gpt_vid)
@@ -9661,6 +9671,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                             ok = data.get("success", False) or data.get("code") == 200
                             if not ok:
                                 msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
+                                _log_gpt_final("failed", msg)
                                 if card_key:
                                     _release_gpt_key(card_key)
                                 _complete_async_task("gpt", gpt_vid)
@@ -9691,6 +9702,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                                 data = resp.json()
                             if resp.status_code != 200 or data.get("code") != 1:
                                 msg = data.get("message", "充值失败，请稍后重试")
+                                _log_gpt_final("failed", msg)
                                 if card_key:
                                     _release_gpt_key(card_key)
                                 _complete_async_task("gpt", gpt_vid)
@@ -9709,6 +9721,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                                 raise HTTPException(status_code=400, detail=msg)
                     else:
                         msg = f"{data.get('message', 'TG BOT 充值失败')}（且无可用卡密通道）"
+                        _log_gpt_final("failed", msg)
                         _complete_async_task("gpt", gpt_vid)
                         _broadcast_submit_failure(
                             "gpt",
@@ -9724,6 +9737,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                         raise HTTPException(status_code=400, detail=msg)
                 else:
                     msg = data.get("message", "TG BOT 充值失败")
+                    _log_gpt_final("failed", msg)
                     if card_key:
                         _release_gpt_key(card_key)
                     _complete_async_task("gpt", gpt_vid)
@@ -9755,6 +9769,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 data = resp.json()
             if resp.status_code != 200 or data.get("code") != 1:
                 msg = data.get("message", "充值失败，请稍后重试")
+                _log_gpt_final("failed", msg)
                 if card_key:
                     _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
@@ -9778,6 +9793,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             _release_gpt_key(card_key)
         _complete_async_task("gpt", gpt_vid)
         failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
+        _log_gpt_final("failed", failure_msg)
         _broadcast_submit_failure(
             "gpt",
             failure_msg,
@@ -9809,6 +9825,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         )
         conn.commit()
     _complete_async_task("gpt", gpt_vid)
+    _log_gpt_final("pass", f"充值成功 ({channel.upper()})")
 
     # SSE: success
     broadcast_verify_event({

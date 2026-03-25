@@ -128,6 +128,38 @@ DEFAULT_CONFIG = {
             "warmupTimeout": 90,
             "verifyTimeout": 120
         },
+        "gptRechargeBot": {
+            "enabled": False,
+            "targetBot": "@AutoRechargeProbot",
+            "sendFormat": "{account}",
+            "processingKeywords": ["PROCESSING", "处理中", "WAIT", "⏳", "RUNNING"],
+            "responseRules": [
+                {
+                    "keywords": ["SUCCESS", "SUCCESSFUL", "充值成功", "✅", "DONE", "COMPLETED"],
+                    "status": "approved",
+                    "success": True,
+                    "message": "充值成功"
+                },
+                {
+                    "keywords": ["COOLDOWN", "RATE LIMIT", "TOO MANY"],
+                    "status": "cooldown",
+                    "success": False,
+                    "message": "账号冷却中"
+                },
+                {
+                    "keywords": ["FAILED", "FAIL", "ERROR", "❌", "INVALID", "EXPIRED", "充值失败"],
+                    "status": "failed",
+                    "success": False,
+                    "message": "充值失败"
+                }
+            ],
+            "cooldown": {
+                "keywords": ["COOLDOWN", "RATE LIMIT", "TOO MANY"],
+                "timePattern": "(\\d+)\\s*[MS]"
+            },
+            "timeout": 120,
+            "maxRetries": 5
+        },
         "singleBots": [
             {
                 "id": "blackbot",
@@ -270,7 +302,8 @@ DEFAULT_CONFIG = {
         "upixel": False,
         "kpixel": False,
         "vpixel": False,
-        "gpt": False
+        "gpt": False,
+        "gpt_tg": False
     },
     
     # Tips inline (shown on verify page)
@@ -447,4 +480,3 @@ def get_puppeteer_settings() -> dict:
         "useGeminiPhoto": puppeteer.get("useGeminiPhoto", True),
         "availableTemplates": get_available_templates()
     }
-

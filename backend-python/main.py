@@ -13,6 +13,7 @@ import os
 import json
 import asyncio
 import re
+import contextlib
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
@@ -2337,8 +2338,19 @@ async def check_telegram_connections():
 @app.post("/api/telegram/accounts")
 async def add_telegram_account(request: TelegramAccountAddRequest):
     """Add a new Telegram account"""
-    result = tg_manager.add_account(request.apiId, request.apiHash, request.label)
-    return result
+    try:
+        api_id = (request.apiId or "").strip()
+        api_hash = (request.apiHash or "").strip()
+        label = (request.label or "").strip()
+        if not api_id or not api_hash:
+            raise HTTPException(status_code=400, detail="apiId 和 apiHash 不能为空")
+        result = tg_manager.add_account(api_id, api_hash, label)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("[TGManager] add account failed")
+        raise HTTPException(status_code=500, detail=f"添加账号失败: {e}")
 
 
 @app.delete("/api/telegram/accounts/{account_id}")
@@ -6338,12 +6350,24 @@ async def get_service_status():
 
     # --- GPT per-channel auto-detect ---
     gpt_channels_status = {}
-    for ch in ("sbs", "red", "vip"):
+    for ch in GPT_CHANNELS:
         maint_key = f"gpt_{ch}"
         if manual.get(maint_key):
             gpt_channels_status[ch] = {"available": False, "reason": "管理员手动维护中"}
         else:
             try:
+                if ch == "tg":
+                    if not _get_gpt_tg_config().get("enabled"):
+                        gpt_channels_status[ch] = {"available": False, "reason": "TG Bot 通道未启用"}
+                        continue
+                    if not tg_manager.is_connected:
+                        gpt_channels_status[ch] = {"available": False, "reason": "TG 账号未连接"}
+                        continue
+                    if not _has_available_gptbot_account(config):
+                        gpt_channels_status[ch] = {"available": False, "reason": "无可用 GPTBot 账号"}
+                        continue
+                    gpt_channels_status[ch] = {"available": True, "reason": ""}
+                    continue
                 conn = database.get_connection()
                 avail = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='available' AND channel=?", (ch,)).fetchone()[0]
                 if avail > 0:
@@ -6370,6 +6394,7 @@ async def get_service_status():
             "gpt_sbs": manual.get("gpt_sbs", False),
             "gpt_red": manual.get("gpt_red", False),
             "gpt_vip": manual.get("gpt_vip", False),
+            "gpt_tg": manual.get("gpt_tg", False),
         }
     }
 
@@ -6390,7 +6415,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip"):
+    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_tg"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -6802,7 +6827,8 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     channel = payload.get("channel", "sbs")
     user_id = int(payload.get("user_id", 0) or 0)
     event_meta = _build_verify_event_meta("gpt", email or "GPT充值", user_id, f"gpt_{channel}", card_key, channel)
-    _release_gpt_key(card_key)
+    if card_key:
+        _release_gpt_key(card_key)
     broadcast_verify_event({
         "type": "progress",
         "step": "result", "status": "failed", "success": False,
@@ -8821,10 +8847,173 @@ GPT_RED_ORIGIN = "https://redeemgpt.com"
 GPT_VIP_RECHARGE_BASE = "https://ht.gptai.vip/api"
 GPT_VIP_ORIGIN = "https://shop.gptai.vip"
 GPT_RECHARGE_COST = 2.0  # CDK points per successful recharge
-GPT_CHANNELS = ("sbs", "red", "vip")
+GPT_KEY_CHANNELS = ("sbs", "red", "vip")
+GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg")
 
 import uuid as _uuid
 import asyncio as _asyncio
+from telethon import events
+
+_gpt_tg_account_locks: Dict[str, asyncio.Lock] = {}
+
+
+def _get_gpt_tg_lock(account_id: str) -> asyncio.Lock:
+    if account_id not in _gpt_tg_account_locks:
+        _gpt_tg_account_locks[account_id] = asyncio.Lock()
+    return _gpt_tg_account_locks[account_id]
+
+
+def _get_gpt_tg_config() -> dict:
+    import config_manager
+    cfg = config_manager.get_config().get("verification", {}).get("gptRechargeBot", {}) or {}
+    return {
+        "enabled": bool(cfg.get("enabled", False)),
+        "targetBot": (cfg.get("targetBot") or "@AutoRechargeProbot").strip(),
+        "sendFormat": cfg.get("sendFormat") or "{account}",
+        "processingKeywords": cfg.get("processingKeywords") or ["PROCESSING", "处理中", "WAIT", "⏳", "RUNNING"],
+        "responseRules": cfg.get("responseRules") or [],
+        "cooldown": cfg.get("cooldown") or {"keywords": ["COOLDOWN", "RATE LIMIT", "TOO MANY"], "timePattern": r"(\d+)\s*[MS]"},
+        "timeout": int(cfg.get("timeout", 120)),
+        "maxRetries": int(cfg.get("maxRetries", 5)),
+    }
+
+
+def _has_available_gptbot_account(config: Optional[dict] = None) -> bool:
+    if config is None:
+        import config_manager
+        cfg = config_manager.get_config()
+    else:
+        cfg = config
+    tg_cfg = _get_gpt_tg_config()
+    if not tg_cfg.get("enabled"):
+        return False
+    if not tg_manager.is_connected:
+        return False
+
+    tg_accounts = cfg.get("telegramAccounts", [])
+    live_clients = tg_manager.get_all_clients()
+    now_ts = time.time()
+    return any(
+        acc.get("enabled", True)
+        and "gptbot" in (acc.get("assignedBots") or [])
+        and acc.get("id") in live_clients
+        and tg_manager._cooldowns.get(acc.get("id"), 0) <= now_ts
+        for acc in tg_accounts
+    )
+
+
+def _parse_gpt_tg_response(text: str, cfg: dict) -> dict:
+    raw = text or ""
+    upper = " ".join(raw.upper().split())
+
+    # Match explicit response rules first
+    for rule in cfg.get("responseRules", []) or []:
+        kws = [str(k).upper() for k in (rule.get("keywords") or []) if str(k).strip()]
+        if kws and any(k in upper for k in kws):
+            status = rule.get("status", "failed")
+            result = {
+                "success": bool(rule.get("success", False)),
+                "status": status,
+                "message": rule.get("message", "任务完成"),
+                "raw": raw,
+            }
+            if status == "cooldown":
+                cd_cfg = cfg.get("cooldown", {}) or {}
+                pattern = cd_cfg.get("timePattern") or r"(\d+)\s*[MS]"
+                m = re.search(pattern, upper, flags=re.IGNORECASE)
+                if m:
+                    value = int(m.group(1))
+                    if "M" in upper and "S" not in upper:
+                        value *= 60
+                    result["cooldown_seconds"] = value
+                else:
+                    result["cooldown_seconds"] = 90
+            return result
+
+    # Processing keywords
+    for kw in cfg.get("processingKeywords", []) or []:
+        if str(kw).strip() and str(kw).upper() in upper:
+            return {"success": None, "status": "processing", "message": "处理中", "raw": raw}
+
+    # Conservative fallback
+    if any(k in upper for k in ("SUCCESS", "SUCCESSFUL", "✅", "DONE", "COMPLETED", "充值成功")):
+        return {"success": True, "status": "approved", "message": "充值成功", "raw": raw}
+    if any(k in upper for k in ("COOLDOWN", "RATE LIMIT", "TOO MANY")):
+        return {"success": False, "status": "cooldown", "message": "账号冷却中", "cooldown_seconds": 90, "raw": raw}
+    if any(k in upper for k in ("FAIL", "FAILED", "ERROR", "❌", "INVALID", "EXPIRED", "充值失败")):
+        return {"success": False, "status": "failed", "message": "充值失败", "raw": raw}
+    return {"success": None, "status": "processing", "message": "处理中", "raw": raw}
+
+
+async def _send_gpt_tg_and_wait(client, bot_username: str, outbound: str, cfg: dict) -> dict:
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    bot_name = bot_username.lstrip("@")
+
+    async def handler(event):
+        if future.done():
+            return
+        reply_text = event.message.text or event.message.message or ""
+        if not reply_text:
+            reply_text = event.message.caption or ""
+        if not reply_text:
+            return
+        parsed = _parse_gpt_tg_response(reply_text, cfg)
+        if parsed.get("status") == "processing":
+            return
+        future.set_result(parsed)
+
+    client.add_event_handler(handler, events.NewMessage(from_users=bot_name))
+    client.add_event_handler(handler, events.MessageEdited(from_users=bot_name))
+    try:
+        await client.send_message(bot_name, outbound)
+        return await asyncio.wait_for(future, timeout=max(30, int(cfg.get("timeout", 120))))
+    except asyncio.TimeoutError:
+        return {"success": False, "status": "timeout", "message": "TG Bot 响应超时"}
+    finally:
+        with contextlib.suppress(Exception):
+            client.remove_event_handler(handler, events.NewMessage)
+        with contextlib.suppress(Exception):
+            client.remove_event_handler(handler, events.MessageEdited)
+
+
+async def _gpt_recharge_via_tg_bot(card_key: str, account: str, email: str):
+    cfg = _get_gpt_tg_config()
+    if not cfg.get("enabled"):
+        return {"success": False, "status": "failed", "message": "TG 通道未启用"}
+    if not tg_manager.is_connected:
+        return {"success": False, "status": "failed", "message": "TG 账号未连接"}
+
+    send_format = cfg.get("sendFormat", "{card_key}----{account}")
+    outbound = (
+        send_format
+        .replace("{card_key}", card_key)
+        .replace("{account}", account)
+        .replace("{email}", email or "")
+    )
+    max_retries = max(1, int(cfg.get("maxRetries", 5)))
+
+    for _ in range(max_retries):
+        pool_item = tg_manager.get_next_client(bot_type="gptbot")
+        if not pool_item:
+            wait_seconds = tg_manager.get_shortest_cooldown_wait()
+            if wait_seconds > 0:
+                await asyncio.sleep(min(wait_seconds, 30))
+                continue
+            return {"success": False, "status": "failed", "message": "没有可用的 TG 充值账号"}
+
+        acc_id, client = pool_item
+        lock = _get_gpt_tg_lock(acc_id)
+        async with lock:
+            result = await _send_gpt_tg_and_wait(client, cfg.get("targetBot", "@AutoRechargeProbot"), outbound, cfg)
+
+        result["account_id"] = acc_id
+        if result.get("status") == "cooldown":
+            tg_manager.set_cooldown(acc_id, int(result.get("cooldown_seconds") or 90))
+            continue
+        return result
+
+    return {"success": False, "status": "failed", "message": "所有 TG 账号均在冷却中，请稍后重试"}
 
 
 def _release_gpt_key(card_key: str):
@@ -8927,7 +9116,7 @@ async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(N
     body = await request.json()
     keys_text = body.get("keys", "")
     channel = body.get("channel", "sbs").strip().lower()
-    if channel not in GPT_CHANNELS:
+    if channel not in GPT_KEY_CHANNELS:
         channel = "sbs"
     keys = [k.strip() for k in keys_text.strip().split("\n") if k.strip()]
     if not keys:
@@ -9018,7 +9207,11 @@ async def gpt_keys_list(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     conn = database.get_connection()
-    rows = conn.execute("SELECT * FROM gpt_keys ORDER BY id DESC").fetchall()
+    key_placeholders = ",".join("?" for _ in GPT_KEY_CHANNELS)
+    rows = conn.execute(
+        f"SELECT * FROM gpt_keys WHERE channel IN ({key_placeholders}) ORDER BY id DESC",
+        list(GPT_KEY_CHANNELS)
+    ).fetchall()
     return {"keys": [dict(r) for r in rows]}
 
 
@@ -9033,13 +9226,24 @@ async def gpt_keys_stats(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     conn = database.get_connection()
-    total = conn.execute("SELECT COUNT(*) FROM gpt_keys").fetchone()[0]
-    available = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='available'").fetchone()[0]
-    used = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE status='used'").fetchone()[0]
+    key_placeholders = ",".join("?" for _ in GPT_KEY_CHANNELS)
+    key_params = list(GPT_KEY_CHANNELS)
+    total = conn.execute(
+        f"SELECT COUNT(*) FROM gpt_keys WHERE channel IN ({key_placeholders})",
+        key_params
+    ).fetchone()[0]
+    available = conn.execute(
+        f"SELECT COUNT(*) FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders})",
+        key_params
+    ).fetchone()[0]
+    used = conn.execute(
+        f"SELECT COUNT(*) FROM gpt_keys WHERE status='used' AND channel IN ({key_placeholders})",
+        key_params
+    ).fetchone()[0]
 
     # Per-channel stats
     channels = {}
-    for ch in GPT_CHANNELS:
+    for ch in GPT_KEY_CHANNELS:
         ch_total = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE channel=?", (ch,)).fetchone()[0]
         ch_avail = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE channel=? AND status='available'", (ch,)).fetchone()[0]
         ch_used = conn.execute("SELECT COUNT(*) FROM gpt_keys WHERE channel=? AND status='used'", (ch,)).fetchone()[0]
@@ -9085,19 +9289,36 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
     conn = database.get_connection()
     import config_manager as _cfg_mgr
     _maint = _cfg_mgr.get_config().get("serviceMaintenance", {})
-    excluded_channels = [ch for ch in GPT_CHANNELS if _maint.get(f"gpt_{ch}")]
-    if len(excluded_channels) == len(GPT_CHANNELS):
-        raise HTTPException(status_code=503, detail="所有充值通道维护中")
+    excluded_channels = [ch for ch in GPT_KEY_CHANNELS if _maint.get(f"gpt_{ch}")]
     placeholders = ",".join("?" for _ in excluded_channels) if excluded_channels else None
-    if excluded_channels:
+    key_placeholders = ",".join("?" for _ in GPT_KEY_CHANNELS)
+    key_channel_params = list(GPT_KEY_CHANNELS)
+    if excluded_channels and len(excluded_channels) < len(GPT_KEY_CHANNELS):
         row = conn.execute(
-            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel NOT IN ({placeholders}) LIMIT 1",
-            excluded_channels
+            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) AND channel NOT IN ({placeholders}) LIMIT 1",
+            key_channel_params + excluded_channels
+        ).fetchone()
+    elif not excluded_channels:
+        row = conn.execute(
+            f"SELECT id, card_key, channel FROM gpt_keys WHERE status='available' AND channel IN ({key_placeholders}) LIMIT 1",
+            key_channel_params
         ).fetchone()
     else:
-        row = conn.execute("SELECT id, card_key, channel FROM gpt_keys WHERE status='available' LIMIT 1").fetchone()
+        row = None
+
+    # If key channels unavailable, fallback to TG bot channel (no card key required).
     if not row:
-        raise HTTPException(status_code=400, detail="暂无可用卡密，请联系管理员")
+        if not _maint.get("gpt_tg") and _has_available_gptbot_account(_cfg_mgr.get_config()):
+            return {
+                "success": True,
+                "card_key": "",
+                "masked": "TG BOT",
+                "key_id": 0,
+                "channel": "tg",
+            }
+        if len(excluded_channels) == len(GPT_KEY_CHANNELS) and _maint.get("gpt_tg"):
+            raise HTTPException(status_code=503, detail="所有充值通道维护中")
+        raise HTTPException(status_code=400, detail="暂无可用充值通道，请联系管理员")
 
     key_id, card_key, channel = row["id"], row["card_key"], row["channel"] or "sbs"
 
@@ -9179,7 +9400,9 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     email = body.get("email", "").strip()
     channel = body.get("channel", "sbs").strip().lower()
 
-    if not card_key or not account:
+    if not account:
+        raise HTTPException(status_code=400, detail="参数不完整")
+    if channel != "tg" and not card_key:
         raise HTTPException(status_code=400, detail="参数不完整")
 
     import time as _gpt_time
@@ -9209,7 +9432,8 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             ok = data.get("success") or data.get("flag", False)
             if not ok:
                 msg = data.get("msg", "充值失败，请稍后重试")
-                _release_gpt_key(card_key)
+                if card_key:
+                    _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
                 _broadcast_submit_failure(
                     "gpt",
@@ -9229,7 +9453,27 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             ok = data.get("success", False) or data.get("code") == 200
             if not ok:
                 msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
-                _release_gpt_key(card_key)
+                if card_key:
+                    _release_gpt_key(card_key)
+                _complete_async_task("gpt", gpt_vid)
+                _broadcast_submit_failure(
+                    "gpt",
+                    msg,
+                    email=email or "GPT充值",
+                    user_id=user_id,
+                    method=f"gpt_{channel}",
+                    http_status=400,
+                    refunded=False,
+                    card_key=card_key,
+                    channel=channel,
+                )
+                raise HTTPException(status_code=400, detail=msg)
+        elif channel == "tg":
+            data = await _gpt_recharge_via_tg_bot(card_key, account, email)
+            if not data.get("success"):
+                msg = data.get("message", "TG BOT 充值失败")
+                if card_key:
+                    _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
                 _broadcast_submit_failure(
                     "gpt",
@@ -9259,7 +9503,8 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 data = resp.json()
             if resp.status_code != 200 or data.get("code") != 1:
                 msg = data.get("message", "充值失败，请稍后重试")
-                _release_gpt_key(card_key)
+                if card_key:
+                    _release_gpt_key(card_key)
                 _complete_async_task("gpt", gpt_vid)
                 _broadcast_submit_failure(
                     "gpt",
@@ -9277,7 +9522,8 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     except HTTPException:
         raise
     except Exception as e:
-        _release_gpt_key(card_key)
+        if card_key:
+            _release_gpt_key(card_key)
         _complete_async_task("gpt", gpt_vid)
         failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
         _broadcast_submit_failure(
@@ -9302,13 +9548,14 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id}: {e}")
 
     # Mark card key as used
-    conn = database.get_connection()
-    now = datetime.now().isoformat()
-    conn.execute(
-        "UPDATE gpt_keys SET status='used', used_email=?, used_at=? WHERE card_key=?",
-        (email, now, card_key)
-    )
-    conn.commit()
+    if card_key:
+        conn = database.get_connection()
+        now = datetime.now().isoformat()
+        conn.execute(
+            "UPDATE gpt_keys SET status='used', used_email=?, used_at=? WHERE card_key=?",
+            (email, now, card_key)
+        )
+        conn.commit()
     _complete_async_task("gpt", gpt_vid)
 
     # SSE: success

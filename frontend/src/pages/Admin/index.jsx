@@ -1003,7 +1003,7 @@ function LiveTaskMonitor() {
 // ==========================================
 // GPT Keys Management Tab
 // ==========================================
-function GptKeysTab() {
+function GptKeysTab({ config, setConfig }) {
     const { user } = useAuth();
     const token = user?.token || localStorage.getItem('verifykey-token');
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -1014,7 +1014,24 @@ function GptKeysTab() {
     const [adding, setAdding] = useState(false);
     const [addResult, setAddResult] = useState(null);
     const [addChannel, setAddChannel] = useState('sbs');
-    const [gptMaint, setGptMaint] = useState({ gpt_sbs: false, gpt_red: false, gpt_vip: false });
+    const [gptMaint, setGptMaint] = useState({ gpt_sbs: false, gpt_red: false, gpt_vip: false, gpt_tg: false });
+    const [tgAccounts, setTgAccounts] = useState([]);
+    const [tgPoolSavingId, setTgPoolSavingId] = useState(null);
+    const [newProcessingKw, setNewProcessingKw] = useState('');
+    const [tgLoading, setTgLoading] = useState(false);
+    const [tgChecking, setTgChecking] = useState(false);
+    const [tgCheckResults, setTgCheckResults] = useState(null);
+    const [tgShowAdd, setTgShowAdd] = useState(false);
+    const [tgNewApiId, setTgNewApiId] = useState('');
+    const [tgNewApiHash, setTgNewApiHash] = useState('');
+    const [tgNewLabel, setTgNewLabel] = useState('');
+    const [tgLoginAccountId, setTgLoginAccountId] = useState(null);
+    const [tgLoginStep, setTgLoginStep] = useState('phone');
+    const [tgLoginPhone, setTgLoginPhone] = useState('');
+    const [tgLoginCode, setTgLoginCode] = useState('');
+    const [tgLoginHash, setTgLoginHash] = useState('');
+    const [tgLoginPassword, setTgLoginPassword] = useState('');
+    const [tgLoginMsg, setTgLoginMsg] = useState('');
 
     const fetchStats = async () => {
         try {
@@ -1042,12 +1059,199 @@ function GptKeysTab() {
                     gpt_sbs: data.manual.gpt_sbs || false,
                     gpt_red: data.manual.gpt_red || false,
                     gpt_vip: data.manual.gpt_vip || false,
+                    gpt_tg: data.manual.gpt_tg || false,
                 });
             }
         } catch {}
     };
 
-    useEffect(() => { fetchStats(); fetchKeys(); fetchGptMaint(); }, []);
+    const fetchTgAccounts = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setTgAccounts(data.accounts || []);
+            } else {
+                console.error('Failed to fetch TG accounts:', res.status);
+            }
+        } catch (e) {
+            console.error('Failed to fetch TG accounts:', e);
+        }
+    };
+
+    const updateGptCfg = (patchOrBuilder) => {
+        setConfig(prev => {
+            const verification = { ...(prev?.verification || {}) };
+            const current = { ...(verification.gptRechargeBot || {}) };
+            const next = typeof patchOrBuilder === 'function'
+                ? patchOrBuilder(current)
+                : { ...current, ...patchOrBuilder };
+            return { ...prev, verification: { ...verification, gptRechargeBot: next } };
+        });
+    };
+
+    const handleToggleTgPool = async (acc) => {
+        setTgPoolSavingId(acc.id);
+        try {
+            await fetch(`${API_BASE}/api/telegram/accounts/${acc.id}/toggle`, {
+                method: 'PUT',
+                headers: authHeaders,
+                body: JSON.stringify({ enabled: !acc.enabled }),
+            });
+            await fetchTgAccounts();
+        } catch (e) {
+            console.error('TG pool toggle failed:', e);
+        } finally {
+            setTgPoolSavingId(null);
+        }
+    };
+
+    const handleToggleGptAssign = async (acc) => {
+        const assigned = acc.assignedBots || ['dualbot'];
+        const newAssigned = assigned.includes('gptbot')
+            ? assigned.filter(b => b !== 'gptbot')
+            : [...assigned, 'gptbot'];
+        setTgPoolSavingId(acc.id);
+        try {
+            await fetch(`${API_BASE}/api/telegram/accounts/${acc.id}/toggle`, {
+                method: 'PUT',
+                headers: authHeaders,
+                body: JSON.stringify({ assignedBots: newAssigned }),
+            });
+            await fetchTgAccounts();
+        } catch (e) {
+            console.error('GPTBot assign toggle failed:', e);
+        } finally {
+            setTgPoolSavingId(null);
+        }
+    };
+
+    const handleTgAdd = async () => {
+        if (!tgNewApiId || !tgNewApiHash) return;
+        setTgLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ apiId: tgNewApiId.trim(), apiHash: tgNewApiHash.trim(), label: tgNewLabel.trim() || undefined })
+            });
+            const text = await res.text();
+            let data = {};
+            try { data = text ? JSON.parse(text) : {}; } catch {}
+            if (res.ok) {
+                setTgShowAdd(false);
+                setTgNewApiId('');
+                setTgNewApiHash('');
+                setTgNewLabel('');
+                fetchTgAccounts();
+            } else {
+                const serverMsg = data.detail || data.error || data.message || text || `HTTP ${res.status}`;
+                alert(`添加失败: ${serverMsg}`);
+            }
+        } catch (e) {
+            alert('添加失败: ' + e.message);
+        } finally {
+            setTgLoading(false);
+        }
+    };
+
+    const handleTgLoginRequest = async (accountId) => {
+        if (!tgLoginPhone) return;
+        setTgLoading(true);
+        setTgLoginMsg('');
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}/login`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ phone: tgLoginPhone })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setTgLoginHash(data.phone_code_hash);
+                setTgLoginStep('code');
+                setTgLoginMsg(data.message || '验证码已发送');
+            } else {
+                setTgLoginMsg(data.detail || data.error || '发送验证码失败');
+            }
+        } catch (e) {
+            setTgLoginMsg('网络错误: ' + e.message);
+        } finally {
+            setTgLoading(false);
+        }
+    };
+
+    const handleTgVerifyCode = async (accountId) => {
+        if (!tgLoginCode) return;
+        setTgLoading(true);
+        setTgLoginMsg('');
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}/verify`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({
+                    phone: tgLoginPhone,
+                    code: tgLoginCode,
+                    phone_code_hash: tgLoginHash,
+                    password: tgLoginPassword || undefined
+                })
+            });
+            const data = await res.json();
+            if (data.needs_password) {
+                setTgLoginStep('password');
+                setTgLoginMsg('此账号启用了两步验证，请输入密码');
+            } else if (res.ok && data.success) {
+                setTgLoginStep('done');
+                setTgLoginMsg(`✅ ${data.message || '登录成功'}`);
+                setTgLoginAccountId(null);
+                fetchTgAccounts();
+            } else {
+                setTgLoginMsg(data.detail || data.error || '验证码错误');
+            }
+        } catch (e) {
+            setTgLoginMsg('网络错误: ' + e.message);
+        } finally {
+            setTgLoading(false);
+        }
+    };
+
+    const handleTgRemove = async (accountId) => {
+        if (!window.confirm('确定要删除这个账号吗？')) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/${accountId}`, { method: 'DELETE', headers: authHeaders });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                alert(`删除失败: ${data.detail || data.error || `HTTP ${res.status}`}`);
+                return;
+            }
+            fetchTgAccounts();
+        } catch (e) {
+            alert('删除失败');
+        }
+    };
+
+    const handleTgCheckConnections = async () => {
+        setTgChecking(true);
+        setTgCheckResults(null);
+        try {
+            const res = await fetch(`${API_BASE}/api/telegram/accounts/check-connections`, { method: 'POST', headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                const map = {};
+                (data.results || []).forEach(r => { map[r.id] = r; });
+                setTgCheckResults(map);
+                fetchTgAccounts();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(`检测连接失败: ${data.detail || data.error || `HTTP ${res.status}`}`);
+            }
+        } catch (e) {
+            console.error('Check connections failed:', e);
+        } finally {
+            setTgChecking(false);
+        }
+    };
+
+    useEffect(() => { fetchStats(); fetchKeys(); fetchGptMaint(); fetchTgAccounts(); }, []);
 
     const handleAdd = async () => {
         if (!newKeys.trim()) return;
@@ -1094,7 +1298,7 @@ function GptKeysTab() {
         return <span style={{ padding: '2px 10px', borderRadius: '8px', background: s.bg, color: s.color, fontWeight: 600, fontSize: '12px' }}>{s.text}</span>;
     };
 
-    const channelColors = { red: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626' }, sbs: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' }, vip: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed' } };
+    const channelColors = { red: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626' }, sbs: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' }, vip: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed' }, tg: { bg: 'rgba(20,184,166,0.1)', color: '#0f766e' } };
     const channelBadge = (ch) => {
         const c = channelColors[ch] || channelColors.sbs;
         return <span style={{
@@ -1265,13 +1469,426 @@ function GptKeysTab() {
                             ))}
                             {keys.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                                    <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
                                         暂无卡密，请先添加
                                     </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            {/* GPT Recharge TG Bot Config */}
+            <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{
+                    padding: '16px 20px',
+                    borderBottom: '1px solid var(--border-primary)',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                }}>
+                    <span>🤖 GPT 充值 TG Bot</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0f766e', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={config?.verification?.gptRechargeBot?.enabled || false}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                verification: {
+                                    ...prev.verification || {},
+                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, enabled: e.target.checked }
+                                }
+                            }))}
+                            style={{ width: '16px', height: '16px' }}
+                        />
+                        启用
+                    </label>
+                </div>
+                <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr 120px 120px', gap: '10px' }}>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>目标 Bot</label>
+                        <input type="text" className="input"
+                            value={config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot'}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                verification: {
+                                    ...prev.verification || {},
+                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, targetBot: e.target.value }
+                                }
+                            }))}
+                            placeholder="@AutoRechargeProbot"
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>发送格式</label>
+                        <input type="text" className="input"
+                            value={config?.verification?.gptRechargeBot?.sendFormat || '{account}'}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                verification: {
+                                    ...prev.verification || {},
+                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, sendFormat: e.target.value }
+                                }
+                            }))}
+                            placeholder="{account}"
+                            style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '12px' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>超时(秒)</label>
+                        <input type="number" className="input"
+                            value={config?.verification?.gptRechargeBot?.timeout ?? 120}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                verification: {
+                                    ...prev.verification || {},
+                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, timeout: parseInt(e.target.value, 10) || 120 }
+                                }
+                            }))}
+                            min="30" max="600"
+                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>最大重试</label>
+                        <input type="number" className="input"
+                            value={config?.verification?.gptRechargeBot?.maxRetries ?? 5}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                verification: {
+                                    ...prev.verification || {},
+                                    gptRechargeBot: { ...prev.verification?.gptRechargeBot || {}, maxRetries: parseInt(e.target.value, 10) || 5 }
+                                }
+                            }))}
+                            min="1" max="20"
+                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                        />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1', marginTop: '2px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        这是无卡密 TG 通道。占位符支持: <code>{'{account}'}</code> <code>{'{email}'}</code>（兼容保留 <code>{'{card_key}'}</code>）。账号请在 TG Bot 页面给账号勾选 <strong>GPTBot</strong> 标签。
+                    </div>
+                </div>
+            </div>
+
+            {/* GPT TG Account Pool */}
+            <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{
+                    padding: '16px 20px',
+                    borderBottom: '1px solid var(--border-primary)',
+                    fontWeight: 700,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                }}>
+                    <span>📱 GPTBot 账号池</span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn" style={{ fontSize: '12px', padding: '5px 10px' }} onClick={() => setTgShowAdd(v => !v)}>
+                            + 添加账号
+                        </button>
+                        <button className="btn" style={{ fontSize: '12px', padding: '5px 10px' }} onClick={handleTgCheckConnections} disabled={tgChecking}>
+                            {tgChecking ? '检测中...' : '📡 检测连接'}
+                        </button>
+                        <button className="btn" style={{ fontSize: '12px', padding: '5px 10px' }} onClick={fetchTgAccounts}>刷新</button>
+                    </div>
+                </div>
+                <div style={{ padding: '12px 20px', fontSize: '12px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-primary)' }}>
+                    这里可直接管理 GPT 充值账号池（添加、登录、检测连接、启用并发、GPTBot 分配）。
+                </div>
+                {tgShowAdd && (
+                    <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '8px' }}>
+                            <input className="input" placeholder="API ID" value={tgNewApiId} onChange={e => setTgNewApiId(e.target.value)} />
+                            <input className="input" placeholder="API Hash" value={tgNewApiHash} onChange={e => setTgNewApiHash(e.target.value)} />
+                            <input className="input" placeholder="账号备注(可选)" value={tgNewLabel} onChange={e => setTgNewLabel(e.target.value)} />
+                            <button className="btn btn-primary" onClick={handleTgAdd} disabled={tgLoading || !tgNewApiId || !tgNewApiHash}>
+                                {tgLoading ? '添加中...' : '添加'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+                <div style={{ padding: '10px 20px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {tgAccounts.length === 0 ? (
+                        <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px' }}>
+                            暂无 TG 账号
+                        </div>
+                    ) : (
+                        tgAccounts.map(acc => {
+                            const assigned = acc.assignedBots || ['dualbot'];
+                            const gptAssigned = assigned.includes('gptbot');
+                            return (
+                                <div key={acc.id} style={{
+                                    border: '1px solid var(--border-primary)',
+                                    borderRadius: '10px',
+                                    padding: '10px 12px',
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr auto',
+                                    alignItems: 'center',
+                                    gap: '10px'
+                                }}>
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {acc.label || acc.phone || acc.id}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span>{acc.phone || (acc.hasSession ? '已登录' : '未登录')}</span>
+                                            <span style={{
+                                                padding: '1px 6px',
+                                                borderRadius: '6px',
+                                                fontSize: '10px',
+                                                background: acc.hasSession ? 'rgba(16,185,129,0.14)' : 'rgba(239,68,68,0.12)',
+                                                color: acc.hasSession ? '#059669' : '#dc2626'
+                                            }}>
+                                                {acc.hasSession ? '会话正常' : '未登录'}
+                                            </span>
+                                            {tgCheckResults && tgCheckResults[acc.id] && (
+                                                <span style={{
+                                                    padding: '1px 6px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '10px',
+                                                    background: tgCheckResults[acc.id].online ? 'rgba(16,185,129,0.14)' : 'rgba(239,68,68,0.12)',
+                                                    color: tgCheckResults[acc.id].online ? '#059669' : '#dc2626'
+                                                }}>
+                                                    {tgCheckResults[acc.id].online ? '在线' : '掉线'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                        {!acc.hasSession ? (
+                                            <button
+                                                className="btn btn-primary"
+                                                disabled={tgLoading}
+                                                onClick={() => {
+                                                    setTgLoginAccountId(acc.id);
+                                                    setTgLoginStep('phone');
+                                                    setTgLoginPhone('');
+                                                    setTgLoginCode('');
+                                                    setTgLoginHash('');
+                                                    setTgLoginPassword('');
+                                                    setTgLoginMsg('');
+                                                }}
+                                                style={{ fontSize: '12px', padding: '5px 10px' }}
+                                            >
+                                                登录账号
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    className="btn"
+                                                    disabled={tgPoolSavingId === acc.id}
+                                                    onClick={() => handleToggleTgPool(acc)}
+                                                    style={{
+                                                        fontSize: '12px', padding: '5px 10px',
+                                                        border: 'none', borderRadius: '7px',
+                                                        background: acc.enabled ? 'rgba(16,185,129,0.14)' : 'rgba(107,114,128,0.12)',
+                                                        color: acc.enabled ? '#059669' : '#6b7280'
+                                                    }}
+                                                >
+                                                    {acc.enabled ? '已启用' : '已下架'}
+                                                </button>
+                                                <button
+                                                    className="btn"
+                                                    disabled={tgPoolSavingId === acc.id}
+                                                    onClick={() => handleToggleGptAssign(acc)}
+                                                    style={{
+                                                        fontSize: '12px', padding: '5px 10px',
+                                                        border: 'none', borderRadius: '7px',
+                                                        background: gptAssigned ? 'rgba(34,197,94,0.15)' : 'rgba(156,163,175,0.15)',
+                                                        color: gptAssigned ? '#16a34a' : '#6b7280'
+                                                    }}
+                                                >
+                                                    {gptAssigned ? '✓ GPTBot' : 'GPTBot'}
+                                                </button>
+                                            </>
+                                        )}
+                                        <button
+                                            className="btn"
+                                            onClick={() => handleTgRemove(acc.id)}
+                                            style={{
+                                                fontSize: '12px', padding: '5px 10px',
+                                                border: 'none', borderRadius: '7px',
+                                                background: 'rgba(239,68,68,0.12)', color: '#dc2626'
+                                            }}
+                                        >
+                                            删除
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+                {tgLoginAccountId && (
+                    <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                            <strong style={{ fontSize: '13px' }}>登录账号</strong>
+                            <button className="btn" style={{ fontSize: '11px', padding: '3px 8px' }} onClick={() => setTgLoginAccountId(null)}>关闭</button>
+                        </div>
+                        {tgLoginStep === 'phone' && (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <input className="input" placeholder="+8613800138000" value={tgLoginPhone} onChange={e => setTgLoginPhone(e.target.value)} />
+                                <button className="btn btn-primary" onClick={() => handleTgLoginRequest(tgLoginAccountId)} disabled={tgLoading || !tgLoginPhone}>
+                                    {tgLoading ? '发送中...' : '发送验证码'}
+                                </button>
+                            </div>
+                        )}
+                        {(tgLoginStep === 'code' || tgLoginStep === 'password') && (
+                            <div style={{ display: 'grid', gridTemplateColumns: tgLoginStep === 'password' ? '1fr 1fr auto' : '1fr auto', gap: '8px' }}>
+                                <input className="input" placeholder="验证码" value={tgLoginCode} onChange={e => setTgLoginCode(e.target.value)} />
+                                {tgLoginStep === 'password' && (
+                                    <input className="input" type="password" placeholder="2FA 密码" value={tgLoginPassword} onChange={e => setTgLoginPassword(e.target.value)} />
+                                )}
+                                <button className="btn btn-primary" onClick={() => handleTgVerifyCode(tgLoginAccountId)} disabled={tgLoading || !tgLoginCode}>
+                                    {tgLoading ? '验证中...' : '验证登录'}
+                                </button>
+                            </div>
+                        )}
+                        {tgLoginMsg && <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>{tgLoginMsg}</div>}
+                    </div>
+                )}
+            </div>
+
+            {/* GPT TG Rules */}
+            <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 700 }}>
+                    🧩 GPT TG 响应规则
+                </div>
+                <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                            处理中关键词 (processingKeywords)
+                        </label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                            {(config?.verification?.gptRechargeBot?.processingKeywords || []).map((kw, idx) => (
+                                <span key={idx} style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                    padding: '2px 8px', fontSize: '11px', fontWeight: 600,
+                                    background: 'rgba(245,158,11,0.1)', color: '#d97706',
+                                    borderRadius: '10px', border: '1px solid rgba(245,158,11,0.2)'
+                                }}>
+                                    {kw}
+                                    <span
+                                        style={{ cursor: 'pointer', lineHeight: 1 }}
+                                        onClick={() => updateGptCfg(cur => ({
+                                            ...cur,
+                                            processingKeywords: (cur.processingKeywords || []).filter((_, i) => i !== idx),
+                                        }))}
+                                    >×</span>
+                                </span>
+                            ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                                type="text"
+                                className="input"
+                                value={newProcessingKw}
+                                onChange={e => setNewProcessingKw(e.target.value)}
+                                placeholder="新增关键词，按 Enter 或点击添加"
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && newProcessingKw.trim()) {
+                                        const v = newProcessingKw.trim();
+                                        updateGptCfg(cur => ({ ...cur, processingKeywords: [...(cur.processingKeywords || []), v] }));
+                                        setNewProcessingKw('');
+                                    }
+                                }}
+                                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                            />
+                            <button
+                                className="btn"
+                                onClick={() => {
+                                    if (!newProcessingKw.trim()) return;
+                                    const v = newProcessingKw.trim();
+                                    updateGptCfg(cur => ({ ...cur, processingKeywords: [...(cur.processingKeywords || []), v] }));
+                                    setNewProcessingKw('');
+                                }}
+                            >添加</button>
+                        </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-primary)', paddingTop: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>响应规则 (responseRules)</label>
+                            <button
+                                className="btn"
+                                style={{ fontSize: '12px', padding: '4px 10px' }}
+                                onClick={() => updateGptCfg(cur => ({
+                                    ...cur,
+                                    responseRules: [...(cur.responseRules || []), { keywords: ['SUCCESS'], status: 'approved', success: true, message: '充值成功' }],
+                                }))}
+                            >+ 添加规则</button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {(config?.verification?.gptRechargeBot?.responseRules || []).map((rule, ri) => (
+                                <div key={ri} style={{ border: '1px solid var(--border-primary)', borderRadius: '8px', padding: '10px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr 36px', gap: '8px', alignItems: 'center' }}>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={(rule.keywords || []).join(' | ')}
+                                            onChange={e => {
+                                                const keywords = e.target.value.split('|').map(s => s.trim()).filter(Boolean);
+                                                updateGptCfg(cur => {
+                                                    const list = [...(cur.responseRules || [])];
+                                                    list[ri] = { ...list[ri], keywords };
+                                                    return { ...cur, responseRules: list };
+                                                });
+                                            }}
+                                            placeholder="关键词1 | 关键词2"
+                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px', fontFamily: 'monospace' }}
+                                        />
+                                        <select
+                                            className="input"
+                                            value={rule.status || 'failed'}
+                                            onChange={e => {
+                                                const status = e.target.value;
+                                                updateGptCfg(cur => {
+                                                    const list = [...(cur.responseRules || [])];
+                                                    list[ri] = { ...list[ri], status, success: status === 'approved' };
+                                                    return { ...cur, responseRules: list };
+                                                });
+                                            }}
+                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                        >
+                                            <option value="approved">approved</option>
+                                            <option value="cooldown">cooldown</option>
+                                            <option value="failed">failed</option>
+                                        </select>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={rule.message || ''}
+                                            onChange={e => {
+                                                updateGptCfg(cur => {
+                                                    const list = [...(cur.responseRules || [])];
+                                                    list[ri] = { ...list[ri], message: e.target.value };
+                                                    return { ...cur, responseRules: list };
+                                                });
+                                            }}
+                                            placeholder="结果消息"
+                                            style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                                        />
+                                        <button
+                                            className="btn"
+                                            onClick={() => updateGptCfg(cur => ({
+                                                ...cur,
+                                                responseRules: (cur.responseRules || []).filter((_, i) => i !== ri),
+                                            }))}
+                                            style={{ color: '#dc2626', border: 'none', background: 'rgba(239,68,68,0.1)', borderRadius: '6px', padding: '4px 0' }}
+                                        >×</button>
+                                    </div>
+                                </div>
+                            ))}
+                            {(config?.verification?.gptRechargeBot?.responseRules || []).length === 0 && (
+                                <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px', padding: '8px 0' }}>
+                                    暂无规则
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1282,6 +1899,7 @@ function GptKeysTab() {
                     { key: 'gpt_sbs', label: '🔵 SBS 通道', desc: 'chong.databrain.sbs' },
                     { key: 'gpt_red', label: '🔴 RED 通道', desc: 'redeemgpt.com' },
                     { key: 'gpt_vip', label: '🟣 VIP 通道', desc: 'shop.gptai.vip' },
+                    { key: 'gpt_tg', label: '🟢 TG 通道', desc: 'Telegram Userbot 目标 Bot' },
                 ].map(s => (
                     <div key={s.key} style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -4052,6 +4670,14 @@ export default function Admin() {
                         verifyBot: config?.verification?.dualBot?.verifyBot || '@AutoGeminiProbot',
                         autoBypass: config?.verification?.dualBot?.autoBypass !== false
                     },
+                    gptRechargeBot: {
+                        ...(config?.verification?.gptRechargeBot || {}),
+                        enabled: config?.verification?.gptRechargeBot?.enabled || false,
+                        targetBot: config?.verification?.gptRechargeBot?.targetBot || '@AutoRechargeProbot',
+                        sendFormat: config?.verification?.gptRechargeBot?.sendFormat || '{account}',
+                        timeout: Number(config?.verification?.gptRechargeBot?.timeout || 120),
+                        maxRetries: Number(config?.verification?.gptRechargeBot?.maxRetries || 5),
+                    },
                     singleBots: config?.verification?.singleBots || []
                 }
             };
@@ -6058,6 +6684,7 @@ export default function Admin() {
                                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                                     {[
                                                                         { key: 'dualbot', label: '新Bot' },
+                                                                        { key: 'gptbot', label: 'GPTBot' },
                                                                         ...(config?.verification?.singleBots || []).map(b => ({ key: b.id, label: b.id === 'blackbot' ? 'BlackBot' : b.id === 'oldbot' ? '老Bot' : b.username }))
                                                                     ].map(bot => {
                                                                         const assigned = (acc.assignedBots || ['dualbot']);
@@ -8931,7 +9558,7 @@ export default function Admin() {
 
                 {/* GPT Recharge Tab */}
                 {activeTab === 'gpt-recharge' && (
-                    <GptKeysTab />
+                    <GptKeysTab config={config} setConfig={setConfig} />
                 )}
             </div >
         </div >

@@ -1256,6 +1256,15 @@ export default function Verify() {
                                                     setGptResultMsg('');
                                                     const token = getToken();
                                                     try {
+                                                        const parseApiResponse = async (res) => {
+                                                            const text = await res.text();
+                                                            try {
+                                                                return text ? JSON.parse(text) : {};
+                                                            } catch {
+                                                                return { detail: text || `HTTP ${res.status}` };
+                                                            }
+                                                        };
+
                                                         const exRes = await fetch(`${API_BASE}/api/gpt/exchange`, {
                                                             method: 'POST',
                                                             headers: {
@@ -1264,7 +1273,7 @@ export default function Verify() {
                                                             },
                                                             body: JSON.stringify({}),
                                                         });
-                                                        const exData = await exRes.json();
+                                                        const exData = await parseApiResponse(exRes);
                                                         if (!exRes.ok || !exData.success) {
                                                             setGptError(sanitizeError(exData.detail) || t('gptCardExchangeFailed'));
                                                             setGptRecharging(false);
@@ -1285,7 +1294,7 @@ export default function Verify() {
                                                                 channel: exData.channel || 'sbs',
                                                             }),
                                                         });
-                                                        const reData = await reRes.json();
+                                                        const reData = await parseApiResponse(reRes);
                                                         if (reRes.ok && reData.success) {
                                                             setGptSuccess(true);
                                                             setGptResultMsg(t('gptRechargeSuccess'));

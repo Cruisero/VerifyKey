@@ -797,7 +797,7 @@ export default function Verify() {
                                         <li>
                                             <span className="check-icon required">🔐</span>
                                             <span><strong>{t('guide2faTitle')}</strong>{t('guide2faDesc')}
-                                                <a href="https://www.notion.so/2FA-32cfb1c3c17c807e83bdcb371212e287?source=copy_link"
+                                                <a href="https://ocnklud9ghxt.feishu.cn/wiki/LFCSweRWuiz5oxkgeNQc0htwn2d?from=from_copylink"
                                                     target="_blank" rel="noopener noreferrer"
                                                     style={{
                                                         background: 'rgba(99,102,241,0.1)', color: '#6366f1',

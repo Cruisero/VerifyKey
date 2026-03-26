@@ -4334,6 +4334,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                 <th>CDK 代码</th>
                                 <th>积分</th>
                                 <th>使用情况</th>
+                                <th>绑定用户ID</th>
                                 <th>状态</th>
                                 <th>备注</th>
                                 <th>创建时间</th>
@@ -4350,6 +4351,9 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                         <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{c.code}</td>
                                         <td>{c.quota} 积分</td>
                                         <td>{c.used} / {c.quota}</td>
+                                        <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+                                            {c.redeemedBy ? `user:${c.redeemedBy}` : '-'}
+                                        </td>
                                         <td>
                                             <span className={`badge badge-${c.status === 'unused' ? 'info' : c.status === 'active' ? 'success' : 'error'}`}>
                                                 {c.status === 'unused' ? '未使用' : c.status === 'active' ? '使用中' : '已用完'}
@@ -4372,7 +4376,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                     </tr>
                                     {expandedCdk === c.code && (
                                         <tr>
-                                            <td colSpan={8} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
+                                            <td colSpan={9} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
                                                 <div style={{ padding: '12px 20px' }}>
                                                     <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
                                                         📜 验证记录 ({cdkHistory.length})
@@ -4416,7 +4420,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                 </React.Fragment >
                             ))}
                             {filteredList.length === 0 && (
-                                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无 CDK 数据</td></tr>
+                                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-muted)' }}>暂无 CDK 数据</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -5013,7 +5017,7 @@ export default function Admin() {
 
     const handleUpdateUser = async () => {
         if (!editingUser) return;
-        const credits = parseInt(editCredits);
+        const credits = parseFloat(editCredits);
         if (isNaN(credits) || credits < 0) {
             alert('请输入有效的积分数值');
             return;
@@ -6095,7 +6099,7 @@ export default function Admin() {
                                     <div style={{ marginBottom: '16px' }}>
                                         <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>积分</label>
                                         <input
-                                            className="input" type="number" min="0"
+                                            className="input" type="number" min="0" step="0.1"
                                             value={editCredits}
                                             onChange={e => setEditCredits(e.target.value)}
                                             style={{ width: '100%', boxSizing: 'border-box' }}

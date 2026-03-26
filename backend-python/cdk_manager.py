@@ -262,7 +262,7 @@ def get_all_cdks() -> List[Dict]:
     """Get all CDKs as a list (for Admin panel)"""
     conn = database.get_connection()
     cursor = conn.execute(
-        "SELECT code, quota, used, status, created_at, last_used_at, note FROM cdkeys ORDER BY created_at DESC"
+        "SELECT code, quota, used, status, created_at, last_used_at, note, redeemed_by FROM cdkeys ORDER BY created_at DESC"
     )
     return [
         {
@@ -273,7 +273,8 @@ def get_all_cdks() -> List[Dict]:
             "remaining": r["quota"] - r["used"],
             "createdAt": r["created_at"],
             "lastUsedAt": r["last_used_at"],
-            "note": r["note"]
+            "note": r["note"],
+            "redeemedBy": r["redeemed_by"]
         }
         for r in cursor.fetchall()
     ]

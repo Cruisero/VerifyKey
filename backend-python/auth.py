@@ -385,7 +385,7 @@ def toggle_user_status(user_id: int, status: str) -> bool:
     return affected > 0
 
 
-def update_user_credits_admin(user_id: int, credits: int) -> bool:
+def update_user_credits_admin(user_id: int, credits: float) -> bool:
     """Set user credits to exact amount (admin)"""
     conn = get_db()
     cursor = conn.cursor()
@@ -397,5 +397,4 @@ def update_user_credits_admin(user_id: int, credits: int) -> bool:
     affected = cursor.rowcount
     conn.close()
     return affected > 0
-
 

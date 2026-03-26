@@ -2010,10 +2010,10 @@ async def update_user_credits_endpoint(user_id: int, request: Request, authoriza
     if credits is None or not isinstance(credits, (int, float)):
         raise HTTPException(status_code=400, detail="Invalid credits value")
 
-    success = auth.update_user_credits_admin(user_id, int(credits))
+    success = auth.update_user_credits_admin(user_id, float(credits))
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"success": True, "credits": int(credits)}
+    return {"success": True, "credits": float(credits)}
 
 
 @app.post("/api/admin/users/{user_id}")
@@ -2032,12 +2032,12 @@ async def update_user_admin_endpoint(user_id: int, request: Request, authorizati
 
     if credits is None or not isinstance(credits, (int, float)):
         raise HTTPException(status_code=400, detail="Invalid credits value")
-    if int(credits) < 0:
+    if float(credits) < 0:
         raise HTTPException(status_code=400, detail="Credits must be >= 0")
     if password and len(password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
 
-    success = auth.update_user_credits_admin(user_id, int(credits))
+    success = auth.update_user_credits_admin(user_id, float(credits))
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -2045,7 +2045,7 @@ async def update_user_admin_endpoint(user_id: int, request: Request, authorizati
     if password:
         password_updated = auth.reset_password(user_id, password)
 
-    return {"success": True, "credits": int(credits), "passwordUpdated": password_updated}
+    return {"success": True, "credits": float(credits), "passwordUpdated": password_updated}
 
 
 @app.get("/api/admin/users/{user_id}/history")

@@ -2615,7 +2615,7 @@ function GptTeamTab() {
                                         <span>{teamMembersData.members.filter(m => m.status === 'joined').length} 人</span>
                                     </div>
                                     <div className="gpt-team-members-table-wrap">
-                                        <table className="admin-table" style={{ width: '100%', minWidth: 520 }}>
+                                        <table className="admin-table gpt-team-members-table">
                                             <thead>
                                                 <tr><th>邮箱</th><th>角色</th><th>加入时间</th><th>操作</th></tr>
                                             </thead>
@@ -2653,7 +2653,7 @@ function GptTeamTab() {
                                         <span>{teamMembersData.members.filter(m => m.status === 'invited').length} 人</span>
                                     </div>
                                     <div className="gpt-team-members-table-wrap">
-                                        <table className="admin-table" style={{ width: '100%', minWidth: 520 }}>
+                                        <table className="admin-table gpt-team-members-table">
                                             <thead>
                                                 <tr><th>邮箱</th><th>状态</th><th>邀请时间</th><th>操作</th></tr>
                                             </thead>

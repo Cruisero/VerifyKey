@@ -648,7 +648,7 @@
 }
 
 .gpt-team-members-modal {
-    width: min(1200px, 100%);
+    width: min(1480px, calc(100vw - 64px));
 }
 
 .gpt-team-members-toolbar {
@@ -681,10 +681,12 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
+    align-items: start;
 }
 
 .gpt-team-members-panel {
     padding: 16px;
+    min-width: 0;
 }
 
 .gpt-team-members-panel-head {
@@ -706,10 +708,49 @@
 }
 
 .gpt-team-members-table-wrap {
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     border: 1px solid rgba(203, 213, 225, 0.8);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.9);
+    max-height: min(56vh, 640px);
+}
+
+.gpt-team-members-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.gpt-team-members-table th,
+.gpt-team-members-table td {
+    word-break: break-word;
+    white-space: normal;
+    vertical-align: middle;
+}
+
+.gpt-team-members-table th:nth-child(1),
+.gpt-team-members-table td:nth-child(1) {
+    width: 48%;
+}
+
+.gpt-team-members-table th:nth-child(2),
+.gpt-team-members-table td:nth-child(2) {
+    width: 18%;
+}
+
+.gpt-team-members-table th:nth-child(3),
+.gpt-team-members-table td:nth-child(3) {
+    width: 22%;
+}
+
+.gpt-team-members-table th:nth-child(4),
+.gpt-team-members-table td:nth-child(4) {
+    width: 12%;
+    white-space: nowrap;
+}
+
+.gpt-team-members-table .btn {
+    width: 100%;
 }
 
 .gpt-team-dashboard-table-card {

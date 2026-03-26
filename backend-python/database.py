@@ -13,8 +13,18 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Database file path (inside docker /app/data, locally in current dir)
-DB_DIR = "/app/data"
+def _resolve_db_dir() -> str:
+    env_dir = os.getenv("ONEPASS_DB_DIR", "").strip()
+    if env_dir:
+        return env_dir
+    docker_dir = "/app/data"
+    if os.path.isdir(docker_dir) and os.access(docker_dir, os.W_OK):
+        return docker_dir
+    return os.path.join(os.path.dirname(__file__), "data")
+
+
+# Database file path (inside docker `/app/data`, local dev falls back to `backend-python/data`)
+DB_DIR = _resolve_db_dir()
 DB_FILE = os.path.join(DB_DIR, "onepass.db")
 
 # Thread-local storage for connections
@@ -121,6 +131,37 @@ def init_db():
                 used_at TEXT DEFAULT ''
             );
 
+            CREATE TABLE IF NOT EXISTS gpt_team_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                account_id TEXT DEFAULT '',
+                team_name TEXT DEFAULT '',
+                plan_type TEXT DEFAULT '',
+                subscription_plan TEXT DEFAULT '',
+                expires_at TEXT DEFAULT '',
+                current_members INTEGER NOT NULL DEFAULT 0,
+                max_members INTEGER NOT NULL DEFAULT 6,
+                status TEXT NOT NULL DEFAULT 'active',
+                access_token TEXT DEFAULT '',
+                refresh_token TEXT DEFAULT '',
+                session_token TEXT DEFAULT '',
+                client_id TEXT DEFAULT '',
+                device_code_auth_enabled INTEGER NOT NULL DEFAULT 0,
+                error_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS gpt_team_usage_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                code TEXT DEFAULT '',
+                team_id INTEGER DEFAULT 0,
+                account_id TEXT DEFAULT '',
+                redeemed_at TEXT NOT NULL,
+                is_warranty_redemption INTEGER NOT NULL DEFAULT 0
+            );
+
             CREATE INDEX IF NOT EXISTS idx_vh_status ON verification_history(status);
             CREATE INDEX IF NOT EXISTS idx_vh_timestamp ON verification_history(timestamp);
             CREATE INDEX IF NOT EXISTS idx_vh_vid ON verification_history(verification_id);
@@ -130,6 +171,11 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_gk_status ON gpt_keys(status);
             CREATE INDEX IF NOT EXISTS idx_vpc_status ON vpixel_cards(status);
             CREATE INDEX IF NOT EXISTS idx_ypc_status ON ypixel_cards(status);
+            CREATE INDEX IF NOT EXISTS idx_gta_status ON gpt_team_accounts(status);
+            CREATE INDEX IF NOT EXISTS idx_gta_email ON gpt_team_accounts(email);
+            CREATE INDEX IF NOT EXISTS idx_gtu_time ON gpt_team_usage_records(redeemed_at);
+            CREATE INDEX IF NOT EXISTS idx_gtu_email ON gpt_team_usage_records(email);
+            CREATE INDEX IF NOT EXISTS idx_gtu_team ON gpt_team_usage_records(team_id);
         """)
 
         # Migrate existing JSON data
@@ -387,4 +433,3 @@ def start_auto_backup():
     t = threading.Thread(target=_backup_loop, daemon=True, name="db-auto-backup")
     t.start()
     print("[DB Backup] Auto-backup scheduled (every 24h)")
-

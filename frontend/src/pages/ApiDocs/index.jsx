@@ -199,7 +199,7 @@ const ENDPOINTS = [
                 path: '/api/gpt/recharge',
                 desc: 'ChatGPT Plus 月度充值',
                 params: [
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 2 积分）' },
+                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 1.5 积分）' },
                     { name: 'card_key', type: 'string', required: true, desc: '充值卡密' },
                     { name: 'account', type: 'string', required: true, desc: 'ChatGPT 账号' },
                     { name: 'email', type: 'string', required: false, desc: '绑定邮箱（记录用）' },
@@ -281,7 +281,7 @@ const ENDPOINTS = [
 const CREDITS_TABLE = [
     { service: 'Gemini 普通认证', cost: '-1 积分' },
     { service: 'Gemini 高级认证', cost: '-1.5 积分' },
-    { service: 'ChatGPT Plus 月度充值', cost: '-2 积分' },
+    { service: 'ChatGPT Plus 月度充值', cost: '-1.5 积分' },
     { service: '邀请好友（首次兑换后）', cost: '+0.2 积分' },
 ];
 

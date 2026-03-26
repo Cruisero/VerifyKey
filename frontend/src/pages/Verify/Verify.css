@@ -2519,6 +2519,30 @@
     border: 1px solid rgba(124, 92, 252, 0.15);
 }
 
+.gpt-mode-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.gpt-mode-tab {
+    min-height: 50px;
+    border: 1px solid rgba(124, 92, 252, 0.16);
+    border-radius: 12px;
+    background: rgba(124, 92, 252, 0.04);
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+
+.gpt-mode-tab.active {
+    background: linear-gradient(135deg, #7c5cfc, #6366f1);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 8px 20px rgba(124, 92, 252, 0.22);
+}
+
 /* Step Flow */
 .gpt-steps-flow {
     display: flex;
@@ -2597,6 +2621,44 @@
     flex-direction: column;
     gap: 10px;
     flex: 1;
+}
+
+.gpt-team-invite-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid rgba(124, 92, 252, 0.12);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(124, 92, 252, 0.04), rgba(255, 255, 255, 0.6));
+}
+
+.gpt-team-email-input {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 14px;
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 15px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+.gpt-team-email-input:focus {
+    outline: none;
+    border-color: #7c5cfc;
+    box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.1);
+}
+
+.gpt-team-invite-note {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    padding: 10px 12px;
+    background: rgba(248, 250, 252, 0.9);
+    border-radius: 10px;
 }
 
 .gpt-session-header {

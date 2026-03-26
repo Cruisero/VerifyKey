@@ -64,6 +64,9 @@ def _ensure_redeemed_by_column():
     """Auto-migrate: add redeemed_by column to cdkeys if missing."""
     conn = database.get_connection()
     try:
+        table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cdkeys'").fetchone()
+        if not table:
+            return
         conn.execute("SELECT redeemed_by FROM cdkeys LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE cdkeys ADD COLUMN redeemed_by INTEGER DEFAULT NULL")

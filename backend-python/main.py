@@ -15,9 +15,11 @@ import asyncio
 import re
 import contextlib
 import time
+import base64
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import uuid
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -2017,6 +2019,1362 @@ async def get_admin_user_history_endpoint(user_id: int, authorization: str = Hea
     all_items = pixel_items + gpt_items
     all_items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return {"user": target_user, "history": all_items[:100]}
+
+
+# ============ GPT TEAM MANAGEMENT (ADMIN) ============
+
+class GptTeamCreateRequest(BaseModel):
+    email: str
+    accountId: Optional[str] = ""
+    teamName: Optional[str] = ""
+    planType: Optional[str] = ""
+    subscriptionPlan: Optional[str] = ""
+    expiresAt: Optional[str] = ""
+    currentMembers: Optional[int] = 0
+    maxMembers: Optional[int] = 6
+    status: Optional[str] = "active"
+    accessToken: Optional[str] = ""
+    refreshToken: Optional[str] = ""
+    sessionToken: Optional[str] = ""
+    clientId: Optional[str] = ""
+    deviceCodeAuthEnabled: Optional[bool] = False
+
+
+class GptTeamUpdateRequest(BaseModel):
+    email: Optional[str] = None
+    accountId: Optional[str] = None
+    teamName: Optional[str] = None
+    planType: Optional[str] = None
+    subscriptionPlan: Optional[str] = None
+    expiresAt: Optional[str] = None
+    currentMembers: Optional[int] = None
+    maxMembers: Optional[int] = None
+    status: Optional[str] = None
+    accessToken: Optional[str] = None
+    refreshToken: Optional[str] = None
+    sessionToken: Optional[str] = None
+    clientId: Optional[str] = None
+    deviceCodeAuthEnabled: Optional[bool] = None
+
+
+class GptTeamImportRequest(BaseModel):
+    import_type: str = "batch"
+    access_token: Optional[str] = ""
+    refresh_token: Optional[str] = ""
+    session_token: Optional[str] = ""
+    client_id: Optional[str] = ""
+    email: Optional[str] = ""
+    account_id: Optional[str] = ""
+    team_name: Optional[str] = ""
+    max_members: Optional[int] = 6
+    status: Optional[str] = "active"
+    content: Optional[str] = ""
+
+
+class GptTeamRecordCreateRequest(BaseModel):
+    email: str
+    code: Optional[str] = ""
+    teamId: Optional[int] = 0
+    accountId: Optional[str] = ""
+    redeemedAt: Optional[str] = ""
+    isWarrantyRedemption: Optional[bool] = False
+
+
+class GptTeamMemberRequest(BaseModel):
+    email: str
+
+
+def _gpt_team_row_to_dict(row):
+    return {
+        "id": row["id"],
+        "email": row["email"] or "",
+        "accountId": row["account_id"] or "",
+        "teamName": row["team_name"] or "",
+        "planType": row["plan_type"] or "",
+        "subscriptionPlan": row["subscription_plan"] or "",
+        "expiresAt": row["expires_at"] or "",
+        "currentMembers": int(row["current_members"] or 0),
+        "maxMembers": int(row["max_members"] or 0),
+        "status": row["status"] or "active",
+        "accessToken": row["access_token"] or "",
+        "refreshToken": row["refresh_token"] or "",
+        "sessionToken": row["session_token"] or "",
+        "clientId": row["client_id"] or "",
+        "deviceCodeAuthEnabled": bool(row["device_code_auth_enabled"] or 0),
+        "errorCount": int(row["error_count"] or 0),
+        "createdAt": row["created_at"] or "",
+        "updatedAt": row["updated_at"] or "",
+    }
+
+
+def _normalize_team_payload(raw: dict) -> dict:
+    now = datetime.utcnow().isoformat() + "Z"
+    email = (raw.get("email") or "").strip()
+    return {
+        "email": email,
+        "account_id": (raw.get("accountId") or raw.get("account_id") or "").strip(),
+        "team_name": (raw.get("teamName") or raw.get("team_name") or "").strip(),
+        "plan_type": (raw.get("planType") or raw.get("plan_type") or "").strip(),
+        "subscription_plan": (raw.get("subscriptionPlan") or raw.get("subscription_plan") or "").strip(),
+        "expires_at": (raw.get("expiresAt") or raw.get("expires_at") or "").strip(),
+        "current_members": int(raw.get("currentMembers") or raw.get("current_members") or 0),
+        "max_members": int(raw.get("maxMembers") or raw.get("max_members") or 6),
+        "status": (raw.get("status") or "active").strip().lower(),
+        "access_token": (raw.get("accessToken") or raw.get("access_token") or "").strip(),
+        "refresh_token": (raw.get("refreshToken") or raw.get("refresh_token") or "").strip(),
+        "session_token": (raw.get("sessionToken") or raw.get("session_token") or "").strip(),
+        "client_id": (raw.get("clientId") or raw.get("client_id") or "").strip(),
+        "device_code_auth_enabled": 1 if bool(raw.get("deviceCodeAuthEnabled") or raw.get("device_code_auth_enabled")) else 0,
+        "updated_at": now,
+        "created_at": now,
+    }
+
+
+def _decode_jwt_payload_unverified(token: str) -> dict:
+    try:
+        token = (token or "").strip()
+        if token.count(".") < 2:
+            return {}
+        payload_b64 = token.split(".")[1]
+        padding = "=" * ((4 - len(payload_b64) % 4) % 4)
+        decoded = base64.urlsafe_b64decode(payload_b64 + padding).decode("utf-8", errors="ignore")
+        data = json.loads(decoded)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _extract_email_from_access_token(token: str) -> str:
+    data = _decode_jwt_payload_unverified(token)
+    profile = data.get("https://api.openai.com/profile") or {}
+    email = (profile.get("email") or data.get("email") or "").strip()
+    return email
+
+
+def _extract_account_id_from_access_token(token: str) -> str:
+    data = _decode_jwt_payload_unverified(token)
+    auth_claim = data.get("https://api.openai.com/auth") or {}
+    account_id = (auth_claim.get("chatgpt_account_id") or "").strip()
+    return account_id
+
+
+_gpt_team_sessions = {}
+
+
+async def _gpt_team_get_session(identifier: str = "default"):
+    session = _gpt_team_sessions.get(identifier)
+    if session:
+        return session
+    from curl_cffi.requests import AsyncSession as CurlAsyncSession
+    session = CurlAsyncSession(
+        impersonate="chrome110",
+        timeout=30,
+        verify=False,
+    )
+    _gpt_team_sessions[identifier] = session
+    return session
+
+
+async def _gpt_team_clear_session(identifier: Optional[str] = None):
+    if identifier:
+        session = _gpt_team_sessions.pop(identifier, None)
+        if session:
+            with contextlib.suppress(Exception):
+                await session.close()
+        return
+    for key, session in list(_gpt_team_sessions.items()):
+        with contextlib.suppress(Exception):
+            await session.close()
+        _gpt_team_sessions.pop(key, None)
+
+
+async def _gpt_team_make_request(method: str, url: str, headers: Optional[dict] = None, json_data: Optional[dict] = None, identifier: str = "default") -> dict:
+    headers = dict(headers or {})
+    if identifier == "default":
+        account_id = headers.get("chatgpt-account-id", "")
+        if account_id:
+            identifier = f"acc_{account_id}"
+        else:
+            auth_header = headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token_email = _extract_email_from_access_token(auth_header.replace("Bearer ", ""))
+                if token_email:
+                    identifier = token_email.lower()
+    session = await _gpt_team_get_session(identifier)
+    base_headers = {
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://chatgpt.com/",
+        "Origin": "https://chatgpt.com",
+        "Connection": "keep-alive",
+    }
+    for key, value in base_headers.items():
+        headers.setdefault(key, value)
+
+    try:
+        if method == "GET":
+            response = await session.get(url, headers=headers)
+        elif method == "POST":
+            response = await session.post(url, headers=headers, json=json_data)
+        elif method == "DELETE":
+            response = await session.delete(url, headers=headers, json=json_data)
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+    except Exception as e:
+        return {"success": False, "status_code": 0, "error": str(e), "error_code": ""}
+
+    status_code = getattr(response, "status_code", 0)
+    raw_text = ""
+    with contextlib.suppress(Exception):
+        raw_text = response.text
+    parsed = {}
+    with contextlib.suppress(Exception):
+        parsed = response.json()
+
+    if 200 <= status_code < 300:
+        return {"success": True, "status_code": status_code, "data": parsed if isinstance(parsed, dict) else {}, "error": None, "error_code": ""}
+
+    error_code = ""
+    error_message = raw_text or f"HTTP {status_code}"
+    if isinstance(parsed, dict):
+        detail = parsed.get("detail", parsed.get("error", error_message))
+        if isinstance(detail, dict):
+            error_message = detail.get("message") or detail.get("error") or json.dumps(detail, ensure_ascii=False)
+            error_code = detail.get("code") or ""
+        else:
+            error_message = str(detail)
+            error_info = parsed.get("error")
+            if isinstance(error_info, dict):
+                error_code = error_info.get("code") or ""
+            else:
+                error_code = parsed.get("code") or ""
+
+    if "token_invalidated" in (error_message or "").lower() or error_code == "token_invalidated":
+        await _gpt_team_clear_session(identifier)
+
+    return {
+        "success": False,
+        "status_code": status_code,
+        "error": error_message,
+        "error_code": error_code,
+        "data": parsed if isinstance(parsed, dict) else {},
+    }
+
+
+async def _gpt_team_refresh_access_token_with_session_token(session_token: str, account_id: str = "", identifier: str = "default") -> dict:
+    session_token = (session_token or "").strip()
+    if not session_token:
+        return {"success": False, "error": "缺少 Session Token"}
+
+    url = "https://chatgpt.com/api/auth/session"
+    if account_id:
+        url += f"?exchange_workspace_token=true&workspace_id={account_id}&reason=setCurrentAccount"
+    cookie_name = "__Secure-next-auth.session-token"
+    if not session_token.startswith("eyJ"):
+        cookie_name = "next-auth.session-token"
+
+    session = await _gpt_team_get_session(identifier if identifier != "default" else f"st_{session_token[:8]}")
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Cookie": f"{cookie_name}={session_token}",
+        "Referer": "https://chatgpt.com/",
+        "Connection": "keep-alive",
+    }
+    try:
+        response = await session.get(url, headers=headers)
+        if response.status_code != 200:
+            return {"success": False, "error": response.text or f"HTTP {response.status_code}", "status_code": response.status_code}
+        data = response.json()
+        access_token = (data.get("accessToken") or "").strip()
+        refreshed_session_token = (data.get("sessionToken") or session_token).strip()
+        if not access_token:
+            return {"success": False, "error": "响应中未包含 accessToken"}
+        return {"success": True, "access_token": access_token, "session_token": refreshed_session_token}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+async def _gpt_team_refresh_access_token_with_refresh_token(refresh_token: str, client_id: str) -> dict:
+    refresh_token = (refresh_token or "").strip()
+    client_id = (client_id or "").strip()
+    if not refresh_token or not client_id:
+        return {"success": False, "error": "刷新 Access Token 需要 Refresh Token 和 Client ID"}
+    try:
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
+            response = await client.post(
+                "https://auth.openai.com/oauth/token",
+                json={
+                    "client_id": client_id,
+                    "grant_type": "refresh_token",
+                    "redirect_uri": "com.openai.sora://auth.openai.com/android/com.openai.sora/callback",
+                    "refresh_token": refresh_token,
+                },
+                headers={"Content-Type": "application/json"},
+            )
+        if response.status_code != 200:
+            return {"success": False, "error": response.text or f"HTTP {response.status_code}", "status_code": response.status_code}
+        data = response.json()
+        access_token = (data.get("access_token") or "").strip()
+        if not access_token:
+            return {"success": False, "error": "刷新响应中未包含 access_token"}
+        return {
+            "success": True,
+            "access_token": access_token,
+            "refresh_token": (data.get("refresh_token") or refresh_token).strip(),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+async def _gpt_team_ensure_access_token(team_row, force_refresh: bool = False) -> dict:
+    access_token = (team_row["access_token"] or "").strip()
+    refresh_token = (team_row["refresh_token"] or "").strip()
+    session_token = (team_row["session_token"] or "").strip()
+    client_id = (team_row["client_id"] or "").strip()
+    account_id = (team_row["account_id"] or "").strip()
+    identifier = (team_row["email"] or account_id or f"team_{team_row['id']}").strip()
+
+    if access_token and not force_refresh:
+        return {
+            "success": True,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "session_token": session_token,
+            "identifier": identifier,
+        }
+
+    if session_token:
+        refreshed = await _gpt_team_refresh_access_token_with_session_token(session_token, account_id=account_id, identifier=identifier)
+        if refreshed.get("success"):
+            return {
+                "success": True,
+                "access_token": refreshed["access_token"],
+                "refresh_token": refresh_token,
+                "session_token": refreshed.get("session_token", session_token),
+                "identifier": identifier,
+            }
+
+    if refresh_token and client_id:
+        refreshed = await _gpt_team_refresh_access_token_with_refresh_token(refresh_token, client_id)
+        if refreshed.get("success"):
+            return {
+                "success": True,
+                "access_token": refreshed["access_token"],
+                "refresh_token": refreshed.get("refresh_token", refresh_token),
+                "session_token": session_token,
+                "identifier": identifier,
+            }
+
+    if access_token:
+        return {
+            "success": True,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "session_token": session_token,
+            "identifier": identifier,
+        }
+    return {"success": False, "error": "Token 已过期且无法刷新"}
+
+
+async def _gpt_team_get_account_info(access_token: str, identifier: str = "default") -> dict:
+    result = await _gpt_team_make_request(
+        "GET",
+        "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27",
+        headers={"Authorization": f"Bearer {access_token}"},
+        identifier=identifier,
+    )
+    if not result.get("success"):
+        return {"success": False, "accounts": [], "error": result.get("error") or "获取账户信息失败"}
+    data = result.get("data") or {}
+    accounts_data = data.get("accounts") or {}
+    team_accounts = []
+    if isinstance(accounts_data, dict):
+        for aid, info in accounts_data.items():
+            account = (info or {}).get("account") or {}
+            entitlement = (info or {}).get("entitlement") or {}
+            if account.get("plan_type") != "team":
+                continue
+            team_accounts.append({
+                "account_id": aid,
+                "name": account.get("name") or "",
+                "plan_type": account.get("plan_type") or "",
+                "account_user_role": account.get("account_user_role") or "",
+                "subscription_plan": entitlement.get("subscription_plan") or "",
+                "expires_at": entitlement.get("expires_at") or "",
+                "has_active_subscription": bool(entitlement.get("has_active_subscription")),
+            })
+    return {"success": True, "accounts": team_accounts, "error": None}
+
+
+async def _gpt_team_get_account_settings(access_token: str, account_id: str, identifier: str = "default") -> dict:
+    return await _gpt_team_make_request(
+        "GET",
+        f"https://chatgpt.com/backend-api/accounts/{account_id}/settings",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "chatgpt-account-id": account_id,
+        },
+        identifier=identifier,
+    )
+
+
+async def _gpt_team_get_members(access_token: str, account_id: str, identifier: str = "default") -> dict:
+    all_members = []
+    offset = 0
+    limit = 50
+    while True:
+        result = await _gpt_team_make_request(
+            "GET",
+            f"https://chatgpt.com/backend-api/accounts/{account_id}/users?limit={limit}&offset={offset}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            identifier=identifier,
+        )
+        if not result.get("success"):
+            return {"success": False, "members": [], "total": 0, "error": result.get("error") or "获取成员失败"}
+        data = result.get("data") or {}
+        items = data.get("items") or []
+        total = int(data.get("total") or 0)
+        all_members.extend(items if isinstance(items, list) else [])
+        if len(all_members) >= total or not items:
+            break
+        offset += limit
+    return {"success": True, "members": all_members, "total": len(all_members), "error": None}
+
+
+async def _gpt_team_get_invites(access_token: str, account_id: str, identifier: str = "default") -> dict:
+    result = await _gpt_team_make_request(
+        "GET",
+        f"https://chatgpt.com/backend-api/accounts/{account_id}/invites",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "chatgpt-account-id": account_id,
+        },
+        identifier=identifier,
+    )
+    if not result.get("success"):
+        return {"success": False, "items": [], "total": 0, "error": result.get("error") or "获取邀请失败"}
+    data = result.get("data") or {}
+    items = data.get("items") or []
+    return {"success": True, "items": items if isinstance(items, list) else [], "total": len(items or []), "error": None}
+
+
+async def _gpt_team_send_invite(access_token: str, account_id: str, email: str, identifier: str = "default") -> dict:
+    return await _gpt_team_make_request(
+        "POST",
+        f"https://chatgpt.com/backend-api/accounts/{account_id}/invites",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "chatgpt-account-id": account_id,
+        },
+        json_data={"email_addresses": [email], "role": "standard-user", "resend_emails": True},
+        identifier=identifier,
+    )
+
+
+async def _gpt_team_delete_member(access_token: str, account_id: str, user_id: str, identifier: str = "default") -> dict:
+    return await _gpt_team_make_request(
+        "DELETE",
+        f"https://chatgpt.com/backend-api/accounts/{account_id}/users/{user_id}",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "chatgpt-account-id": account_id,
+        },
+        identifier=identifier,
+    )
+
+
+async def _gpt_team_delete_invite(access_token: str, account_id: str, email: str, identifier: str = "default") -> dict:
+    return await _gpt_team_make_request(
+        "DELETE",
+        f"https://chatgpt.com/backend-api/accounts/{account_id}/invites",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "chatgpt-account-id": account_id,
+        },
+        json_data={"email_address": email},
+        identifier=identifier,
+    )
+
+
+def _gpt_team_pick_account(team_row, accounts: list) -> Optional[dict]:
+    if not accounts:
+        return None
+    account_id = (team_row["account_id"] or "").strip()
+    for account in accounts:
+        if (account.get("account_id") or "") == account_id:
+            return account
+    for account in accounts:
+        if account.get("has_active_subscription"):
+            return account
+    return accounts[0]
+
+
+async def _gpt_team_sync(team_id: int, force_refresh: bool = False) -> dict:
+    conn = database.get_connection()
+    team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    if not team_row:
+        return {"success": False, "error": f"Team ID {team_id} 不存在"}
+
+    ensured = await _gpt_team_ensure_access_token(team_row, force_refresh=force_refresh)
+    if not ensured.get("success"):
+        return {"success": False, "error": ensured.get("error") or "Token 已过期且无法刷新"}
+
+    access_token = ensured["access_token"]
+    refresh_token = ensured.get("refresh_token", "")
+    session_token = ensured.get("session_token", "")
+    identifier = ensured.get("identifier") or (team_row["email"] or f"team_{team_id}")
+
+    token_email = _extract_email_from_access_token(access_token)
+    if token_email and team_row["email"] and token_email.lower() != team_row["email"].lower():
+        return {"success": False, "error": f"Token 对应账号 ({token_email}) 与 Team 邮箱 ({team_row['email']}) 不一致"}
+
+    account_info = await _gpt_team_get_account_info(access_token, identifier=identifier)
+    if not account_info.get("success"):
+        return {"success": False, "error": account_info.get("error") or "获取账户信息失败"}
+
+    current_account = _gpt_team_pick_account(team_row, account_info.get("accounts") or [])
+    if not current_account:
+        return {"success": False, "error": "该 Token 没有关联任何 Team 账户"}
+
+    members_result = await _gpt_team_get_members(access_token, current_account["account_id"], identifier=identifier)
+    if not members_result.get("success"):
+        return {"success": False, "error": members_result.get("error") or "获取成员列表失败"}
+
+    invites_result = await _gpt_team_get_invites(access_token, current_account["account_id"], identifier=identifier)
+    if not invites_result.get("success"):
+        return {"success": False, "error": invites_result.get("error") or "获取邀请列表失败"}
+
+    settings_result = await _gpt_team_get_account_settings(access_token, current_account["account_id"], identifier=identifier)
+    beta_settings = ((settings_result.get("data") or {}).get("beta_settings") or {}) if settings_result.get("success") else {}
+    device_code_auth_enabled = 1 if bool(beta_settings.get("codex_device_code_auth")) else 0
+
+    current_members = int(members_result.get("total") or 0) + int(invites_result.get("total") or 0)
+    expires_at_raw = (current_account.get("expires_at") or "").strip()
+    normalized_expires_at = expires_at_raw
+    status = "active"
+    if current_members >= int(team_row["max_members"] or 6):
+        status = "full"
+    if expires_at_raw:
+        with contextlib.suppress(Exception):
+            expires_dt = datetime.fromisoformat(expires_at_raw.replace("+00:00", ""))
+            if expires_dt < datetime.now():
+                status = "expired"
+
+    now = datetime.utcnow().isoformat() + "Z"
+    conn.execute(
+        """
+        UPDATE gpt_team_accounts
+        SET email = ?, account_id = ?, team_name = ?, plan_type = ?, subscription_plan = ?,
+            expires_at = ?, current_members = ?, status = ?, access_token = ?, refresh_token = ?,
+            session_token = ?, device_code_auth_enabled = ?, error_count = 0, updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            token_email or (team_row["email"] or ""),
+            current_account.get("account_id") or team_row["account_id"] or "",
+            current_account.get("name") or team_row["team_name"] or "",
+            current_account.get("plan_type") or team_row["plan_type"] or "",
+            current_account.get("subscription_plan") or team_row["subscription_plan"] or "",
+            normalized_expires_at,
+            current_members,
+            status,
+            access_token,
+            refresh_token,
+            session_token,
+            device_code_auth_enabled,
+            now,
+            team_id,
+        ),
+    )
+    conn.commit()
+
+    member_emails = set()
+    for member in members_result.get("members") or []:
+        if member.get("email"):
+            member_emails.add(member["email"].lower())
+    for invite in invites_result.get("items") or []:
+        if invite.get("email_address"):
+            member_emails.add(invite["email_address"].lower())
+
+    return {
+        "success": True,
+        "message": f"同步成功,当前成员数: {current_members}",
+        "member_emails": sorted(member_emails),
+        "team": _gpt_team_row_to_dict(conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()),
+        "accountId": current_account.get("account_id") or "",
+    }
+
+
+async def _gpt_team_members_payload(team_id: int) -> dict:
+    sync_result = await _gpt_team_sync(team_id)
+    if not sync_result.get("success"):
+        return {"success": False, "members": [], "total": 0, "error": sync_result.get("error") or "同步失败"}
+
+    conn = database.get_connection()
+    team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    if not team_row:
+        return {"success": False, "members": [], "total": 0, "error": "Team 不存在"}
+
+    ensured = await _gpt_team_ensure_access_token(team_row)
+    if not ensured.get("success"):
+        return {"success": False, "members": [], "total": 0, "error": ensured.get("error") or "Token 不可用"}
+
+    access_token = ensured["access_token"]
+    identifier = ensured.get("identifier") or (team_row["email"] or f"team_{team_id}")
+    account_id = (team_row["account_id"] or sync_result.get("accountId") or "").strip()
+
+    members_result = await _gpt_team_get_members(access_token, account_id, identifier=identifier)
+    if not members_result.get("success"):
+        return {"success": False, "members": [], "total": 0, "error": members_result.get("error") or "获取成员失败"}
+    invites_result = await _gpt_team_get_invites(access_token, account_id, identifier=identifier)
+    if not invites_result.get("success"):
+        return {"success": False, "members": [], "total": 0, "error": invites_result.get("error") or "获取邀请失败"}
+
+    all_members = []
+    for member in members_result.get("members") or []:
+        all_members.append({
+            "user_id": member.get("id") or "",
+            "email": member.get("email") or "",
+            "name": member.get("name") or "",
+            "role": member.get("role") or "",
+            "added_at": member.get("created_time") or "",
+            "status": "joined",
+        })
+    for invite in invites_result.get("items") or []:
+        all_members.append({
+            "user_id": "",
+            "email": invite.get("email_address") or "",
+            "name": invite.get("email_address") or "",
+            "role": "standard-user",
+            "added_at": invite.get("created_time") or invite.get("invite_link_expiry_time") or "",
+            "status": "invited",
+        })
+    return {"success": True, "members": all_members, "total": len(all_members), "error": None, "team": _gpt_team_row_to_dict(team_row)}
+
+
+async def _pick_team_for_user_invite() -> Optional[dict]:
+    conn = database.get_connection()
+    rows = conn.execute(
+        """
+        SELECT * FROM gpt_team_accounts
+        WHERE status IN ('active', 'full', 'error', 'expired')
+        ORDER BY
+            CASE WHEN status='active' THEN 0 WHEN status='full' THEN 1 ELSE 2 END,
+            updated_at DESC,
+            id ASC
+        LIMIT 20
+        """
+    ).fetchall()
+    for row in rows:
+        sync_result = await _gpt_team_sync(row["id"])
+        if not sync_result.get("success"):
+            continue
+        team = sync_result.get("team") or {}
+        current_members = int(team.get("currentMembers") or 0)
+        max_members = int(team.get("maxMembers") or 0)
+        if (team.get("status") or "").lower() == "active" and max_members > 0 and current_members < max_members:
+            return team
+    return None
+
+
+def _parse_team_import_text(text: str) -> List[dict]:
+    jwt_pattern = r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
+    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+    account_id_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    refresh_token_pattern = r"rt[_-][A-Za-z0-9._-]+"
+    session_token_pattern = r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)?"
+    client_id_pattern = r"app_[A-Za-z0-9]+"
+    results = []
+
+    for raw_line in (text or "").strip().split("\n"):
+        line = (raw_line or "").strip()
+        if not line:
+            continue
+        token = None
+        email = None
+        account_id = None
+        refresh_token = None
+        session_token = None
+        client_id = None
+
+        parts = [p.strip() for p in re.split(r"----|\||\t|\s{2,}", line) if p.strip()]
+        if len(parts) >= 2:
+            for part in parts:
+                if not token and re.fullmatch(jwt_pattern, part):
+                    token = part
+                elif not email and re.fullmatch(email_pattern, part):
+                    email = part
+                elif not account_id and re.fullmatch(account_id_pattern, part, re.IGNORECASE):
+                    account_id = part
+                elif not refresh_token and re.match(refresh_token_pattern, part):
+                    refresh_token = part
+                elif not session_token and re.match(session_token_pattern, part):
+                    if token:
+                        session_token = part
+                    else:
+                        token = part
+                elif not client_id and re.match(client_id_pattern, part):
+                    client_id = part
+
+        if not token:
+            tokens = re.findall(jwt_pattern, line)
+            if tokens:
+                token = tokens[0]
+                if len(tokens) > 1:
+                    session_token = tokens[1]
+            if not email:
+                emails = re.findall(email_pattern, line)
+                email = emails[0] if emails else None
+            if not account_id:
+                account_ids = re.findall(account_id_pattern, line, re.IGNORECASE)
+                account_id = account_ids[0] if account_ids else None
+            if not refresh_token:
+                rts = re.findall(refresh_token_pattern, line)
+                refresh_token = rts[0] if rts else None
+            if not client_id:
+                cids = re.findall(client_id_pattern, line)
+                client_id = cids[0] if cids else None
+
+        if token or session_token or refresh_token:
+            results.append({
+                "token": token,
+                "email": email,
+                "account_id": account_id,
+                "refresh_token": refresh_token,
+                "session_token": session_token,
+                "client_id": client_id,
+            })
+
+    return results
+
+
+def _import_gpt_team_single(access_token: Optional[str], email: Optional[str], account_id: Optional[str], refresh_token: Optional[str], session_token: Optional[str], client_id: Optional[str], team_name: Optional[str], max_members: Optional[int], status: Optional[str]) -> dict:
+    try:
+        access_token = (access_token or "").strip()
+        refresh_token = (refresh_token or "").strip()
+        session_token = (session_token or "").strip()
+        client_id = (client_id or "").strip()
+        team_name = (team_name or "").strip()
+        status = ((status or "active").strip().lower() or "active")
+        max_members = int(max_members or 6)
+        if max_members < 1:
+            max_members = 6
+
+        if not any([access_token, refresh_token, session_token]):
+            return {
+                "success": False,
+                "team_id": None,
+                "email": email,
+                "message": None,
+                "error": "必须提供 Access Token、Refresh Token 或 Session Token 其中之一",
+            }
+
+        if not access_token:
+            return {
+                "success": False,
+                "team_id": None,
+                "email": email,
+                "message": None,
+                "error": "缺少有效的 Access Token，且无法通过 Session/Refresh Token 刷新",
+            }
+
+        token_email = _extract_email_from_access_token(access_token)
+        email = (email or "").strip() or token_email
+        if not email:
+            return {
+                "success": False,
+                "team_id": None,
+                "email": None,
+                "message": None,
+                "error": "无法从 Token 中提取邮箱,请手动提供邮箱",
+            }
+        if token_email and token_email.lower() != email.lower():
+            return {
+                "success": False,
+                "team_id": None,
+                "email": email,
+                "message": None,
+                "error": f"Token 对应的账号身份 ({token_email}) 与提供的邮箱 ({email}) 不符，导入已中止。请检查是否有其他账号正在登录导致 Session 污染。",
+            }
+
+        account_id = (account_id or "").strip() or _extract_account_id_from_access_token(access_token)
+        if not account_id:
+            return {
+                "success": False,
+                "team_id": None,
+                "email": email,
+                "message": None,
+                "error": "无法从 Token 中提取 Account ID,请手动提供 Account ID",
+            }
+
+        conn = database.get_connection()
+        exist_by_account = conn.execute(
+            "SELECT id FROM gpt_team_accounts WHERE account_id = ? LIMIT 1",
+            (account_id,),
+        ).fetchone()
+        if exist_by_account:
+            return {
+                "success": False,
+                "team_id": None,
+                "email": email,
+                "message": None,
+                "error": "该 Team 账号已在系统中",
+            }
+
+        now = datetime.utcnow().isoformat() + "Z"
+        conn.execute(
+            """
+            INSERT INTO gpt_team_accounts (
+                email, account_id, team_name, plan_type, subscription_plan, expires_at,
+                current_members, max_members, status, access_token, refresh_token,
+                session_token, client_id, device_code_auth_enabled, error_count, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+            """,
+            (
+                email,
+                account_id,
+                team_name,
+                "",
+                "",
+                "",
+                0,
+                max_members,
+                status,
+                access_token,
+                refresh_token,
+                session_token,
+                client_id,
+                0,
+                now,
+                now,
+            ),
+        )
+        team_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+        conn.commit()
+        return {
+            "success": True,
+            "team_id": team_id,
+            "email": email,
+            "message": "成功导入 1 个 Team 账号",
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "team_id": None,
+            "email": email,
+            "message": None,
+            "error": f"导入失败: {str(e)}",
+        }
+
+
+@app.get("/api/admin/gpt-team/dashboard")
+async def admin_gpt_team_dashboard(
+    authorization: Optional[str] = Header(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
+    search: str = Query(""),
+    status: str = Query(""),
+):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    search = (search or "").strip()
+    status = (status or "").strip().lower()
+
+    where = ["1=1"]
+    params: List = []
+    if search:
+        where.append("(email LIKE ? OR account_id LIKE ? OR team_name LIKE ?)")
+        kw = f"%{search}%"
+        params.extend([kw, kw, kw])
+    if status:
+        where.append("status = ?")
+        params.append(status)
+
+    where_sql = " AND ".join(where)
+    total_row = conn.execute(f"SELECT COUNT(*) AS c FROM gpt_team_accounts WHERE {where_sql}", params).fetchone()
+    total = int(total_row["c"] if total_row else 0)
+    offset = (page - 1) * per_page
+    rows = conn.execute(
+        f"""
+        SELECT * FROM gpt_team_accounts
+        WHERE {where_sql}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?
+        """,
+        [*params, per_page, offset],
+    ).fetchall()
+    teams = [_gpt_team_row_to_dict(r) for r in rows]
+
+    stats_row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS total_teams,
+            SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS available_teams
+        FROM gpt_team_accounts
+        """
+    ).fetchone()
+    rec_row = conn.execute("SELECT COUNT(*) AS total_records FROM gpt_team_usage_records").fetchone()
+    stats = {
+        "totalTeams": int((stats_row["total_teams"] if stats_row else 0) or 0),
+        "availableTeams": int((stats_row["available_teams"] if stats_row else 0) or 0),
+        "totalRecords": int((rec_row["total_records"] if rec_row else 0) or 0),
+    }
+
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    return {
+        "stats": stats,
+        "teams": teams,
+        "pagination": {
+            "currentPage": page,
+            "perPage": per_page,
+            "total": total,
+            "totalPages": total_pages,
+        },
+    }
+
+
+@app.post("/api/admin/gpt-team/teams")
+async def admin_gpt_team_create(team: GptTeamCreateRequest, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    payload = _normalize_team_payload(team.dict())
+    if not payload["email"]:
+        raise HTTPException(status_code=400, detail="email 不能为空")
+    conn = database.get_connection()
+    conn.execute(
+        """
+        INSERT INTO gpt_team_accounts (
+            email, account_id, team_name, plan_type, subscription_plan, expires_at,
+            current_members, max_members, status, access_token, refresh_token,
+            session_token, client_id, device_code_auth_enabled, error_count, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        ON CONFLICT(email) DO UPDATE SET
+            account_id=excluded.account_id,
+            team_name=excluded.team_name,
+            plan_type=excluded.plan_type,
+            subscription_plan=excluded.subscription_plan,
+            expires_at=excluded.expires_at,
+            current_members=excluded.current_members,
+            max_members=excluded.max_members,
+            status=excluded.status,
+            access_token=excluded.access_token,
+            refresh_token=excluded.refresh_token,
+            session_token=excluded.session_token,
+            client_id=excluded.client_id,
+            device_code_auth_enabled=excluded.device_code_auth_enabled,
+            updated_at=excluded.updated_at
+        """,
+        (
+            payload["email"], payload["account_id"], payload["team_name"], payload["plan_type"],
+            payload["subscription_plan"], payload["expires_at"], payload["current_members"],
+            payload["max_members"], payload["status"], payload["access_token"], payload["refresh_token"],
+            payload["session_token"], payload["client_id"], payload["device_code_auth_enabled"],
+            payload["created_at"], payload["updated_at"],
+        ),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM gpt_team_accounts WHERE email = ? LIMIT 1", (payload["email"],)).fetchone()
+    return {"success": True, "team": _gpt_team_row_to_dict(row)}
+
+
+@app.get("/api/admin/gpt-team/teams/{team_id}")
+async def admin_gpt_team_get(team_id: int, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Team 不存在")
+    return {"success": True, "team": _gpt_team_row_to_dict(row)}
+
+
+@app.put("/api/admin/gpt-team/teams/{team_id}")
+async def admin_gpt_team_update(team_id: int, body: GptTeamUpdateRequest, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    update_raw = {k: v for k, v in body.dict().items() if v is not None}
+    if not update_raw:
+        return {"success": True}
+    payload = _normalize_team_payload(update_raw)
+    conn = database.get_connection()
+    existing = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Team 不存在")
+
+    merged = {
+        "email": payload["email"] or existing["email"],
+        "account_id": payload["account_id"] if "accountId" in update_raw or "account_id" in update_raw else existing["account_id"],
+        "team_name": payload["team_name"] if "teamName" in update_raw or "team_name" in update_raw else existing["team_name"],
+        "plan_type": payload["plan_type"] if "planType" in update_raw or "plan_type" in update_raw else existing["plan_type"],
+        "subscription_plan": payload["subscription_plan"] if "subscriptionPlan" in update_raw or "subscription_plan" in update_raw else existing["subscription_plan"],
+        "expires_at": payload["expires_at"] if "expiresAt" in update_raw or "expires_at" in update_raw else existing["expires_at"],
+        "current_members": payload["current_members"] if "currentMembers" in update_raw or "current_members" in update_raw else existing["current_members"],
+        "max_members": payload["max_members"] if "maxMembers" in update_raw or "max_members" in update_raw else existing["max_members"],
+        "status": payload["status"] if "status" in update_raw else existing["status"],
+        "access_token": payload["access_token"] if "accessToken" in update_raw or "access_token" in update_raw else existing["access_token"],
+        "refresh_token": payload["refresh_token"] if "refreshToken" in update_raw or "refresh_token" in update_raw else existing["refresh_token"],
+        "session_token": payload["session_token"] if "sessionToken" in update_raw or "session_token" in update_raw else existing["session_token"],
+        "client_id": payload["client_id"] if "clientId" in update_raw or "client_id" in update_raw else existing["client_id"],
+        "device_code_auth_enabled": payload["device_code_auth_enabled"] if "deviceCodeAuthEnabled" in update_raw or "device_code_auth_enabled" in update_raw else existing["device_code_auth_enabled"],
+    }
+    merged["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    conn.execute(
+        """
+        UPDATE gpt_team_accounts
+        SET email=?, account_id=?, team_name=?, plan_type=?, subscription_plan=?, expires_at=?,
+            current_members=?, max_members=?, status=?, access_token=?, refresh_token=?,
+            session_token=?, client_id=?, device_code_auth_enabled=?, updated_at=?
+        WHERE id=?
+        """,
+        (
+            merged["email"], merged["account_id"], merged["team_name"], merged["plan_type"], merged["subscription_plan"],
+            merged["expires_at"], merged["current_members"], merged["max_members"], merged["status"], merged["access_token"],
+            merged["refresh_token"], merged["session_token"], merged["client_id"], merged["device_code_auth_enabled"],
+            merged["updated_at"], team_id,
+        ),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    return {"success": True, "team": _gpt_team_row_to_dict(row)}
+
+
+@app.delete("/api/admin/gpt-team/teams/{team_id}")
+async def admin_gpt_team_delete(team_id: int, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    conn.execute("DELETE FROM gpt_team_accounts WHERE id = ?", (team_id,))
+    conn.commit()
+    return {"success": True, "id": team_id}
+
+
+@app.post("/api/admin/gpt-team/teams/{team_id}/refresh")
+async def admin_gpt_team_refresh(team_id: int, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    result = await _gpt_team_sync(team_id, force_refresh=True)
+    if not result.get("success"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/api/admin/gpt-team/teams/{team_id}/members/list")
+async def admin_gpt_team_members(team_id: int, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    result = await _gpt_team_members_payload(team_id)
+    if not result.get("success"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/api/admin/gpt-team/teams/{team_id}/members/add")
+async def admin_gpt_team_add_member(team_id: int, body: GptTeamMemberRequest, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    email = (body.email or "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="email 不能为空")
+
+    sync_result = await _gpt_team_sync(team_id)
+    if not sync_result.get("success"):
+        return JSONResponse(status_code=400, content=sync_result)
+
+    conn = database.get_connection()
+    team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    if not team_row:
+        raise HTTPException(status_code=404, detail="Team 不存在")
+    if int(team_row["current_members"] or 0) >= int(team_row["max_members"] or 6):
+        raise HTTPException(status_code=400, detail="Team 已满员")
+
+    ensured = await _gpt_team_ensure_access_token(team_row)
+    if not ensured.get("success"):
+        return JSONResponse(status_code=400, content=ensured)
+
+    result = await _gpt_team_send_invite(
+        ensured["access_token"],
+        team_row["account_id"],
+        email,
+        identifier=ensured.get("identifier") or team_row["email"] or f"team_{team_id}",
+    )
+    if not result.get("success"):
+        return JSONResponse(status_code=400, content={"success": False, "error": result.get("error") or "添加成员失败"})
+
+    await _gpt_team_sync(team_id)
+    return {"success": True, "message": f"已邀请 {email}"}
+
+
+@app.post("/api/admin/gpt-team/teams/{team_id}/members/{user_id}/delete")
+async def admin_gpt_team_delete_member(team_id: int, user_id: str, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    if not team_row:
+        raise HTTPException(status_code=404, detail="Team 不存在")
+
+    ensured = await _gpt_team_ensure_access_token(team_row)
+    if not ensured.get("success"):
+        return JSONResponse(status_code=400, content=ensured)
+
+    result = await _gpt_team_delete_member(
+        ensured["access_token"],
+        team_row["account_id"],
+        user_id,
+        identifier=ensured.get("identifier") or team_row["email"] or f"team_{team_id}",
+    )
+    if not result.get("success"):
+        return JSONResponse(status_code=400, content={"success": False, "error": result.get("error") or "删除成员失败"})
+
+    await _gpt_team_sync(team_id)
+    return {"success": True, "message": "成员已删除"}
+
+
+@app.post("/api/admin/gpt-team/teams/{team_id}/invites/revoke")
+async def admin_gpt_team_revoke_invite(team_id: int, body: GptTeamMemberRequest, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    email = (body.email or "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="email 不能为空")
+
+    conn = database.get_connection()
+    team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
+    if not team_row:
+        raise HTTPException(status_code=404, detail="Team 不存在")
+
+    ensured = await _gpt_team_ensure_access_token(team_row)
+    if not ensured.get("success"):
+        return JSONResponse(status_code=400, content=ensured)
+
+    result = await _gpt_team_delete_invite(
+        ensured["access_token"],
+        team_row["account_id"],
+        email,
+        identifier=ensured.get("identifier") or team_row["email"] or f"team_{team_id}",
+    )
+    if not result.get("success"):
+        return JSONResponse(status_code=400, content={"success": False, "error": result.get("error") or "撤回邀请失败"})
+
+    await _gpt_team_sync(team_id)
+    return {"success": True, "message": f"已撤回 {email} 的邀请"}
+
+
+@app.post("/api/admin/gpt-team/import")
+async def admin_gpt_team_import(body: GptTeamImportRequest, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    if body.import_type == "single":
+        result = _import_gpt_team_single(
+            access_token=body.access_token,
+            email=body.email,
+            account_id=body.account_id,
+            refresh_token=body.refresh_token,
+            session_token=body.session_token,
+            client_id=body.client_id,
+            team_name=body.team_name,
+            max_members=body.max_members,
+            status=body.status,
+        )
+        if not result.get("success"):
+            return JSONResponse(status_code=400, content=result)
+        return result
+
+    if body.import_type != "batch":
+        return JSONResponse(status_code=400, content={"success": False, "error": "无效的导入类型"})
+
+    async def progress_generator():
+        try:
+            parsed_data = _parse_team_import_text(body.content or "")
+            if not parsed_data:
+                yield json.dumps({"type": "error", "error": "未能从文本中提取任何 Token"}, ensure_ascii=False) + "\n"
+                return
+
+            seen = set()
+            unique_data = []
+            for item in parsed_data:
+                token = item.get("token")
+                email = item.get("email")
+                if not email and token:
+                    email = _extract_email_from_access_token(token)
+                    if email:
+                        item["email"] = email
+                dedup_key = (email or "").lower() if email else token
+                if dedup_key and dedup_key not in seen:
+                    seen.add(dedup_key)
+                    unique_data.append(item)
+
+            parsed_data = unique_data
+            total = len(parsed_data)
+            yield json.dumps({"type": "start", "total": total}, ensure_ascii=False) + "\n"
+
+            success_count = 0
+            failed_count = 0
+            for i, data in enumerate(parsed_data):
+                result = _import_gpt_team_single(
+                    access_token=data.get("token"),
+                    email=data.get("email"),
+                    account_id=data.get("account_id"),
+                    refresh_token=data.get("refresh_token"),
+                    session_token=data.get("session_token"),
+                    client_id=data.get("client_id"),
+                    team_name="",
+                    max_members=6,
+                    status="active",
+                )
+                if result.get("success"):
+                    success_count += 1
+                else:
+                    failed_count += 1
+
+                yield json.dumps({
+                    "type": "progress",
+                    "current": i + 1,
+                    "total": total,
+                    "success_count": success_count,
+                    "failed_count": failed_count,
+                    "last_result": {
+                        "email": result.get("email") or data.get("email") or "未知",
+                        "account_id": data.get("account_id", "未指定"),
+                        "success": bool(result.get("success")),
+                        "team_id": result.get("team_id"),
+                        "message": result.get("message"),
+                        "error": result.get("error"),
+                    },
+                }, ensure_ascii=False) + "\n"
+
+            yield json.dumps({
+                "type": "finish",
+                "total": total,
+                "success_count": success_count,
+                "failed_count": failed_count,
+            }, ensure_ascii=False) + "\n"
+        except Exception as e:
+            yield json.dumps({"type": "error", "error": f"批量导入过程中发生异常: {str(e)}"}, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(progress_generator(), media_type="application/x-ndjson")
+
+
+@app.get("/api/admin/gpt-team/records")
+async def admin_gpt_team_records(
+    authorization: Optional[str] = Header(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
+    email: str = Query(""),
+    code: str = Query(""),
+    team_id: int = Query(0),
+    start_date: str = Query(""),
+    end_date: str = Query(""),
+):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    where = ["1=1"]
+    params: List = []
+    if email.strip():
+        where.append("r.email LIKE ?")
+        params.append(f"%{email.strip()}%")
+    if code.strip():
+        where.append("r.code LIKE ?")
+        params.append(f"%{code.strip()}%")
+    if team_id:
+        where.append("r.team_id = ?")
+        params.append(team_id)
+    if start_date.strip():
+        where.append("substr(r.redeemed_at,1,10) >= ?")
+        params.append(start_date.strip())
+    if end_date.strip():
+        where.append("substr(r.redeemed_at,1,10) <= ?")
+        params.append(end_date.strip())
+
+    where_sql = " AND ".join(where)
+    all_rows = conn.execute(
+        f"""
+        SELECT r.*, t.team_name, t.email AS team_email
+        FROM gpt_team_usage_records r
+        LEFT JOIN gpt_team_accounts t ON r.team_id = t.id
+        WHERE {where_sql}
+        ORDER BY r.id DESC
+        """,
+        params,
+    ).fetchall()
+    records = [
+        {
+            "id": row["id"],
+            "email": row["email"] or "",
+            "code": row["code"] or "",
+            "teamId": int(row["team_id"] or 0),
+            "teamName": row["team_name"] or "",
+            "teamEmail": row["team_email"] or "",
+            "accountId": row["account_id"] or "",
+            "redeemedAt": row["redeemed_at"] or "",
+            "isWarrantyRedemption": bool(row["is_warranty_redemption"] or 0),
+        }
+        for row in all_rows
+    ]
+
+    total = len(records)
+    now = datetime.now()
+    today = now.date()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    stats = {"total": total, "today": 0, "thisWeek": 0, "thisMonth": 0}
+    for r in records:
+        ts = (r.get("redeemedAt") or "").strip()
+        if not ts:
+            continue
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", ""))
+            d = dt.date()
+            if d >= today:
+                stats["today"] += 1
+            if d >= week_start:
+                stats["thisWeek"] += 1
+            if d >= month_start:
+                stats["thisMonth"] += 1
+        except Exception:
+            continue
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated = records[start:end]
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    return {
+        "records": paginated,
+        "stats": stats,
+        "pagination": {
+            "currentPage": page,
+            "perPage": per_page,
+            "total": total,
+            "totalPages": total_pages,
+        },
+    }
+
+
+@app.post("/api/admin/gpt-team/records")
+async def admin_gpt_team_add_record(body: GptTeamRecordCreateRequest, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    if not (body.email or "").strip():
+        raise HTTPException(status_code=400, detail="email 不能为空")
+    redeemed_at = (body.redeemedAt or "").strip() or (datetime.utcnow().isoformat() + "Z")
+    conn = database.get_connection()
+    conn.execute(
+        """
+        INSERT INTO gpt_team_usage_records (email, code, team_id, account_id, redeemed_at, is_warranty_redemption)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            body.email.strip(),
+            (body.code or "").strip(),
+            int(body.teamId or 0),
+            (body.accountId or "").strip(),
+            redeemed_at,
+            1 if bool(body.isWarrantyRedemption) else 0,
+        ),
+    )
+    conn.commit()
+    return {"success": True}
+
+
+@app.delete("/api/admin/gpt-team/records/{record_id}")
+async def admin_gpt_team_delete_record(record_id: int, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    conn = database.get_connection()
+    conn.execute("DELETE FROM gpt_team_usage_records WHERE id = ?", (record_id,))
+    conn.commit()
+    return {"success": True, "id": record_id}
 
 
 # ============ DOCUMENT CAPTURE ROUTES ============
@@ -4274,8 +5632,30 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
         for row in gpt_rows
     ]
 
+    gpt_team_rows = conn.execute(
+        """
+        SELECT id, status, verification_id, message, timestamp
+        FROM verification_history
+        WHERE cdk = ? AND via = 'gpt_team'
+        ORDER BY rowid DESC
+        LIMIT 50
+        """,
+        (cdk_tag,)
+    ).fetchall()
+    gpt_team_items = [
+        {
+            "id": row["id"],
+            "type": "gpt",
+            "status": row["status"],
+            "email": "",
+            "message": row["message"] or "Team 邀请",
+            "timestamp": row["timestamp"] or "",
+        }
+        for row in gpt_team_rows
+    ]
+
     # 3) Merge and sort by timestamp descending, limit 50
-    all_items = pixel_items + gpt_items
+    all_items = pixel_items + gpt_items + gpt_team_items
     all_items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return {"history": all_items[:50]}
 
@@ -8849,7 +10229,8 @@ GPT_RED_RECHARGE_BASE = "https://gpt.86gamestore.com/api"
 GPT_RED_ORIGIN = "https://redeemgpt.com"
 GPT_VIP_RECHARGE_BASE = "https://ht.gptai.vip/api"
 GPT_VIP_ORIGIN = "https://shop.gptai.vip"
-GPT_RECHARGE_COST = 2.0  # CDK points per successful recharge
+GPT_RECHARGE_COST = 1.5  # CDK points per successful recharge
+GPT_TEAM_INVITE_COST = 0.3
 GPT_KEY_CHANNELS = ("sbs", "red", "vip")
 GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg")
 
@@ -9525,6 +10906,144 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
     }
 
 
+@app.post("/api/gpt/team-invite")
+async def gpt_team_invite(request: Request, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+
+    user_id = user.get("id")
+    credits = float(user.get("credits", 0) or 0)
+    if credits < GPT_TEAM_INVITE_COST:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_TEAM_INVITE_COST} 积分，剩余 {credits}）")
+
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="请输入有效邮箱")
+
+    cdk_label = f"user:{user_id}"
+    invite_vid = f"gpt_team_{uuid.uuid4().hex[:10]}"
+    event_meta = _build_verify_event_meta("gpt", email, user_id, "gpt_team", "", "team")
+
+    broadcast_verify_event({
+        "type": "progress",
+        "vid": invite_vid,
+        "step": "submitted",
+        "message": "⏳ 正在创建 Team 邀请...",
+        **event_meta,
+    })
+
+    team = await _pick_team_for_user_invite()
+    if not team:
+        verification_history.log_verification("failed", invite_vid, "暂无可用 Team 名额", cdk=cdk_label, via="gpt_team")
+        _broadcast_submit_failure(
+            "gpt",
+            "暂无可用 Team 名额",
+            email=email,
+            user_id=user_id,
+            method="gpt_team",
+            http_status=503,
+            refunded=False,
+            channel="team",
+        )
+        raise HTTPException(status_code=503, detail="暂无可用 Team 名额")
+
+    auth_result = auth.deduct_credits(user_id, GPT_TEAM_INVITE_COST)
+    if not auth_result:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_TEAM_INVITE_COST} 积分，剩余 {credits}）")
+
+    try:
+        conn = database.get_connection()
+        team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team["id"],)).fetchone()
+        if not team_row:
+            raise HTTPException(status_code=404, detail="Team 不存在")
+
+        ensured = await _gpt_team_ensure_access_token(team_row)
+        if not ensured.get("success"):
+            raise HTTPException(status_code=400, detail=ensured.get("error") or "Team Token 不可用")
+
+        invite_result = await _gpt_team_send_invite(
+            ensured["access_token"],
+            team_row["account_id"],
+            email,
+            identifier=ensured.get("identifier") or team_row["email"] or f"team_{team['id']}",
+        )
+        if not invite_result.get("success"):
+            raise HTTPException(status_code=400, detail=invite_result.get("error") or "邀请失败")
+
+        conn.execute(
+            """
+            INSERT INTO gpt_team_usage_records (email, code, team_id, account_id, redeemed_at, is_warranty_redemption)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                email,
+                "TEAM_INVITE",
+                int(team["id"]),
+                team_row["account_id"] or "",
+                datetime.utcnow().isoformat() + "Z",
+                0,
+            ),
+        )
+        conn.commit()
+
+        await _gpt_team_sync(team["id"])
+        message = f"Team 邀请已发送（{team_row['email']} / {team_row['team_name'] or '未命名 Team'}）"
+        verification_history.log_verification("pass", invite_vid, message, cdk=cdk_label, via="gpt_team")
+        broadcast_verify_event({
+            "type": "progress",
+            "vid": invite_vid,
+            "step": "result",
+            "status": "approved",
+            "success": True,
+            "message": "✅ Team 邀请已发送",
+            "teamId": int(team["id"]),
+            "teamName": team_row["team_name"] or "",
+            **event_meta,
+        })
+        return {
+            "success": True,
+            "email": email,
+            "team_id": int(team["id"]),
+            "team_name": team_row["team_name"] or "",
+            "message": message,
+        }
+    except HTTPException as e:
+        with contextlib.suppress(Exception):
+            auth.update_credits(user_id, GPT_TEAM_INVITE_COST)
+        verification_history.log_verification("failed", invite_vid, str(e.detail), cdk=cdk_label, via="gpt_team")
+        _broadcast_submit_failure(
+            "gpt",
+            str(e.detail),
+            email=email,
+            user_id=user_id,
+            method="gpt_team",
+            http_status=e.status_code,
+            refunded=True,
+            channel="team",
+        )
+        raise
+    except Exception as e:
+        with contextlib.suppress(Exception):
+            auth.update_credits(user_id, GPT_TEAM_INVITE_COST)
+        verification_history.log_verification("failed", invite_vid, str(e), cdk=cdk_label, via="gpt_team")
+        _broadcast_submit_failure(
+            "gpt",
+            str(e),
+            email=email,
+            user_id=user_id,
+            method="gpt_team",
+            http_status=500,
+            refunded=True,
+            channel="team",
+        )
+        raise HTTPException(status_code=500, detail=f"Team 邀请失败: {e}")
+
+
 # --- User: Recharge (proxy to external API, route by channel) ---
 @app.post("/api/gpt/recharge")
 async def gpt_recharge(request: Request, authorization: Optional[str] = Header(None)):
@@ -9809,7 +11328,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
 
     # Success — deduct user credits
     try:
-        result = auth.deduct_credits(user_id, int(GPT_RECHARGE_COST))
+        result = auth.deduct_credits(user_id, GPT_RECHARGE_COST)
         if not result:
             print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id} (insufficient credits?)")
     except Exception as e:

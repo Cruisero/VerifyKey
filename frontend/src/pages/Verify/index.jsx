@@ -52,6 +52,8 @@ export default function Verify() {
     const [gptError, setGptError] = useState('');
     const [gptSession, setGptSession] = useState('');
     const [gptEmail, setGptEmail] = useState('');
+    const [gptMode, setGptMode] = useState('plus');
+    const [gptInviteEmail, setGptInviteEmail] = useState('');
     const [gptSessionError, setGptSessionError] = useState(false);
     const [gptRecharging, setGptRecharging] = useState(false);
     const [gptSuccess, setGptSuccess] = useState(false);
@@ -96,6 +98,8 @@ export default function Verify() {
     const pollingRefs = useRef({});
 
     const { t, lang } = useLang();
+    const gptCurrentCost = gptMode === 'team' ? 0.3 : 2;
+    const gptCurrentTargetEmail = gptMode === 'team' ? gptInviteEmail : gptEmail;
 
     // Build localized error descriptions
     const ERROR_DESCRIPTIONS = Object.fromEntries(
@@ -715,7 +719,14 @@ export default function Verify() {
                                             <span className="credits-dot gpt"></span>
                                             {t('gptMonthly')}
                                         </div>
-                                        <span className="credits-price-val">-2 {t('credits')}</span>
+                                        <span className="credits-price-val">-1.5 {t('credits')}</span>
+                                    </div>
+                                    <div className="credits-price-item">
+                                        <div className="credits-price-service">
+                                            <span className="credits-dot gpt"></span>
+                                            {t('gptTeamInviteRule')}
+                                        </div>
+                                        <span className="credits-price-val">-0.3 {t('credits')}</span>
                                     </div>
                                     <div className="credits-price-item invite">
                                         <div className="credits-price-service">
@@ -1153,15 +1164,38 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">🤖</span>
-                                        <span>{t('gptPanelTitle')}</span>
+                                        <span>{gptMode === 'team' ? t('gptTeamPanelTitle') : t('gptPanelTitle')}</span>
                                     </div>
-                                    <span className="gpt-cost-badge">{t('gptCostBadge')}</span>
+                                    <span className="gpt-cost-badge">{gptMode === 'team' ? t('gptTeamCostBadge') : t('gptCostBadge')}</span>
                                 </div>
                                 <div className="panel-body">
                                     <div className="gpt-panel-body-inner">
+                                        <div className="gpt-mode-tabs">
+                                            <button
+                                                className={`gpt-mode-tab ${gptMode === 'plus' ? 'active' : ''}`}
+                                                onClick={() => {
+                                                    setGptMode('plus');
+                                                    setGptSuccess(false);
+                                                    setGptResultMsg('');
+                                                    setGptError('');
+                                                }}
+                                            >
+                                                {t('gptModePlus')}
+                                            </button>
+                                            <button
+                                                className={`gpt-mode-tab ${gptMode === 'team' ? 'active' : ''}`}
+                                                onClick={() => {
+                                                    setGptMode('team');
+                                                    setGptSuccess(false);
+                                                    setGptResultMsg('');
+                                                    setGptError('');
+                                                }}
+                                            >
+                                                {t('gptModeTeam')}
+                                            </button>
+                                        </div>
 
-                                        {/* Phase 1: Session Input (before account identified) */}
-                                        {!gptEmail && !gptSuccess && (
+                                        {gptMode === 'plus' && !gptEmail && !gptSuccess && (
                                             <div className="gpt-session-section">
                                                 <div className="gpt-session-header">
                                                     <div className="gpt-session-title">
@@ -1218,8 +1252,7 @@ export default function Verify() {
                                             </div>
                                         )}
 
-                                        {/* Phase 2: Account Confirmed Card */}
-                                        {gptEmail && !gptSuccess && (
+                                        {gptMode === 'plus' && gptEmail && !gptSuccess && (
                                             <div className="gpt-account-card">
                                                 <div className="gpt-account-avatar">
                                                     {gptEmail.charAt(0).toUpperCase()}
@@ -1238,6 +1271,29 @@ export default function Verify() {
                                             </div>
                                         )}
 
+                                        {gptMode === 'team' && !gptSuccess && (
+                                            <div className="gpt-team-invite-section">
+                                                <div className="gpt-session-title">
+                                                    <span>✉️</span>
+                                                    <span>{t('gptTeamInviteEmail')}</span>
+                                                </div>
+                                                <input
+                                                    type="email"
+                                                    className="gpt-team-email-input"
+                                                    placeholder={t('gptTeamInvitePlaceholder')}
+                                                    value={gptInviteEmail}
+                                                    onChange={e => {
+                                                        setGptInviteEmail(e.target.value);
+                                                        setGptError('');
+                                                    }}
+                                                    disabled={gptRecharging}
+                                                />
+                                                <div className="gpt-team-invite-note">
+                                                    {t('gptTeamInviteNote')}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Error Messages */}
                                         {gptError && (
                                             <div className="gpt-error-msg">
@@ -1249,7 +1305,12 @@ export default function Verify() {
                                         {!gptSuccess && (
                                             <button
                                                 className="gpt-recharge-btn"
-                                                disabled={!gptEmail || !user || gptRecharging || (user?.credits || 0) < 2}
+                                                disabled={
+                                                    !(gptMode === 'team' ? gptInviteEmail.trim() : gptEmail) ||
+                                                    !user ||
+                                                    gptRecharging ||
+                                                    (user?.credits || 0) < gptCurrentCost
+                                                }
                                                 onClick={async () => {
                                                     setGptRecharging(true);
                                                     setGptError('');
@@ -1265,43 +1326,63 @@ export default function Verify() {
                                                             }
                                                         };
 
-                                                        const exRes = await fetch(`${API_BASE}/api/gpt/exchange`, {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                                                            },
-                                                            body: JSON.stringify({}),
-                                                        });
-                                                        const exData = await parseApiResponse(exRes);
-                                                        if (!exRes.ok || !exData.success) {
-                                                            setGptError(sanitizeError(exData.detail) || t('gptCardExchangeFailed'));
-                                                            setGptRecharging(false);
-                                                            return;
-                                                        }
-                                                        setGptCardKey(exData.card_key);
-                                                        setGptChannel(exData.channel || 'sbs');
-                                                        const reRes = await fetch(`${API_BASE}/api/gpt/recharge`, {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                                                            },
-                                                            body: JSON.stringify({
-                                                                card_key: exData.card_key,
-                                                                account: gptSession,
-                                                                email: gptEmail,
-                                                                channel: exData.channel || 'sbs',
-                                                            }),
-                                                        });
-                                                        const reData = await parseApiResponse(reRes);
-                                                        if (reRes.ok && reData.success) {
-                                                            setGptSuccess(true);
-                                                            setGptResultMsg(t('gptRechargeSuccess'));
-                                                            await refreshUser();
-                                                            fetchUserHistory('gpt');
+                                                        if (gptMode === 'team') {
+                                                            const inviteRes = await fetch(`${API_BASE}/api/gpt/team-invite`, {
+                                                                method: 'POST',
+                                                                headers: {
+                                                                    'Content-Type': 'application/json',
+                                                                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                                                                },
+                                                                body: JSON.stringify({ email: gptInviteEmail.trim() }),
+                                                            });
+                                                            const inviteData = await parseApiResponse(inviteRes);
+                                                            if (inviteRes.ok && inviteData.success) {
+                                                                setGptSuccess(true);
+                                                                setGptResultMsg(inviteData.message || t('gptTeamInviteSuccess'));
+                                                                await refreshUser();
+                                                                fetchUserHistory('gpt');
+                                                            } else {
+                                                                setGptError(sanitizeError(inviteData.detail || inviteData.error) || t('gptTeamInviteFailed'));
+                                                            }
                                                         } else {
-                                                            setGptError(sanitizeError(reData.detail) || t('gptRechargeFailed'));
+                                                            const exRes = await fetch(`${API_BASE}/api/gpt/exchange`, {
+                                                                method: 'POST',
+                                                                headers: {
+                                                                    'Content-Type': 'application/json',
+                                                                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                                                                },
+                                                                body: JSON.stringify({}),
+                                                            });
+                                                            const exData = await parseApiResponse(exRes);
+                                                            if (!exRes.ok || !exData.success) {
+                                                                setGptError(sanitizeError(exData.detail) || t('gptCardExchangeFailed'));
+                                                                setGptRecharging(false);
+                                                                return;
+                                                            }
+                                                            setGptCardKey(exData.card_key);
+                                                            setGptChannel(exData.channel || 'sbs');
+                                                            const reRes = await fetch(`${API_BASE}/api/gpt/recharge`, {
+                                                                method: 'POST',
+                                                                headers: {
+                                                                    'Content-Type': 'application/json',
+                                                                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                                                                },
+                                                                body: JSON.stringify({
+                                                                    card_key: exData.card_key,
+                                                                    account: gptSession,
+                                                                    email: gptEmail,
+                                                                    channel: exData.channel || 'sbs',
+                                                                }),
+                                                            });
+                                                            const reData = await parseApiResponse(reRes);
+                                                            if (reRes.ok && reData.success) {
+                                                                setGptSuccess(true);
+                                                                setGptResultMsg(t('gptRechargeSuccess'));
+                                                                await refreshUser();
+                                                                fetchUserHistory('gpt');
+                                                            } else {
+                                                                setGptError(sanitizeError(reData.detail) || t('gptRechargeFailed'));
+                                                            }
                                                         }
                                                     } catch (e) {
                                                         setGptError(sanitizeError(e.message));
@@ -1311,17 +1392,17 @@ export default function Verify() {
                                                 }}
                                             >
                                                 {gptRecharging ? (
-                                                    <><span className="loading-spinner small"></span> {t('gptRecharging')}</>
+                                                    <><span className="loading-spinner small"></span> {gptMode === 'team' ? t('gptTeamInviting') : t('gptRecharging')}</>
                                                 ) : (
-                                                    <>{t('gptStartRecharge')}</>
+                                                    <>{gptMode === 'team' ? t('gptTeamStartInvite') : t('gptStartRecharge')}</>
                                                 )}
                                             </button>
                                         )}
 
                                         {/* Insufficient points warning */}
-                                        {user && (user.credits || 0) < 2 && !gptSuccess && (
+                                        {user && (user.credits || 0) < gptCurrentCost && !gptSuccess && (
                                             <div className="gpt-error-msg">
-                                                <span>⚠️</span> {t('gptInsufficientCredits').replace('{credits}', user.credits || 0)}
+                                                <span>⚠️</span> {(gptMode === 'team' ? t('gptTeamInsufficientCredits') : t('gptInsufficientCredits')).replace('{credits}', user.credits || 0)}
                                             </div>
                                         )}
                                     </div>
@@ -1391,27 +1472,28 @@ export default function Verify() {
                                         <>
                                             {!gptSuccess && !gptRecharging && !gptResultMsg && (
                                                 <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-tertiary)' }}>
-                                                    <p>{t('gptResultHint')}</p>
-                                                    <p style={{ fontSize: '13px', marginTop: '8px' }}>{t('gptResultNote')}</p>
+                                                    <p>{gptMode === 'team' ? t('gptTeamResultHint') : t('gptResultHint')}</p>
+                                                    <p style={{ fontSize: '13px', marginTop: '8px' }}>{gptMode === 'team' ? t('gptTeamResultNote') : t('gptResultNote')}</p>
                                                 </div>
                                             )}
                                             {gptRecharging && (
                                                 <div style={{ textAlign: 'center', padding: '32px' }}>
                                                     <span className="loading-spinner"></span>
-                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>{t('gptRechargingMsg')}</p>
+                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>{gptMode === 'team' ? t('gptTeamInvitingMsg') : t('gptRechargingMsg')}</p>
                                                 </div>
                                             )}
                                             {gptSuccess && (
                                                 <div style={{ textAlign: 'center', padding: '24px' }}>
                                                     <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
-                                                    <h3 style={{ color: '#059669', marginBottom: '8px' }}>{t('gptSuccessTitle')}</h3>
-                                                    <p style={{ color: 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: t('gptSuccessDesc').replace('{email}', gptEmail) }} />
+                                                    <h3 style={{ color: '#059669', marginBottom: '8px' }}>{gptMode === 'team' ? t('gptTeamSuccessTitle') : t('gptSuccessTitle')}</h3>
+                                                    <p style={{ color: 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: (gptMode === 'team' ? t('gptTeamSuccessDesc') : t('gptSuccessDesc')).replace('{email}', gptCurrentTargetEmail) }} />
                                                     <button
                                                         className="btn btn-primary"
                                                         style={{ marginTop: '16px' }}
                                                         onClick={() => {
                                                             setGptSession('');
                                                             setGptEmail('');
+                                                            setGptInviteEmail('');
                                                             setGptSuccess(false);
                                                             setGptResultMsg('');
                                                             setGptError('');

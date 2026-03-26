@@ -2027,6 +2027,873 @@ function GptKeysTab({ config, setConfig }) {
 }
 
 
+function GptTeamTab() {
+    const { user } = useAuth();
+    const token = user?.token || localStorage.getItem('verifykey-token');
+    const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+
+    const [section, setSection] = useState('dashboard');
+    const [loading, setLoading] = useState(false);
+    const [recordsLoading, setRecordsLoading] = useState(false);
+    const [teams, setTeams] = useState([]);
+    const [teamStats, setTeamStats] = useState({ totalTeams: 0, availableTeams: 0, totalRecords: 0 });
+    const [teamFilters, setTeamFilters] = useState({ search: '', status: '', page: 1, perPage: 20 });
+    const [teamPagination, setTeamPagination] = useState({ currentPage: 1, totalPages: 1, total: 0, perPage: 20 });
+
+    const [records, setRecords] = useState([]);
+    const [recordStats, setRecordStats] = useState({ total: 0, today: 0, thisWeek: 0, thisMonth: 0 });
+    const [recordFilters, setRecordFilters] = useState({ email: '', code: '', teamId: '', startDate: '', endDate: '', page: 1, perPage: 20 });
+    const [recordPagination, setRecordPagination] = useState({ currentPage: 1, totalPages: 1, total: 0, perPage: 20 });
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importMode, setImportMode] = useState('single');
+    const [importing, setImporting] = useState(false);
+    const [membersModalOpen, setMembersModalOpen] = useState(false);
+    const [membersLoading, setMembersLoading] = useState(false);
+    const [membersActionLoading, setMembersActionLoading] = useState('');
+    const [memberModalTeam, setMemberModalTeam] = useState(null);
+    const [memberEmailInput, setMemberEmailInput] = useState('');
+    const [teamMembersData, setTeamMembersData] = useState({ members: [], total: 0, error: '' });
+    const [batchProgress, setBatchProgress] = useState({ visible: false, stage: '正在准备...', percent: 0, success: 0, failed: 0 });
+    const [batchResults, setBatchResults] = useState([]);
+    const [batchSummary, setBatchSummary] = useState('');
+    const [singleImport, setSingleImport] = useState({
+        access_token: '',
+        refresh_token: '',
+        session_token: '',
+        client_id: '',
+        email: '',
+        account_id: '',
+    });
+    const [batchContent, setBatchContent] = useState('');
+
+    const formatShortAccountId = (value) => {
+        const text = (value || '').trim();
+        if (!text) return '-';
+        if (text.length <= 18) return text;
+        return `${text.slice(0, 8)}...${text.slice(-6)}`;
+    };
+
+    const formatStatusLabel = (value) => {
+        const map = {
+            active: '可用',
+            full: '已满',
+            expired: '过期',
+            error: '异常',
+            banned: '封禁',
+        };
+        return map[(value || '').toLowerCase()] || (value || '-');
+    };
+
+    const formatDateTimeCell = (value) => {
+        const text = (value || '').trim();
+        if (!text) return { date: '-', time: '' };
+        try {
+            const date = new Date(text);
+            if (Number.isNaN(date.getTime())) return { date: text, time: '' };
+            const formatted = date.toLocaleString('zh-CN', { hour12: false });
+            const [day = formatted, time = ''] = formatted.split(' ');
+            return { date: day, time };
+        } catch {
+            return { date: text, time: '' };
+        }
+    };
+
+    const fetchDashboard = async () => {
+        setLoading(true);
+        try {
+            const qp = new URLSearchParams({
+                page: String(teamFilters.page || 1),
+                per_page: String(teamFilters.perPage || 20),
+                search: teamFilters.search || '',
+                status: teamFilters.status || '',
+            });
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/dashboard?${qp.toString()}`, { headers: authHeaders });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setTeams(data.teams || []);
+            setTeamStats(data.stats || { totalTeams: 0, availableTeams: 0, totalRecords: 0 });
+            setTeamPagination(data.pagination || { currentPage: 1, totalPages: 1, total: 0, perPage: 20 });
+        } catch (e) {
+            console.error('Failed to fetch GPT team dashboard:', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchRecords = async () => {
+        setRecordsLoading(true);
+        try {
+            const qp = new URLSearchParams({
+                page: String(recordFilters.page || 1),
+                per_page: String(recordFilters.perPage || 20),
+                email: recordFilters.email || '',
+                code: recordFilters.code || '',
+                team_id: String(recordFilters.teamId || 0),
+                start_date: recordFilters.startDate || '',
+                end_date: recordFilters.endDate || '',
+            });
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/records?${qp.toString()}`, { headers: authHeaders });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setRecords(data.records || []);
+            setRecordStats(data.stats || { total: 0, today: 0, thisWeek: 0, thisMonth: 0 });
+            setRecordPagination(data.pagination || { currentPage: 1, totalPages: 1, total: 0, perPage: 20 });
+        } catch (e) {
+            console.error('Failed to fetch GPT team records:', e);
+        } finally {
+            setRecordsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchDashboard();
+    }, [teamFilters.page, teamFilters.perPage]);
+
+    useEffect(() => {
+        fetchRecords();
+    }, [recordFilters.page, recordFilters.perPage]);
+
+    const handleSubmitSingleImport = async () => {
+        try {
+            setImporting(true);
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/import`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({
+                    import_type: 'single',
+                    access_token: singleImport.access_token || '',
+                    refresh_token: singleImport.refresh_token || '',
+                    session_token: singleImport.session_token || '',
+                    client_id: singleImport.client_id || '',
+                    email: singleImport.email || '',
+                    account_id: singleImport.account_id || '',
+                })
+            });
+            const raw = await res.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch {
+                throw new Error(raw || `HTTP ${res.status}`);
+            }
+            if (!res.ok) throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+            if (!data.success) throw new Error(data.error || '导入失败');
+            setShowImportModal(false);
+            setSingleImport({
+                access_token: '',
+                refresh_token: '',
+                session_token: '',
+                client_id: '',
+                email: '',
+                account_id: '',
+            });
+            await fetchDashboard();
+        } catch (e) {
+            alert(`导入失败: ${e.message}`);
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const handleSubmitBatchImport = async () => {
+        if (!batchContent.trim()) return;
+        try {
+            setImporting(true);
+            setBatchProgress({ visible: true, stage: '准备导入...', percent: 0, success: 0, failed: 0 });
+            setBatchResults([]);
+            setBatchSummary('');
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/import`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ import_type: 'batch', content: batchContent })
+            });
+            if (!res.ok) {
+                let errMsg = `HTTP ${res.status}`;
+                try {
+                    const errJson = await res.json();
+                    errMsg = errJson.error || errJson.detail || errMsg;
+                } catch {}
+                throw new Error(errMsg);
+            }
+
+            const reader = res.body?.getReader();
+            if (!reader) throw new Error('批量导入流不可用');
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let successCount = 0;
+            let failedCount = 0;
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    let data = null;
+                    try { data = JSON.parse(line); } catch { continue; }
+                    if (data.type === 'start') {
+                        setBatchProgress(prev => ({ ...prev, stage: `开始导入 (共 ${data.total} 条)...`, percent: 0 }));
+                    } else if (data.type === 'progress') {
+                        successCount = Number(data.success_count || 0);
+                        failedCount = Number(data.failed_count || 0);
+                        const percent = Math.round(((data.current || 0) / (data.total || 1)) * 100);
+                        setBatchProgress({
+                            visible: true,
+                            stage: `正在导入 ${data.current}/${data.total}...`,
+                            percent,
+                            success: successCount,
+                            failed: failedCount,
+                        });
+                        if (data.last_result) {
+                            setBatchResults(prev => [data.last_result, ...prev]);
+                        }
+                    } else if (data.type === 'finish') {
+                        const sum = `总数: ${data.total} | 成功: ${data.success_count} | 失败: ${data.failed_count}`;
+                        setBatchSummary(sum);
+                        setBatchProgress({
+                            visible: true,
+                            stage: '导入完成',
+                            percent: 100,
+                            success: Number(data.success_count || 0),
+                            failed: Number(data.failed_count || 0),
+                        });
+                        await fetchDashboard();
+                    } else if (data.type === 'error') {
+                        throw new Error(data.error || '批量导入失败');
+                    }
+                }
+            }
+        } catch (e) {
+            alert(`导入失败: ${e.message}`);
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const handleEditTeam = async (team) => {
+        const teamName = window.prompt('Team 名称', team.teamName || '');
+        if (teamName === null) return;
+        const status = (window.prompt('状态(active/full/expired/error/banned)', team.status || 'active') || '').trim().toLowerCase();
+        if (!status) return;
+        const maxMembersRaw = window.prompt('最大成员数', String(team.maxMembers || 6));
+        if (maxMembersRaw === null) return;
+        const maxMembers = Number(maxMembersRaw);
+        if (!Number.isFinite(maxMembers) || maxMembers < 0) {
+            alert('最大成员数格式不正确');
+            return;
+        }
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/teams/${team.id}`, {
+                method: 'PUT',
+                headers: authHeaders,
+                body: JSON.stringify({ teamName, status, maxMembers })
+            });
+            if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+            await fetchDashboard();
+        } catch (e) {
+            alert(`更新失败: ${e.message}`);
+        }
+    };
+
+    const handleDeleteTeam = async (team) => {
+        if (!window.confirm(`确认删除 Team: ${team.email} ?`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/teams/${team.id}`, { method: 'DELETE', headers: authHeaders });
+            if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+            await fetchDashboard();
+        } catch (e) {
+            alert(`删除失败: ${e.message}`);
+        }
+    };
+
+    const loadTeamMembers = async (teamId) => {
+        setMembersLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/teams/${teamId}/members/list`, { headers: authHeaders });
+            const raw = await res.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch {
+                throw new Error(raw || `HTTP ${res.status}`);
+            }
+            if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+            setTeamMembersData({ members: data.members || [], total: Number(data.total || 0), error: '' });
+            if (data.team) setMemberModalTeam(data.team);
+            await fetchDashboard();
+        } catch (e) {
+            setTeamMembersData({ members: [], total: 0, error: e.message || '加载失败' });
+        } finally {
+            setMembersLoading(false);
+        }
+    };
+
+    const handleOpenMembers = async (team) => {
+        setMemberModalTeam(team);
+        setMemberEmailInput('');
+        setTeamMembersData({ members: [], total: 0, error: '' });
+        setMembersModalOpen(true);
+        await loadTeamMembers(team.id);
+    };
+
+    const handleRefreshTeam = async (team) => {
+        try {
+            setMembersActionLoading(`refresh-${team.id}`);
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/teams/${team.id}/refresh`, {
+                method: 'POST',
+                headers: authHeaders,
+            });
+            const raw = await res.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch {
+                throw new Error(raw || `HTTP ${res.status}`);
+            }
+            if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+            await fetchDashboard();
+            if (membersModalOpen && memberModalTeam?.id === team.id) {
+                await loadTeamMembers(team.id);
+            }
+        } catch (e) {
+            alert(`刷新失败: ${e.message}`);
+        } finally {
+            setMembersActionLoading('');
+        }
+    };
+
+    const handleAddMember = async () => {
+        if (!memberModalTeam?.id) return;
+        const email = memberEmailInput.trim();
+        if (!email) {
+            alert('请输入成员邮箱');
+            return;
+        }
+        try {
+            setMembersActionLoading('add-member');
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/teams/${memberModalTeam.id}/members/add`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ email }),
+            });
+            const raw = await res.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch {
+                throw new Error(raw || `HTTP ${res.status}`);
+            }
+            if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+            setMemberEmailInput('');
+            await loadTeamMembers(memberModalTeam.id);
+        } catch (e) {
+            alert(`邀请失败: ${e.message}`);
+        } finally {
+            setMembersActionLoading('');
+        }
+    };
+
+    const handleDeleteMember = async (member) => {
+        if (!memberModalTeam?.id) return;
+        if (!window.confirm(`确认删除成员 ${member.email || member.user_id} ?`)) return;
+        try {
+            setMembersActionLoading(`delete-${member.user_id}`);
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/teams/${memberModalTeam.id}/members/${member.user_id}/delete`, {
+                method: 'POST',
+                headers: authHeaders,
+            });
+            const raw = await res.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch {
+                throw new Error(raw || `HTTP ${res.status}`);
+            }
+            if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+            await loadTeamMembers(memberModalTeam.id);
+        } catch (e) {
+            alert(`删除失败: ${e.message}`);
+        } finally {
+            setMembersActionLoading('');
+        }
+    };
+
+    const handleRevokeInvite = async (member) => {
+        if (!memberModalTeam?.id) return;
+        if (!window.confirm(`确认撤回对 ${member.email} 的邀请 ?`)) return;
+        try {
+            setMembersActionLoading(`revoke-${member.email}`);
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/teams/${memberModalTeam.id}/invites/revoke`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ email: member.email }),
+            });
+            const raw = await res.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch {
+                throw new Error(raw || `HTTP ${res.status}`);
+            }
+            if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+            await loadTeamMembers(memberModalTeam.id);
+        } catch (e) {
+            alert(`撤回失败: ${e.message}`);
+        } finally {
+            setMembersActionLoading('');
+        }
+    };
+
+    const handleAddRecord = async () => {
+        const email = (window.prompt('使用邮箱') || '').trim();
+        if (!email) return;
+        const code = (window.prompt('兑换码（可选）') || '').trim();
+        const teamIdRaw = (window.prompt('Team ID（可选）', '0') || '0').trim();
+        const accountId = (window.prompt('Account ID（可选）') || '').trim();
+        const teamId = Number(teamIdRaw || '0');
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/records`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ email, code, teamId: Number.isFinite(teamId) ? teamId : 0, accountId })
+            });
+            if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+            await fetchRecords();
+            await fetchDashboard();
+        } catch (e) {
+            alert(`新增记录失败: ${e.message}`);
+        }
+    };
+
+    const handleDeleteRecord = async (id) => {
+        if (!window.confirm(`确认删除记录 #${id} ?`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/gpt-team/records/${id}`, { method: 'DELETE', headers: authHeaders });
+            if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+            await fetchRecords();
+            await fetchDashboard();
+        } catch (e) {
+            alert(`删除记录失败: ${e.message}`);
+        }
+    };
+
+    return (
+        <div className="tab-content">
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button className={`admin-tab ${section === 'dashboard' ? 'active' : ''}`} onClick={() => setSection('dashboard')}>📊 控制台</button>
+                <button className={`admin-tab ${section === 'records' ? 'active' : ''}`} onClick={() => setSection('records')}>📜 使用记录</button>
+            </div>
+
+            {section === 'dashboard' && (
+                <div>
+                    <div className="stats-grid" style={{ marginBottom: '12px' }}>
+                        <div className="stat-card card"><div className="stat-info"><span className="stat-value">{teamStats.totalTeams || 0}</span><span className="stat-label">Team 总数</span></div></div>
+                        <div className="stat-card card"><div className="stat-info"><span className="stat-value">{teamStats.availableTeams || 0}</span><span className="stat-label">可用 Team</span></div></div>
+                        <div className="stat-card card"><div className="stat-info"><span className="stat-value">{teamStats.totalRecords || 0}</span><span className="stat-label">使用记录</span></div></div>
+                    </div>
+                    <div className="card" style={{ padding: '12px', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <input className="input" style={{ maxWidth: 260 }} placeholder="搜索邮箱/Account/Team" value={teamFilters.search} onChange={e => setTeamFilters(prev => ({ ...prev, search: e.target.value }))} />
+                            <select className="input" style={{ maxWidth: 160 }} value={teamFilters.status} onChange={e => setTeamFilters(prev => ({ ...prev, status: e.target.value }))}>
+                                <option value="">全部状态</option>
+                                <option value="active">active</option>
+                                <option value="full">full</option>
+                                <option value="expired">expired</option>
+                                <option value="error">error</option>
+                                <option value="banned">banned</option>
+                            </select>
+                            <button className="btn" onClick={() => { setTeamFilters(prev => ({ ...prev, page: 1 })); fetchDashboard(); }}>查询</button>
+                            <button className="btn btn-secondary" onClick={() => { setTeamFilters({ search: '', status: '', page: 1, perPage: 20 }); setTimeout(fetchDashboard, 0); }}>重置</button>
+                            <button className="btn btn-primary" onClick={() => setShowImportModal(true)}>+ 导入 Team</button>
+                        </div>
+                    </div>
+                    <div className="card gpt-team-dashboard-table-card">
+                        {loading ? <div style={{ padding: 16 }}>加载中...</div> : (
+                            <div className="gpt-team-dashboard-table-wrap">
+                            <table className="admin-table gpt-team-dashboard-table" style={{ width: '100%', minWidth: 1180 }}>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th><th>账号</th><th>Team 信息</th><th>成员</th><th>状态</th><th>到期</th><th>更新时间</th><th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {teams.map(team => {
+                                        const updatedAt = formatDateTimeCell(team.updatedAt);
+                                        const expiresAt = formatDateTimeCell(team.expiresAt);
+                                        const currentMembers = Number(team.currentMembers || 0);
+                                        const maxMembers = Number(team.maxMembers || 0);
+                                        const usagePercent = maxMembers > 0 ? Math.min(100, Math.round((currentMembers / maxMembers) * 100)) : 0;
+                                        return (
+                                            <tr key={team.id}>
+                                                <td>
+                                                    <div className="gpt-team-id-cell">#{team.id}</div>
+                                                </td>
+                                                <td>
+                                                    <div className="gpt-team-account-cell">
+                                                        <div className="gpt-team-account-email">{team.email || '-'}</div>
+                                                        <div className="gpt-team-account-sub">Account ID: {formatShortAccountId(team.accountId)}</div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div className="gpt-team-team-cell">
+                                                        <div className="gpt-team-team-name">{team.teamName || '未命名 Team'}</div>
+                                                        <div className="gpt-team-team-meta">
+                                                            <span>{team.planType || 'team'}</span>
+                                                            <span>{team.subscriptionPlan || '未识别套餐'}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div className="gpt-team-members-cell">
+                                                        <div className="gpt-team-members-top">
+                                                            <strong>{currentMembers}/{maxMembers || '-'}</strong>
+                                                            <span>{usagePercent}%</span>
+                                                        </div>
+                                                        <div className="gpt-team-members-bar">
+                                                            <div className="gpt-team-members-bar-fill" style={{ width: `${usagePercent}%` }} />
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span className={`gpt-team-status-badge ${(team.status || '').toLowerCase()}`}>
+                                                        {formatStatusLabel(team.status)}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div className="gpt-team-time-cell">
+                                                        <div>{expiresAt.date}</div>
+                                                        {expiresAt.time && <small>{expiresAt.time}</small>}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div className="gpt-team-time-cell">
+                                                        <div>{updatedAt.date}</div>
+                                                        {updatedAt.time && <small>{updatedAt.time}</small>}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div className="gpt-team-actions">
+                                                        <button className="btn btn-sm btn-secondary" onClick={() => handleRefreshTeam(team)} disabled={membersActionLoading === `refresh-${team.id}`}>刷新</button>
+                                                        <button className="btn btn-sm btn-secondary" onClick={() => handleOpenMembers(team)}>成员</button>
+                                                        <button className="btn btn-sm" onClick={() => handleEditTeam(team)}>编辑</button>
+                                                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteTeam(team)}>删除</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {teams.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>暂无 Team 数据</td></tr>}
+                                </tbody>
+                            </table>
+                            </div>
+                        )}
+                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>共 {teamPagination.total || 0} 条</span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="btn btn-sm" disabled={(teamPagination.currentPage || 1) <= 1} onClick={() => setTeamFilters(prev => ({ ...prev, page: Math.max(1, (prev.page || 1) - 1) }))}>上一页</button>
+                            <span style={{ alignSelf: 'center' }}>{teamPagination.currentPage || 1} / {teamPagination.totalPages || 1}</span>
+                            <button className="btn btn-sm" disabled={(teamPagination.currentPage || 1) >= (teamPagination.totalPages || 1)} onClick={() => setTeamFilters(prev => ({ ...prev, page: (prev.page || 1) + 1 }))}>下一页</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {membersModalOpen && (
+                <div className="gpt-team-modal-backdrop" onClick={() => membersActionLoading ? null : setMembersModalOpen(false)}>
+                    <div className="gpt-team-modal gpt-team-members-modal" onClick={e => e.stopPropagation()}>
+                        <div className="gpt-team-modal-header">
+                            <div>
+                                <h3 className="gpt-team-modal-title">Team 成员管理</h3>
+                                <p className="gpt-team-modal-subtitle">
+                                    {memberModalTeam?.email || '-'} · {memberModalTeam?.teamName || '未命名 Team'} · {memberModalTeam?.currentMembers || 0}/{memberModalTeam?.maxMembers || 0}
+                                </p>
+                            </div>
+                            <button className="gpt-team-modal-close" onClick={() => setMembersModalOpen(false)} aria-label="关闭">×</button>
+                        </div>
+                        <div className="gpt-team-modal-body">
+                            <div className="gpt-team-members-toolbar">
+                                <div className="gpt-team-members-add">
+                                    <input
+                                        className="input"
+                                        placeholder="输入成员邮箱后发送邀请"
+                                        value={memberEmailInput}
+                                        onChange={e => setMemberEmailInput(e.target.value)}
+                                    />
+                                    <button className="btn btn-primary" onClick={handleAddMember} disabled={membersActionLoading === 'add-member' || membersLoading}>
+                                        {membersActionLoading === 'add-member' ? '邀请中...' : '邀请成员'}
+                                    </button>
+                                </div>
+                                <button className="btn" onClick={() => loadTeamMembers(memberModalTeam.id)} disabled={membersLoading}>重新加载</button>
+                            </div>
+
+                            {teamMembersData.error && (
+                                <div className="gpt-team-members-error">{teamMembersData.error}</div>
+                            )}
+
+                            <div className="gpt-team-members-panels">
+                                <div className="card gpt-team-members-panel">
+                                    <div className="gpt-team-members-panel-head">
+                                        <strong>已加入成员</strong>
+                                        <span>{teamMembersData.members.filter(m => m.status === 'joined').length} 人</span>
+                                    </div>
+                                    <div className="gpt-team-members-table-wrap">
+                                        <table className="admin-table" style={{ width: '100%', minWidth: 520 }}>
+                                            <thead>
+                                                <tr><th>邮箱</th><th>角色</th><th>加入时间</th><th>操作</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {membersLoading ? (
+                                                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px' }}>加载中...</td></tr>
+                                                ) : teamMembersData.members.filter(m => m.status === 'joined').length === 0 ? (
+                                                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>暂无已加入成员</td></tr>
+                                                ) : (
+                                                    teamMembersData.members.filter(m => m.status === 'joined').map(member => (
+                                                        <tr key={`joined-${member.user_id || member.email}`}>
+                                                            <td>{member.email || '-'}</td>
+                                                            <td>{member.role === 'account-owner' ? '所有者' : (member.role || '成员')}</td>
+                                                            <td>{member.added_at ? new Date(member.added_at).toLocaleString('zh-CN', { hour12: false }) : '-'}</td>
+                                                            <td>
+                                                                {member.role === 'account-owner' ? (
+                                                                    <span style={{ color: 'var(--text-secondary)' }}>不可删除</span>
+                                                                ) : (
+                                                                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteMember(member)} disabled={membersActionLoading === `delete-${member.user_id}`}>
+                                                                        {membersActionLoading === `delete-${member.user_id}` ? '删除中...' : '删除'}
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="card gpt-team-members-panel">
+                                    <div className="gpt-team-members-panel-head">
+                                        <strong>待加入邀请</strong>
+                                        <span>{teamMembersData.members.filter(m => m.status === 'invited').length} 人</span>
+                                    </div>
+                                    <div className="gpt-team-members-table-wrap">
+                                        <table className="admin-table" style={{ width: '100%', minWidth: 520 }}>
+                                            <thead>
+                                                <tr><th>邮箱</th><th>状态</th><th>邀请时间</th><th>操作</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {membersLoading ? (
+                                                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px' }}>加载中...</td></tr>
+                                                ) : teamMembersData.members.filter(m => m.status === 'invited').length === 0 ? (
+                                                    <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>暂无待加入邀请</td></tr>
+                                                ) : (
+                                                    teamMembersData.members.filter(m => m.status === 'invited').map(member => (
+                                                        <tr key={`invite-${member.email}`}>
+                                                            <td>{member.email || '-'}</td>
+                                                            <td>待加入</td>
+                                                            <td>{member.added_at ? new Date(member.added_at).toLocaleString('zh-CN', { hour12: false }) : '-'}</td>
+                                                            <td>
+                                                                <button className="btn btn-sm" onClick={() => handleRevokeInvite(member)} disabled={membersActionLoading === `revoke-${member.email}`}>
+                                                                    {membersActionLoading === `revoke-${member.email}` ? '撤回中...' : '撤回'}
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="gpt-team-modal-actions">
+                                <button className="btn" onClick={() => setMembersModalOpen(false)} disabled={!!membersActionLoading}>关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showImportModal && (
+                <div className="gpt-team-modal-backdrop" onClick={() => !importing && setShowImportModal(false)}>
+                    <div className="gpt-team-modal" onClick={e => e.stopPropagation()}>
+                        <div className="gpt-team-modal-header">
+                            <div>
+                                <h3 className="gpt-team-modal-title">导入 Team</h3>
+                                <p className="gpt-team-modal-subtitle">沿用 team-manage 的导入结构，支持单个导入和批量流式导入。</p>
+                            </div>
+                            <button className="gpt-team-modal-close" onClick={() => setShowImportModal(false)} aria-label="关闭">×</button>
+                        </div>
+                        <div className="gpt-team-modal-body">
+                            <div className="gpt-team-modal-tabs">
+                                <button className={`gpt-team-modal-tab ${importMode === 'single' ? 'active' : ''}`} onClick={() => setImportMode('single')}>单个导入</button>
+                                <button className={`gpt-team-modal-tab ${importMode === 'batch' ? 'active' : ''}`} onClick={() => setImportMode('batch')}>批量导入</button>
+                            </div>
+
+                            {importMode === 'single' ? (
+                                <div className="gpt-team-import-form">
+                                    <div className="gpt-team-form-field gpt-team-form-field-full">
+                                        <label className="gpt-team-field-label">Access Token (AT) *</label>
+                                        <input className="input" value={singleImport.access_token} onChange={e => setSingleImport(prev => ({ ...prev, access_token: e.target.value }))} placeholder="eyJ..." />
+                                        <div className="gpt-team-field-hint">必填项，以 `eyJ` 开头的 JWT Token</div>
+                                    </div>
+                                    <div className="gpt-team-form-field">
+                                        <label className="gpt-team-field-label">Refresh Token (RT)</label>
+                                        <input className="input" value={singleImport.refresh_token} onChange={e => setSingleImport(prev => ({ ...prev, refresh_token: e.target.value }))} placeholder="rt-..." />
+                                        <div className="gpt-team-field-hint">可选，用于自动刷新 AT</div>
+                                    </div>
+                                    <div className="gpt-team-form-field">
+                                        <label className="gpt-team-field-label">Session Token</label>
+                                        <input className="input" value={singleImport.session_token} onChange={e => setSingleImport(prev => ({ ...prev, session_token: e.target.value }))} placeholder="eyJ..." />
+                                        <div className="gpt-team-field-hint">可选，作为备选刷新方式</div>
+                                    </div>
+                                    <div className="gpt-team-form-field">
+                                        <label className="gpt-team-field-label">Client ID</label>
+                                        <input className="input" value={singleImport.client_id} onChange={e => setSingleImport(prev => ({ ...prev, client_id: e.target.value }))} placeholder="Client ID" />
+                                        <div className="gpt-team-field-hint">使用 Refresh Token 时建议填写</div>
+                                    </div>
+                                    <div className="gpt-team-form-field">
+                                        <label className="gpt-team-field-label">邮箱</label>
+                                        <input className="input" value={singleImport.email} onChange={e => setSingleImport(prev => ({ ...prev, email: e.target.value }))} placeholder="admin@example.com" />
+                                        <div className="gpt-team-field-hint">可选，不填则从 Access Token 自动提取</div>
+                                    </div>
+                                    <div className="gpt-team-form-field">
+                                        <label className="gpt-team-field-label">Account ID</label>
+                                        <input className="input" value={singleImport.account_id} onChange={e => setSingleImport(prev => ({ ...prev, account_id: e.target.value }))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                                        <div className="gpt-team-field-hint">可选，如果不填写将从 API 自动获取</div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="gpt-team-batch-panel">
+                                    <div className="gpt-team-form-field gpt-team-form-field-full">
+                                    <label className="gpt-team-field-label">批量导入内容 <span className="required">*</span></label>
+                                    <textarea
+                                        className="input"
+                                        style={{ minHeight: '240px', resize: 'vertical' }}
+                                        value={batchContent}
+                                        onChange={e => setBatchContent(e.target.value)}
+                                        placeholder={'一行一个 AT Token...'}
+                                    />
+                                    <div className="gpt-team-field-hint">和 `team-manage` 一样，逐行解析 token，实时返回导入进度。</div>
+                                    </div>
+                                    {batchProgress.visible && (
+                                        <div className="gpt-team-batch-progress">
+                                            <div className="gpt-team-batch-progress-meta">
+                                                <span>{batchProgress.stage}</span>
+                                                <span>{batchProgress.percent}%</span>
+                                            </div>
+                                            <div className="gpt-team-batch-progress-bar">
+                                                <div className="gpt-team-batch-progress-bar-fill" style={{ width: `${batchProgress.percent}%` }} />
+                                            </div>
+                                            <div className="gpt-team-batch-progress-stats">
+                                                <span>成功: <span className="gpt-team-count-success">{batchProgress.success}</span></span>
+                                                <span>失败: <span className="gpt-team-count-failed">{batchProgress.failed}</span></span>
+                                            </div>
+                                            {batchResults.length > 0 && (
+                                                <div className="gpt-team-batch-results-wrap">
+                                                    <div className="gpt-team-batch-results-head">
+                                                        <strong>导入详情</strong>
+                                                        <small>{batchSummary}</small>
+                                                    </div>
+                                                    <div className="gpt-team-batch-results-table-wrap">
+                                                        <table className="admin-table" style={{ width: '100%', minWidth: 420 }}>
+                                                            <thead><tr><th>邮箱</th><th>状态</th><th>消息</th></tr></thead>
+                                                            <tbody>
+                                                                {batchResults.map((res, idx) => (
+                                                                    <tr key={`${res.email || 'unknown'}-${idx}`}>
+                                                                        <td>{res.email || '未知'}</td>
+                                                                        <td className={res.success ? 'gpt-team-status-success' : 'gpt-team-status-failed'}>{res.success ? '成功' : '失败'}</td>
+                                                                        <td>{res.success ? (res.message || '导入成功') : (res.error || '导入失败')}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="gpt-team-modal-actions">
+                                <button className="btn" onClick={() => setShowImportModal(false)} disabled={importing}>取消</button>
+                                <button
+                                    className="btn btn-primary"
+                                    disabled={importing || (importMode === 'single' ? !singleImport.access_token.trim() : !batchContent.trim())}
+                                    onClick={() => importMode === 'single' ? handleSubmitSingleImport() : handleSubmitBatchImport()}
+                                >
+                                    {importing ? '导入中...' : '确定导入'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {section === 'records' && (
+                <div>
+                    <div className="stats-grid" style={{ marginBottom: '12px' }}>
+                        <div className="stat-card card"><div className="stat-info"><span className="stat-value">{recordStats.total || 0}</span><span className="stat-label">总记录</span></div></div>
+                        <div className="stat-card card"><div className="stat-info"><span className="stat-value">{recordStats.today || 0}</span><span className="stat-label">今日</span></div></div>
+                        <div className="stat-card card"><div className="stat-info"><span className="stat-value">{recordStats.thisWeek || 0}</span><span className="stat-label">本周</span></div></div>
+                        <div className="stat-card card"><div className="stat-info"><span className="stat-value">{recordStats.thisMonth || 0}</span><span className="stat-label">本月</span></div></div>
+                    </div>
+                    <div className="card" style={{ padding: '12px', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <input className="input" style={{ maxWidth: 200 }} placeholder="邮箱" value={recordFilters.email} onChange={e => setRecordFilters(prev => ({ ...prev, email: e.target.value }))} />
+                            <input className="input" style={{ maxWidth: 160 }} placeholder="兑换码" value={recordFilters.code} onChange={e => setRecordFilters(prev => ({ ...prev, code: e.target.value }))} />
+                            <input className="input" style={{ maxWidth: 120 }} placeholder="Team ID" value={recordFilters.teamId} onChange={e => setRecordFilters(prev => ({ ...prev, teamId: e.target.value }))} />
+                            <input className="input" type="date" value={recordFilters.startDate} onChange={e => setRecordFilters(prev => ({ ...prev, startDate: e.target.value }))} />
+                            <input className="input" type="date" value={recordFilters.endDate} onChange={e => setRecordFilters(prev => ({ ...prev, endDate: e.target.value }))} />
+                            <button className="btn" onClick={() => { setRecordFilters(prev => ({ ...prev, page: 1 })); fetchRecords(); }}>查询</button>
+                            <button className="btn btn-secondary" onClick={() => { setRecordFilters({ email: '', code: '', teamId: '', startDate: '', endDate: '', page: 1, perPage: 20 }); setTimeout(fetchRecords, 0); }}>重置</button>
+                            <button className="btn btn-primary" onClick={handleAddRecord}>+ 新增记录</button>
+                        </div>
+                    </div>
+                    <div className="card" style={{ overflowX: 'auto' }}>
+                        {recordsLoading ? <div style={{ padding: 16 }}>加载中...</div> : (
+                            <table className="admin-table" style={{ width: '100%', minWidth: 920 }}>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th><th>邮箱</th><th>兑换码</th><th>Team ID</th><th>Team 名称</th><th>Account ID</th><th>时间</th><th>质保</th><th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {records.map(r => (
+                                        <tr key={r.id}>
+                                            <td>{r.id}</td>
+                                            <td>{r.email}</td>
+                                            <td>{r.code || '-'}</td>
+                                            <td>{r.teamId || '-'}</td>
+                                            <td>{r.teamName || '-'}</td>
+                                            <td>{r.accountId || '-'}</td>
+                                            <td>{r.redeemedAt ? new Date(r.redeemedAt).toLocaleString('zh-CN', { hour12: false }) : '-'}</td>
+                                            <td>{r.isWarrantyRedemption ? '是' : '否'}</td>
+                                            <td><button className="btn btn-sm btn-danger" onClick={() => handleDeleteRecord(r.id)}>删除</button></td>
+                                        </tr>
+                                    ))}
+                                    {records.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>暂无使用记录</td></tr>}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>共 {recordPagination.total || 0} 条</span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="btn btn-sm" disabled={(recordPagination.currentPage || 1) <= 1} onClick={() => setRecordFilters(prev => ({ ...prev, page: Math.max(1, (prev.page || 1) - 1) }))}>上一页</button>
+                            <span style={{ alignSelf: 'center' }}>{recordPagination.currentPage || 1} / {recordPagination.totalPages || 1}</span>
+                            <button className="btn btn-sm" disabled={(recordPagination.currentPage || 1) >= (recordPagination.totalPages || 1)} onClick={() => setRecordFilters(prev => ({ ...prev, page: (prev.page || 1) + 1 }))}>下一页</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+
 function PixelApiTab() {
     const { user } = useAuth();
     const token = user?.token || localStorage.getItem('verifykey-token');
@@ -4865,6 +5732,7 @@ export default function Admin() {
         { id: 'live-monitor', label: '实时监控', icon: '📺' },
         { id: 'pixel-api', label: 'Pixel API', icon: '📡' },
         { id: 'gpt-recharge', label: 'GPT 充值', icon: '🤖' },
+        { id: 'gpt-team', label: 'GPT Team', icon: '🧩' },
         { id: 'cdk', label: t('tabCdk'), icon: '🔑' },
         { id: 'users', label: t('tabUsers'), icon: '👥' },
         { id: 'ai-generator', label: t('tabAiGen'), icon: '🤖' },
@@ -9644,6 +10512,10 @@ export default function Admin() {
                 {/* GPT Recharge Tab */}
                 {activeTab === 'gpt-recharge' && (
                     <GptKeysTab config={config} setConfig={setConfig} />
+                )}
+
+                {activeTab === 'gpt-team' && (
+                    <GptTeamTab />
                 )}
             </div >
         </div >

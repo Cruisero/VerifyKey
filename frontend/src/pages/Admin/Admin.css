@@ -413,6 +413,467 @@
     font-family: monospace;
 }
 
+.gpt-team-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 24px;
+}
+
+.gpt-team-modal {
+    width: min(980px, 100%);
+    max-height: min(90vh, 980px);
+    background:
+        radial-gradient(circle at top left, rgba(99, 102, 241, 0.08), transparent 28%),
+        linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 24px;
+    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.gpt-team-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid rgba(203, 213, 225, 0.8);
+}
+
+.gpt-team-modal-title {
+    margin: 0;
+    font-size: 42px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: #0f172a;
+}
+
+.gpt-team-modal-subtitle {
+    margin: 10px 0 0;
+    font-size: 14px;
+    color: #64748b;
+}
+
+.gpt-team-modal-close {
+    border: none;
+    background: transparent;
+    color: #0f172a;
+    font-size: 44px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.gpt-team-modal-body {
+    padding: 24px 32px 28px;
+    overflow: auto;
+}
+
+.gpt-team-modal-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.gpt-team-modal-tab {
+    border: 1px solid rgba(203, 213, 225, 0.9);
+    background: #f3f4f6;
+    color: #111827;
+    padding: 18px 20px;
+    border-radius: 18px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.gpt-team-modal-tab.active {
+    background: linear-gradient(135deg, #5b5ce6 0%, #4338ca 100%);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 14px 30px rgba(79, 70, 229, 0.24);
+}
+
+.gpt-team-import-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 20px;
+}
+
+.gpt-team-form-field {
+    min-width: 0;
+}
+
+.gpt-team-form-field-full {
+    grid-column: 1 / -1;
+}
+
+.gpt-team-field-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.gpt-team-field-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #64748b;
+}
+
+.gpt-team-import-form .input,
+.gpt-team-batch-panel .input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 52px;
+    border-radius: 16px;
+    border: 1px solid #dbe4f0;
+    background: rgba(255, 255, 255, 0.92);
+    font-size: 16px;
+}
+
+.gpt-team-import-form .input:focus,
+.gpt-team-batch-panel .input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+}
+
+.gpt-team-batch-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.gpt-team-batch-progress {
+    padding: 16px 18px;
+    background: rgba(248, 250, 252, 0.96);
+    border: 1px solid rgba(203, 213, 225, 0.8);
+    border-radius: 18px;
+}
+
+.gpt-team-batch-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.gpt-team-batch-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.gpt-team-batch-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #5b5ce6 0%, #4338ca 100%);
+    transition: width 0.3s ease;
+}
+
+.gpt-team-batch-progress-stats {
+    margin-top: 8px;
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: #475569;
+}
+
+.gpt-team-count-success {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+.gpt-team-count-failed {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.gpt-team-batch-results-wrap {
+    margin-top: 14px;
+}
+
+.gpt-team-batch-results-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    color: #475569;
+}
+
+.gpt-team-batch-results-head small {
+    color: #64748b;
+}
+
+.gpt-team-batch-results-table-wrap {
+    max-height: 220px;
+    overflow: auto;
+    border: 1px solid rgba(203, 213, 225, 0.8);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.gpt-team-status-success {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+.gpt-team-status-failed {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.gpt-team-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.gpt-team-members-modal {
+    width: min(1200px, 100%);
+}
+
+.gpt-team-members-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.gpt-team-members-add {
+    display: grid;
+    grid-template-columns: minmax(280px, 420px) auto;
+    gap: 10px;
+    align-items: center;
+    flex: 1;
+}
+
+.gpt-team-members-error {
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(239, 68, 68, 0.24);
+    background: rgba(254, 242, 242, 0.92);
+    color: #b91c1c;
+    font-size: 14px;
+}
+
+.gpt-team-members-panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.gpt-team-members-panel {
+    padding: 16px;
+}
+
+.gpt-team-members-panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.gpt-team-members-panel-head strong {
+    color: #0f172a;
+    font-size: 16px;
+}
+
+.gpt-team-members-panel-head span {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.gpt-team-members-table-wrap {
+    overflow: auto;
+    border: 1px solid rgba(203, 213, 225, 0.8);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.gpt-team-dashboard-table-card {
+    overflow: hidden;
+}
+
+.gpt-team-dashboard-table-wrap {
+    overflow-x: auto;
+}
+
+.gpt-team-dashboard-table thead th {
+    padding: 16px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: rgba(248, 250, 252, 0.92);
+}
+
+.gpt-team-dashboard-table tbody td {
+    padding: 18px 20px;
+    vertical-align: middle;
+}
+
+.gpt-team-id-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 14px;
+    background: rgba(99, 102, 241, 0.08);
+    color: #4338ca;
+    font-weight: 700;
+}
+
+.gpt-team-account-cell,
+.gpt-team-team-cell,
+.gpt-team-time-cell,
+.gpt-team-members-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gpt-team-account-email,
+.gpt-team-team-name {
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.gpt-team-account-sub,
+.gpt-team-team-meta,
+.gpt-team-time-cell small {
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.gpt-team-team-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.gpt-team-team-meta span {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(226, 232, 240, 0.72);
+}
+
+.gpt-team-members-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #0f172a;
+    font-size: 13px;
+}
+
+.gpt-team-members-top strong {
+    font-size: 16px;
+}
+
+.gpt-team-members-top span {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.gpt-team-members-bar {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(226, 232, 240, 0.9);
+    overflow: hidden;
+}
+
+.gpt-team-members-bar-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
+}
+
+.gpt-team-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+
+.gpt-team-status-badge.active {
+    background: rgba(220, 252, 231, 0.9);
+    color: #15803d;
+    border-color: rgba(34, 197, 94, 0.24);
+}
+
+.gpt-team-status-badge.full {
+    background: rgba(254, 249, 195, 0.92);
+    color: #a16207;
+    border-color: rgba(245, 158, 11, 0.24);
+}
+
+.gpt-team-status-badge.expired {
+    background: rgba(255, 237, 213, 0.92);
+    color: #c2410c;
+    border-color: rgba(249, 115, 22, 0.24);
+}
+
+.gpt-team-status-badge.error,
+.gpt-team-status-badge.banned {
+    background: rgba(254, 226, 226, 0.92);
+    color: #b91c1c;
+    border-color: rgba(239, 68, 68, 0.24);
+}
+
+.gpt-team-time-cell {
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.gpt-team-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.gpt-team-actions .btn {
+    min-width: 58px;
+    border-radius: 12px;
+}
+
 @media (max-width: 768px) {
     .test-document-content {
         grid-template-columns: 1fr;
@@ -452,6 +913,67 @@
     .settings-form {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .gpt-team-modal-backdrop {
+        padding: 12px;
+    }
+
+    .gpt-team-modal {
+        max-height: 94vh;
+        border-radius: 20px;
+    }
+
+    .gpt-team-modal-header {
+        padding: 22px 20px 16px;
+    }
+
+    .gpt-team-modal-title {
+        font-size: 32px;
+    }
+
+    .gpt-team-modal-body {
+        padding: 18px 20px 22px;
+    }
+
+    .gpt-team-modal-tabs,
+    .gpt-team-import-form {
+        grid-template-columns: 1fr;
+    }
+
+    .gpt-team-modal-tab {
+        padding: 15px 16px;
+        font-size: 16px;
+    }
+
+    .gpt-team-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .gpt-team-modal-actions .btn {
+        width: 100%;
+    }
+
+    .gpt-team-members-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .gpt-team-members-add {
+        grid-template-columns: 1fr;
+    }
+
+    .gpt-team-members-panels {
+        grid-template-columns: 1fr;
+    }
+
+    .gpt-team-dashboard-table thead th,
+    .gpt-team-dashboard-table tbody td {
+        padding: 14px 16px;
+    }
+
+    .gpt-team-actions {
+        min-width: 240px;
     }
 }
 

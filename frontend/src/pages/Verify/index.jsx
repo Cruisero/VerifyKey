@@ -96,6 +96,7 @@ export default function Verify() {
 
     // Polling refs
     const pollingRefs = useRef({});
+    const standardRouteRef = useRef(null);
 
     const { t, lang } = useLang();
     const gptCurrentCost = gptMode === 'team' ? 0.3 : 2;
@@ -234,28 +235,69 @@ export default function Verify() {
             .filter(Boolean);
     };
 
-    // Submit a single account — routes to UPixel, YPixel, or KPixel/VPixel based on tier
-    const submitOneJob = async (account, resultId) => {
-        const isKPixel = verifyTier === 'pro';
-        const normalizedTotp = (account.totp_secret || '').replace(/\s+/g, '');
+    const getNextStandardSource = () => {
+        const upixelAvailable = Boolean(serviceStatus?.upixel?.available);
+        const ypixelAvailable = Boolean(serviceStatus?.ypixel?.available || serviceStatus?.upixel?.ypixelUp);
 
-        // Standard tier: prefer UPixel, fallback to YPixel
-        let apiUrl, payload, jobSourceDefault;
-        if (isKPixel) {
-            apiUrl = `${API_BASE}/api/kpixel/jobs`;
-            payload = { email: account.email, password: account.password, twofa: normalizedTotp };
-            jobSourceDefault = 'kpixel';
-        } else if (!serviceStatus?.upixel?.available && serviceStatus?.upixel?.ypixelUp) {
-            // UPixel down, YPixel up → use YPixel
-            apiUrl = `${API_BASE}/api/ypixel/jobs`;
-            payload = { email: account.email, password: account.password, twofa: normalizedTotp, recovery_email: account.backupEmail || '' };
-            jobSourceDefault = 'ypixel';
-        } else {
-            apiUrl = `${API_BASE}/api/pixel/jobs`;
-            payload = { email: account.email, password: account.password, totp_secret: normalizedTotp };
-            jobSourceDefault = 'pixel';
+        if (upixelAvailable && ypixelAvailable) {
+            let nextSource = standardRouteRef.current;
+            if (!nextSource) {
+                try {
+                    nextSource = window.localStorage.getItem('verify-standard-next-source') || 'pixel';
+                } catch {
+                    nextSource = 'pixel';
+                }
+            }
+            const resolvedSource = nextSource === 'ypixel' ? 'ypixel' : 'pixel';
+            const followingSource = resolvedSource === 'pixel' ? 'ypixel' : 'pixel';
+            standardRouteRef.current = followingSource;
+            try {
+                window.localStorage.setItem('verify-standard-next-source', followingSource);
+            } catch {
+                // ignore storage failures
+            }
+            return resolvedSource;
         }
 
+        if (upixelAvailable) return 'pixel';
+        if (ypixelAvailable) return 'ypixel';
+        return 'pixel';
+    };
+
+    const buildJobPlan = (account) => {
+        const normalizedTotp = (account.totp_secret || '').replace(/\s+/g, '');
+
+        if (verifyTier === 'pro') {
+            return {
+                apiUrl: `${API_BASE}/api/kpixel/jobs`,
+                payload: { email: account.email, password: account.password, twofa: normalizedTotp },
+                source: 'kpixel',
+                totalStages: 0,
+            };
+        }
+
+        const standardSource = getNextStandardSource();
+        if (standardSource === 'ypixel') {
+            return {
+                apiUrl: `${API_BASE}/api/ypixel/jobs`,
+                payload: { email: account.email, password: account.password, twofa: normalizedTotp, recovery_email: account.backupEmail || '' },
+                source: 'ypixel',
+                totalStages: 0,
+            };
+        }
+
+        return {
+            apiUrl: `${API_BASE}/api/pixel/jobs`,
+            payload: { email: account.email, password: account.password, totp_secret: normalizedTotp },
+            source: 'pixel',
+            totalStages: 8,
+        };
+    };
+
+    // Submit a single account — routes to UPixel, YPixel, or KPixel/VPixel based on tier
+    const submitOneJob = async (account, resultId, plan) => {
+        const jobPlan = plan || buildJobPlan(account);
+        const { apiUrl, payload, source: jobSourceDefault } = jobPlan;
         const token = getToken();
 
         try {
@@ -490,8 +532,9 @@ export default function Verify() {
 
         setVerifyStatus('processing');
 
+        const jobPlans = accounts.map(acc => buildJobPlan(acc));
+
         // Create result items
-        const isYPixelRoute = verifyTier !== 'pro' && !serviceStatus?.upixel?.available && serviceStatus?.upixel?.ypixelUp;
         const resultItems = accounts.map((acc, i) => ({
             id: Date.now() + i,
             email: acc.email,
@@ -499,17 +542,17 @@ export default function Verify() {
             timestamp: new Date().toISOString(),
             message: `⏳ ${t('submitting')}`,
             stage: 0,
-            totalStages: (verifyTier === 'pro' || isYPixelRoute) ? 0 : 8,
+            totalStages: jobPlans[i].totalStages,
             stageLabel: '',
             url: '',
             jobId: '',
-            source: verifyTier === 'pro' ? 'kpixel' : (isYPixelRoute ? 'ypixel' : 'pixel'),
+            source: jobPlans[i].source,
         }));
         setResults(prev => [...resultItems, ...prev]);
 
         // Submit all jobs
         for (let i = 0; i < accounts.length; i++) {
-            await submitOneJob(accounts[i], resultItems[i].id);
+            await submitOneJob(accounts[i], resultItems[i].id, jobPlans[i]);
             // Small delay between batch submissions
             if (i < accounts.length - 1) {
                 await new Promise(r => setTimeout(r, 500));

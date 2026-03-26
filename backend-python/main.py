@@ -335,6 +335,94 @@ def _build_verify_event_meta(source: str, email: str = "", user_id: int = 0, met
     }
 
 
+def _persist_verification_history_strict(status: str, verification_id: str, message: str = "", cdk: str = "", via: str = ""):
+    record = None
+    try:
+        record = verification_history.log_verification(status, verification_id, message, cdk=cdk, via=via)
+    except Exception as e:
+        logger.warning(f"[History] log_verification failed for {verification_id} ({status}/{via}): {e}")
+
+    try:
+        conn = database.get_connection()
+        row = conn.execute(
+            "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history WHERE verification_id = ? AND status = ? ORDER BY rowid DESC LIMIT 1",
+            (verification_id, status),
+        ).fetchone()
+        if row:
+            return {
+                "success": True,
+                "record": {
+                    "id": row["id"],
+                    "status": row["status"],
+                    "verificationId": row["verification_id"],
+                    "message": row["message"],
+                    "cdk": row["cdk"],
+                    "timestamp": row["timestamp"],
+                    "via": row["via"] if "via" in row.keys() else "",
+                },
+                "fallbackInserted": False,
+            }
+    except Exception as e:
+        logger.warning(f"[History] verification read failed for {verification_id} ({status}/{via}): {e}")
+
+    try:
+        conn = database.get_connection()
+        record_id = (record or {}).get("id") or str(uuid.uuid4())[:8]
+        now = datetime.utcnow().isoformat() + "Z"
+        try:
+            conn.execute(
+                "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (record_id, status, verification_id, message, cdk, now, via),
+            )
+        except Exception:
+            conn.execute(
+                "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                (record_id, status, verification_id, message, cdk, now),
+            )
+        conn.commit()
+        logger.warning(f"[History] Fallback inserted record for {verification_id} ({status}/{via})")
+        return {
+            "success": True,
+            "record": {
+                "id": record_id,
+                "status": status,
+                "verificationId": verification_id,
+                "message": message,
+                "cdk": cdk,
+                "timestamp": now,
+                "via": via,
+            },
+            "fallbackInserted": True,
+        }
+    except Exception as e:
+        logger.error(f"[History] Failed to persist record for {verification_id} ({status}/{via}): {e}")
+        return {"success": False, "record": record, "error": str(e)}
+
+
+def _record_submit_failure(source: str, message: str, email: str = "", user_id: int = 0, method: str = "", http_status: int = 0, upstream_status: int = 0, refunded: bool = False, card_key: str = "", channel: str = "", via: str = ""):
+    attempt_id = _broadcast_submit_failure(
+        source,
+        message,
+        email=email,
+        user_id=user_id,
+        method=method,
+        http_status=http_status,
+        upstream_status=upstream_status,
+        refunded=refunded,
+        card_key=card_key,
+        channel=channel,
+    )
+    if user_id:
+        _persist_verification_history_strict(
+            "failed",
+            attempt_id,
+            message,
+            cdk=f"user:{user_id}",
+            via=via or source,
+        )
+    return attempt_id
+
+
 def _broadcast_submit_failure(source: str, message: str, email: str = "", user_id: int = 0, method: str = "", http_status: int = 0, upstream_status: int = 0, refunded: bool = False, card_key: str = "", channel: str = ""):
     attempt_id = f"submit_{source}_{uuid.uuid4().hex[:12]}"
     broadcast_verify_event({
@@ -8440,7 +8528,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 msg = f"Pixel API 错误: HTTP {resp.status_code}"
                 code = ""
             final_detail = f"{code}: {msg}" if code else msg
-            _broadcast_submit_failure(
+            _record_submit_failure(
                 "pixel",
                 final_detail,
                 email=request.email,
@@ -8449,12 +8537,13 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 http_status=resp.status_code,
                 upstream_status=resp.status_code,
                 refunded=refund_result.get("refunded", False),
+                via="pixel",
             )
             raise HTTPException(status_code=resp.status_code, detail=final_detail)
 
     except httpx.HTTPError as e:
         refund_result = _refund_user_credits(user_id, 1.0, request.email, via="pixel_submit")
-        _broadcast_submit_failure(
+        _record_submit_failure(
             "pixel",
             f"无法连接 Pixel API: {str(e)}",
             email=request.email,
@@ -8462,6 +8551,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             method="pixel_api",
             http_status=502,
             refunded=refund_result.get("refunded", False),
+            via="pixel",
         )
         raise HTTPException(status_code=502, detail=f"无法连接 Pixel API: {str(e)}")
 
@@ -8872,8 +8962,6 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
 
     _deduct_user_credits_or_raise(user_id, credit_cost, f"积分不足（需要 {credit_cost} 积分）")
 
-    _deduct_user_credits_or_raise(user_id, credit_cost, f"积分不足（需要 {credit_cost} 积分）")
-
     # Round-robin: decide which service to use
     use_vpixel = False
     if kpixel_available and vpixel_available:
@@ -8947,7 +9035,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                 else:
                     print(f"[ProTier] VPixel submit error: {data.get('message')}")
                     refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
-                    _broadcast_submit_failure(
+                    _record_submit_failure(
                         "vpixel",
                         data.get("message", "VPixel 提交失败"),
                         email=request.email,
@@ -8956,6 +9044,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                         http_status=500,
                         refunded=refund_result.get("refunded", False),
                         card_key=vpc_card,
+                        via="vpixel",
                     )
                     raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
         except httpx.HTTPError as e:
@@ -8968,7 +9057,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
             else:
                 print(f"[ProTier] VPixel connection error: {e}")
                 refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
-                _broadcast_submit_failure(
+                _record_submit_failure(
                     "vpixel",
                     f"VPixel 连接失败: {str(e)}",
                     email=request.email,
@@ -8977,6 +9066,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     http_status=502,
                     refunded=refund_result.get("refunded", False),
                     card_key=vpc_card,
+                    via="vpixel",
                 )
                 raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
@@ -9009,7 +9099,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
             else:
                 print(f"[ProTier] KPixel submit error: {data.get('message')}")
                 refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
-                _broadcast_submit_failure(
+                _record_submit_failure(
                     "kpixel",
                     data.get("message", "KPixel 提交失败"),
                     email=request.email,
@@ -9017,13 +9107,14 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     method="kpixel_api",
                     http_status=500,
                     refunded=refund_result.get("refunded", False),
+                    via="kpixel",
                 )
                 raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
         except httpx.HTTPError as e:
             print(f"[ProTier] KPixel connection error: {e}")
             refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="pro_submit")
-            _broadcast_submit_failure(
+            _record_submit_failure(
                 "kpixel",
                 f"KPixel 连接失败: {str(e)}",
                 email=request.email,
@@ -9031,6 +9122,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                 method="kpixel_api",
                 http_status=502,
                 refunded=refund_result.get("refunded", False),
+                via="kpixel",
             )
             raise HTTPException(status_code=500, detail="服务端错误，请稍后重试")
 
@@ -9532,7 +9624,7 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
         else:
             refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
             failure_message = data.get("message", "VPixel 提交失败")
-            _broadcast_submit_failure(
+            _record_submit_failure(
                 "vpixel",
                 failure_message,
                 email=request.email,
@@ -9541,12 +9633,13 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
                 http_status=400,
                 refunded=refund_result.get("refunded", False),
                 card_key=vpixel_cfg["card"],
+                via="vpixel",
             )
             raise HTTPException(status_code=400, detail=failure_message)
 
     except httpx.HTTPError as e:
         refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
-        _broadcast_submit_failure(
+        _record_submit_failure(
             "vpixel",
             f"无法连接 VPixel API: {str(e)}",
             email=request.email,
@@ -9555,6 +9648,7 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
             http_status=502,
             refunded=refund_result.get("refunded", False),
             card_key=vpixel_cfg["card"],
+            via="vpixel",
         )
         raise HTTPException(status_code=502, detail=f"无法连接 VPixel API: {str(e)}")
 
@@ -10052,7 +10146,7 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
             conn.commit()
             err_msg = data.get("message", data.get("error", "提交失败"))
             refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="ypixel_submit")
-            _broadcast_submit_failure(
+            _record_submit_failure(
                 "ypixel",
                 err_msg,
                 email=request.email,
@@ -10061,6 +10155,7 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
                 http_status=400,
                 refunded=refund_result.get("refunded", False),
                 card_key=card_key,
+                via="ypixel",
             )
             raise HTTPException(status_code=400, detail="服务端错误")
 
@@ -10069,7 +10164,7 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
         conn.execute("UPDATE ypixel_cards SET status='available', used_by_email='' WHERE id=?", (card_id,))
         conn.commit()
         refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="ypixel_submit")
-        _broadcast_submit_failure(
+        _record_submit_failure(
             "ypixel",
             f"YPixel 连接失败: {str(e)}",
             email=request.email,
@@ -10078,6 +10173,7 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
             http_status=502,
             refunded=refund_result.get("refunded", False),
             card_key=card_key,
+            via="ypixel",
         )
         raise HTTPException(status_code=502, detail="服务端错误")
 
@@ -10939,7 +11035,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
 
     team = await _pick_team_for_user_invite()
     if not team:
-        verification_history.log_verification("failed", invite_vid, "暂无可用 Team 名额", cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("failed", invite_vid, "暂无可用 Team 名额", cdk=cdk_label, via="gpt_team")
         _broadcast_submit_failure(
             "gpt",
             "暂无可用 Team 名额",
@@ -10993,7 +11089,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
 
         await _gpt_team_sync(team["id"])
         message = f"Team 邀请已发送（{team_row['email']} / {team_row['team_name'] or '未命名 Team'}）"
-        verification_history.log_verification("pass", invite_vid, message, cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("pass", invite_vid, message, cdk=cdk_label, via="gpt_team")
         broadcast_verify_event({
             "type": "progress",
             "vid": invite_vid,
@@ -11015,7 +11111,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
     except HTTPException as e:
         with contextlib.suppress(Exception):
             auth.update_credits(user_id, GPT_TEAM_INVITE_COST)
-        verification_history.log_verification("failed", invite_vid, str(e.detail), cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("failed", invite_vid, str(e.detail), cdk=cdk_label, via="gpt_team")
         _broadcast_submit_failure(
             "gpt",
             str(e.detail),
@@ -11030,7 +11126,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
     except Exception as e:
         with contextlib.suppress(Exception):
             auth.update_credits(user_id, GPT_TEAM_INVITE_COST)
-        verification_history.log_verification("failed", invite_vid, str(e), cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("failed", invite_vid, str(e), cdk=cdk_label, via="gpt_team")
         _broadcast_submit_failure(
             "gpt",
             str(e),
@@ -11091,10 +11187,9 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     })
 
     def _log_gpt_final(status: str, message: str):
-        try:
-            verification_history.log_verification(status, gpt_vid, message, cdk=cdk_label, via="gpt")
-        except Exception as _e:
-            logger.warning(f"[GPT Recharge] Failed to persist {status} record for {gpt_vid}: {_e}")
+        result = _persist_verification_history_strict(status, gpt_vid, message, cdk=cdk_label, via="gpt")
+        if not result.get("success"):
+            logger.warning(f"[GPT Recharge] Failed to persist {status} record for {gpt_vid}: {result.get('error', 'unknown error')}")
 
     import httpx
     try:

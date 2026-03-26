@@ -2058,10 +2058,7 @@ function GptTeamTab() {
     const [batchSummary, setBatchSummary] = useState('');
     const [singleImport, setSingleImport] = useState({
         access_token: '',
-        refresh_token: '',
         session_token: '',
-        client_id: '',
-        email: '',
         account_id: '',
     });
     const [batchContent, setBatchContent] = useState('');
@@ -2162,10 +2159,7 @@ function GptTeamTab() {
                 body: JSON.stringify({
                     import_type: 'single',
                     access_token: singleImport.access_token || '',
-                    refresh_token: singleImport.refresh_token || '',
                     session_token: singleImport.session_token || '',
-                    client_id: singleImport.client_id || '',
-                    email: singleImport.email || '',
                     account_id: singleImport.account_id || '',
                 })
             });
@@ -2181,10 +2175,7 @@ function GptTeamTab() {
             setShowImportModal(false);
             setSingleImport({
                 access_token: '',
-                refresh_token: '',
                 session_token: '',
-                client_id: '',
-                email: '',
                 account_id: '',
             });
             await fetchDashboard();
@@ -2515,7 +2506,7 @@ function GptTeamTab() {
                             <table className="admin-table gpt-team-dashboard-table" style={{ width: '100%', minWidth: 1180 }}>
                                 <thead>
                                     <tr>
-                                        <th>ID</th><th>账号</th><th>Team 信息</th><th>成员</th><th>状态</th><th>到期</th><th>更新时间</th><th>操作</th>
+                                        <th>ID</th><th>账号</th><th>成员</th><th>状态</th><th>到期</th><th>更新时间</th><th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2524,7 +2515,6 @@ function GptTeamTab() {
                                         const expiresAt = formatDateTimeCell(team.expiresAt);
                                         const currentMembers = Number(team.currentMembers || 0);
                                         const maxMembers = Number(team.maxMembers || 0);
-                                        const usagePercent = maxMembers > 0 ? Math.min(100, Math.round((currentMembers / maxMembers) * 100)) : 0;
                                         return (
                                             <tr key={team.id}>
                                                 <td>
@@ -2537,23 +2527,8 @@ function GptTeamTab() {
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <div className="gpt-team-team-cell">
-                                                        <div className="gpt-team-team-name">{team.teamName || '未命名 Team'}</div>
-                                                        <div className="gpt-team-team-meta">
-                                                            <span>{team.planType || 'team'}</span>
-                                                            <span>{team.subscriptionPlan || '未识别套餐'}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
                                                     <div className="gpt-team-members-cell">
-                                                        <div className="gpt-team-members-top">
-                                                            <strong>{currentMembers}/{maxMembers || '-'}</strong>
-                                                            <span>{usagePercent}%</span>
-                                                        </div>
-                                                        <div className="gpt-team-members-bar">
-                                                            <div className="gpt-team-members-bar-fill" style={{ width: `${usagePercent}%` }} />
-                                                        </div>
+                                                        <strong>{currentMembers}/{maxMembers || '-'}</strong>
                                                     </div>
                                                 </td>
                                                 <td>
@@ -2584,7 +2559,7 @@ function GptTeamTab() {
                                             </tr>
                                         );
                                     })}
-                                    {teams.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>暂无 Team 数据</td></tr>}
+                                    {teams.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>暂无 Team 数据</td></tr>}
                                 </tbody>
                             </table>
                             </div>
@@ -2739,24 +2714,9 @@ function GptTeamTab() {
                                         <div className="gpt-team-field-hint">必填项，以 `eyJ` 开头的 JWT Token</div>
                                     </div>
                                     <div className="gpt-team-form-field">
-                                        <label className="gpt-team-field-label">Refresh Token (RT)</label>
-                                        <input className="input" value={singleImport.refresh_token} onChange={e => setSingleImport(prev => ({ ...prev, refresh_token: e.target.value }))} placeholder="rt-..." />
-                                        <div className="gpt-team-field-hint">可选，用于自动刷新 AT</div>
-                                    </div>
-                                    <div className="gpt-team-form-field">
                                         <label className="gpt-team-field-label">Session Token</label>
                                         <input className="input" value={singleImport.session_token} onChange={e => setSingleImport(prev => ({ ...prev, session_token: e.target.value }))} placeholder="eyJ..." />
                                         <div className="gpt-team-field-hint">可选，作为备选刷新方式</div>
-                                    </div>
-                                    <div className="gpt-team-form-field">
-                                        <label className="gpt-team-field-label">Client ID</label>
-                                        <input className="input" value={singleImport.client_id} onChange={e => setSingleImport(prev => ({ ...prev, client_id: e.target.value }))} placeholder="Client ID" />
-                                        <div className="gpt-team-field-hint">使用 Refresh Token 时建议填写</div>
-                                    </div>
-                                    <div className="gpt-team-form-field">
-                                        <label className="gpt-team-field-label">邮箱</label>
-                                        <input className="input" value={singleImport.email} onChange={e => setSingleImport(prev => ({ ...prev, email: e.target.value }))} placeholder="admin@example.com" />
-                                        <div className="gpt-team-field-hint">可选，不填则从 Access Token 自动提取</div>
                                     </div>
                                     <div className="gpt-team-form-field">
                                         <label className="gpt-team-field-label">Account ID</label>

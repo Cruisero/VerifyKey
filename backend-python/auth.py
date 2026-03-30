@@ -264,14 +264,25 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 
 
 def update_credits(user_id: int, amount: int) -> Optional[dict]:
-    """Update user credits"""
+    """Update user credits. Prevents negative balances when deducting."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE users SET credits = credits + ?, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-    """, (amount, user_id))
-    conn.commit()
+    if amount < 0:
+        # Prevent negative balance: only deduct if sufficient credits
+        cursor.execute("""
+            UPDATE users SET credits = credits + ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ? AND credits >= ?
+        """, (amount, user_id, abs(amount)))
+        conn.commit()
+        if cursor.rowcount == 0:
+            conn.close()
+            return None
+    else:
+        cursor.execute("""
+            UPDATE users SET credits = credits + ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (amount, user_id))
+        conn.commit()
     conn.close()
     
     return get_user_by_id(user_id)

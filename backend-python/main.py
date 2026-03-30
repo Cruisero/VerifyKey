@@ -8181,9 +8181,9 @@ def _deduct_user_credits_for_reconciliation(user_id: int, cost: float, verificat
         if result:
             logging.info(f"[{via or 'task'}] Re-deducted {cost} credits from user {user_id} for late success {verification_id}")
             return {"deducted": True, "forced": False}
-        auth.update_credits(user_id, -cost)
-        logging.warning(f"[{via or 'task'}] Forced late-success deduction of {cost} credits from user {user_id} for {verification_id}")
-        return {"deducted": True, "forced": True}
+        # Insufficient credits — log warning but do NOT force negative balance
+        logging.warning(f"[{via or 'task'}] Late-success deduction skipped for user {user_id} (insufficient credits) for {verification_id}")
+        return {"deducted": False, "forced": False, "reason": "insufficient_credits"}
     except Exception as e:
         logging.warning(f"[{via or 'task'}] Late-success deduction failed for user {user_id} on {verification_id}: {e}")
         return {"deducted": False, "forced": False, "error": str(e)}
@@ -8224,6 +8224,11 @@ def _finalize_user_success(verification_id: str, user_id: int, cost: float, mess
 def _finalize_user_failure(verification_id: str, user_id: int, message: str, via: str = "", refund_cost: float = 0):
     existing = _get_user_verification_row(verification_id, user_id)
     if existing and _is_terminal_history_status(existing["status"]):
+        # Even if already recorded, still attempt refund if cost > 0
+        # Previous bug: skipping refund here caused credits to be lost
+        if refund_cost and existing["status"] == "failed":
+            refund_result = _refund_user_credits(user_id, refund_cost, verification_id, via=via)
+            logging.info(f"[{via or 'task'}] Late refund attempt for already-finalized {verification_id}: refunded={refund_result.get('refunded')}")
         return {
             "finalized": existing["status"] == "failed",
             "status": existing["status"],

@@ -187,6 +187,7 @@ def init_db():
         _add_vid_column_to_bot_verify_log(conn)
         _add_via_column_to_verification_history(conn)
         _add_channel_column_to_gpt_keys(conn)
+        _add_quota_columns_to_vpixel_cards(conn)
         _add_quota_columns_to_ypixel_cards(conn)
 
         conn.commit()
@@ -325,6 +326,27 @@ def _add_channel_column_to_gpt_keys(conn: sqlite3.Connection):
             print("[DB] Added 'channel' column to gpt_keys table")
     except Exception as e:
         print(f"[DB] Error adding channel column: {e}")
+
+
+def _add_quota_columns_to_vpixel_cards(conn: sqlite3.Connection):
+    """Add remaining and total_count columns to vpixel_cards if they don't exist."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(vpixel_cards)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "remaining" not in columns:
+            conn.execute("ALTER TABLE vpixel_cards ADD COLUMN remaining INTEGER DEFAULT 0")
+            print("[DB] Added 'remaining' column to vpixel_cards table")
+        if "total_count" not in columns:
+            conn.execute("ALTER TABLE vpixel_cards ADD COLUMN total_count INTEGER DEFAULT 0")
+            print("[DB] Added 'total_count' column to vpixel_cards table")
+        conn.execute(
+            "UPDATE vpixel_cards SET total_count=1 WHERE COALESCE(total_count, 0)=0"
+        )
+        conn.execute(
+            "UPDATE vpixel_cards SET remaining=1 WHERE status IN ('available', 'reserved') AND COALESCE(remaining, 0)=0"
+        )
+    except Exception as e:
+        print(f"[DB] Error adding quota columns to vpixel_cards: {e}")
 
 
 def _add_quota_columns_to_ypixel_cards(conn: sqlite3.Connection):

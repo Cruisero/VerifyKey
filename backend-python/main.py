@@ -254,6 +254,7 @@ async def _resume_getgem_poll(vid: str, task_id: str, cdk: str):
 
 # ========== Admin SSE Event Bus ==========
 _admin_sse_subscribers: list = []  # list of asyncio.Queue for connected admin clients
+_user_sse_subscribers: dict = {}  # user_id -> list[asyncio.Queue]
 _terminal_verify_events: dict = {}  # vid -> {"status": "pass"|"failed", "timestamp": float}
 
 # ========== Manual Override Signal ==========
@@ -333,6 +334,94 @@ def _build_verify_event_meta(source: str, email: str = "", user_id: int = 0, met
         "cardKey": card_key or "",
         "channel": channel or "",
     }
+
+
+def _parse_event_user_id(event: dict) -> int:
+    raw_user_id = event.get("userId") or event.get("user_id") or ""
+    if isinstance(raw_user_id, int):
+        return raw_user_id
+    if isinstance(raw_user_id, str):
+        raw_user_id = raw_user_id.strip()
+        if raw_user_id.startswith("user:"):
+            raw_user_id = raw_user_id.split(":", 1)[1]
+        try:
+            return int(raw_user_id)
+        except Exception:
+            return 0
+    return 0
+
+
+def _build_user_active_verifications(user_id: int) -> list:
+    if not user_id:
+        return []
+
+    source_label_map = {
+        "pixel": "pixel",
+        "kpixel": "kpixel",
+        "vpixel": "vpixel",
+        "ypixel": "ypixel",
+    }
+    default_message_map = {
+        "pixel": "⏳ 排队中...",
+        "kpixel": "⏳ 排队中...",
+        "vpixel": "⏳ 排队中...",
+        "ypixel": "⏳ 排队中...",
+    }
+
+    active_items = []
+    pending_tasks = _load_pending_async_tasks()
+    for _, info in (pending_tasks or {}).items():
+        task_type = (info or {}).get("type", "")
+        if task_type not in source_label_map:
+            continue
+
+        task_id = str((info or {}).get("task_id", "") or "")
+        payload = (info or {}).get("payload") or {}
+        if int(payload.get("user_id") or 0) != int(user_id):
+            continue
+
+        existing = _get_user_verification_row(task_id, user_id)
+        if existing and _is_terminal_history_status(existing["status"]):
+            continue
+
+        status = "processing"
+        message = default_message_map.get(task_type, "⏳ 处理中...")
+        elapsed = 0
+        url = ""
+
+        if task_type == "vpixel":
+            cache = _vpixel_job_status.get(task_id) or {}
+            cache_status = (cache.get("status") or "").lower()
+            status = "processing" if cache_status in ("pending", "running", "") else ("success" if cache_status == "success" else "failed")
+            message = cache.get("message") or message
+            elapsed = cache.get("elapsed") or 0
+            url = cache.get("url") or ""
+        elif task_type == "ypixel":
+            cache = _ypixel_job_status.get(task_id) or {}
+            cache_status = (cache.get("status") or "").lower()
+            status = "processing" if cache_status in ("pending", "running", "") else ("success" if cache_status == "success" else "failed")
+            message = cache.get("message") or message
+            elapsed = cache.get("elapsed") or 0
+            url = cache.get("url") or ""
+
+        if status != "processing":
+            continue
+
+        active_items.append({
+            "id": task_id,
+            "verificationId": task_id,
+            "type": "pixel",
+            "source": source_label_map[task_type],
+            "status": status,
+            "email": payload.get("email") or "",
+            "message": message,
+            "timestamp": datetime.utcfromtimestamp((info or {}).get("timestamp") or time.time()).isoformat() + "Z",
+            "elapsed": elapsed,
+            "url": url,
+        })
+
+    active_items.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
+    return active_items
 
 
 def _persist_verification_history_strict(status: str, verification_id: str, message: str = "", cdk: str = "", via: str = ""):
@@ -463,6 +552,14 @@ def broadcast_verify_event(event: dict):
             q.put_nowait(event)
         except Exception:
             pass
+
+    user_id = _parse_event_user_id(event)
+    if user_id and _user_sse_subscribers.get(user_id):
+        for q in list(_user_sse_subscribers.get(user_id) or []):
+            try:
+                q.put_nowait(event)
+            except Exception:
+                pass
 
 app = FastAPI(
     title="OnePass Python Backend",
@@ -5284,6 +5381,54 @@ async def admin_verify_stream(request: Request, authorization: Optional[str] = Q
         }
     )
 
+
+@app.get("/api/user/verify-stream")
+async def user_verify_stream(request: Request, authorization: Optional[str] = Query(None)):
+    """SSE endpoint for the logged-in user's own verification progress."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="请先登录")
+
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期")
+
+    user_id = int(user.get("id") or 0)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="登录已过期")
+
+    import json as _json_sse
+
+    queue = asyncio.Queue()
+    _user_sse_subscribers.setdefault(user_id, []).append(queue)
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"data: {_json_sse.dumps(event, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            subscribers = _user_sse_subscribers.get(user_id) or []
+            with contextlib.suppress(ValueError):
+                subscribers.remove(queue)
+            if not subscribers:
+                _user_sse_subscribers.pop(user_id, None)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
+
 @app.get("/api/admin/bot-users")
 async def get_bot_users(authorization: Optional[str] = Header(None)):
     """Get all Telegram bot users."""
@@ -5746,6 +5891,23 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
     all_items = pixel_items + gpt_items + gpt_team_items
     all_items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return {"history": all_items[:50]}
+
+
+@app.get("/api/user/active-verifications")
+async def get_user_active_verifications(authorization: Optional[str] = Header(None)):
+    """Get the logged-in user's current in-progress verification tasks."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期")
+
+    user_id = int(user.get("id") or 0)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="登录已过期")
+
+    return {"items": _build_user_active_verifications(user_id)}
 
 
 @app.get("/api/admin/verify-history")
@@ -7972,7 +8134,7 @@ def _run_alert_check():
     if vpixel_cfg.get("enabled") and not manual.get("vpixel"):
         try:
             conn = database.get_connection()
-            avail = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available'").fetchone()[0]
+            avail = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available' AND COALESCE(remaining, 1) > 0").fetchone()[0]
             if avail == 0:
                 alerts.append({"service": "VPixel", "status": "卡密耗尽", "reason": "可用卡密: 0"})
             elif avail <= 3:
@@ -8904,7 +9066,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     if vpixel_available:
         _vpc_conn = database.get_connection()
         _vpixel_card_row = _vpc_conn.execute(
-            "SELECT id, card_key FROM vpixel_cards WHERE status='available' LIMIT 1"
+            "SELECT id, card_key, remaining, total_count FROM vpixel_cards WHERE status='available' AND COALESCE(remaining, 1) > 0 ORDER BY COALESCE(remaining, 1) DESC, id ASC LIMIT 1"
         ).fetchone()
         if not _vpixel_card_row:
             vpixel_available = False
@@ -9005,8 +9167,10 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                 )
             data = resp.json()
             if data.get("success"):
-                # Mark card as used
-                _vpc_conn.execute("UPDATE vpixel_cards SET status='used' WHERE id=?", (vpc_id,))
+                _vpc_conn.execute(
+                    "UPDATE vpixel_cards SET status='reserved', used_by_email=?, used_by_user=?, used_at=? WHERE id=?",
+                    (request.email, user_id, _dt.now().isoformat(), vpc_id),
+                )
                 _vpc_conn.commit()
                 import time as _t
                 poll_id = f"vp_{int(_t.time())}_{request.email[:8]}"
@@ -9030,12 +9194,15 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
                     "source": "vpixel",
                 }
             else:
-                # VPixel failed — mark card as invalid
-                _vpc_conn.execute("UPDATE vpixel_cards SET status='invalid' WHERE id=?", (vpc_id,))
+                # Submit failed — release the card back to available, do not swallow it
+                _vpc_conn.execute(
+                    "UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE id=?",
+                    (vpc_id,),
+                )
                 _vpc_conn.commit()
                 # VPixel failed, try KPixel as fallback if available
                 if kpixel_available:
-                    print(f"[ProTier] VPixel submit failed ({data.get('message')}), card {vpc_card} invalid, falling back to KPixel")
+                    print(f"[ProTier] VPixel submit failed ({data.get('message')}), card {vpc_card} released, falling back to KPixel")
                     use_vpixel = False  # fall through to KPixel below
                 else:
                     print(f"[ProTier] VPixel submit error: {data.get('message')}")
@@ -9290,6 +9457,72 @@ def _get_vpixel_config():
     }
 
 
+def _extract_vpixel_card_quota(payload: dict) -> tuple:
+    """Extract best-effort quota metadata from VPixel responses."""
+    if not isinstance(payload, dict):
+        return None, None
+    data = payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}
+
+    def _pick(*keys):
+        for source in (payload, data):
+            for key in keys:
+                value = source.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+                if isinstance(value, str) and value.strip().isdigit():
+                    return int(value.strip())
+        return None
+
+    remaining = _pick("remaining", "remaining_uses", "balance", "quota_remaining")
+    total_count = _pick("total_count", "total_uses", "quota_total", "quota")
+    return remaining, total_count
+
+
+async def _vpixel_probe_card(client: httpx.AsyncClient, base_url: str, card_key: str) -> dict:
+    """Best-effort VPixel card validation and quota lookup."""
+    try:
+        resp = await client.get(
+            f"{base_url}/tasks/card/{card_key}",
+            params={"page": 1, "page_size": 1},
+        )
+    except Exception as e:
+        return {"valid": False, "message": f"验证请求失败: {str(e)}", "remaining": 0, "total_count": 0}
+
+    try:
+        data = resp.json()
+    except Exception:
+        data = {}
+
+    if resp.status_code != 200:
+        return {
+            "valid": False,
+            "message": (data.get("message") if isinstance(data, dict) else "") or f"HTTP {resp.status_code}",
+            "remaining": 0,
+            "total_count": 0,
+        }
+
+    if isinstance(data, dict) and data.get("success") is False:
+        return {
+            "valid": False,
+            "message": data.get("message") or "验证失败",
+            "remaining": 0,
+            "total_count": 0,
+        }
+
+    remaining, total_count = _extract_vpixel_card_quota(data)
+    if remaining is None:
+        remaining = 1
+    if total_count is None:
+        total_count = max(remaining, 1)
+
+    return {
+        "valid": remaining > 0,
+        "message": "验证通过" if remaining > 0 else "额度已用完",
+        "remaining": remaining,
+        "total_count": total_count,
+    }
+
+
 _vpixel_polling_tasks: dict = {}
 # VPixel job status cache: poll_id -> {status, message, elapsed, ...}
 _vpixel_job_status: dict = {}
@@ -9330,7 +9563,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                 if wait_seconds is None:
                     try:
                         conn = database.get_connection()
-                        conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+                        conn.execute("UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE card_key=? AND status='reserved'", (card,))
                         conn.commit()
                     except Exception:
                         pass
@@ -9408,6 +9641,45 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                         **event_meta,
                     })
                 elif mapped_status == "success":
+                    try:
+                        quota_probe = await _vpixel_probe_card(client, base_url, card)
+                        remaining = quota_probe.get("remaining", 0)
+                        total_count = quota_probe.get("total_count", max(remaining, 1))
+                        conn = database.get_connection()
+                        conn.execute(
+                            "UPDATE vpixel_cards SET remaining=?, total_count=?, status=?, used_by_email=?, used_by_user=?, used_at=? WHERE card_key=?",
+                            (
+                                remaining,
+                                total_count,
+                                "used" if remaining <= 0 else "available",
+                                email if remaining <= 0 else "",
+                                user_id if remaining <= 0 else 0,
+                                dt.utcnow().isoformat() + "Z" if remaining <= 0 else "",
+                                card,
+                            ),
+                        )
+                        conn.commit()
+                    except Exception:
+                        try:
+                            conn = database.get_connection()
+                            row = conn.execute("SELECT remaining, total_count FROM vpixel_cards WHERE card_key=?", (card,)).fetchone()
+                            remaining = max(int((row["remaining"] if row else 1) or 1) - 1, 0)
+                            total_count = int((row["total_count"] if row else max(remaining, 1)) or max(remaining, 1))
+                            conn.execute(
+                                "UPDATE vpixel_cards SET remaining=?, total_count=?, status=?, used_by_email=?, used_by_user=?, used_at=? WHERE card_key=?",
+                                (
+                                    remaining,
+                                    total_count,
+                                    "used" if remaining <= 0 else "available",
+                                    email if remaining <= 0 else "",
+                                    user_id if remaining <= 0 else 0,
+                                    dt.utcnow().isoformat() + "Z" if remaining <= 0 else "",
+                                    card,
+                                ),
+                            )
+                            conn.commit()
+                        except Exception:
+                            pass
                     result = _finalize_user_success(poll_id, user_id, credit_cost, f"VPixel 成功: {result_msg}", via="vpixel")
                     _complete_async_task("vpixel", poll_id)
                     _vpixel_job_status[poll_id] = {"status": "Success", "message": result_msg or "验证成功", "elapsed": round(elapsed, 1)}
@@ -9427,7 +9699,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                     # Release the card back to available
                     try:
                         conn = database.get_connection()
-                        conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+                        conn.execute("UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE card_key=? AND status='reserved'", (card,))
                         conn.commit()
                     except Exception:
                         pass
@@ -9450,7 +9722,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
         # Release card on cancellation
         try:
             conn = database.get_connection()
-            conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+            conn.execute("UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE card_key=? AND status='reserved'", (card,))
             conn.commit()
         except Exception:
             pass
@@ -9461,7 +9733,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
         # Release card on error
         try:
             conn = database.get_connection()
-            conn.execute("UPDATE vpixel_cards SET status='available', used_by_email=NULL, used_at=NULL WHERE card_key=? AND status='reserved'", (card,))
+            conn.execute("UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE card_key=? AND status='reserved'", (card,))
             conn.commit()
         except Exception:
             pass
@@ -9560,16 +9832,15 @@ class VPixelJobRequest(BaseModel):
 async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[str] = Header(None)):
     """Submit a VPixel job — validates user credits, posts to 1688ai.vip, starts background poller."""
     vpixel_cfg = _get_vpixel_config()
-    if not vpixel_cfg["enabled"] or not vpixel_cfg["card"]:
+    if not vpixel_cfg["enabled"]:
         _broadcast_submit_failure(
             "vpixel",
-            "VPixel API 未启用或未配置卡密",
+            "VPixel API 未启用",
             email=request.email,
             method="vpixel_card_pool",
             http_status=503,
-            card_key=vpixel_cfg.get("card", ""),
         )
-        raise HTTPException(status_code=503, detail="VPixel API 未启用或未配置卡密")
+        raise HTTPException(status_code=503, detail="VPixel API 未启用")
 
     credit_cost = vpixel_cfg.get("creditCost", 1.5)
 
@@ -9585,19 +9856,43 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
     if credits < credit_cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {credit_cost} 积分）")
 
+    conn = database.get_connection()
+    card_row = conn.execute(
+        "SELECT id, card_key FROM vpixel_cards WHERE status='available' AND COALESCE(remaining, 1) > 0 ORDER BY COALESCE(remaining, 1) DESC, id ASC LIMIT 1"
+    ).fetchone()
+    if not card_row:
+        _broadcast_submit_failure(
+            "vpixel",
+            "VPixel 无可用卡密",
+            email=request.email,
+            user_id=user_id,
+            method="vpixel_card_pool",
+            http_status=503,
+        )
+        raise HTTPException(status_code=503, detail="VPixel 无可用卡密")
+
+    card_id = card_row["id"]
+    card_key = card_row["card_key"]
+
+    _deduct_user_credits_or_raise(user_id, credit_cost, f"积分不足（需要 {credit_cost} 积分）")
+
     # Format account line for VPixel: email--password--2fa
     account_line = f"{request.email}--{request.password}--{request.twofa}"
+    conn.execute(
+        "UPDATE vpixel_cards SET status='reserved', used_by_email=?, used_by_user=?, used_at=? WHERE id=?",
+        (request.email, user_id, dt.utcnow().isoformat() + "Z", card_id),
+    )
+    conn.commit()
 
     # Submit to VPixel API
-    from datetime import datetime as _dt
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 f"{vpixel_cfg['baseUrl']}/tasks/submit",
                 json={
-                    "card": vpixel_cfg["card"],
+                    "card": card_key,
                     "accounts": [account_line],
-                    "timestamp": _dt.utcnow().isoformat() + "Z",
+                    "timestamp": dt.utcnow().isoformat() + "Z",
                 },
                 headers={"Content-Type": "application/json"},
             )
@@ -9615,7 +9910,7 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
                 "email": request.email,
                 "user_id": user_id,
                 "cost": credit_cost,
-                "card": vpixel_cfg["card"],
+                "card": card_key,
                 "base_url": vpixel_cfg["baseUrl"],
                 "account_line": account_line,
             }
@@ -9627,6 +9922,11 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
                 "source": "vpixel",
             }
         else:
+            conn.execute(
+                "UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE id=?",
+                (card_id,),
+            )
+            conn.commit()
             refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
             failure_message = data.get("message", "VPixel 提交失败")
             _record_submit_failure(
@@ -9637,12 +9937,17 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
                 method="vpixel_card_pool",
                 http_status=400,
                 refunded=refund_result.get("refunded", False),
-                card_key=vpixel_cfg["card"],
+                card_key=card_key,
                 via="vpixel",
             )
             raise HTTPException(status_code=400, detail=failure_message)
 
     except httpx.HTTPError as e:
+        conn.execute(
+            "UPDATE vpixel_cards SET status='available', used_by_email='', used_by_user=0, used_at='' WHERE id=?",
+            (card_id,),
+        )
+        conn.commit()
         refund_result = _refund_user_credits(user_id, credit_cost, request.email, via="vpixel_submit")
         _record_submit_failure(
             "vpixel",
@@ -9652,7 +9957,7 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
             method="vpixel_card_pool",
             http_status=502,
             refunded=refund_result.get("refunded", False),
-            card_key=vpixel_cfg["card"],
+            card_key=card_key,
             via="vpixel",
         )
         raise HTTPException(status_code=502, detail=f"无法连接 VPixel API: {str(e)}")
@@ -9726,20 +10031,54 @@ async def vpixel_cards_add(request: Request, authorization: Optional[str] = Head
         raise HTTPException(status_code=400, detail="请输入至少一个卡密")
 
     from datetime import datetime
+    vpixel_cfg = _get_vpixel_config()
+    base_url = vpixel_cfg["baseUrl"]
     conn = database.get_connection()
-    added, skipped = 0, 0
-    for key in keys:
-        existing = conn.execute("SELECT id FROM vpixel_cards WHERE card_key=?", (key,)).fetchone()
-        if existing:
-            skipped += 1
-            continue
-        conn.execute(
-            "INSERT INTO vpixel_cards (card_key, status, created_at) VALUES (?, ?, ?)",
-            (key, "available", datetime.now().isoformat()),
-        )
-        added += 1
+    valid_count = 0
+    invalid_count = 0
+    duplicate_count = 0
+    results = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for key in keys:
+            existing = conn.execute("SELECT id FROM vpixel_cards WHERE card_key=?", (key,)).fetchone()
+            if existing:
+                duplicate_count += 1
+                results.append({"key": key, "status": "duplicate", "msg": "已存在"})
+                continue
+
+            probe = await _vpixel_probe_card(client, base_url, key)
+            remaining = probe.get("remaining", 0)
+            total_count = probe.get("total_count", 0)
+            ok = bool(probe.get("valid"))
+            msg = probe.get("message", "")
+            status = "available" if ok and remaining > 0 else "invalid"
+
+            try:
+                conn.execute(
+                    "INSERT INTO vpixel_cards (card_key, status, created_at, remaining, total_count) VALUES (?, ?, ?, ?, ?)",
+                    (key, status, datetime.now().isoformat(), remaining, total_count),
+                )
+            except Exception:
+                duplicate_count += 1
+                results.append({"key": key, "status": "duplicate", "msg": "已存在"})
+                continue
+
+            if ok and remaining > 0:
+                valid_count += 1
+                results.append({"key": key, "status": "valid", "msg": msg or "验证通过", "remaining": remaining, "total_count": total_count})
+            else:
+                invalid_count += 1
+                results.append({"key": key, "status": "invalid", "msg": msg or "验证失败", "remaining": remaining, "total_count": total_count})
     conn.commit()
-    return {"success": True, "added": added, "skipped": skipped}
+    return {
+        "success": True,
+        "valid": valid_count,
+        "invalid": invalid_count,
+        "duplicate": duplicate_count,
+        "total_input": len(keys),
+        "results": results,
+    }
 
 
 @app.get("/api/vpixel/cards")
@@ -9757,7 +10096,7 @@ async def vpixel_cards_stats(authorization: Optional[str] = Header(None)):
     _verify_admin_token(authorization)
     conn = database.get_connection()
     total = conn.execute("SELECT COUNT(*) FROM vpixel_cards").fetchone()[0]
-    available = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available'").fetchone()[0]
+    available = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available' AND COALESCE(remaining, 1) > 0").fetchone()[0]
     used = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='used'").fetchone()[0]
     return {"total": total, "available": available, "used": used}
 

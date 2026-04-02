@@ -97,6 +97,7 @@ export default function Verify() {
     // Polling refs
     const pollingRefs = useRef({});
     const standardRouteRef = useRef(null);
+    const userSseRef = useRef(null);
 
     const { t, lang } = useLang();
     const gptCurrentCost = gptMode === 'team' ? 0.3 : 2;
@@ -328,6 +329,7 @@ export default function Verify() {
                 r.id === resultId ? {
                     ...r,
                     jobId,
+                    verificationId: jobId,
                     tier: verifyTier,
                     source: jobSource,
                     message: t('submitted'),
@@ -500,8 +502,107 @@ export default function Verify() {
     useEffect(() => {
         return () => {
             Object.values(pollingRefs.current).forEach(id => clearInterval(id));
+            if (userSseRef.current) {
+                userSseRef.current.close();
+                userSseRef.current = null;
+            }
         };
     }, []);
+
+    useEffect(() => {
+        const token = getToken();
+        if (!token || !user) return;
+
+        let cancelled = false;
+
+        const refreshPixelHistory = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/user/verify-history`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const all = Array.isArray(data.history) ? data.history : [];
+                setHistoryData(all.filter(item => item.type === 'pixel'));
+            } catch (e) {
+                console.warn('Failed to refresh pixel history from SSE:', e);
+            }
+        };
+
+        const restoreActiveVerifications = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/user/active-verifications`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const activeItems = Array.isArray(data.items) ? data.items : [];
+                if (cancelled || activeItems.length === 0) return;
+
+                const restored = activeItems.map(item => ({
+                    id: item.verificationId || item.id,
+                    verificationId: item.verificationId || item.id,
+                    email: item.email || '',
+                    source: item.source || 'pixel',
+                    status: item.status === 'pass' ? 'success' : (item.status === 'failed' ? 'failed' : 'processing'),
+                    timestamp: item.timestamp || new Date().toISOString(),
+                    message: item.message || t('processingMsg'),
+                    stage: item.stage || 0,
+                    totalStages: item.totalStages || 0,
+                    stageLabel: item.stageLabel || '',
+                    url: item.url || '',
+                    jobId: item.verificationId || item.id,
+                    elapsed: item.elapsed ? Math.round(item.elapsed) : 0,
+                    queuePosition: typeof item.queuePosition === 'number' ? item.queuePosition : -1,
+                    estimatedWait: item.estimatedWait || 0,
+                }));
+
+                setResults(prev => {
+                    const existingKeys = new Set(prev.map(item => item.verificationId || item.jobId || item.id));
+                    const merged = restored.filter(item => !existingKeys.has(item.verificationId));
+                    return [...merged, ...prev];
+                });
+            } catch (e) {
+                console.warn('Failed to restore active verifications:', e);
+            }
+        };
+
+        restoreActiveVerifications();
+
+        const sse = new EventSource(`${API_BASE}/api/user/verify-stream?authorization=${encodeURIComponent(`Bearer ${token}`)}`);
+        userSseRef.current = sse;
+
+        sse.onmessage = (evt) => {
+            try {
+                const payload = JSON.parse(evt.data);
+                const mapped = mapUserSseEventToResult(payload);
+                if (mapped) {
+                    upsertLiveResult(mapped);
+                    if (mapped.status !== 'processing') {
+                        refreshUser();
+                        refreshPixelHistory();
+                    }
+                }
+            } catch (e) {
+                console.warn('User SSE parse error:', e);
+            }
+        };
+
+        sse.onerror = () => {
+            if (userSseRef.current === sse) {
+                sse.close();
+                userSseRef.current = null;
+            }
+        };
+
+        return () => {
+            cancelled = true;
+            if (userSseRef.current === sse) {
+                sse.close();
+                userSseRef.current = null;
+            }
+        };
+    }, [user, getToken, mapUserSseEventToResult, upsertLiveResult, refreshUser, t]);
 
     // Handle submit
     const handleVerify = async () => {
@@ -546,6 +647,7 @@ export default function Verify() {
             stageLabel: '',
             url: '',
             jobId: '',
+            verificationId: '',
             source: jobPlans[i].source,
         }));
         setResults(prev => [...resultItems, ...prev]);
@@ -668,6 +770,60 @@ export default function Verify() {
             : user[0] + '***';
         return `${masked}@${domain}`;
     };
+
+    const mapUserSseEventToResult = useCallback((event) => {
+        if (!event || event.type !== 'progress') return null;
+        const verificationId = event.vid || '';
+        if (!verificationId) return null;
+
+        const isTerminal = event.step === 'result';
+        const mappedStatus = isTerminal
+            ? (event.success ? 'success' : 'failed')
+            : 'processing';
+
+        return {
+            id: verificationId,
+            verificationId,
+            email: event.submitEmail || event.link || '',
+            source: event.source || 'pixel',
+            status: mappedStatus,
+            timestamp: new Date().toISOString(),
+            message: event.message || (mappedStatus === 'processing' ? t('processingMsg') : ''),
+            stage: event.stage || 0,
+            totalStages: event.totalStages || 0,
+            stageLabel: event.stageLabel || '',
+            url: event.url || '',
+            jobId: verificationId,
+            elapsed: event.elapsed ? Math.round(event.elapsed) : 0,
+            queuePosition: typeof event.queuePosition === 'number' ? event.queuePosition : -1,
+            estimatedWait: event.estimated_wait_seconds || event.estimatedWait || 0,
+        };
+    }, [t]);
+
+    const upsertLiveResult = useCallback((incoming) => {
+        if (!incoming?.verificationId) return;
+        setResults(prev => {
+            const index = prev.findIndex(item =>
+                item.verificationId === incoming.verificationId ||
+                item.jobId === incoming.verificationId ||
+                item.id === incoming.verificationId
+            );
+
+            if (index >= 0) {
+                const next = [...prev];
+                next[index] = {
+                    ...next[index],
+                    ...incoming,
+                    id: next[index].id,
+                    verificationId: incoming.verificationId,
+                    timestamp: incoming.timestamp || next[index].timestamp,
+                };
+                return next;
+            }
+
+            return [incoming, ...prev];
+        });
+    }, []);
 
     // Stats
     const liveStats = {

@@ -9462,9 +9462,10 @@ def _extract_vpixel_card_quota(payload: dict) -> tuple:
     if not isinstance(payload, dict):
         return None, None
     data = payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}
+    card_code_obj = data.get("card_code_obj", {}) if isinstance(data.get("card_code_obj"), dict) else {}
 
     def _pick(*keys):
-        for source in (payload, data):
+        for source in (card_code_obj, payload, data):
             for key in keys:
                 value = source.get(key)
                 if isinstance(value, (int, float)):
@@ -9473,8 +9474,12 @@ def _extract_vpixel_card_quota(payload: dict) -> tuple:
                     return int(value.strip())
         return None
 
+    total_count = _pick("total_count", "total_uses", "quota_total", "quota", "total_quota")
     remaining = _pick("remaining", "remaining_uses", "balance", "quota_remaining")
-    total_count = _pick("total_count", "total_uses", "quota_total", "quota")
+    if remaining is None:
+        used_quota = _pick("used_quota")
+        if total_count is not None and used_quota is not None:
+            remaining = max(total_count - used_quota, 0)
     return remaining, total_count
 
 
@@ -9550,8 +9555,27 @@ async def _vpixel_probe_card(client: httpx.AsyncClient, base_url: str, card_key:
             "total_count": 0,
         }
 
+    items = []
+    card_code_obj = {}
+    if isinstance(data, dict):
+        payload_data = data.get("data", {})
+        if isinstance(payload_data, dict) and isinstance(payload_data.get("items"), list):
+            items = payload_data.get("items") or []
+            if isinstance(payload_data.get("card_code_obj"), dict):
+                card_code_obj = payload_data.get("card_code_obj") or {}
+
     remaining, total_count = _extract_vpixel_card_quota(data)
-    if remaining is None or total_count is None or (remaining == 1 and total_count == 1):
+    api_has_card_signal = bool(card_code_obj) or remaining is not None or total_count is not None or bool(items)
+
+    if bool(card_code_obj):
+        if total_count is None:
+            total_count = int(card_code_obj.get("total_quota") or 0)
+        if remaining is None:
+            total_quota = int(card_code_obj.get("total_quota") or 0)
+            used_quota = int(card_code_obj.get("used_quota") or 0)
+            remaining = max(total_quota - used_quota, 0)
+
+    if not bool(card_code_obj) and api_has_card_signal and (remaining is None or total_count is None or (remaining == 1 and total_count == 1)):
         try:
             page_resp = await client.get(
                 f"{base_url}/order_qurey.html",
@@ -9565,6 +9589,14 @@ async def _vpixel_probe_card(client: httpx.AsyncClient, base_url: str, card_key:
                     total_count = html_total_count
         except Exception:
             pass
+
+    if not api_has_card_signal:
+        return {
+            "valid": False,
+            "message": "未识别到有效卡密信息",
+            "remaining": 0,
+            "total_count": 0,
+        }
 
     if remaining is None:
         remaining = 1

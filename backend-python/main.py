@@ -9483,6 +9483,10 @@ def _extract_vpixel_card_quota_from_html(html: str) -> tuple:
     if not html or not isinstance(html, str):
         return None, None
 
+    plain = re.sub(r"<[^>]+>", " ", html)
+    plain = re.sub(r"&nbsp;|&#160;", " ", plain, flags=re.IGNORECASE)
+    plain = re.sub(r"\s+", " ", plain)
+
     def _pick_number(label: str):
         patterns = [
             rf"{label}\s*</[^>]+>\s*<[^>]*>\s*(\d+)",
@@ -9495,6 +9499,12 @@ def _extract_vpixel_card_quota_from_html(html: str) -> tuple:
                     return int(match.group(1))
                 except Exception:
                     return None
+        plain_match = re.search(rf"{label}\s*[:：]?\s*(\d+)", plain, re.IGNORECASE)
+        if plain_match:
+            try:
+                return int(plain_match.group(1))
+            except Exception:
+                return None
         return None
 
     total_count = _pick_number("总可提交数量")

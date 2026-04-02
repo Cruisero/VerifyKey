@@ -307,7 +307,8 @@ DEFAULT_CONFIG = {
         "kpixel": False,
         "vpixel": False,
         "gpt": False,
-        "gpt_tg": False
+        "gpt_tg": False,
+        "gpt_team": False
     },
     
     # Tips inline (shown on verify page)

@@ -8012,6 +8012,27 @@ async def get_service_status():
     gpt_ok = any(c["available"] for c in gpt_channels_status.values())
     gpt_reason = "" if gpt_ok else "所有充值通道不可用"
 
+    # --- GPT Team auto-detect ---
+    gpt_team_ok = False
+    gpt_team_reason = ""
+    if manual.get("gpt_team"):
+        gpt_team_reason = "管理员手动维护中"
+    else:
+        try:
+            conn = database.get_connection()
+            active_with_seats = conn.execute(
+                """
+                SELECT COUNT(*) FROM gpt_team_accounts
+                WHERE status = 'active' AND current_members < max_members
+                """
+            ).fetchone()[0]
+            if active_with_seats > 0:
+                gpt_team_ok = True
+            else:
+                gpt_team_reason = "暂无可用 Team 名额"
+        except Exception:
+            gpt_team_reason = "数据库查询失败"
+
     return {
         "upixel": {"available": upixel_ok, "reason": upixel_reason,
                    "ypixelUp": ypixel_ok, "standardAvailable": standard_available},
@@ -8019,6 +8040,7 @@ async def get_service_status():
         "kpixel": {"available": pro_available, "reason": pro_reason,
                    "kpixelUp": kpixel_ok, "vpixelUp": vpixel_ok},
         "gpt": {"available": gpt_ok, "reason": gpt_reason, "channels": gpt_channels_status},
+        "gpt_team": {"available": gpt_team_ok, "reason": gpt_team_reason},
         "manual": {
             "upixel": manual.get("upixel", False),
             "kpixel": manual.get("kpixel", False),
@@ -8028,6 +8050,7 @@ async def get_service_status():
             "gpt_red": manual.get("gpt_red", False),
             "gpt_vip": manual.get("gpt_vip", False),
             "gpt_tg": manual.get("gpt_tg", False),
+            "gpt_team": manual.get("gpt_team", False),
         }
     }
 
@@ -8048,7 +8071,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_tg"):
+    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_tg", "gpt_team"):
         if key in data:
             sm[key] = bool(data[key])
 

@@ -509,6 +509,60 @@ export default function Verify() {
         };
     }, []);
 
+    const mapUserSseEventToResult = useCallback((event) => {
+        if (!event || event.type !== 'progress') return null;
+        const verificationId = event.vid || '';
+        if (!verificationId) return null;
+
+        const isTerminal = event.step === 'result';
+        const mappedStatus = isTerminal
+            ? (event.success ? 'success' : 'failed')
+            : 'processing';
+
+        return {
+            id: verificationId,
+            verificationId,
+            email: event.submitEmail || event.link || '',
+            source: event.source || 'pixel',
+            status: mappedStatus,
+            timestamp: new Date().toISOString(),
+            message: event.message || (mappedStatus === 'processing' ? t('processingMsg') : ''),
+            stage: event.stage || 0,
+            totalStages: event.totalStages || 0,
+            stageLabel: event.stageLabel || '',
+            url: event.url || '',
+            jobId: verificationId,
+            elapsed: event.elapsed ? Math.round(event.elapsed) : 0,
+            queuePosition: typeof event.queuePosition === 'number' ? event.queuePosition : -1,
+            estimatedWait: event.estimated_wait_seconds || event.estimatedWait || 0,
+        };
+    }, [t]);
+
+    const upsertLiveResult = useCallback((incoming) => {
+        if (!incoming?.verificationId) return;
+        setResults(prev => {
+            const index = prev.findIndex(item =>
+                item.verificationId === incoming.verificationId ||
+                item.jobId === incoming.verificationId ||
+                item.id === incoming.verificationId
+            );
+
+            if (index >= 0) {
+                const next = [...prev];
+                next[index] = {
+                    ...next[index],
+                    ...incoming,
+                    id: next[index].id,
+                    verificationId: incoming.verificationId,
+                    timestamp: incoming.timestamp || next[index].timestamp,
+                };
+                return next;
+            }
+
+            return [incoming, ...prev];
+        });
+    }, []);
+
     useEffect(() => {
         const token = getToken();
         if (!token || !user) return;
@@ -771,59 +825,7 @@ export default function Verify() {
         return `${masked}@${domain}`;
     };
 
-    const mapUserSseEventToResult = useCallback((event) => {
-        if (!event || event.type !== 'progress') return null;
-        const verificationId = event.vid || '';
-        if (!verificationId) return null;
 
-        const isTerminal = event.step === 'result';
-        const mappedStatus = isTerminal
-            ? (event.success ? 'success' : 'failed')
-            : 'processing';
-
-        return {
-            id: verificationId,
-            verificationId,
-            email: event.submitEmail || event.link || '',
-            source: event.source || 'pixel',
-            status: mappedStatus,
-            timestamp: new Date().toISOString(),
-            message: event.message || (mappedStatus === 'processing' ? t('processingMsg') : ''),
-            stage: event.stage || 0,
-            totalStages: event.totalStages || 0,
-            stageLabel: event.stageLabel || '',
-            url: event.url || '',
-            jobId: verificationId,
-            elapsed: event.elapsed ? Math.round(event.elapsed) : 0,
-            queuePosition: typeof event.queuePosition === 'number' ? event.queuePosition : -1,
-            estimatedWait: event.estimated_wait_seconds || event.estimatedWait || 0,
-        };
-    }, [t]);
-
-    const upsertLiveResult = useCallback((incoming) => {
-        if (!incoming?.verificationId) return;
-        setResults(prev => {
-            const index = prev.findIndex(item =>
-                item.verificationId === incoming.verificationId ||
-                item.jobId === incoming.verificationId ||
-                item.id === incoming.verificationId
-            );
-
-            if (index >= 0) {
-                const next = [...prev];
-                next[index] = {
-                    ...next[index],
-                    ...incoming,
-                    id: next[index].id,
-                    verificationId: incoming.verificationId,
-                    timestamp: incoming.timestamp || next[index].timestamp,
-                };
-                return next;
-            }
-
-            return [incoming, ...prev];
-        });
-    }, []);
 
     // Stats
     const liveStats = {
@@ -1384,13 +1386,18 @@ export default function Verify() {
                                             <button
                                                 className={`gpt-mode-tab ${gptMode === 'team' ? 'active' : ''}`}
                                                 onClick={() => {
+                                                    if (serviceStatus?.gpt_team?.available === false) return;
                                                     setGptMode('team');
                                                     setGptSuccess(false);
                                                     setGptResultMsg('');
                                                     setGptError('');
                                                 }}
+                                                style={serviceStatus?.gpt_team?.available === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                             >
                                                 {t('gptModeTeam')}
+                                                {serviceStatus?.gpt_team?.available === false && (
+                                                    <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
+                                                )}
                                             </button>
                                         </div>
 

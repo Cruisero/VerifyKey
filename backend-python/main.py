@@ -9478,6 +9478,37 @@ def _extract_vpixel_card_quota(payload: dict) -> tuple:
     return remaining, total_count
 
 
+def _extract_vpixel_card_quota_from_html(html: str) -> tuple:
+    """Extract quota from VPixel order query HTML page."""
+    if not html or not isinstance(html, str):
+        return None, None
+
+    def _pick_number(label: str):
+        patterns = [
+            rf"{label}\s*</[^>]+>\s*<[^>]*>\s*(\d+)",
+            rf"{label}\s*(\d+)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, html, re.IGNORECASE)
+            if match:
+                try:
+                    return int(match.group(1))
+                except Exception:
+                    return None
+        return None
+
+    total_count = _pick_number("总可提交数量")
+    submitted = _pick_number("已提交数量")
+    remaining = _pick_number("剩余可用")
+
+    if remaining is None and total_count is not None and submitted is not None:
+        remaining = max(total_count - submitted, 0)
+    if total_count is None and remaining is not None and submitted is not None:
+        total_count = remaining + submitted
+
+    return remaining, total_count
+
+
 async def _vpixel_probe_card(client: httpx.AsyncClient, base_url: str, card_key: str) -> dict:
     """Best-effort VPixel card validation and quota lookup."""
     try:
@@ -9510,6 +9541,21 @@ async def _vpixel_probe_card(client: httpx.AsyncClient, base_url: str, card_key:
         }
 
     remaining, total_count = _extract_vpixel_card_quota(data)
+    if remaining is None or total_count is None or (remaining == 1 and total_count == 1):
+        try:
+            page_resp = await client.get(
+                f"{base_url}/order_qurey.html",
+                params={"card": card_key},
+            )
+            if page_resp.status_code == 200:
+                html_remaining, html_total_count = _extract_vpixel_card_quota_from_html(page_resp.text)
+                if html_remaining is not None:
+                    remaining = html_remaining
+                if html_total_count is not None:
+                    total_count = html_total_count
+        except Exception:
+            pass
+
     if remaining is None:
         remaining = 1
     if total_count is None:

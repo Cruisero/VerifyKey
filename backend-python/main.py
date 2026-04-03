@@ -7948,8 +7948,8 @@ async def get_service_status():
             except Exception:
                 vpixel_reason = "无法连接 API"
 
-    # Combined pro-tier availability: available if EITHER KPixel or VPixel is up
-    pro_available = kpixel_ok or vpixel_ok
+    # Combined pro-tier availability: available if EITHER KPixel or VPixel or UPixel is up
+    pro_available = kpixel_ok or vpixel_ok or upixel_ok
     pro_reason = ""
     if not pro_available:
         # Show the first meaningful reason
@@ -8455,7 +8455,8 @@ def _complete_async_task(task_type: str, task_id: str):
 
 async def _resume_pending_pixel_task(task_id: str, payload: dict):
     try:
-        await _pixel_poll_job(task_id, payload["email"], int(payload["user_id"]), _get_pixel_config())
+        cost = payload.get("cost", 1.0)
+        await _pixel_poll_job(task_id, payload["email"], int(payload["user_id"]), _get_pixel_config(), cost)
     finally:
         _pixel_job_context.pop(task_id, None)
 
@@ -8501,7 +8502,7 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     _complete_async_task("gpt", task_id)
 
 
-async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict):
+async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict, cost: float = 1.0):
     """Background task: poll Pixel API job status and broadcast SSE events to admin."""
     import time
     base_url = pixel_cfg["baseUrl"]
@@ -8523,7 +8524,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
             while True:
                 wait_seconds = _next_pixel_poll_interval(time.time() - start_time)
                 if wait_seconds is None:
-                    _finalize_user_failure(job_id, user_id, "失败: 轮询超时", via="pixel", refund_cost=1.0)
+                    _finalize_user_failure(job_id, user_id, "失败: 轮询超时", via="pixel", refund_cost=cost)
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
@@ -8577,7 +8578,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 if status == "success":
                     url = data.get("url", "")
-                    result = _finalize_user_success(job_id, user_id, 1, f"Google One URL: {url}", via="pixel")
+                    result = _finalize_user_success(job_id, user_id, cost, f"Google One URL: {url}", via="pixel")
                     _complete_async_task("pixel", job_id)
                     # Broadcast final result
                     broadcast_verify_event({
@@ -8597,7 +8598,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 elif status == "failed":
                     error = data.get("error", "UNKNOWN_ERROR")
-                    _finalize_user_failure(job_id, user_id, f"失败: {error}", via="pixel", refund_cost=1.0)
+                    _finalize_user_failure(job_id, user_id, f"失败: {error}", via="pixel", refund_cost=cost)
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
@@ -8613,11 +8614,11 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     break
 
     except asyncio.CancelledError:
-        _finalize_user_failure(job_id, user_id, "失败: 轮询取消", via="pixel", refund_cost=1.0)
+        _finalize_user_failure(job_id, user_id, "失败: 轮询取消", via="pixel", refund_cost=cost)
         _complete_async_task("pixel", job_id)
     except Exception as e:
         print(f"[Pixel] Poll error for {job_id}: {e}")
-        _finalize_user_failure(job_id, user_id, f"失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="pixel", refund_cost=1.0)
+        _finalize_user_failure(job_id, user_id, f"失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="pixel", refund_cost=cost)
         _complete_async_task("pixel", job_id)
         broadcast_verify_event({
             "type": "progress",
@@ -8638,6 +8639,7 @@ class PixelJobRequest(BaseModel):
     totp_secret: str
     cdk: str = ""
     priority: int = 0
+    mode: str = "semi-auto"
 
 
 @app.post("/api/pixel/jobs")
@@ -8663,10 +8665,11 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
     user_id = user.get("id")
     credits = user.get("credits", 0)
-    if credits < 1.0:
-        raise HTTPException(status_code=400, detail="积分不足（需要 1 积分）")
+    cost = 1.5 if request.mode == "auto" else 1.0
+    if credits < cost:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {cost} 积分）")
 
-    _deduct_user_credits_or_raise(user_id, 1.0, "积分不足（需要 1 积分）")
+    _deduct_user_credits_or_raise(user_id, cost, f"积分不足（需要 {cost} 积分）")
 
     # Proxy to Pixel API
     base_url = pixel_cfg["baseUrl"]
@@ -8680,6 +8683,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         "password": request.password,
         "totp_secret": normalized_totp_secret,
         "priority": request.priority,
+        "mode": request.mode,
     }
 
     try:
@@ -8691,9 +8695,9 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             job_id = data.get("job_id", "")
 
             # Start background polling task (pass user_id for credit deduction)
-            task = asyncio.create_task(_pixel_poll_job(job_id, request.email, user_id, pixel_cfg))
+            task = asyncio.create_task(_pixel_poll_job(job_id, request.email, user_id, pixel_cfg, cost))
             _pixel_polling_tasks[job_id] = task
-            _pixel_job_context[job_id] = {"email": request.email, "user_id": user_id, "cost": 1.0}
+            _pixel_job_context[job_id] = {"email": request.email, "user_id": user_id, "cost": cost}
             _register_async_task("pixel", job_id, _pixel_job_context[job_id])
 
             return {
@@ -8703,7 +8707,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 "estimated_wait_seconds": data.get("estimated_wait_seconds", 0),
             }
         else:
-            refund_result = _refund_user_credits(user_id, 1.0, request.email, via="pixel_submit")
+            refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
             # Forward error from Pixel API
             try:
                 err = resp.json()
@@ -8732,7 +8736,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             raise HTTPException(status_code=resp.status_code, detail=final_detail)
 
     except httpx.HTTPError as e:
-        refund_result = _refund_user_credits(user_id, 1.0, request.email, via="pixel_submit")
+        refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
         _record_submit_failure(
             "pixel",
             f"无法连接 Pixel API: {str(e)}",
@@ -8787,10 +8791,11 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
     data = resp.json()
     status = data.get("status", "")
     ctx = _pixel_job_context.get(job_id) or {}
+    cost = ctx.get("cost", 1.0)
     event_meta = _build_verify_event_meta("pixel", ctx.get("email", ""), user.get("id"), "pixel_api")
     if status == "success":
         url = data.get("url", "")
-        result = _finalize_user_success(job_id, user.get("id"), 1, f"Google One URL: {url}", via="pixel")
+        result = _finalize_user_success(job_id, user.get("id"), cost, f"Google One URL: {url}", via="pixel")
         _complete_async_task("pixel", job_id)
         broadcast_verify_event({
             "type": "progress",
@@ -8807,7 +8812,7 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
         return {"success": True, "status": "success", "confirmed": True, "finalized": result}
     if status == "failed":
         error = data.get("error", "UNKNOWN_ERROR")
-        _finalize_user_failure(job_id, user.get("id"), f"失败: {error}", via="pixel", refund_cost=1.0)
+        _finalize_user_failure(job_id, user.get("id"), f"失败: {error}", via="pixel", refund_cost=cost)
         _complete_async_task("pixel", job_id)
         return {"success": True, "status": "failed", "confirmed": True}
     return {"success": True, "status": status or "pending", "confirmed": False}

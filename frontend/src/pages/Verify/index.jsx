@@ -269,11 +269,23 @@ export default function Verify() {
         const normalizedTotp = (account.totp_secret || '').replace(/\s+/g, '');
 
         if (verifyTier === 'pro') {
+            const kpixelUp = Boolean(serviceStatus?.kpixel?.kpixelUp);
+            const vpixelUp = Boolean(serviceStatus?.kpixel?.vpixelUp);
+
+            if (kpixelUp || vpixelUp) {
+                return {
+                    apiUrl: `${API_BASE}/api/kpixel/jobs`,
+                    payload: { email: account.email, password: account.password, twofa: normalizedTotp },
+                    source: 'kpixel',
+                    totalStages: 0,
+                };
+            }
+
             return {
-                apiUrl: `${API_BASE}/api/kpixel/jobs`,
-                payload: { email: account.email, password: account.password, twofa: normalizedTotp },
-                source: 'kpixel',
-                totalStages: 0,
+                apiUrl: `${API_BASE}/api/pixel/jobs`,
+                payload: { email: account.email, password: account.password, totp_secret: normalizedTotp, mode: 'auto' },
+                source: 'pixel',
+                totalStages: 6,
             };
         }
 

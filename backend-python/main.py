@@ -7885,7 +7885,9 @@ async def get_service_status():
                             else:
                                 upixel_reason = "API 余额不足"
                         else:
-                            upixel_reason = "无法查询余额"
+                            # Instead of failing, assume the API is up but doesn't implement balance checking
+                            upixel_ok = True
+                            upixel_reason = ""
                     else:
                         upixel_reason = "API 离线"
                 else:

@@ -12,6 +12,7 @@ const ERROR_KEY_MAP = {
     INTERNAL_ERROR: 'errInternalError',
     DEVICE_UNAVAILABLE: 'errDeviceUnavailable',
     DEVICE_PREP_FAILED: 'errDevicePrepFailed',
+    DEVICE_ERROR: 'errDeviceError',
     PROXY_ERROR: 'errProxyError',
     PASSKEY_BLOCKED: 'errPasskeyBlocked',
     CAPTCHA: 'errCaptcha',
@@ -24,6 +25,11 @@ const ERROR_KEY_MAP = {
     TWOFACTOR_PAGE_ERROR: 'errTwofactorPageError',
     GOOGLE_LOGIN_ERROR: 'errGoogleLoginError',
     GOOGLE_ONE_UNAVAILABLE: 'errGoogleOneUnavailable',
+    OFFER_UNAVAILABLE: 'errOfferUnavailable',
+    ALREADY_SUBSCRIBED: 'errAlreadySubscribed',
+    CARD_FAILED: 'errCardFailed',
+    LOGIN_FAILED: 'errLoginFailed',
+    NETWORK_ERROR: 'errNetworkError',
     URL_CAPTURE_FAILED: 'errUrlCaptureFailed',
     SIGNIN_FAILED: 'errSigninFailed',
     ACCOUNT_NOT_DETECTED: 'errAccountNotDetected',
@@ -531,6 +537,18 @@ export default function Verify() {
             ? (event.success ? 'success' : 'failed')
             : 'processing';
 
+        // Sanitize message: strip error codes and show only descriptions for users
+        let msg = event.message || (mappedStatus === 'processing' ? t('processingMsg') : '');
+        if (mappedStatus === 'failed' && msg) {
+            // Strip leading emoji/symbols then check if it's a raw error code
+            const stripped = msg.replace(/^[❌✅⏳🔄⚠️\s]+/, '').trim();
+            if (ERROR_DESCRIPTIONS[stripped]) {
+                msg = `❌ ${ERROR_DESCRIPTIONS[stripped]}`;
+            } else {
+                msg = `❌ ${sanitizeError(stripped)}`;
+            }
+        }
+
         return {
             id: verificationId,
             verificationId,
@@ -538,7 +556,7 @@ export default function Verify() {
             source: event.source || 'pixel',
             status: mappedStatus,
             timestamp: new Date().toISOString(),
-            message: event.message || (mappedStatus === 'processing' ? t('processingMsg') : ''),
+            message: msg,
             stage: event.stage || 0,
             totalStages: event.totalStages || 0,
             stageLabel: event.stageLabel || '',

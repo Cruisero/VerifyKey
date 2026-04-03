@@ -8458,7 +8458,8 @@ def _complete_async_task(task_type: str, task_id: str):
 async def _resume_pending_pixel_task(task_id: str, payload: dict):
     try:
         cost = payload.get("cost", 1.0)
-        await _pixel_poll_job(task_id, payload["email"], int(payload["user_id"]), _get_pixel_config(), cost)
+        mode = payload.get("mode", "semi-auto")
+        await _pixel_poll_job(task_id, payload["email"], int(payload["user_id"]), _get_pixel_config(), cost, mode)
     finally:
         _pixel_job_context.pop(task_id, None)
 
@@ -8504,13 +8505,14 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     _complete_async_task("gpt", task_id)
 
 
-async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict, cost: float = 1.0):
+async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict, cost: float = 1.0, mode: str = "semi-auto"):
     """Background task: poll Pixel API job status and broadcast SSE events to admin."""
     import time
     base_url = pixel_cfg["baseUrl"]
     headers = {"X-API-Key": pixel_cfg["apiKey"]}
     start_time = time.time()
-    event_meta = _build_verify_event_meta("pixel", email, user_id, "pixel_api")
+    sse_source = "pixel_auto" if mode == "auto" else "pixel"
+    event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
 
     # Broadcast initial submitted event
     broadcast_verify_event({
@@ -8697,9 +8699,9 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             job_id = data.get("job_id", "")
 
             # Start background polling task (pass user_id for credit deduction)
-            task = asyncio.create_task(_pixel_poll_job(job_id, request.email, user_id, pixel_cfg, cost))
+            task = asyncio.create_task(_pixel_poll_job(job_id, request.email, user_id, pixel_cfg, cost, request.mode))
             _pixel_polling_tasks[job_id] = task
-            _pixel_job_context[job_id] = {"email": request.email, "user_id": user_id, "cost": cost}
+            _pixel_job_context[job_id] = {"email": request.email, "user_id": user_id, "cost": cost, "mode": request.mode}
             _register_async_task("pixel", job_id, _pixel_job_context[job_id])
 
             return {
@@ -8794,7 +8796,8 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
     status = data.get("status", "")
     ctx = _pixel_job_context.get(job_id) or {}
     cost = ctx.get("cost", 1.0)
-    event_meta = _build_verify_event_meta("pixel", ctx.get("email", ""), user.get("id"), "pixel_api")
+    sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+    event_meta = _build_verify_event_meta(sse_source, ctx.get("email", ""), user.get("id"), "pixel_api")
     if status == "success":
         url = data.get("url", "")
         result = _finalize_user_success(job_id, user.get("id"), cost, f"Google One URL: {url}", via="pixel")

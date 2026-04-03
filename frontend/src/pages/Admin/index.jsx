@@ -711,11 +711,11 @@ function LiveTaskMonitor() {
 
     // Source label mapping
     const sourceLabels = {
-        pixel: 'UPixel', kpixel: 'KPixel', ypixel: 'YPixel',
+        pixel: 'UPixel', pixel_auto: 'UPixel Auto', kpixel: 'KPixel', ypixel: 'YPixel',
         vpixel: 'VPixel', gpt: 'GPT充值',
     };
 
-    const isGeminiSource = (src) => ['pixel', 'kpixel', 'ypixel', 'vpixel'].includes(src);
+    const isGeminiSource = (src) => ['pixel', 'pixel_auto', 'kpixel', 'ypixel', 'vpixel'].includes(src);
 
     useEffect(() => {
         if (!token) return;
@@ -827,6 +827,7 @@ function LiveTaskMonitor() {
     const sourceBadge = (src) => {
         const colors = {
             pixel: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' },
+            pixel_auto: { bg: 'rgba(234,88,12,0.1)', color: '#ea580c' },
             kpixel: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed' },
             ypixel: { bg: 'rgba(245,158,11,0.1)', color: '#d97706' },
             vpixel: { bg: 'rgba(236,72,153,0.1)', color: '#db2777' },
@@ -3038,7 +3039,7 @@ function PixelApiTab() {
                         status = 'submitted';
                     }
 
-                    const isKPixel = data.source === 'kpixel' || data.source === 'vpixel' || data.source === 'gpt';
+                    const isKPixel = data.source === 'kpixel' || data.source === 'vpixel' || data.source === 'gpt' || data.source === 'pixel_auto';
 
                     const entry = {
                         id: existingIdx >= 0 ? prev[existingIdx].id : Date.now() + Math.random(),
@@ -3462,6 +3463,7 @@ function PixelApiTab() {
                                                 {(() => {
                                                     const srcMap = {
                                                         pixel: { label: 'UPixel', bg: 'rgba(16,185,129,0.12)', color: '#059669' },
+                                                        pixel_auto: { label: 'UPixel Auto', bg: 'rgba(234,88,12,0.12)', color: '#ea580c' },
                                                         kpixel: { label: 'KPixel', bg: 'rgba(124,92,252,0.12)', color: '#7c5cfc' },
                                                         vpixel: { label: 'VPixel', bg: 'rgba(6,182,212,0.12)', color: '#0891b2' },
                                                         gpt: { label: `GPT${job.channel ? '-' + job.channel.toUpperCase() : ''}`, bg: 'rgba(245,158,11,0.12)', color: '#d97706' },
@@ -5906,6 +5908,7 @@ export default function Admin() {
                                                     {r.via && (() => {
                                                         const viaColors = {
                                                             pixel: { bg: '#059669', label: 'UPixel' },
+                                                            pixel_auto: { bg: '#ea580c', label: 'UPixel Auto' },
                                                             kpixel: { bg: '#7c5cfc', label: 'KPixel' },
                                                             vpixel: { bg: '#0891b2', label: 'VPixel' },
                                                             ypixel: { bg: '#d97706', label: 'YPixel' },

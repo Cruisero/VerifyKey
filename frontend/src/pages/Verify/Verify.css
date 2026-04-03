@@ -782,6 +782,7 @@
 .status-grid.three-rows {
     grid-template-rows: repeat(2, 12px);
     grid-auto-rows: 0;
+    height: 27px;
     overflow: hidden;
 }
 
@@ -792,6 +793,7 @@
 
     .status-grid.three-rows {
         grid-template-rows: repeat(3, 12px);
+        height: 42px;
     }
 }
 

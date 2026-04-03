@@ -65,7 +65,8 @@ def init_db():
                 verification_id TEXT DEFAULT '',
                 message TEXT DEFAULT '',
                 cdk TEXT DEFAULT '',
-                timestamp TEXT NOT NULL
+                timestamp TEXT NOT NULL,
+                email TEXT DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS bot_verify_log (
@@ -189,6 +190,7 @@ def init_db():
         _add_channel_column_to_gpt_keys(conn)
         _add_quota_columns_to_vpixel_cards(conn)
         _add_quota_columns_to_ypixel_cards(conn)
+        _add_email_column_to_verification_history(conn)
 
         conn.commit()
         _initialized = True
@@ -313,6 +315,18 @@ def _add_via_column_to_verification_history(conn: sqlite3.Connection):
             print("[DB] Added 'via' column to verification_history table")
     except Exception as e:
         print(f"[DB] Error adding via column: {e}")
+
+
+def _add_email_column_to_verification_history(conn: sqlite3.Connection):
+    """Add email column to verification_history if it doesn't exist yet."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(verification_history)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "email" not in columns:
+            conn.execute("ALTER TABLE verification_history ADD COLUMN email TEXT DEFAULT ''")
+            print("[DB] Added 'email' column to verification_history table")
+    except Exception as e:
+        print(f"[DB] Error adding email column: {e}")
 
 
 def _add_channel_column_to_gpt_keys(conn: sqlite3.Connection):

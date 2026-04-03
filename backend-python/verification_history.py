@@ -31,7 +31,7 @@ def _load_reset_timestamp():
         pass
 
 
-def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "", via: str = "") -> Dict:
+def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "", via: str = "", email: str = "") -> Dict:
     """
     Log a verification result.
     
@@ -41,6 +41,7 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
         message: Optional status message (rejection reason, success URL, etc.)
         cdk: Optional CDK code used for this verification
         via: Optional route source tag (e.g. 'getgem', 'dualbot', 'singlebot_1')
+        email: Optional email submitted by the user
     
     Returns:
         The logged record (or existing record if duplicate)
@@ -62,6 +63,7 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
                 "message": "duplicate",
                 "cdk": cdk,
                 "via": via,
+                "email": email,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "deduplicated": True
             }
@@ -73,12 +75,13 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
         "message": message,
         "cdk": cdk,
         "via": via,
+        "email": email,
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
     conn.execute(
-        "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (record["id"], record["status"], record["verificationId"], record["message"], record["cdk"], record["timestamp"], record["via"])
+        "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (record["id"], record["status"], record["verificationId"], record["message"], record["cdk"], record["timestamp"], record["via"], record["email"])
     )
     conn.commit()
 
@@ -123,12 +126,12 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
     conn = database.get_connection()
     if _display_reset_at and not ignore_reset:
         cursor = conn.execute(
-            "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history WHERE timestamp > ? ORDER BY rowid DESC LIMIT ?",
+            "SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE timestamp > ? ORDER BY rowid DESC LIMIT ?",
             (_display_reset_at, limit)
         )
     else:
         cursor = conn.execute(
-            "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history ORDER BY rowid DESC LIMIT ?",
+            "SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history ORDER BY rowid DESC LIMIT ?",
             (limit,)
         )
     rows = cursor.fetchall()
@@ -141,6 +144,7 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
             "message": r["message"],
             "cdk": r["cdk"],
             "via": r["via"] if "via" in r.keys() else "",
+            "submitEmail": r["email"] if "email" in r.keys() else "",
             "timestamp": r["timestamp"]
         }
         for r in reversed(rows)
@@ -215,7 +219,7 @@ def get_history_by_cdk(cdk_code: str) -> List[Dict]:
     """Get verification history for a specific CDK code."""
     conn = database.get_connection()
     cursor = conn.execute(
-        "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history WHERE cdk = ? ORDER BY rowid DESC",
+        "SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE cdk = ? ORDER BY rowid DESC",
         (cdk_code,)
     )
     return [
@@ -226,6 +230,7 @@ def get_history_by_cdk(cdk_code: str) -> List[Dict]:
             "message": r["message"],
             "cdk": r["cdk"],
             "via": r["via"] if "via" in r.keys() else "",
+            "submitEmail": r["email"] if "email" in r.keys() else "",
             "timestamp": r["timestamp"]
         }
         for r in cursor.fetchall()
@@ -245,7 +250,7 @@ def get_history_by_user(user_id: int, limit: int = 50) -> List[Dict]:
     conn = database.get_connection()
     cdk_tag = f"user:{user_id}"
     cursor = conn.execute(
-        "SELECT id, status, verification_id, message, cdk, timestamp, via "
+        "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
         "FROM verification_history WHERE cdk = ? ORDER BY rowid DESC LIMIT ?",
         (cdk_tag, limit)
     )
@@ -257,6 +262,7 @@ def get_history_by_user(user_id: int, limit: int = 50) -> List[Dict]:
             "message": r["message"],
             "cdk": r["cdk"],
             "via": r["via"] if "via" in r.keys() else "",
+            "submitEmail": r["email"] if "email" in r.keys() else "",
             "timestamp": r["timestamp"]
         }
         for r in cursor.fetchall()

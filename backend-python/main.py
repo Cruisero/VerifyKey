@@ -424,17 +424,17 @@ def _build_user_active_verifications(user_id: int) -> list:
     return active_items
 
 
-def _persist_verification_history_strict(status: str, verification_id: str, message: str = "", cdk: str = "", via: str = ""):
+def _persist_verification_history_strict(status: str, verification_id: str, message: str = "", cdk: str = "", via: str = "", email: str = ""):
     record = None
     try:
-        record = verification_history.log_verification(status, verification_id, message, cdk=cdk, via=via)
+        record = verification_history.log_verification(status, verification_id, message, cdk=cdk, via=via, email=email)
     except Exception as e:
         logger.warning(f"[History] log_verification failed for {verification_id} ({status}/{via}): {e}")
 
     try:
         conn = database.get_connection()
         row = conn.execute(
-            "SELECT id, status, verification_id, message, cdk, timestamp, via FROM verification_history WHERE verification_id = ? AND status = ? ORDER BY rowid DESC LIMIT 1",
+            "SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE verification_id = ? AND status = ? ORDER BY rowid DESC LIMIT 1",
             (verification_id, status),
         ).fetchone()
         if row:
@@ -448,6 +448,7 @@ def _persist_verification_history_strict(status: str, verification_id: str, mess
                     "cdk": row["cdk"],
                     "timestamp": row["timestamp"],
                     "via": row["via"] if "via" in row.keys() else "",
+                    "submitEmail": row["email"] if "email" in row.keys() else "",
                 },
                 "fallbackInserted": False,
             }
@@ -460,8 +461,8 @@ def _persist_verification_history_strict(status: str, verification_id: str, mess
         now = datetime.utcnow().isoformat() + "Z"
         try:
             conn.execute(
-                "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (record_id, status, verification_id, message, cdk, now, via),
+                "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (record_id, status, verification_id, message, cdk, now, via, email),
             )
         except Exception:
             conn.execute(
@@ -508,6 +509,7 @@ def _record_submit_failure(source: str, message: str, email: str = "", user_id: 
             message,
             cdk=f"user:{user_id}",
             via=via or source,
+            email=email,
         )
     return attempt_id
 
@@ -8313,7 +8315,7 @@ def _is_terminal_history_status(status: str) -> bool:
     return (status or "").lower() in ("pass", "failed")
 
 
-def _upsert_user_verification_result(verification_id: str, user_id: int, status: str, message: str, via: str = ""):
+def _upsert_user_verification_result(verification_id: str, user_id: int, status: str, message: str, via: str = "", email: str = ""):
     if not verification_id or not user_id:
         return {"updated": False, "status": status}
 
@@ -8326,13 +8328,13 @@ def _upsert_user_verification_result(verification_id: str, user_id: int, status:
         if existing["status"] == status and (existing["message"] or "") == (message or ""):
             return {"updated": False, "status": existing["status"]}
         conn.execute(
-            "UPDATE verification_history SET status = ?, message = ?, timestamp = ?, via = ? WHERE id = ?",
-            (status, message, now, via, existing["id"]),
+            "UPDATE verification_history SET status = ?, message = ?, timestamp = ?, via = ?, email = ? WHERE id = ?",
+            (status, message, now, via, email, existing["id"]),
         )
     else:
         conn.execute(
-            "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (str(uuid.uuid4())[:8], status, verification_id, message, cdk_tag, now, via),
+            "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4())[:8], status, verification_id, message, cdk_tag, now, via, email),
         )
     conn.commit()
     return {"updated": True, "status": status}
@@ -8376,7 +8378,7 @@ def _deduct_user_credits_for_reconciliation(user_id: int, cost: float, verificat
         return {"deducted": False, "forced": False, "error": str(e)}
 
 
-def _finalize_user_success(verification_id: str, user_id: int, cost: float, message: str, via: str = ""):
+def _finalize_user_success(verification_id: str, user_id: int, cost: float, message: str, via: str = "", email: str = ""):
     existing = _get_user_verification_row(verification_id, user_id)
     if existing and existing["status"] == "pass":
         return {
@@ -8394,7 +8396,7 @@ def _finalize_user_success(verification_id: str, user_id: int, cost: float, mess
         elif not deduction.get("deducted"):
             note = "（晚到成功，补扣失败）"
         final_message = f"{message} {note}".strip()
-        _upsert_user_verification_result(verification_id, user_id, "pass", final_message, via=via)
+        _upsert_user_verification_result(verification_id, user_id, "pass", final_message, via=via, email=email)
         return {
             "finalized": True,
             "deducted": deduction.get("deducted", False),
@@ -8404,11 +8406,11 @@ def _finalize_user_success(verification_id: str, user_id: int, cost: float, mess
             "forcedDeduction": deduction.get("forced", False),
         }
 
-    _upsert_user_verification_result(verification_id, user_id, "pass", message, via=via)
+    _upsert_user_verification_result(verification_id, user_id, "pass", message, via=via, email=email)
     return {"finalized": True, "deducted": False, "already_done": False}
 
 
-def _finalize_user_failure(verification_id: str, user_id: int, message: str, via: str = "", refund_cost: float = 0):
+def _finalize_user_failure(verification_id: str, user_id: int, message: str, via: str = "", refund_cost: float = 0, email: str = ""):
     existing = _get_user_verification_row(verification_id, user_id)
     if existing and _is_terminal_history_status(existing["status"]):
         # Even if already recorded, still attempt refund if cost > 0
@@ -8422,7 +8424,7 @@ def _finalize_user_failure(verification_id: str, user_id: int, message: str, via
             "already_done": True,
         }
     refund_result = _refund_user_credits(user_id, refund_cost, verification_id, via=via) if refund_cost else {"refunded": False}
-    result = _upsert_user_verification_result(verification_id, user_id, "failed", message, via=via)
+    result = _upsert_user_verification_result(verification_id, user_id, "failed", message, via=via, email=email)
     result["refunded"] = refund_result.get("refunded", False)
     return result
 
@@ -8528,7 +8530,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
             while True:
                 wait_seconds = _next_pixel_poll_interval(time.time() - start_time)
                 if wait_seconds is None:
-                    _finalize_user_failure(job_id, user_id, "失败: 轮询超时", via="pixel", refund_cost=cost)
+                    _finalize_user_failure(job_id, user_id, "失败: 轮询超时", via=sse_source, refund_cost=cost, email=email)
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
@@ -8582,7 +8584,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 if status == "success":
                     url = data.get("url", "")
-                    result = _finalize_user_success(job_id, user_id, cost, f"Google One URL: {url}", via="pixel")
+                    result = _finalize_user_success(job_id, user_id, cost, f"Google One URL: {url}", via=sse_source, email=email)
                     _complete_async_task("pixel", job_id)
                     # Broadcast final result
                     broadcast_verify_event({
@@ -8602,7 +8604,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 elif status == "failed":
                     error = data.get("error", "UNKNOWN_ERROR")
-                    _finalize_user_failure(job_id, user_id, f"失败: {error}", via="pixel", refund_cost=cost)
+                    _finalize_user_failure(job_id, user_id, f"失败: {error}", via=sse_source, refund_cost=cost, email=email)
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
@@ -8618,11 +8620,11 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     break
 
     except asyncio.CancelledError:
-        _finalize_user_failure(job_id, user_id, "失败: 轮询取消", via="pixel", refund_cost=cost)
+        _finalize_user_failure(job_id, user_id, "失败: 轮询取消", via=sse_source, refund_cost=cost, email=email)
         _complete_async_task("pixel", job_id)
     except Exception as e:
         print(f"[Pixel] Poll error for {job_id}: {e}")
-        _finalize_user_failure(job_id, user_id, f"失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="pixel", refund_cost=cost)
+        _finalize_user_failure(job_id, user_id, f"失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via=sse_source, refund_cost=cost, email=email)
         _complete_async_task("pixel", job_id)
         broadcast_verify_event({
             "type": "progress",
@@ -8670,6 +8672,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     user_id = user.get("id")
     credits = user.get("credits", 0)
     cost = 1.5 if request.mode == "auto" else 1.0
+    sse_source = "pixel_auto" if request.mode == "auto" else "pixel"
     if credits < cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {cost} 积分）")
 
@@ -8735,7 +8738,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 http_status=resp.status_code,
                 upstream_status=resp.status_code,
                 refunded=refund_result.get("refunded", False),
-                via="pixel",
+                via=sse_source,
             )
             raise HTTPException(status_code=resp.status_code, detail=final_detail)
 
@@ -8749,7 +8752,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             method="pixel_api",
             http_status=502,
             refunded=refund_result.get("refunded", False),
-            via="pixel",
+            via=sse_source,
         )
         raise HTTPException(status_code=502, detail=f"无法连接 Pixel API: {str(e)}")
 

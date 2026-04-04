@@ -8751,23 +8751,22 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             }
         else:
             refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
-            # Forward error from Pixel API
+            # 409 Conflict = email already has an active job — just inform, don't record as failure
             if resp.status_code == 409:
-                msg = "该邮箱已在队列中，请等待当前任务完成"
-                code = ""
-            else:
-                try:
-                    err = resp.json()
-                    detail = err.get("detail", {})
-                    if isinstance(detail, dict):
-                        msg = detail.get("message", f"Pixel API 错误: HTTP {resp.status_code}")
-                        code = detail.get("code", "")
-                    else:
-                        msg = str(detail)
-                        code = ""
-                except Exception:
-                    msg = f"Pixel API 错误: HTTP {resp.status_code}"
+                raise HTTPException(status_code=409, detail="该邮箱已在队列中，请等待当前任务完成")
+            # Other errors: parse upstream response
+            try:
+                err = resp.json()
+                detail = err.get("detail", {})
+                if isinstance(detail, dict):
+                    msg = detail.get("message", f"Pixel API 错误: HTTP {resp.status_code}")
+                    code = detail.get("code", "")
+                else:
+                    msg = str(detail)
                     code = ""
+            except Exception:
+                msg = f"Pixel API 错误: HTTP {resp.status_code}"
+                code = ""
             final_detail = f"{code}: {msg}" if code else msg
             _record_submit_failure(
                 "pixel",

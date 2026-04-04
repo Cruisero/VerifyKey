@@ -148,7 +148,7 @@ export default function Verify() {
     }, [results]);
 
     const { t, lang } = useLang();
-    const gptCurrentCost = gptMode === 'team' ? 0.3 : 2;
+    const gptCurrentCost = gptMode === 'team' ? 0.3 : 1.5;
     const gptCurrentTargetEmail = gptMode === 'team' ? gptInviteEmail : gptEmail;
 
     // Build localized error descriptions

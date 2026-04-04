@@ -149,7 +149,8 @@ export default function Verify() {
                     const catchUpDuration = 50; // seconds to catch up to new basePct
                     if (elapsed < catchUpDuration && currentSnap.fromPct < targetPct) {
                         const catchUpProgress = Math.min(elapsed / catchUpDuration, 1);
-                        const catchUpEased = 1 - Math.pow(1 - catchUpProgress, 3);
+                        // Using linear progression instead of fast ease-out to avoid rapid jumps at the start
+                        const catchUpEased = catchUpProgress; // linear transition
                         const displayPct = Math.min(Math.round(currentSnap.fromPct + (targetPct - currentSnap.fromPct) * catchUpEased), 99);
                         if (next[r.id] !== displayPct) { next[r.id] = displayPct; changed = true; }
                     } else {

@@ -146,7 +146,7 @@ export default function Verify() {
 
                     // Phase 1: smoothly transition from fromPct to targetPct (catch-up)
                     // Phase 2: then creep from targetPct toward nextStagePct
-                    const catchUpDuration = 8; // seconds to catch up to new basePct
+                    const catchUpDuration = 50; // seconds to catch up to new basePct
                     if (elapsed < catchUpDuration && currentSnap.fromPct < targetPct) {
                         const catchUpProgress = Math.min(elapsed / catchUpDuration, 1);
                         const catchUpEased = 1 - Math.pow(1 - catchUpProgress, 3);

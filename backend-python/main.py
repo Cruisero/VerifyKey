@@ -8457,20 +8457,23 @@ def _is_timeout_error(exc: Exception) -> bool:
     return isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException))
 
 
-PIXEL_POLL_TIMEOUT_SECONDS = 8 * 60
+PIXEL_QUEUE_TIMEOUT_SECONDS = 45 * 60
+PIXEL_RUN_TIMEOUT_SECONDS = 8 * 60
 
 
-def _next_pixel_poll_interval(elapsed_seconds: float):
-    if elapsed_seconds >= PIXEL_POLL_TIMEOUT_SECONDS:
-        return None
-    if elapsed_seconds < 5 * 60:
-        interval = 10
-    elif elapsed_seconds < 10 * 60:
-        interval = 30
+def _get_pixel_poll_interval(total_elapsed: float, running_elapsed: float, last_status: str):
+    if last_status == "queued":
+        if total_elapsed >= PIXEL_QUEUE_TIMEOUT_SECONDS:
+            return None, "失败: 排队超时"
+        interval = 10 if total_elapsed < 5 * 60 else (20 if total_elapsed < 15 * 60 else 30)
+        remaining = PIXEL_QUEUE_TIMEOUT_SECONDS - total_elapsed
+        return max(1, min(interval, int(remaining))), ""
     else:
-        interval = 60
-    remaining = PIXEL_POLL_TIMEOUT_SECONDS - elapsed_seconds
-    return max(1, min(interval, int(remaining)))
+        if running_elapsed >= PIXEL_RUN_TIMEOUT_SECONDS:
+            return None, "失败: 运行/验证超时"
+        interval = 10 if running_elapsed < 3 * 60 else (15 if running_elapsed < 6 * 60 else 30)
+        remaining = PIXEL_RUN_TIMEOUT_SECONDS - running_elapsed
+        return max(1, min(interval, int(remaining))), ""
 
 
 def _register_async_task(task_type: str, task_id: str, payload: dict):
@@ -8549,12 +8552,19 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
         **event_meta,
     })
 
+    last_known_status = "queued"
+    running_start_time = None
+
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             while True:
-                wait_seconds = _next_pixel_poll_interval(time.time() - start_time)
+                total_elapsed = time.time() - start_time
+                running_elapsed = (time.time() - running_start_time) if running_start_time else 0.0
+                
+                wait_seconds, timeout_msg = _get_pixel_poll_interval(total_elapsed, running_elapsed, last_known_status)
+                
                 if wait_seconds is None:
-                    _finalize_user_failure(job_id, user_id, "失败: 轮询超时", via=sse_source, refund_cost=cost, email=email)
+                    _finalize_user_failure(job_id, user_id, timeout_msg, via=sse_source, refund_cost=cost, email=email)
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
@@ -8562,8 +8572,8 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                         "step": "result",
                         "status": "failed",
                         "success": False,
-                        "message": "❌ 轮询超时",
-                        "elapsed": round(time.time() - start_time, 1),
+                        "message": f"❌ {timeout_msg}",
+                        "elapsed": round(total_elapsed, 1),
                         **event_meta,
                     })
                     break
@@ -8578,6 +8588,11 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     continue
 
                 status = data.get("status", "")
+                if status != "queued" and last_known_status == "queued" and running_start_time is None:
+                    running_start_time = time.time()
+                if status:
+                    last_known_status = status
+
                 stage = data.get("stage", 0)
                 total_stages = data.get("total_stages", 8)
                 stage_label = data.get("stage_label", "")

@@ -192,6 +192,40 @@ const ENDPOINTS = [
         ],
     },
     {
+        group: '🚀 OnePass 自动化审核引擎 (DualBot)',
+        items: [
+            {
+                method: 'POST',
+                path: '/api/verify/dualbot',
+                desc: '批量提交流水线任务 (EventStream 流式返回)',
+                params: [
+                    { name: 'links', type: 'array', required: true, desc: '包含多个 SheerID verify 链接的数组' },
+                    { name: 'cdk', type: 'string', required: true, desc: '当前有效并有余量的卡密' },
+                    { name: 'mode', type: 'string', required: false, desc: '模式：auto (全自动) 或 semi-auto (半自动)' },
+                ],
+                response: `// 此接口为流式响应 (text/event-stream)
+event: message
+data: {"verificationId": "1234abcd", "currentStep": "processing", "message": "正在分配底层验证节点..."}
+
+event: message
+data: {"verificationId": "1234abcd", "currentStep": "pass", "message": "验证通过"}`,
+            },
+            {
+                method: 'GET',
+                path: '/api/check-status/{verificationId}',
+                desc: '丢失重连与探活复原单据状态',
+                params: [
+                    { name: 'verificationId', type: 'string', required: true, desc: '16位验证 ID' },
+                ],
+                response: `{
+  "verificationId": "1234abcd",
+  "currentStep": "pass",
+  "status": "success"
+}`,
+            },
+        ],
+    },
+    {
         group: '🤖 ChatGPT 充值服务',
         items: [
             {

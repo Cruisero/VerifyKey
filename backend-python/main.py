@@ -5995,14 +5995,30 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
     # Also set the manual override signal so running verification tasks can detect it
-    # Extract VID from the record
     cursor2 = conn.execute("SELECT verificationId FROM verification_history WHERE id = ?", (record_id,))
     row2 = cursor2.fetchone()
+    vid = ""
     if row2 and row2["verificationId"]:
-        set_manual_override(row2["verificationId"], request.status)
-        _remember_terminal_verify_event(row2["verificationId"], request.status)
+        vid = row2["verificationId"]
+        set_manual_override(vid, request.status)
+        _remember_terminal_verify_event(vid, request.status)
     # Broadcast the update via SSE so admin page refreshes
     broadcast_verify_event({"type": "history_updated", "id": record_id, "status": request.status})
+    
+    if vid:
+        override_msg = "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败"
+        event_payload = {
+            "type": "progress",
+            "vid": vid,
+            "step": "result",
+            "status": "approved" if request.status == "pass" else "failed",
+            "success": request.status == "pass",
+            "message": override_msg,
+        }
+        if cdk_code and cdk_code.startswith("user:"):
+            event_payload["userId"] = cdk_code
+        broadcast_verify_event(event_payload)
+        
     return {"updated": True, "id": record_id, "status": request.status, "cdkMessage": cdk_message}
 
 
@@ -6036,24 +6052,30 @@ async def override_verification_by_vid(request: VidOverrideRequest):
         # Create new record so it appears in history API
         verification_history.log_verification(request.status, request.vid, override_msg)
     
+    cdk_field = ""
+    if existing:
+        cdk_row = conn.execute("SELECT cdk FROM verification_history WHERE id = ?", (existing["id"],)).fetchone()
+        if cdk_row:
+            cdk_field = cdk_row["cdk"] or ""
+
     # Broadcast a per-link result event so admin SSE log updates immediately
-    broadcast_verify_event({
+    event_payload = {
         "type": "progress",
         "vid": request.vid,
         "step": "result",
         "status": "approved" if request.status == "pass" else "failed",
         "success": request.status == "pass",
         "message": override_msg,
-    })
+    }
+    if cdk_field and cdk_field.startswith("user:"):
+        event_payload["userId"] = cdk_field
+        
+    broadcast_verify_event(event_payload)
 
     # Credit handling: check existing record for cdk field
     credit_message = ""
     if existing:
         old_status = existing["status"]
-        cdk_field = ""
-        cdk_row = conn.execute("SELECT cdk FROM verification_history WHERE id = ?", (existing["id"],)).fetchone()
-        if cdk_row:
-            cdk_field = cdk_row["cdk"] or ""
 
         if cdk_field and cdk_field.startswith("user:"):
             # User credit system

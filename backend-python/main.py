@@ -8554,6 +8554,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     continue
 
                 status = data.get("status", "")
+                logger.info(f"[Pixel-Poll] job={job_id} upstream response keys={list(data.keys())} status={status} queue_position={data.get('queue_position','MISSING')} position={data.get('position','MISSING')}")
                 stage = data.get("stage", 0)
                 total_stages = data.get("total_stages", 8)
                 stage_label = data.get("stage_label", "")

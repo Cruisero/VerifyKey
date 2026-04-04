@@ -400,7 +400,7 @@
     stroke-width: 3;
     stroke-linecap: round;
     stroke-dasharray: 0 100;
-    transition: stroke-dasharray 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: stroke-dasharray 0.8s ease;
 }
 
 .progress-ring-text {
@@ -434,7 +434,7 @@
     height: 100%;
     background: linear-gradient(90deg, var(--color-primary), #8b5cf6);
     border-radius: 2px;
-    transition: width 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.8s ease;
     position: relative;
     overflow: hidden;
 }

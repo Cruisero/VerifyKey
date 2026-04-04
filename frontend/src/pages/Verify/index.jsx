@@ -105,6 +105,48 @@ export default function Verify() {
     const standardRouteRef = useRef(null);
     const userSseRef = useRef(null);
 
+    // Visual progress interpolation: smoothly creep between discrete stages
+    const stageSnapshotRef = useRef({}); // { [resultId]: { stage, timestamp } }
+    const [visualProgress, setVisualProgress] = useState({}); // { [resultId]: displayPct }
+
+    // Tick visual progress every second for processing items
+    useEffect(() => {
+        const ticker = setInterval(() => {
+            setVisualProgress(prev => {
+                const next = { ...prev };
+                let changed = false;
+                for (const r of results) {
+                    if (r.status !== 'processing' || !r.totalStages || r.totalStages <= 0) {
+                        if (next[r.id] !== undefined) { delete next[r.id]; changed = true; }
+                        continue;
+                    }
+                    const snap = stageSnapshotRef.current[r.id];
+                    if (!snap) {
+                        stageSnapshotRef.current[r.id] = { stage: r.stage, ts: Date.now() };
+                        continue;
+                    }
+                    // If stage changed, update snapshot
+                    if (snap.stage !== r.stage) {
+                        stageSnapshotRef.current[r.id] = { stage: r.stage, ts: Date.now() };
+                    }
+                    const basePct = (r.stage / r.totalStages) * 100;
+                    const nextStagePct = ((r.stage + 1) / r.totalStages) * 100;
+                    const gap = nextStagePct - basePct;
+                    const elapsed = (Date.now() - stageSnapshotRef.current[r.id].ts) / 1000;
+                    const avgStageTime = 50; // ~50s per stage
+                    const creep = gap * Math.min(elapsed / avgStageTime, 0.85);
+                    const displayPct = Math.min(Math.round(basePct + creep), 99);
+                    if (next[r.id] !== displayPct) {
+                        next[r.id] = displayPct;
+                        changed = true;
+                    }
+                }
+                return changed ? next : prev;
+            });
+        }, 1000);
+        return () => clearInterval(ticker);
+    }, [results]);
+
     const { t, lang } = useLang();
     const gptCurrentCost = gptMode === 'team' ? 0.3 : 2;
     const gptCurrentTargetEmail = gptMode === 'team' ? gptInviteEmail : gptEmail;
@@ -1346,7 +1388,7 @@ export default function Verify() {
                                                     <div key={result.id} className={`result-item ${result.status}`}>
                                                         <div className="result-status">
                                                             {result.status === 'processing' && (() => {
-                                                                const pct = result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0;
+                                                                const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);
                                                                 const isQueued = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing');
                                                                 return isQueued ? (
                                                                     <span className="spinner small"></span>
@@ -1368,14 +1410,17 @@ export default function Verify() {
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(result.email)}</span>
                                                             </div>
-                                                            {result.status === 'processing' && result.totalStages > 0 && !result.message?.includes('排队') && !result.message?.includes('queue') ? (
-                                                                <div className="progress-bar-container">
-                                                                    <div className="progress-bar-track">
-                                                                        <div className="progress-bar-fill" style={{ width: `${Math.min(Math.round((result.stage / result.totalStages) * 100), 99)}%` }} />
+                                                            {result.status === 'processing' && result.totalStages > 0 && !result.message?.includes('排队') && !result.message?.includes('queue') ? (() => {
+                                                                const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
+                                                                return (
+                                                                    <div className="progress-bar-container">
+                                                                        <div className="progress-bar-track">
+                                                                            <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+                                                                        </div>
+                                                                        <span className="progress-bar-label">{pct}%</span>
                                                                     </div>
-                                                                    <span className="progress-bar-label">{Math.min(Math.round((result.stage / result.totalStages) * 100), 99)}%</span>
-                                                                </div>
-                                                            ) : (
+                                                                );
+                                                            })() : (
                                                                 <span className="result-message">
                                                                     {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
                                                                 </span>

@@ -375,6 +375,76 @@
     min-width: 0;
 }
 
+/* Circular Progress Ring */
+.progress-ring {
+    position: relative;
+    width: 28px;
+    height: 28px;
+}
+
+.progress-ring-svg {
+    width: 28px;
+    height: 28px;
+    transform: rotate(-90deg);
+}
+
+.progress-ring-bg {
+    fill: none;
+    stroke: var(--border-primary);
+    stroke-width: 3;
+}
+
+.progress-ring-fill {
+    fill: none;
+    stroke: var(--color-primary);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 0 100;
+    transition: stroke-dasharray 0.6s ease;
+}
+
+.progress-ring-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1;
+}
+
+/* Inline Progress Bar */
+.progress-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.progress-bar-track {
+    flex: 1;
+    height: 4px;
+    background: var(--border-primary);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-primary), #8b5cf6);
+    border-radius: 2px;
+    transition: width 0.6s ease;
+}
+
+.progress-bar-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-primary);
+    min-width: 32px;
+    text-align: right;
+}
+
 .result-id {
     font-family: var(--font-mono);
     font-size: var(--text-xs);

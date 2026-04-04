@@ -503,7 +503,7 @@ export default function Verify() {
                             queuePosition: data.queue_position,
                             estimatedWait: data.estimated_wait_seconds,
                             message: status === 'running'
-                                ? `🔄 [${stage}/${totalStages}] ${stageLabel}`
+                                ? `${totalStages > 0 ? Math.min(Math.round((stage / totalStages) * 100), 99) : 0}%`
                                 : data.queue_position >= 0
                                     ? t('queueWaiting').replace('{pos}', data.queue_position)
                                     : t('queueing'),
@@ -1345,19 +1345,41 @@ export default function Verify() {
                                                 {results.map((result) => (
                                                     <div key={result.id} className={`result-item ${result.status}`}>
                                                         <div className="result-status">
-                                                            {result.status === 'processing' && <span className="spinner small"></span>}
+                                                            {result.status === 'processing' && (() => {
+                                                                const pct = result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0;
+                                                                const isQueued = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing');
+                                                                return isQueued ? (
+                                                                    <span className="spinner small"></span>
+                                                                ) : (
+                                                                    <div className="progress-ring">
+                                                                        <svg viewBox="0 0 36 36" className="progress-ring-svg">
+                                                                            <circle className="progress-ring-bg" cx="18" cy="18" r="15.5" />
+                                                                            <circle className="progress-ring-fill" cx="18" cy="18" r="15.5"
+                                                                                style={{ strokeDasharray: `${pct} 100` }} />
+                                                                        </svg>
+                                                                        <span className="progress-ring-text">{pct}</span>
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                             {result.status === 'success' && <span className="status-icon success">✓</span>}
                                                             {result.status === 'failed' && <span className="status-icon failed">✕</span>}
                                                         </div>
                                                         <div className="result-info">
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(result.email)}</span>
-
                                                             </div>
-
-                                                            <span className="result-message">
-                                                                {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
-                                                            </span>
+                                                            {result.status === 'processing' && result.totalStages > 0 && !result.message?.includes('排队') && !result.message?.includes('queue') ? (
+                                                                <div className="progress-bar-container">
+                                                                    <div className="progress-bar-track">
+                                                                        <div className="progress-bar-fill" style={{ width: `${Math.min(Math.round((result.stage / result.totalStages) * 100), 99)}%` }} />
+                                                                    </div>
+                                                                    <span className="progress-bar-label">{Math.min(Math.round((result.stage / result.totalStages) * 100), 99)}%</span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="result-message">
+                                                                    {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
+                                                                </span>
+                                                            )}
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
                                                                     <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-url-link">
@@ -1371,6 +1393,11 @@ export default function Verify() {
                                                                         📋
                                                                     </button>
                                                                 </div>
+                                                            )}
+                                                            {result.status !== 'processing' && (
+                                                                <span className="result-message">
+                                                                    {(result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed'))).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
+                                                                </span>
                                                             )}
                                                         </div>
                                                         <div className="result-meta">

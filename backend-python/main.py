@@ -8576,7 +8576,8 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                 if status == "queued":
                     msg = f"⏳ 排队中 (位置: {queue_pos})" if queue_pos >= 0 else "⏳ 排队中..."
                 elif status == "running":
-                    msg = f"🔄 [{stage}/{total_stages}] {stage_label}" if stage_label else f"🔄 [{stage}/{total_stages}]"
+                    pct = min(round((stage / total_stages) * 100), 99) if total_stages > 0 else 0
+                    msg = f"🔄 {pct}%"
                 else:
                     msg = stage_label or status
 

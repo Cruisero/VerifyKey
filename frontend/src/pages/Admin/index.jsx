@@ -5932,9 +5932,9 @@ export default function Admin() {
                                                     {r.userId && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.userId}</span>}
                                                     {r.cdk && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>🔑 {r.cdk}</span>}
                                                 </div>
-                                                {(method || cardKey || r.channel || r.httpStatus || r.upstreamStatus || isSubmissionFailure || r.refunded) && (
+                                                {((!r.via && method) || cardKey || r.channel || r.httpStatus || r.upstreamStatus || isSubmissionFailure || r.refunded) && (
                                                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                        {method && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>method: {method}</span>}
+                                                        {method && !r.via && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>method: {method}</span>}
                                                         {r.channel && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>channel: {String(r.channel).toUpperCase()}</span>}
                                                         {cardKey && <span style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>card: {shortCardKey}</span>}
                                                         {isSubmissionFailure && <span style={{ background: 'rgba(220, 38, 38, 0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace', color: '#dc2626' }}>stage: submission</span>}

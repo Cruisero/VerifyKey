@@ -215,6 +215,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         running: '运行中',
         queuePosition: '排队中',
         fetchSuccess: '✅ 获取成功',
+        subscribeSuccess: '✅ 订阅成功',
         processingMsg: '处理中...',
         queueWaiting: '⏳ 排队中 (位置: {pos})',
 
@@ -569,6 +570,7 @@ Failed verification does not consume quota.`,
         running: 'Running',
         queuePosition: 'In queue',
         fetchSuccess: '✅ Success',
+        subscribeSuccess: '✅ Subscribed',
         processingMsg: 'Processing...',
         queueWaiting: '⏳ In queue (position: {pos})',
 

@@ -525,7 +525,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'success',
-                            message: t('fetchSuccess'),
+                            message: r.tier === 'pro' ? t('subscribeSuccess') : t('fetchSuccess'),
                             url,
                             stage,
                             totalStages,

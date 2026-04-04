@@ -1062,6 +1062,7 @@ function GptKeysTab({ config, setConfig }) {
                     gpt_sbs: data.manual.gpt_sbs || false,
                     gpt_red: data.manual.gpt_red || false,
                     gpt_vip: data.manual.gpt_vip || false,
+                    gpt_aic: data.manual.gpt_aic || false,
                     gpt_tg: data.manual.gpt_tg || false,
                 });
             }
@@ -1348,7 +1349,7 @@ function GptKeysTab({ config, setConfig }) {
         return <span style={{ padding: '2px 10px', borderRadius: '8px', background: s.bg, color: s.color, fontWeight: 600, fontSize: '12px' }}>{s.text}</span>;
     };
 
-    const channelColors = { red: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626' }, sbs: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' }, vip: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed' }, tg: { bg: 'rgba(20,184,166,0.1)', color: '#0f766e' } };
+    const channelColors = { red: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626' }, sbs: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' }, vip: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed' }, aic: { bg: 'rgba(245,158,11,0.1)', color: '#d97706' }, tg: { bg: 'rgba(20,184,166,0.1)', color: '#0f766e' } };
     const channelBadge = (ch) => {
         const c = channelColors[ch] || channelColors.sbs;
         return <span style={{
@@ -1410,7 +1411,7 @@ function GptKeysTab({ config, setConfig }) {
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>➕ 批量添加卡密</span>
                     <div style={{ display: 'flex', gap: '4px' }}>
-                        {['sbs', 'red', 'vip'].map(ch => (
+                        {['sbs', 'red', 'vip', 'aic'].map(ch => (
                             <button key={ch} onClick={() => setAddChannel(ch)} style={{
                                 padding: '4px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                                 fontWeight: 600, fontSize: '12px',
@@ -1981,6 +1982,7 @@ function GptKeysTab({ config, setConfig }) {
                     { key: 'gpt_sbs', label: '🔵 SBS 通道', desc: 'chong.databrain.sbs' },
                     { key: 'gpt_red', label: '🔴 RED 通道', desc: 'redeemgpt.com' },
                     { key: 'gpt_vip', label: '🟣 VIP 通道', desc: 'shop.gptai.vip' },
+                    { key: 'gpt_aic', label: '🟠 AIC 通道', desc: 'aichong.plus' },
                     { key: 'gpt_tg', label: '🟢 TG 通道', desc: 'Telegram Userbot 目标 Bot' },
                 ].map(s => (
                     <div key={s.key} style={{

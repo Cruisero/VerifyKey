@@ -8076,6 +8076,7 @@ async def get_service_status():
             "gpt_sbs": manual.get("gpt_sbs", False),
             "gpt_red": manual.get("gpt_red", False),
             "gpt_vip": manual.get("gpt_vip", False),
+            "gpt_aic": manual.get("gpt_aic", False),
             "gpt_tg": manual.get("gpt_tg", False),
             "gpt_team": manual.get("gpt_team", False),
         }
@@ -8098,7 +8099,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_tg", "gpt_team"):
+    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_tg", "gpt_team"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -8206,7 +8207,7 @@ def _run_alert_check():
             alerts.append({"service": "YPixel", "status": "异常", "reason": "数据库查询失败"})
 
     # --- GPT channels ---
-    for ch_name, ch_label in [("sbs", "GPT-SBS"), ("red", "GPT-RED"), ("vip", "GPT-VIP")]:
+    for ch_name, ch_label in [("sbs", "GPT-SBS"), ("red", "GPT-RED"), ("vip", "GPT-VIP"), ("aic", "GPT-AIC")]:
         if manual.get(f"gpt_{ch_name}"):
             continue
         try:
@@ -10882,9 +10883,11 @@ GPT_RED_RECHARGE_BASE = "https://gpt.86gamestore.com/api"
 GPT_RED_ORIGIN = "https://redeemgpt.com"
 GPT_VIP_RECHARGE_BASE = "https://ht.gptai.vip/api"
 GPT_VIP_ORIGIN = "https://shop.gptai.vip"
+GPT_AIC_RECHARGE_BASE = "https://aichong.plus/api"
+GPT_AIC_ORIGIN = "https://aichong.plus"
 GPT_RECHARGE_COST = 1.5  # CDK points per successful recharge
 GPT_TEAM_INVITE_COST = 0.3
-GPT_KEY_CHANNELS = ("sbs", "red", "vip")
+GPT_KEY_CHANNELS = ("sbs", "red", "vip", "aic")
 GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg")
 
 import uuid as _uuid
@@ -11257,6 +11260,40 @@ async def _vip_api_submit(card_key: str, token_content: str) -> dict:
         return resp.json()
 
 
+async def _aic_api_check(card_key: str) -> dict:
+    """Validate an AIC channel card key via httpx."""
+    import httpx
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{GPT_AIC_RECHARGE_BASE}/redeem/verify",
+            json={"cardCode": card_key, "channel": "primary"},
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json",
+                "origin": GPT_AIC_ORIGIN,
+                "referer": f"{GPT_AIC_ORIGIN}/",
+            },
+        )
+        return resp.json()
+
+
+async def _aic_api_submit(card_key: str, token_content: str) -> dict:
+    """Submit AIC channel recharge via httpx."""
+    import httpx
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            f"{GPT_AIC_RECHARGE_BASE}/redeem/submit",
+            json={"cardCode": card_key, "tokenContent": token_content, "allowOverwrite": False, "channel": "primary"},
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json",
+                "origin": GPT_AIC_ORIGIN,
+                "referer": f"{GPT_AIC_ORIGIN}/",
+            },
+        )
+        return resp.json()
+
+
 # --- Admin: Add card keys in bulk (with external API validation) ---
 @app.post("/api/gpt-keys/add")
 async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(None)):
@@ -11306,6 +11343,12 @@ async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(N
                     ok = vip_data.get("valid", False) and vip_data.get("exists", False)
                     msg = vip_data.get("message", data.get("msg", ""))
                     gift = vip_data.get("productName", "") if ok else ""
+                elif channel == "aic":
+                    data = await _aic_api_check(key)
+                    aic_data = data.get("data") or {}
+                    ok = aic_data.get("valid", False) and aic_data.get("exists", False)
+                    msg = aic_data.get("message", data.get("msg", ""))
+                    gift = "AIC Plus" if ok else ""
                 else:
                     resp = await client.post(
                         f"{GPT_SBS_RECHARGE_BASE}/api/vip/c",
@@ -11530,6 +11573,16 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
                 conn.commit()
                 raise HTTPException(status_code=400, detail=msg)
             masked = vip_data.get("productName", "")
+        elif channel == "aic":
+            data = await _aic_api_check(card_key)
+            aic_data = data.get("data") or {}
+            ok = aic_data.get("valid", False) and aic_data.get("exists", False)
+            if not ok:
+                msg = aic_data.get("message", data.get("msg", "卡密验证失败"))
+                conn.execute("UPDATE gpt_keys SET status='invalid' WHERE id=?", (key_id,))
+                conn.commit()
+                raise HTTPException(status_code=400, detail=msg)
+            masked = "AIC Plus"
         else:
             # SBS channel
             async with httpx.AsyncClient(timeout=30) as client:
@@ -11794,6 +11847,28 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                     channel=channel,
                 )
                 raise HTTPException(status_code=400, detail=msg)
+        elif channel == "aic":
+            # AIC channel: POST /redeem/submit
+            data = await _aic_api_submit(card_key, account)
+            ok = data.get("success", False) or data.get("code") == 200
+            if not ok:
+                msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
+                _log_gpt_final("failed", msg)
+                if card_key:
+                    _release_gpt_key(card_key)
+                _complete_async_task("gpt", gpt_vid)
+                _broadcast_submit_failure(
+                    "gpt",
+                    msg,
+                    email=email or "GPT充值",
+                    user_id=user_id,
+                    method=f"gpt_{channel}",
+                    http_status=400,
+                    refunded=False,
+                    card_key=card_key,
+                    channel=channel,
+                )
+                raise HTTPException(status_code=400, detail=msg)
         elif channel == "tg":
             data = await _gpt_recharge_via_tg_bot(card_key, account, email)
             if not data.get("success"):
@@ -11839,6 +11914,27 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                                 raise HTTPException(status_code=400, detail=msg)
                         elif channel == "vip":
                             data = await _vip_api_submit(card_key, account)
+                            ok = data.get("success", False) or data.get("code") == 200
+                            if not ok:
+                                msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
+                                _log_gpt_final("failed", msg)
+                                if card_key:
+                                    _release_gpt_key(card_key)
+                                _complete_async_task("gpt", gpt_vid)
+                                _broadcast_submit_failure(
+                                    "gpt",
+                                    msg,
+                                    email=email or "GPT充值",
+                                    user_id=user_id,
+                                    method=f"gpt_{channel}",
+                                    http_status=400,
+                                    refunded=False,
+                                    card_key=card_key,
+                                    channel=channel,
+                                )
+                                raise HTTPException(status_code=400, detail=msg)
+                        elif channel == "aic":
+                            data = await _aic_api_submit(card_key, account)
                             ok = data.get("success", False) or data.get("code") == 200
                             if not ok:
                                 msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))

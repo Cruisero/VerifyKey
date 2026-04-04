@@ -8455,7 +8455,7 @@ def _is_timeout_error(exc: Exception) -> bool:
     return isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException))
 
 
-PIXEL_POLL_TIMEOUT_SECONDS = 60 * 60
+PIXEL_POLL_TIMEOUT_SECONDS = 8 * 60
 
 
 def _next_pixel_poll_interval(elapsed_seconds: float):
@@ -8752,18 +8752,22 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         else:
             refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
             # Forward error from Pixel API
-            try:
-                err = resp.json()
-                detail = err.get("detail", {})
-                if isinstance(detail, dict):
-                    msg = detail.get("message", f"Pixel API 错误: HTTP {resp.status_code}")
-                    code = detail.get("code", "")
-                else:
-                    msg = str(detail)
-                    code = ""
-            except Exception:
-                msg = f"Pixel API 错误: HTTP {resp.status_code}"
+            if resp.status_code == 409:
+                msg = "该邮箱已在队列中，请等待当前任务完成"
                 code = ""
+            else:
+                try:
+                    err = resp.json()
+                    detail = err.get("detail", {})
+                    if isinstance(detail, dict):
+                        msg = detail.get("message", f"Pixel API 错误: HTTP {resp.status_code}")
+                        code = detail.get("code", "")
+                    else:
+                        msg = str(detail)
+                        code = ""
+                except Exception:
+                    msg = f"Pixel API 错误: HTTP {resp.status_code}"
+                    code = ""
             final_detail = f"{code}: {msg}" if code else msg
             _record_submit_failure(
                 "pixel",
@@ -8875,6 +8879,40 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
         _complete_async_task("pixel", job_id)
         return {"success": True, "status": "failed", "confirmed": True}
     return {"success": True, "status": status or "pending", "confirmed": False}
+
+
+@app.post("/api/pixel/jobs/{job_id}/cancel")
+async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(None)):
+    """Admin: cancel a stuck Pixel API polling task."""
+    _verify_admin_token(authorization)
+    ctx = _pixel_job_context.get(job_id) or {}
+    user_id = ctx.get("user_id", 0)
+    cost = ctx.get("cost", 1.0)
+    email = ctx.get("email", "")
+    sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+    event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
+
+    # Cancel the asyncio polling task if running
+    task = _pixel_polling_tasks.pop(job_id, None)
+    if task and not task.done():
+        task.cancel()
+
+    # Finalize as failed + refund
+    _finalize_user_failure(job_id, user_id, "管理员手动取消", via=sse_source, refund_cost=cost, email=email)
+    _complete_async_task("pixel", job_id)
+    _pixel_job_context.pop(job_id, None)
+
+    broadcast_verify_event({
+        "type": "progress",
+        "vid": job_id,
+        "step": "result",
+        "status": "failed",
+        "success": False,
+        "message": "❌ 管理员手动取消",
+        "forceTerminalUpdate": True,
+        **event_meta,
+    })
+    return {"success": True, "cancelled": True, "job_id": job_id}
 
 
 @app.get("/api/pixel/health")

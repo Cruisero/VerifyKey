@@ -8584,7 +8584,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 if status == "success":
                     url = data.get("url", "")
-                    result = _finalize_user_success(job_id, user_id, cost, f"Google One URL: {url}", via=sse_source, email=email)
+                    result = _finalize_user_success(job_id, user_id, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
                     _complete_async_task("pixel", job_id)
                     # Broadcast final result
                     broadcast_verify_event({
@@ -8803,7 +8803,7 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
     event_meta = _build_verify_event_meta(sse_source, ctx.get("email", ""), user.get("id"), "pixel_api")
     if status == "success":
         url = data.get("url", "")
-        result = _finalize_user_success(job_id, user.get("id"), cost, f"Google One URL: {url}", via="pixel")
+        result = _finalize_user_success(job_id, user.get("id"), cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=ctx.get("email", ""))
         _complete_async_task("pixel", job_id)
         broadcast_verify_event({
             "type": "progress",

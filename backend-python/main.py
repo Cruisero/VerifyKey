@@ -8554,7 +8554,6 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     continue
 
                 status = data.get("status", "")
-                logger.info(f"[Pixel-Poll] job={job_id} upstream response keys={list(data.keys())} status={status} queue_position={data.get('queue_position','MISSING')} position={data.get('position','MISSING')}")
                 stage = data.get("stage", 0)
                 total_stages = data.get("total_stages", 8)
                 stage_label = data.get("stage_label", "")
@@ -8562,6 +8561,18 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 # Broadcast progress (only for non-terminal states; success/failed have their own broadcasts below)
                 queue_pos = data.get("queue_position", -1)
+                # Upstream UPixel doesn't return queue_position in /api/jobs/{id},
+                # so fetch /api/queue for pending_count when queued
+                if status == "queued" and queue_pos < 0:
+                    try:
+                        q_resp = await client.get(f"{base_url}/api/queue", headers=headers)
+                        if q_resp.status_code == 200:
+                            q_data = q_resp.json()
+                            pending = q_data.get("pending_count", -1)
+                            if pending >= 0:
+                                queue_pos = pending
+                    except Exception:
+                        pass
                 if status == "queued":
                     msg = f"⏳ 排队中 (位置: {queue_pos})" if queue_pos >= 0 else "⏳ 排队中..."
                 elif status == "running":
@@ -8773,7 +8784,22 @@ async def pixel_get_job(job_id: str):
                 headers={"X-API-Key": pixel_cfg["apiKey"]},
             )
         if resp.status_code == 200:
-            return resp.json()
+            data = resp.json()
+            # Upstream UPixel doesn't include queue_position in job status;
+            # fetch /api/queue and inject pending_count as queue_position
+            if data.get("status") == "queued" and "queue_position" not in data:
+                try:
+                    async with httpx.AsyncClient(timeout=5) as qc:
+                        q_resp = await qc.get(
+                            f"{pixel_cfg['baseUrl']}/api/queue",
+                            headers={"X-API-Key": pixel_cfg["apiKey"]},
+                        )
+                    if q_resp.status_code == 200:
+                        q_data = q_resp.json()
+                        data["queue_position"] = q_data.get("pending_count", -1)
+                except Exception:
+                    pass
+            return data
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=str(e))

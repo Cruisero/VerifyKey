@@ -88,7 +88,7 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
     return record
 
 
-def update_verification(record_id: str, status: str) -> bool:
+def update_verification(record_id: str, status: str, message: str = None) -> bool:
     """
     Update the status of an existing verification record.
     Useful for updating 'processing' → 'pass'/'failed'/'cancel'.
@@ -96,15 +96,22 @@ def update_verification(record_id: str, status: str) -> bool:
     Args:
         record_id: The record ID to update
         status: New status
+        message: Optional new message to update
     
     Returns:
         True if updated successfully
     """
     conn = database.get_connection()
-    cursor = conn.execute(
-        "UPDATE verification_history SET status = ?, timestamp = ? WHERE id = ?",
-        (status, datetime.now().isoformat(), record_id)
-    )
+    if message is not None:
+        cursor = conn.execute(
+            "UPDATE verification_history SET status = ?, message = ?, timestamp = ? WHERE id = ?",
+            (status, message, datetime.now().isoformat(), record_id)
+        )
+    else:
+        cursor = conn.execute(
+            "UPDATE verification_history SET status = ?, timestamp = ? WHERE id = ?",
+            (status, datetime.now().isoformat(), record_id)
+        )
     conn.commit()
     return cursor.rowcount > 0
 

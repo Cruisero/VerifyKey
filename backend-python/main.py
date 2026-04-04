@@ -5991,7 +5991,8 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
             result = cdk_manager.refund_cdk(cdk_code, 1)
             cdk_message = f" | CDK {cdk_code}: {result['message']}"
     
-    success = verification_history.update_verification(record_id, request.status)
+    override_msg = "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败"
+    success = verification_history.update_verification(record_id, request.status, override_msg)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
     # Also set the manual override signal so running verification tasks can detect it
@@ -6047,7 +6048,7 @@ async def override_verification_by_vid(request: VidOverrideRequest):
     
     if existing:
         # Update existing record
-        verification_history.update_verification(existing["id"], request.status)
+        verification_history.update_verification(existing["id"], request.status, override_msg)
     else:
         # Create new record so it appears in history API
         verification_history.log_verification(request.status, request.vid, override_msg)

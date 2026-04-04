@@ -8559,7 +8559,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                 stage_label = data.get("stage_label", "")
                 elapsed = data.get("elapsed_seconds", time.time() - start_time)
 
-                # Broadcast progress
+                # Broadcast progress (only for non-terminal states; success/failed have their own broadcasts below)
                 queue_pos = data.get("queue_position", -1)
                 if status == "queued":
                     msg = f"⏳ 排队中 (位置: {queue_pos})" if queue_pos >= 0 else "⏳ 排队中..."
@@ -8568,19 +8568,20 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                 else:
                     msg = stage_label or status
 
-                broadcast_verify_event({
-                    "type": "progress",
-                    "vid": job_id,
-                    "step": "processing" if status in ("queued", "running") else "result",
-                    "status": status,
-                    "stage": stage,
-                    "totalStages": total_stages,
-                    "stageLabel": stage_label,
-                    "queuePosition": queue_pos,
-                    "message": msg,
-                    "elapsed": round(elapsed, 1),
-                    **event_meta,
-                })
+                if status in ("queued", "running"):
+                    broadcast_verify_event({
+                        "type": "progress",
+                        "vid": job_id,
+                        "step": "processing",
+                        "status": status,
+                        "stage": stage,
+                        "totalStages": total_stages,
+                        "stageLabel": stage_label,
+                        "queuePosition": queue_pos,
+                        "message": msg,
+                        "elapsed": round(elapsed, 1),
+                        **event_meta,
+                    })
 
                 if status == "success":
                     url = data.get("url", "")

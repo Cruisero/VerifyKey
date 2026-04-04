@@ -504,7 +504,9 @@ export default function Verify() {
                             estimatedWait: data.estimated_wait_seconds,
                             message: status === 'running'
                                 ? `🔄 [${stage}/${totalStages}] ${stageLabel}`
-                                : t('queueWaiting').replace('{pos}', data.queue_position >= 0 ? data.queue_position : '-'),
+                                : data.queue_position >= 0
+                                    ? t('queueWaiting').replace('{pos}', data.queue_position)
+                                    : t('queueing'),
                         } : r
                     ));
                 }

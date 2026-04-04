@@ -106,7 +106,7 @@ export default function Verify() {
     const userSseRef = useRef(null);
 
     // Visual progress interpolation: smoothly creep between discrete stages
-    const stageSnapshotRef = useRef({}); // { [resultId]: { stage, timestamp } }
+    const stageSnapshotRef = useRef({}); // { [resultId]: { stage, ts, fromPct } }
     const [visualProgress, setVisualProgress] = useState({}); // { [resultId]: displayPct }
 
     // Tick visual progress every second for processing items
@@ -122,23 +122,43 @@ export default function Verify() {
                     }
                     const snap = stageSnapshotRef.current[r.id];
                     if (!snap) {
-                        stageSnapshotRef.current[r.id] = { stage: r.stage, ts: Date.now() };
+                        stageSnapshotRef.current[r.id] = { stage: r.stage, ts: Date.now(), fromPct: 0 };
+                        next[r.id] = 0;
+                        changed = true;
                         continue;
                     }
-                    // If stage changed, update snapshot
+                    // If stage changed, record current display pct as starting point for smooth transition
                     if (snap.stage !== r.stage) {
-                        stageSnapshotRef.current[r.id] = { stage: r.stage, ts: Date.now() };
+                        stageSnapshotRef.current[r.id] = {
+                            stage: r.stage,
+                            ts: Date.now(),
+                            fromPct: next[r.id] ?? 0,
+                        };
                     }
-                    const basePct = (r.stage / r.totalStages) * 100;
-                    const nextStagePct = ((r.stage + 1) / r.totalStages) * 100;
-                    const gap = nextStagePct - basePct;
-                    const elapsed = (Date.now() - stageSnapshotRef.current[r.id].ts) / 1000;
-                    const avgStageTime = 50; // ~50s per stage
-                    const creep = gap * Math.min(elapsed / avgStageTime, 0.85);
-                    const displayPct = Math.min(Math.round(basePct + creep), 99);
-                    if (next[r.id] !== displayPct) {
-                        next[r.id] = displayPct;
-                        changed = true;
+                    const currentSnap = stageSnapshotRef.current[r.id];
+                    const targetPct = (r.stage / r.totalStages) * 100;
+                    const nextStagePct = Math.min(((r.stage + 1) / r.totalStages) * 100, 99);
+                    const elapsed = (Date.now() - currentSnap.ts) / 1000;
+                    const avgStageTime = 55; // ~55s per stage
+                    const progress = Math.min(elapsed / avgStageTime, 1);
+                    // Ease-out: fast start, slow finish
+                    const eased = 1 - Math.pow(1 - progress, 2);
+
+                    // Phase 1: smoothly transition from fromPct to targetPct (catch-up)
+                    // Phase 2: then creep from targetPct toward nextStagePct
+                    const catchUpDuration = 8; // seconds to catch up to new basePct
+                    if (elapsed < catchUpDuration && currentSnap.fromPct < targetPct) {
+                        const catchUpProgress = Math.min(elapsed / catchUpDuration, 1);
+                        const catchUpEased = 1 - Math.pow(1 - catchUpProgress, 3);
+                        const displayPct = Math.min(Math.round(currentSnap.fromPct + (targetPct - currentSnap.fromPct) * catchUpEased), 99);
+                        if (next[r.id] !== displayPct) { next[r.id] = displayPct; changed = true; }
+                    } else {
+                        // Creep within current stage
+                        const creepBase = Math.max(targetPct, currentSnap.fromPct);
+                        const creepGap = nextStagePct - creepBase;
+                        const creep = creepGap * eased * 0.85;
+                        const displayPct = Math.min(Math.round(creepBase + creep), 99);
+                        if (next[r.id] !== displayPct) { next[r.id] = displayPct; changed = true; }
                     }
                 }
                 return changed ? next : prev;

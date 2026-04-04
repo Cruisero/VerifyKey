@@ -2086,19 +2086,29 @@
 }
 
 .copy-url-btn {
-    background: none;
-    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(124, 92, 252, 0.08);
+    color: #7c5cfc;
+    border: 1px solid rgba(124, 92, 252, 0.2);
     cursor: pointer;
-    font-size: 12px;
-    padding: 2px 4px;
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-fast);
+    padding: 5px 6px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
     flex-shrink: 0;
 }
 
 .copy-url-btn:hover {
-    background: rgba(124, 92, 252, 0.08);
-    transform: scale(1.15);
+    background: rgba(124, 92, 252, 0.15);
+    border-color: rgba(124, 92, 252, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(124, 92, 252, 0.1);
+}
+
+.copy-url-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
 }
 
 /* Result Meta */

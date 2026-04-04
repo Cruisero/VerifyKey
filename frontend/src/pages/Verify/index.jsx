@@ -635,11 +635,19 @@ export default function Verify() {
     const upsertLiveResult = useCallback((incoming) => {
         if (!incoming?.verificationId) return;
         setResults(prev => {
-            const index = prev.findIndex(item =>
+            let index = prev.findIndex(item =>
                 item.verificationId === incoming.verificationId ||
                 item.jobId === incoming.verificationId ||
                 item.id === incoming.verificationId
             );
+
+            // Race condition: SSE arrived before POST request returned the jobId.
+            // Match against any pending item with same email and empty verificationId.
+            if (index === -1 && incoming.email) {
+                index = prev.findIndex(item => 
+                    !item.verificationId && !item.jobId && item.email === incoming.email && item.status === 'processing'
+                );
+            }
 
             if (index >= 0) {
                 const next = [...prev];

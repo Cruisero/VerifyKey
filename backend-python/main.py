@@ -5842,7 +5842,7 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
             "id": r["id"],
             "type": "pixel",
             "status": r["status"],  # pass / failed
-            "email": "",  # email is not stored in verification_history
+            "email": r.get("email", ""),
             "message": (r.get("message") or "").replace("❌", "").replace("✅", "").strip(),
             "timestamp": r["timestamp"],
         }

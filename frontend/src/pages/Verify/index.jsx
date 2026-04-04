@@ -643,9 +643,17 @@ export default function Verify() {
 
             if (index >= 0) {
                 const next = [...prev];
+                // Filter out falsy values from incoming so we don't overwrite
+                // existing non-empty fields (e.g. url, tier) with empty strings
+                const filtered = {};
+                for (const [k, v] of Object.entries(incoming)) {
+                    if (v !== '' && v !== undefined && v !== null) {
+                        filtered[k] = v;
+                    }
+                }
                 next[index] = {
                     ...next[index],
-                    ...incoming,
+                    ...filtered,
                     id: next[index].id,
                     verificationId: incoming.verificationId,
                     timestamp: incoming.timestamp || next[index].timestamp,

@@ -10,6 +10,9 @@ from typing import Dict, List
 
 import database
 
+# Keywords for user errors that shouldn't pollute the system failure stats
+USER_ERROR_FILTER = " AND IFNULL(message, '') NOT LIKE '%WRONG_PASSWORD%' AND IFNULL(message, '') NOT LIKE '%2fa错误%' AND IFNULL(message, '') NOT LIKE '%账号错误%' AND IFNULL(message, '') NOT LIKE '%密码错误%' AND IFNULL(message, '') NOT LIKE '%incorrect 2fa%' "
+
 # Display reset point — records before this timestamp won't be shown
 _display_reset_at: str = ""
 _reset_loaded: bool = False
@@ -133,12 +136,12 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
     conn = database.get_connection()
     if _display_reset_at and not ignore_reset:
         cursor = conn.execute(
-            "SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE timestamp > ? ORDER BY rowid DESC LIMIT ?",
+            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE timestamp > ? {USER_ERROR_FILTER} ORDER BY rowid DESC LIMIT ?",
             (_display_reset_at, limit)
         )
     else:
         cursor = conn.execute(
-            "SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history ORDER BY rowid DESC LIMIT ?",
+            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE 1=1 {USER_ERROR_FILTER} ORDER BY rowid DESC LIMIT ?",
             (limit,)
         )
     rows = cursor.fetchall()
@@ -185,12 +188,12 @@ def get_history_stats(respect_reset: bool = True) -> Dict:
     conn = database.get_connection()
     if respect_reset and _display_reset_at:
         cursor = conn.execute(
-            "SELECT status, COUNT(*) as cnt FROM verification_history WHERE timestamp > ? GROUP BY status",
+            f"SELECT status, COUNT(*) as cnt FROM verification_history WHERE timestamp > ? {USER_ERROR_FILTER} GROUP BY status",
             (_display_reset_at,)
         )
     else:
         cursor = conn.execute(
-            "SELECT status, COUNT(*) as cnt FROM verification_history GROUP BY status"
+            f"SELECT status, COUNT(*) as cnt FROM verification_history WHERE 1=1 {USER_ERROR_FILTER} GROUP BY status"
         )
     counts = {row["status"]: row["cnt"] for row in cursor.fetchall()}
 

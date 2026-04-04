@@ -1420,11 +1420,11 @@ export default function Verify() {
                                                                         <span className="progress-bar-label">{pct}%</span>
                                                                     </div>
                                                                 );
-                                                            })() : (
+                                                            })() : result.status === 'processing' ? (
                                                                 <span className="result-message">
                                                                     {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
                                                                 </span>
-                                                            )}
+                                                            ) : null}
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
                                                                     <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-url-link">

@@ -5974,14 +5974,14 @@ class ManualOverrideRequest(BaseModel):
 
 @app.patch("/api/verify/history/{record_id}")
 async def override_verification_status(record_id: str, request: ManualOverrideRequest):
-    """Admin: Manually override a verification record's status (pass/failed) with CDK quota adjustment"""
+    """Admin: Manually override a verification record's status (pass/failed) with credit/CDK adjustment"""
     if request.status not in ("pass", "failed"):
         raise HTTPException(status_code=400, detail="Status must be 'pass' or 'failed'")
     
-    # Get current record to check old status and CDK
+    # Get current record to check old status, CDK, and VID
     conn = database.get_connection()
     cursor = conn.execute(
-        "SELECT status, cdk FROM verification_history WHERE id = ?", (record_id,)
+        "SELECT status, cdk, verificationId FROM verification_history WHERE id = ?", (record_id,)
     )
     row = cursor.fetchone()
     if not row:
@@ -5989,29 +5989,48 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     
     old_status = row["status"]
     cdk_code = row["cdk"]
+    vid = row["verificationId"] or ""
     
-    # CDK quota adjustment
-    cdk_message = ""
+    # Credit / CDK quota adjustment
+    credit_message = ""
     if cdk_code and cdk_code != "__BOT_INTERNAL__":
-        if request.status == "pass" and old_status != "pass":
-            # Marking as Pass → deduct 1 CDK quota
-            result = cdk_manager.use_cdk(cdk_code, 1)
-            cdk_message = f" | CDK {cdk_code}: {result['message']}"
-        elif request.status == "failed" and old_status == "pass":
-            # Marking Pass→Failed → refund 1 CDK quota
-            result = cdk_manager.refund_cdk(cdk_code, 1)
-            cdk_message = f" | CDK {cdk_code}: {result['message']}"
+        if cdk_code.startswith("user:"):
+            # User credit system (积分)
+            try:
+                uid = int(cdk_code.split(":")[1])
+                # Determine credit cost based on VID prefix
+                if vid.startswith("yp_"):
+                    cost = 1.0
+                elif vid.startswith("vp_"):
+                    cost = 1.5
+                elif vid.startswith("kp_"):
+                    cost = 1.5
+                else:
+                    cost = 1.0
+
+                if request.status == "pass" and old_status != "pass":
+                    auth.deduct_credits(uid, cost)
+                    credit_message = f"已扣除用户 {uid} 积分 {cost}"
+                elif request.status == "failed" and old_status == "pass":
+                    auth.update_credits(uid, cost)
+                    credit_message = f"已返还用户 {uid} 积分 {cost}"
+            except Exception as e:
+                credit_message = f"积分操作失败: {e}"
+        else:
+            # CDK-based system
+            if request.status == "pass" and old_status != "pass":
+                result = cdk_manager.use_cdk(cdk_code, 1)
+                credit_message = f"CDK {cdk_code}: {result['message']}"
+            elif request.status == "failed" and old_status == "pass":
+                result = cdk_manager.refund_cdk(cdk_code, 1)
+                credit_message = f"CDK {cdk_code}: {result['message']}"
     
     override_msg = "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败"
     success = verification_history.update_verification(record_id, request.status, override_msg)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
     # Also set the manual override signal so running verification tasks can detect it
-    cursor2 = conn.execute("SELECT verificationId FROM verification_history WHERE id = ?", (record_id,))
-    row2 = cursor2.fetchone()
-    vid = ""
-    if row2 and row2["verificationId"]:
-        vid = row2["verificationId"]
+    if vid:
         set_manual_override(vid, request.status)
         _remember_terminal_verify_event(vid, request.status)
     # Broadcast the update via SSE so admin page refreshes
@@ -6031,7 +6050,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
             event_payload["userId"] = cdk_code
         broadcast_verify_event(event_payload)
         
-    return {"updated": True, "id": record_id, "status": request.status, "cdkMessage": cdk_message}
+    return {"updated": True, "id": record_id, "status": request.status, "creditMessage": credit_message}
 
 
 class VidOverrideRequest(BaseModel):

@@ -6007,7 +6007,7 @@ export default function Admin() {
                                                                     });
                                                                     setVerifyLog(prev => prev.map(item =>
                                                                         item.verificationId === r.verificationId
-                                                                            ? { ...item, status: 'failed', message: '管理员手动标记为失败' }
+                                                                            ? { ...item, status: 'failed', message: '认证失败' }
                                                                             : item
                                                                     ));
                                                                 } else {

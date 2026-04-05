@@ -6025,7 +6025,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                 result = cdk_manager.refund_cdk(cdk_code, 1)
                 credit_message = f"CDK {cdk_code}: {result['message']}"
     
-    override_msg = "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败"
+    override_msg = "管理员手动标记为通过" if request.status == "pass" else "认证失败"
     success = verification_history.update_verification(record_id, request.status, override_msg)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
@@ -6037,7 +6037,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     broadcast_verify_event({"type": "history_updated", "id": record_id, "status": request.status})
     
     if vid:
-        override_msg = "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败"
+        override_msg = "管理员手动标记为通过" if request.status == "pass" else "认证失败"
         event_payload = {
             "type": "progress",
             "vid": vid,
@@ -6074,7 +6074,7 @@ async def override_verification_by_vid(request: VidOverrideRequest):
         (request.vid,)
     )
     existing = cursor.fetchone()
-    override_msg = "管理员手动标记为通过" if request.status == "pass" else "管理员手动标记为失败"
+    override_msg = "管理员手动标记为通过" if request.status == "pass" else "认证失败"
     
     if existing:
         # Update existing record
@@ -7226,7 +7226,7 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
                     **r,
                     "status": "approved" if override_status == "pass" else "failed",
                     "success": override_status == "pass",
-                    "message": "管理员手动标记为通过" if override_status == "pass" else "管理员手动标记为失败",
+                    "message": "管理员手动标记为通过" if override_status == "pass" else "认证失败",
                     "via": r.get("via", "") + " (manual)",
                 }
 

@@ -5842,7 +5842,7 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
             "id": r["id"],
             "type": "pixel",
             "status": r["status"],  # pass / failed
-            "email": r.get("email", ""),
+            "email": r.get("submitEmail", "") or r.get("email", ""),
             "message": (r.get("message") or "").replace("❌", "").replace("✅", "").strip(),
             "timestamp": r["timestamp"],
         }
@@ -5861,7 +5861,7 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
             "type": "gpt",
             "status": "pass" if row["status"] == "used" else "failed",
             "email": row["used_email"] or "",
-            "message": f"ChatGPT 充值{'成功' if row['status'] == 'used' else '失败'} ({(row['channel'] or 'sbs').upper()})",
+            "message": f"ChatGPT 充值{'成功' if row['status'] == 'used' else '失败'}",
             "timestamp": row["used_at"] or "",
         }
         for row in gpt_rows
@@ -5869,7 +5869,7 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
 
     gpt_team_rows = conn.execute(
         """
-        SELECT id, status, verification_id, message, timestamp
+        SELECT id, status, verification_id, message, timestamp, email
         FROM verification_history
         WHERE cdk = ? AND via = 'gpt_team'
         ORDER BY rowid DESC
@@ -5882,7 +5882,7 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
             "id": row["id"],
             "type": "gpt",
             "status": row["status"],
-            "email": "",
+            "email": row["email"] if "email" in row.keys() else "",
             "message": row["message"] or "Team 邀请",
             "timestamp": row["timestamp"] or "",
         }
@@ -8595,7 +8595,7 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                     last_known_status = status
 
                 stage = data.get("stage", 0)
-                total_stages = data.get("total_stages", 8)
+                total_stages = data.get("total_stages", 6)
                 stage_label = data.get("stage_label", "")
                 elapsed = data.get("elapsed_seconds", time.time() - start_time)
 
@@ -8934,7 +8934,7 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
         return {"success": True, "status": "success", "confirmed": True, "finalized": result}
     if status == "failed":
         error = data.get("error", "UNKNOWN_ERROR")
-        _finalize_user_failure(job_id, user.get("id"), f"失败: {error}", via="pixel", refund_cost=cost)
+        _finalize_user_failure(job_id, user.get("id"), f"失败: {error}", via="pixel", refund_cost=cost, email=ctx.get("email", ""))
         _complete_async_task("pixel", job_id)
         return {"success": True, "status": "failed", "confirmed": True}
     return {"success": True, "status": status or "pending", "confirmed": False}
@@ -9127,7 +9127,7 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
             while True:
                 wait_seconds = _next_pixel_poll_interval(time.time() - start_time)
                 if wait_seconds is None:
-                    _finalize_user_failure(str(task_id), user_id, "KPixel 失败: 轮询超时", via="kpixel", refund_cost=credit_cost)
+                    _finalize_user_failure(str(task_id), user_id, "KPixel 失败: 轮询超时", via="kpixel", refund_cost=credit_cost, email=email)
                     _complete_async_task("kpixel", str(task_id))
                     broadcast_verify_event({
                         "type": "progress",
@@ -9180,7 +9180,7 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
                         **event_meta,
                     })
                 elif status == "Success":
-                    result = _finalize_user_success(str(task_id), user_id, credit_cost, f"KPixel 成功: {message}", via="kpixel")
+                    result = _finalize_user_success(str(task_id), user_id, credit_cost, f"KPixel 成功: {message}", via="kpixel", email=email)
                     _complete_async_task("kpixel", str(task_id))
                     broadcast_verify_event({
                         "type": "progress",
@@ -9195,7 +9195,7 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
                     })
                     break
                 elif status == "Failed":
-                    _finalize_user_failure(str(task_id), user_id, f"KPixel 失败: {message}", via="kpixel", refund_cost=credit_cost)
+                    _finalize_user_failure(str(task_id), user_id, f"KPixel 失败: {message}", via="kpixel", refund_cost=credit_cost, email=email)
                     _complete_async_task("kpixel", str(task_id))
                     broadcast_verify_event({
                         "type": "progress",
@@ -9210,11 +9210,11 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
                     break
 
     except asyncio.CancelledError:
-        _finalize_user_failure(str(task_id), user_id, "KPixel 失败: 轮询取消", via="kpixel", refund_cost=credit_cost)
+        _finalize_user_failure(str(task_id), user_id, "KPixel 失败: 轮询取消", via="kpixel", refund_cost=credit_cost, email=email)
         _complete_async_task("kpixel", str(task_id))
     except Exception as e:
         logging.error(f"[KPixel] Poll error for task {task_id}: {e}")
-        _finalize_user_failure(str(task_id), user_id, f"KPixel 失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="kpixel", refund_cost=credit_cost)
+        _finalize_user_failure(str(task_id), user_id, f"KPixel 失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="kpixel", refund_cost=credit_cost, email=email)
         _complete_async_task("kpixel", str(task_id))
         broadcast_verify_event({
             "type": "progress",
@@ -9529,7 +9529,7 @@ async def kpixel_confirm_job(task_id: int, authorization: Optional[str] = Header
     cost = ctx.get("cost", kpixel_cfg.get("creditCost", 1.5))
     event_meta = _build_verify_event_meta("kpixel", ctx.get("email", ""), user.get("id"), "kpixel_api")
     if status == "Success":
-        result = _finalize_user_success(str(task_id), user.get("id"), cost, f"KPixel 成功: {message}", via="kpixel")
+        result = _finalize_user_success(str(task_id), user.get("id"), cost, f"KPixel 成功: {message}", via="kpixel", email=ctx.get("email", ""))
         _complete_async_task("kpixel", str(task_id))
         broadcast_verify_event({
             "type": "progress",
@@ -9544,7 +9544,7 @@ async def kpixel_confirm_job(task_id: int, authorization: Optional[str] = Header
         })
         return {"success": True, "status": "success", "confirmed": True, "finalized": result}
     if status == "Failed":
-        _finalize_user_failure(str(task_id), user.get("id"), f"KPixel 失败: {message}", via="kpixel", refund_cost=cost)
+        _finalize_user_failure(str(task_id), user.get("id"), f"KPixel 失败: {message}", via="kpixel", refund_cost=cost, email=ctx.get("email", ""))
         _complete_async_task("kpixel", str(task_id))
         return {"success": True, "status": "failed", "confirmed": True}
     return {"success": True, "status": status or "pending", "confirmed": False}
@@ -9839,7 +9839,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                         conn.commit()
                     except Exception:
                         pass
-                    _finalize_user_failure(poll_id, user_id, "VPixel 失败: 轮询超时", via="vpixel", refund_cost=credit_cost)
+                    _finalize_user_failure(poll_id, user_id, "VPixel 失败: 轮询超时", via="vpixel", refund_cost=credit_cost, email=email)
                     _complete_async_task("vpixel", poll_id)
                     _vpixel_job_status[poll_id] = {"status": "Failed", "message": "轮询超时", "elapsed": round(time.time() - start_time, 1)}
                     broadcast_verify_event({
@@ -9952,7 +9952,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                             conn.commit()
                         except Exception:
                             pass
-                    result = _finalize_user_success(poll_id, user_id, credit_cost, f"VPixel 成功: {result_msg}", via="vpixel")
+                    result = _finalize_user_success(poll_id, user_id, credit_cost, f"VPixel 成功: {result_msg}", via="vpixel", email=email)
                     _complete_async_task("vpixel", poll_id)
                     _vpixel_job_status[poll_id] = {"status": "Success", "message": result_msg or "验证成功", "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
@@ -9975,7 +9975,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
                         conn.commit()
                     except Exception:
                         pass
-                    _finalize_user_failure(poll_id, user_id, f"VPixel 失败: {result_msg}", via="vpixel", refund_cost=credit_cost)
+                    _finalize_user_failure(poll_id, user_id, f"VPixel 失败: {result_msg}", via="vpixel", refund_cost=credit_cost, email=email)
                     _complete_async_task("vpixel", poll_id)
                     _vpixel_job_status[poll_id] = {"status": "Failed", "message": result_msg or "验证失败", "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
@@ -9998,7 +9998,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
             conn.commit()
         except Exception:
             pass
-        _finalize_user_failure(poll_id, user_id, "VPixel 失败: 轮询取消", via="vpixel", refund_cost=credit_cost)
+        _finalize_user_failure(poll_id, user_id, "VPixel 失败: 轮询取消", via="vpixel", refund_cost=credit_cost, email=email)
         _complete_async_task("vpixel", poll_id)
     except Exception as e:
         logging.error(f"[VPixel] Poll error for {email}: {e}")
@@ -10009,7 +10009,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
             conn.commit()
         except Exception:
             pass
-        _finalize_user_failure(poll_id, user_id, f"VPixel 失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="vpixel", refund_cost=credit_cost)
+        _finalize_user_failure(poll_id, user_id, f"VPixel 失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="vpixel", refund_cost=credit_cost, email=email)
         _complete_async_task("vpixel", poll_id)
         _vpixel_job_status[poll_id] = {"status": "Failed", "message": f"轮询错误: {str(e)}", "elapsed": 0}
         broadcast_verify_event({
@@ -10072,7 +10072,7 @@ async def vpixel_confirm_job(poll_id: str, authorization: Optional[str] = Header
     result_msg = target_item.get("result", "")
     event_meta = _build_verify_event_meta("vpixel", ctx.get("email", ""), user.get("id"), "vpixel_card_pool", ctx.get("card", ""))
     if mapped_status == "success":
-        result = _finalize_user_success(poll_id, user.get("id"), ctx["cost"], f"VPixel 成功: {result_msg}", via="vpixel")
+        result = _finalize_user_success(poll_id, user.get("id"), ctx["cost"], f"VPixel 成功: {result_msg}", via="vpixel", email=ctx.get("email", ""))
         _complete_async_task("vpixel", poll_id)
         broadcast_verify_event({
             "type": "progress",
@@ -10087,7 +10087,7 @@ async def vpixel_confirm_job(poll_id: str, authorization: Optional[str] = Header
         })
         return {"success": True, "status": "success", "confirmed": True, "finalized": result}
     if mapped_status == "failed":
-        _finalize_user_failure(poll_id, user.get("id"), f"VPixel 失败: {result_msg}", via="vpixel", refund_cost=ctx["cost"])
+        _finalize_user_failure(poll_id, user.get("id"), f"VPixel 失败: {result_msg}", via="vpixel", refund_cost=ctx["cost"], email=ctx.get("email", ""))
         _complete_async_task("vpixel", poll_id)
         return {"success": True, "status": "failed", "confirmed": True}
     return {"success": True, "status": mapped_status, "confirmed": False}
@@ -10429,7 +10429,7 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                         conn.commit()
                     except Exception:
                         pass
-                    _finalize_user_failure(poll_id, user_id, "YPixel 失败: 任务超时", via="ypixel", refund_cost=credit_cost)
+                    _finalize_user_failure(poll_id, user_id, "YPixel 失败: 任务超时", via="ypixel", refund_cost=credit_cost, email=email)
                     _complete_async_task("ypixel", poll_id)
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": "任务超时", "elapsed": round(time.time() - start_time, 1)}
                     broadcast_verify_event({
@@ -10470,7 +10470,7 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
 
                 # Task completed and account succeeded
                 if task_status in ("completed", "done") and acct_status == "success":
-                    result = _finalize_user_success(poll_id, user_id, credit_cost, f"YPixel 成功: {result_url or message or '验证成功'}", via="ypixel")
+                    result = _finalize_user_success(poll_id, user_id, credit_cost, f"YPixel 成功: {result_url or message or '验证成功'}", via="ypixel", email=email)
                     _complete_async_task("ypixel", poll_id)
                     # Decrement card remaining quota
                     try:
@@ -10512,7 +10512,7 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     except Exception:
                         pass
                     err_msg = message or "验证失败"
-                    _finalize_user_failure(poll_id, user_id, f"YPixel 失败: {err_msg}", via="ypixel", refund_cost=credit_cost)
+                    _finalize_user_failure(poll_id, user_id, f"YPixel 失败: {err_msg}", via="ypixel", refund_cost=credit_cost, email=email)
                     _complete_async_task("ypixel", poll_id)
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
@@ -10534,7 +10534,7 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
                     except Exception:
                         pass
                     err_msg = message or "任务失败"
-                    _finalize_user_failure(poll_id, user_id, f"YPixel 失败: {err_msg}", via="ypixel", refund_cost=credit_cost)
+                    _finalize_user_failure(poll_id, user_id, f"YPixel 失败: {err_msg}", via="ypixel", refund_cost=credit_cost, email=email)
                     _complete_async_task("ypixel", poll_id)
                     _ypixel_job_status[poll_id] = {"status": "Failed", "message": err_msg, "elapsed": round(elapsed, 1)}
                     broadcast_verify_event({
@@ -10571,7 +10571,7 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
             conn.commit()
         except Exception:
             pass
-        _finalize_user_failure(poll_id, user_id, "YPixel 失败: 轮询取消", via="ypixel", refund_cost=credit_cost)
+        _finalize_user_failure(poll_id, user_id, "YPixel 失败: 轮询取消", via="ypixel", refund_cost=credit_cost, email=email)
         _complete_async_task("ypixel", poll_id)
     except Exception as e:
         logging.error(f"[YPixel] Poll error for {email}: {e}")
@@ -10581,7 +10581,7 @@ async def _ypixel_poll_job(task_id: str, card_key: str, email: str, user_id: int
             conn.commit()
         except Exception:
             pass
-        _finalize_user_failure(poll_id, user_id, f"YPixel 失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="ypixel", refund_cost=credit_cost)
+        _finalize_user_failure(poll_id, user_id, f"YPixel 失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via="ypixel", refund_cost=credit_cost, email=email)
         _complete_async_task("ypixel", poll_id)
         _ypixel_job_status[poll_id] = {"status": "Failed", "message": f"轮询错误", "elapsed": 0}
     finally:
@@ -10635,7 +10635,7 @@ async def ypixel_confirm_job(poll_id: str, authorization: Optional[str] = Header
     event_meta = _build_verify_event_meta("ypixel", ctx.get("email", ""), user.get("id"), "ypixel_card_pool", ctx.get("card_key", ""))
 
     if task_status in ("completed", "done") and acct_status == "success":
-        result = _finalize_user_success(poll_id, user.get("id"), ctx["cost"], f"YPixel 成功: {result_url or message or '验证成功'}", via="ypixel")
+        result = _finalize_user_success(poll_id, user.get("id"), ctx["cost"], f"YPixel 成功: {result_url or message or '验证成功'}", via="ypixel", email=ctx.get("email", ""))
         _complete_async_task("ypixel", poll_id)
         display_msg = result_url or message or "验证成功"
         broadcast_verify_event({
@@ -10651,7 +10651,7 @@ async def ypixel_confirm_job(poll_id: str, authorization: Optional[str] = Header
         })
         return {"success": True, "status": "success", "confirmed": True, "finalized": result}
     if (task_status in ("completed", "done") and acct_status in ("failed", "error")) or task_status in ("failed", "error"):
-        _finalize_user_failure(poll_id, user.get("id"), f"YPixel 失败: {message or '任务失败'}", via="ypixel", refund_cost=ctx["cost"])
+        _finalize_user_failure(poll_id, user.get("id"), f"YPixel 失败: {message or '任务失败'}", via="ypixel", refund_cost=ctx["cost"], email=ctx.get("email", ""))
         _complete_async_task("ypixel", poll_id)
         return {"success": True, "status": "failed", "confirmed": True}
     return {"success": True, "status": task_status or "pending", "confirmed": False}

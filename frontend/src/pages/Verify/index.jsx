@@ -372,7 +372,7 @@ export default function Verify() {
             apiUrl: `${API_BASE}/api/pixel/jobs`,
             payload: { email: account.email, password: account.password, totp_secret: normalizedTotp },
             source: 'pixel',
-            totalStages: 8,
+            totalStages: 6,
         };
     };
 
@@ -513,7 +513,7 @@ export default function Verify() {
 
                 const status = data.status;
                 const stage = data.stage || 0;
-                const totalStages = data.total_stages || 8;
+                const totalStages = data.total_stages || 6;
                 const stageLabel = data.stage_label || '';
                 const elapsed = data.elapsed_seconds || 0;
 
@@ -806,7 +806,7 @@ export default function Verify() {
             email: acc.email,
             status: 'processing',
             timestamp: new Date().toISOString(),
-            message: `⏳ ${t('submitting')}`,
+            message: t('submitted'),
             stage: 0,
             totalStages: jobPlans[i].totalStages,
             stageLabel: '',
@@ -1372,14 +1372,14 @@ export default function Verify() {
                                                     displayMsg = displayMsg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
                                                     
                                                     return (
-                                                    <div key={item.id} className={`result-item ${displayStatus}`}>
+                                                    <div key={item.id} className={`result-item history ${displayStatus}`}>
                                                         <div className="result-status">
                                                             {displayStatus === 'success' && <span className="status-icon success">✓</span>}
                                                             {displayStatus === 'failed' && <span className="status-icon failed">✕</span>}
                                                         </div>
                                                         <div className="result-info">
                                                             <div className="result-main-row">
-                                                                <span className="result-id">{maskEmail(item.email)}</span>
+                                                                <span className="result-id">{maskEmail(item.email) || '-'}</span>
                                                             </div>
                                                             <span className="result-message">
                                                                 {displayMsg || (displayStatus === 'success' ? t('verifySuccess') : t('verifyFailed'))}
@@ -1387,11 +1387,11 @@ export default function Verify() {
                                                             {displayStatus === 'success' && displayUrl && (
                                                                 <div className="result-url-row">
                                                                     <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        🔗 {displayUrl.length > 60 ? displayUrl.slice(0, 57) + '...' : displayUrl}
+                                                                        {displayUrl.length > 45 ? displayUrl.slice(0, 42) + '...' : displayUrl}
                                                                     </a>
                                                                     <button
                                                                         className="copy-url-btn"
-                                                                        onClick={() => navigator.clipboard.writeText(item.url)}
+                                                                        onClick={() => navigator.clipboard.writeText(displayUrl)}
                                                                         title={t('copyLink')}
                                                                     >
                                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1429,17 +1429,15 @@ export default function Verify() {
                                                         <div className="result-status">
                                                             {result.status === 'processing' && (() => {
                                                                 const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);
-                                                                const isQueued = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing');
-                                                                return isQueued ? (
-                                                                    <span className="spinner small"></span>
-                                                                ) : (
-                                                                    <div className="progress-ring">
+                                                                const isQueued = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted');
+                                                                return (
+                                                                    <div className={`progress-ring${isQueued ? ' progress-ring-queued' : ''}`}>
                                                                         <svg viewBox="0 0 36 36" className="progress-ring-svg">
                                                                             <circle className="progress-ring-bg" cx="18" cy="18" r="15.5" />
                                                                             <circle className="progress-ring-fill" cx="18" cy="18" r="15.5"
-                                                                                style={{ strokeDasharray: `${pct} 100` }} />
+                                                                                style={{ strokeDasharray: isQueued ? undefined : `${pct} 100` }} />
                                                                         </svg>
-                                                                        <span className="progress-ring-text">{pct}</span>
+                                                                        {!isQueued && <span className="progress-ring-text">{pct}</span>}
                                                                     </div>
                                                                 );
                                                             })()}
@@ -1450,7 +1448,7 @@ export default function Verify() {
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(result.email)}</span>
                                                             </div>
-                                                            {result.status === 'processing' && result.totalStages > 0 && !result.message?.includes('排队') && !result.message?.includes('queue') ? (() => {
+                                                            {result.status === 'processing' && result.totalStages > 0 && !result.message?.includes('排队') && !result.message?.includes('queue') && !result.message?.includes('提交') && !result.message?.includes('Submitting') && !result.message?.includes('Submitted') ? (() => {
                                                                 const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
                                                                 return (
                                                                     <div className="progress-bar-container">
@@ -1468,7 +1466,7 @@ export default function Verify() {
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
                                                                     <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        🔗 {result.url.length > 60 ? result.url.slice(0, 57) + '...' : result.url}
+                                                                        {result.url.length > 45 ? result.url.slice(0, 42) + '...' : result.url}
                                                                     </a>
                                                                     <button
                                                                         className="copy-url-btn"
@@ -1803,7 +1801,7 @@ export default function Verify() {
                                                     let displayMsg = (item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
                                                     
                                                     return (
-                                                    <div key={item.id} className={`result-item ${displayStatus}`}>
+                                                    <div key={item.id} className={`result-item history ${displayStatus}`}>
                                                         <div className="result-status">
                                                             {displayStatus === 'success' && <span className="status-icon success">✓</span>}
                                                             {displayStatus !== 'success' && <span className="status-icon failed">✕</span>}

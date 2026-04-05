@@ -5972,16 +5972,159 @@ async def delete_verification_history(record_id: str):
 class ManualOverrideRequest(BaseModel):
     status: str  # 'pass' or 'failed'
 
+
+async def _fetch_upstream_result_url(vid: str, via: str) -> str:
+    """Fetch the real verification result URL from the upstream Pixel API.
+    
+    When admin manually marks a record as pass, we need to query the upstream
+    API to get the actual subscription URL so users can access their reward.
+    
+    Args:
+        vid: The verification/job ID stored in the DB
+        via: The channel identifier (pixel, pixel_auto, kpixel, vpixel, ypixel, etc.)
+    
+    Returns:
+        The result URL string, or empty string if not available.
+    """
+    import re as _re_url
+    try:
+        via_lower = (via or "").lower()
+        
+        # UPixel: GET {baseUrl}/api/jobs/{job_id}  →  response.url
+        if via_lower in ("pixel", "pixel_auto", "pixel_api"):
+            pixel_cfg = _get_pixel_config()
+            if not pixel_cfg.get("apiKey"):
+                return ""
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{pixel_cfg['baseUrl']}/api/jobs/{vid}",
+                    headers={"X-API-Key": pixel_cfg["apiKey"]},
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                url = data.get("url", "")
+                if url:
+                    return url
+                # Also try extracting from message field
+                msg = data.get("message", "")
+                if msg:
+                    m = _re_url.search(r'(https?://\S+)', msg)
+                    if m:
+                        return m.group(1)
+            return ""
+        
+        # KPixel: POST {baseUrl} with action=get_status  →  response.data.message (contains URL)
+        if via_lower == "kpixel":
+            kpixel_cfg = _get_kpixel_config()
+            if not kpixel_cfg.get("cdkey"):
+                return ""
+            # KPixel task_id is an integer stored as string
+            try:
+                task_id = int(vid)
+            except (ValueError, TypeError):
+                return ""
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(kpixel_cfg["baseUrl"], json={
+                    "action": "get_status",
+                    "cdkey": kpixel_cfg["cdkey"],
+                    "task_id": task_id,
+                })
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("success"):
+                    info = data.get("data", {})
+                    message = info.get("message", "")
+                    if message:
+                        m = _re_url.search(r'(https?://\S+)', message)
+                        if m:
+                            return m.group(1)
+                        # KPixel sometimes returns the URL directly as the message
+                        return message
+            return ""
+        
+        # VPixel: POST {baseUrl}/task/query with card=...  →  response.data fields
+        if via_lower == "vpixel":
+            vpixel_cfg = _get_vpixel_config()
+            if not vpixel_cfg.get("card"):
+                return ""
+            # VPixel poll_id has vp_ prefix; the actual task_id may differ
+            # Try querying with the VID as-is
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{vpixel_cfg['baseUrl']}/task/query",
+                    json={"card": vpixel_cfg["card"], "task_id": vid},
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                result_data = data.get("data", {})
+                # VPixel returns result in 'message' or 'url' field
+                url = result_data.get("url", "") or result_data.get("result_url", "")
+                if url:
+                    return url
+                msg = result_data.get("message", "") or result_data.get("result", "")
+                if msg:
+                    m = _re_url.search(r'(https?://\S+)', msg)
+                    if m:
+                        return m.group(1)
+            return ""
+        
+        # YPixel: GET {baseUrl}/task/{task_id}  →  response fields
+        if via_lower == "ypixel":
+            ypixel_cfg = _get_ypixel_config()
+            # YPixel poll_id may have yp_ prefix; extract the real task_id
+            real_task_id = vid
+            if vid.startswith("yp_"):
+                # The actual task ID might be after the prefix
+                parts = vid.split("_", 2)
+                if len(parts) >= 3:
+                    real_task_id = parts[2]
+                elif len(parts) == 2:
+                    real_task_id = parts[1]
+            async with httpx.AsyncClient(timeout=10) as client:
+                # Try the poll_id first (some YPixel APIs use the full poll_id)
+                resp = await client.get(f"{ypixel_cfg['baseUrl']}/task/{vid}")
+                if resp.status_code != 200 and real_task_id != vid:
+                    resp = await client.get(f"{ypixel_cfg['baseUrl']}/task/{real_task_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                # YPixel may return URL in various fields
+                url = data.get("url", "") or data.get("result_url", "")
+                if url:
+                    return url
+                msg = data.get("message", "") or data.get("result", "")
+                if msg:
+                    m = _re_url.search(r'(https?://\S+)', msg)
+                    if m:
+                        return m.group(1)
+            return ""
+        
+        # Unknown via — try to infer from VID prefix
+        if vid.startswith("yp_"):
+            return await _fetch_upstream_result_url(vid, "ypixel")
+        elif vid.startswith("vp_"):
+            return await _fetch_upstream_result_url(vid, "vpixel")
+        elif vid.startswith("kp_"):
+            return await _fetch_upstream_result_url(vid, "kpixel")
+        else:
+            # Default: try UPixel
+            return await _fetch_upstream_result_url(vid, "pixel")
+    
+    except Exception as e:
+        logging.warning(f"[override] Failed to fetch upstream result for VID={vid} via={via}: {e}")
+        return ""
+
+
 @app.patch("/api/verify/history/{record_id}")
 async def override_verification_status(record_id: str, request: ManualOverrideRequest):
-    """Admin: Manually override a verification record's status (pass/failed) with credit/CDK adjustment"""
+    """Admin: Manually override a verification record's status (pass/failed) with credit/CDK adjustment.
+    When marking as pass, fetches real result URL from upstream API so users get the actual subscription link."""
     if request.status not in ("pass", "failed"):
         raise HTTPException(status_code=400, detail="Status must be 'pass' or 'failed'")
     
-    # Get current record to check old status, CDK, and VID
+    # Get current record to check old status, CDK, VID, and via
     conn = database.get_connection()
     cursor = conn.execute(
-        "SELECT status, cdk, verificationId FROM verification_history WHERE id = ?", (record_id,)
+        "SELECT status, cdk, verificationId, via FROM verification_history WHERE id = ?", (record_id,)
     )
     row = cursor.fetchone()
     if not row:
@@ -5990,6 +6133,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     old_status = row["status"]
     cdk_code = row["cdk"]
     vid = row["verificationId"] or ""
+    via = row["via"] if "via" in row.keys() else ""
     
     # Credit / CDK quota adjustment
     credit_message = ""
@@ -6025,7 +6169,19 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                 result = cdk_manager.refund_cdk(cdk_code, 1)
                 credit_message = f"CDK {cdk_code}: {result['message']}"
     
-    override_msg = "管理员手动标记为通过" if request.status == "pass" else "认证失败"
+    # When marking as pass, fetch real result URL from upstream API
+    real_url = ""
+    if request.status == "pass" and vid:
+        real_url = await _fetch_upstream_result_url(vid, via)
+    
+    if request.status == "pass":
+        if real_url:
+            override_msg = f"✅ 订阅成功: {real_url}"
+        else:
+            override_msg = "管理员手动标记为通过"
+    else:
+        override_msg = "认证失败"
+    
     success = verification_history.update_verification(record_id, request.status, override_msg)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
@@ -6037,7 +6193,6 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     broadcast_verify_event({"type": "history_updated", "id": record_id, "status": request.status})
     
     if vid:
-        override_msg = "管理员手动标记为通过" if request.status == "pass" else "认证失败"
         event_payload = {
             "type": "progress",
             "vid": vid,
@@ -6046,11 +6201,14 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
             "success": request.status == "pass",
             "message": override_msg,
         }
+        if real_url:
+            event_payload["url"] = real_url
         if cdk_code and cdk_code.startswith("user:"):
             event_payload["userId"] = cdk_code
         broadcast_verify_event(event_payload)
         
-    return {"updated": True, "id": record_id, "status": request.status, "creditMessage": credit_message}
+    return {"updated": True, "id": record_id, "status": request.status, "creditMessage": credit_message, "url": real_url}
+
 
 
 class VidOverrideRequest(BaseModel):
@@ -6061,7 +6219,8 @@ class VidOverrideRequest(BaseModel):
 async def override_verification_by_vid(request: VidOverrideRequest):
     """Admin: Override a verification by VID (for processing entries not yet in DB).
     Sets the manual override signal so running verification tasks early-return.
-    Also persists the result to verification_history so it survives page reloads."""
+    Also persists the result to verification_history so it survives page reloads.
+    When marking as pass, fetches real result URL from upstream API."""
     if request.status not in ("pass", "failed"):
         raise HTTPException(status_code=400, detail="Status must be 'pass' or 'failed'")
     
@@ -6070,11 +6229,26 @@ async def override_verification_by_vid(request: VidOverrideRequest):
     # Persist to DB: check if VID already exists in history
     conn = database.get_connection()
     cursor = conn.execute(
-        "SELECT id, status FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+        "SELECT id, status, via FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
         (request.vid,)
     )
     existing = cursor.fetchone()
-    override_msg = "管理员手动标记为通过" if request.status == "pass" else "认证失败"
+    
+    # Fetch real URL from upstream when marking as pass
+    via = ""
+    if existing and "via" in existing.keys():
+        via = existing["via"] or ""
+    real_url = ""
+    if request.status == "pass":
+        real_url = await _fetch_upstream_result_url(request.vid, via)
+    
+    if request.status == "pass":
+        if real_url:
+            override_msg = f"✅ 订阅成功: {real_url}"
+        else:
+            override_msg = "管理员手动标记为通过"
+    else:
+        override_msg = "认证失败"
     
     if existing:
         # Update existing record
@@ -6098,6 +6272,8 @@ async def override_verification_by_vid(request: VidOverrideRequest):
         "success": request.status == "pass",
         "message": override_msg,
     }
+    if real_url:
+        event_payload["url"] = real_url
     if cdk_field and cdk_field.startswith("user:"):
         event_payload["userId"] = cdk_field
         
@@ -6140,7 +6316,7 @@ async def override_verification_by_vid(request: VidOverrideRequest):
                 result = cdk_manager.refund_cdk(cdk_field, 1)
                 credit_message = f"CDK {cdk_field}: {result['message']}"
 
-    return {"ok": True, "vid": request.vid, "status": request.status, "creditMessage": credit_message}
+    return {"ok": True, "vid": request.vid, "status": request.status, "creditMessage": credit_message, "url": real_url}
 
 
 @app.delete("/api/verify/history")

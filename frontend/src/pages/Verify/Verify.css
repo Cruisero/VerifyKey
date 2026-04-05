@@ -324,10 +324,11 @@
 .result-item.success {
     background: var(--color-success-bg);
     position: relative;
-    overflow: hidden;
 }
 
+/* Only clip overflow for real-time (animated) items, not history */
 .result-item.success:not(.history) {
+    overflow: hidden;
     animation: successFadeIn 0.4s ease both;
     border-left: 3px solid #10b981;
 }
@@ -2142,9 +2143,10 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 380px;
-    display: inline-block;
-    vertical-align: middle;
+    max-width: 280px;
+    display: block;
+    flex: 1;
+    min-width: 0;
 }
 
 .result-url-link:hover {

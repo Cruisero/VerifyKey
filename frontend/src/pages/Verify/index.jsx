@@ -1450,7 +1450,7 @@ export default function Verify() {
                                                             {displayStatus === 'success' && displayUrl && (
                                                                 <div className="result-url-row">
                                                                     <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        {displayUrl.length > 55 ? displayUrl.slice(0, 52) + '...' : displayUrl}
+                                                                        {displayUrl}
                                                                     </a>
                                                                     <button
                                                                         className="copy-url-btn"
@@ -1536,7 +1536,7 @@ export default function Verify() {
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
                                                                     <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        {result.url.length > 55 ? result.url.slice(0, 52) + '...' : result.url}
+                                                                        {result.url}
                                                                     </a>
                                                                     <button
                                                                         className="copy-url-btn"

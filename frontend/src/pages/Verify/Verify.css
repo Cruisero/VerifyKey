@@ -2143,7 +2143,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 280px;
     display: block;
     flex: 1;
     min-width: 0;

@@ -1421,6 +1421,19 @@ export default function Verify() {
                                                     // Translate error codes
                                                     displayMsg = translateErrorCodes(displayMsg);
                                                     
+                                                    // Determine what to show as the primary line
+                                                    const maskedEmail = maskEmail(item.email);
+                                                    // For success: prefer email, fallback to '验证成功'
+                                                    // For failed: prefer email, fallback to cleaned error message
+                                                    const primaryText = maskedEmail
+                                                        || (displayStatus === 'failed' ? (displayMsg || '验证失败') : '验证成功');
+                                                    // Show message as secondary line only if:
+                                                    // 1. We have an email (so primary line is email)
+                                                    // 2. displayMsg is not empty
+                                                    // 3. For success: only show if msg is not just generic success text
+                                                    const isGenericSuccess = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(displayMsg);
+                                                    const showSecondaryMsg = maskedEmail && displayMsg && !(displayStatus === 'success' && isGenericSuccess);
+
                                                     return (
                                                     <div key={item.id} className={`result-item history ${displayStatus}`}>
                                                         <div className="result-status">
@@ -1429,11 +1442,11 @@ export default function Verify() {
                                                         </div>
                                                         <div className="result-info">
                                                             <div className="result-main-row">
-                                                                <span className="result-id">{maskEmail(item.email) || '-'}</span>
+                                                                <span className="result-id">{primaryText}</span>
                                                             </div>
-                                                            <span className="result-message">
-                                                                {displayMsg || (displayStatus === 'success' ? t('verifySuccess') : t('verifyFailed'))}
-                                                            </span>
+                                                            {showSecondaryMsg && (
+                                                                <span className="result-message">{displayMsg}</span>
+                                                            )}
                                                             {displayStatus === 'success' && displayUrl && (
                                                                 <div className="result-url-row">
                                                                     <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="result-url-link">
@@ -1861,6 +1874,9 @@ export default function Verify() {
                                                 {gptHistoryData.map((item) => {
                                                     let displayStatus = item.status === 'pass' || item.status === 'success' ? 'success' : 'failed';
                                                     let displayMsg = (item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
+                                                    displayMsg = translateErrorCodes(displayMsg);
+                                                    const isGptGenericSuccess = /^(充值成功|ChatGPT\s*充值成功|Recharge successful|Success)$/i.test(displayMsg);
+                                                    const showGptMsg = displayMsg && !(displayStatus === 'success' && isGptGenericSuccess);
                                                     
                                                     return (
                                                     <div key={item.id} className={`result-item history ${displayStatus}`}>
@@ -1872,7 +1888,8 @@ export default function Verify() {
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{item.email || 'ChatGPT'}</span>
                                                             </div>
-                                                            <span className="result-message">{displayMsg || (displayStatus === 'success' ? t('rechargeSuccess') : t('rechargeFailed'))}</span>
+                                                            {showGptMsg && <span className="result-message">{displayMsg}</span>}
+                                                            {!showGptMsg && displayStatus !== 'success' && <span className="result-message">{t('rechargeFailed')}</span>}
                                                         </div>
                                                         <div className="result-meta">
                                                             <span className="result-time">{formatTime(item.timestamp)}</span>

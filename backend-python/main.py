@@ -5837,17 +5837,28 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
 
     # 1) Pixel verification history
     pixel_records = verification_history.get_history_by_user(user_id, limit=50)
-    pixel_items = [
-        {
+    pixel_items = []
+    import re as _re
+    for r in pixel_records:
+        raw_msg = r.get("message") or ""
+        # Extract URL from message
+        url_match = _re.search(r'(https?://\S+)', raw_msg)
+        url = url_match.group(1) if url_match else ""
+        # Clean the message: strip emoji, URLs
+        clean_msg = raw_msg.replace("❌", "").replace("✅", "").strip()
+        if url:
+            clean_msg = clean_msg.replace(url, "").strip()
+        # Strip trailing colon/spaces
+        clean_msg = _re.sub(r'[:：]\s*$', '', clean_msg).strip()
+        pixel_items.append({
             "id": r["id"],
             "type": "pixel",
             "status": r["status"],  # pass / failed
             "email": r.get("submitEmail", "") or r.get("email", ""),
-            "message": (r.get("message") or "").replace("❌", "").replace("✅", "").strip(),
+            "message": clean_msg,
+            "url": url,
             "timestamp": r["timestamp"],
-        }
-        for r in pixel_records
-    ]
+        })
 
     # 2) GPT recharge history (from gpt_keys table)
     conn = database.get_connection()

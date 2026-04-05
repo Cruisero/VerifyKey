@@ -278,3 +278,29 @@ def get_history_by_user(user_id: int, limit: int = 50) -> List[Dict]:
         for r in cursor.fetchall()
     ]
 
+
+def get_successful_history_by_email(email: str, user_id: int) -> Dict:
+    """Check if the user has already successfully verified this email."""
+    if not email or not user_id:
+        return {}
+    conn = database.get_connection()
+    cdk_tag = f"user:{user_id}"
+    cursor = conn.execute(
+        "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
+        "FROM verification_history WHERE email = ? AND cdk = ? AND status = 'pass' ORDER BY rowid DESC LIMIT 1",
+        (email, cdk_tag)
+    )
+    row = cursor.fetchone()
+    if row:
+        return {
+            "id": row["id"],
+            "status": row["status"],
+            "verificationId": row["verification_id"],
+            "message": row["message"],
+            "cdk": row["cdk"],
+            "via": row["via"] if "via" in row.keys() else "",
+            "submitEmail": row["email"] if "email" in row.keys() else "",
+            "timestamp": row["timestamp"]
+        }
+    return {}
+

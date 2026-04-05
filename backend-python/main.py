@@ -8077,6 +8077,7 @@ async def get_service_status():
             "gpt_red": manual.get("gpt_red", False),
             "gpt_vip": manual.get("gpt_vip", False),
             "gpt_aic": manual.get("gpt_aic", False),
+            "gpt_nitro": manual.get("gpt_nitro", False),
             "gpt_tg": manual.get("gpt_tg", False),
             "gpt_team": manual.get("gpt_team", False),
         }
@@ -8099,7 +8100,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_tg", "gpt_team"):
+    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_team"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -8729,6 +8730,34 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     if credits < cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {cost} 积分）")
 
+    import verification_history
+    import uuid
+    existing_success = verification_history.get_successful_history_by_email(request.email, user_id)
+    if existing_success:
+        job_id = existing_success.get("verificationId") or existing_success.get("id") or ("auto-" + str(uuid.uuid4())[:8])
+        event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
+        msg = existing_success.get("message", "")
+        url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 获取成功", "").replace("✅ 订阅成功", "").strip()
+        if not url.startswith("http"):
+            url = ""
+        
+        broadcast_verify_event({
+            "type": "progress",
+            "vid": job_id,
+            "step": "result", "status": "approved",
+            "success": True,
+            "message": "✅ 验证已成功（获取历史记录）",
+            "url": url,
+            "forceTerminalUpdate": True,
+            **event_meta,
+        })
+        return {
+            "job_id": job_id,
+            "status": "success",
+            "queue_position": -1,
+            "estimated_wait_seconds": 0,
+        }
+
     _deduct_user_credits_or_raise(user_id, cost, f"积分不足（需要 {cost} 积分）")
 
     # Proxy to Pixel API
@@ -8816,6 +8845,20 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
 @app.get("/api/pixel/jobs/{job_id}")
 async def pixel_get_job(job_id: str):
     """Proxy: get Pixel API job status."""
+    import database
+    conn = database.get_connection()
+    row = conn.execute("SELECT status, message FROM verification_history WHERE verification_id = ? AND status IN ('pass', 'failed') ORDER BY rowid DESC LIMIT 1", (job_id,)).fetchone()
+    if row:
+        status = row["status"]
+        msg = row["message"]
+        if status == "pass":
+            url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 验证已成功（获取历史记录）", "").strip()
+            if not url.startswith("http"):
+                url = ""
+            return {"job_id": job_id, "status": "success", "url": url}
+        else:
+            return {"job_id": job_id, "status": "failed", "error": msg}
+
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["apiKey"]:
         raise HTTPException(status_code=503, detail="Pixel API 未配置")
@@ -10900,9 +10943,11 @@ GPT_VIP_RECHARGE_BASE = "https://ht.gptai.vip/api"
 GPT_VIP_ORIGIN = "https://shop.gptai.vip"
 GPT_AIC_RECHARGE_BASE = "https://aichong.plus/api"
 GPT_AIC_ORIGIN = "https://aichong.plus"
+GPT_NITRO_RECHARGE_BASE = "https://receipt-api.nitro.xin"
+GPT_NITRO_ORIGIN = "https://receipt.nitro.xin"
 GPT_RECHARGE_COST = 1.5  # CDK points per successful recharge
 GPT_TEAM_INVITE_COST = 0.3
-GPT_KEY_CHANNELS = ("sbs", "red", "vip", "aic")
+GPT_KEY_CHANNELS = ("sbs", "red", "vip", "aic", "nitro")
 GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg")
 
 import uuid as _uuid
@@ -11309,6 +11354,42 @@ async def _aic_api_submit(card_key: str, token_content: str) -> dict:
         return resp.json()
 
 
+async def _nitro_api_check(card_key: str) -> dict:
+    """Validate a Nitro channel card key via httpx."""
+    import httpx
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{GPT_NITRO_RECHARGE_BASE}/cdks/public/check",
+            json={"code": card_key},
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json",
+                "x-product-id": "chatgpt",
+                "origin": GPT_NITRO_ORIGIN,
+                "referer": f"{GPT_NITRO_ORIGIN}/",
+            },
+        )
+        return resp.json()
+
+
+async def _nitro_api_submit(card_key: str, token_content: str) -> dict:
+    """Submit Nitro channel recharge via httpx."""
+    import httpx
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            f"{GPT_NITRO_RECHARGE_BASE}/external/public/check-user",
+            json={"cdk": card_key, "user": token_content},
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "content-type": "application/json",
+                "x-product-id": "chatgpt",
+                "origin": GPT_NITRO_ORIGIN,
+                "referer": f"{GPT_NITRO_ORIGIN}/",
+            },
+        )
+        return resp.json()
+
+
 # --- Admin: Add card keys in bulk (with external API validation) ---
 @app.post("/api/gpt-keys/add")
 async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(None)):
@@ -11364,6 +11445,11 @@ async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(N
                     ok = aic_data.get("valid", False) and aic_data.get("exists", False)
                     msg = aic_data.get("message", data.get("msg", ""))
                     gift = "AIC Plus" if ok else ""
+                elif channel == "nitro":
+                    data = await _nitro_api_check(key)
+                    ok = bool(data.get("app_product_name"))
+                    msg = data.get("message", data.get("msg", ""))
+                    gift = data.get("app_product_name", "Nitro Plus") if ok else ""
                 else:
                     resp = await client.post(
                         f"{GPT_SBS_RECHARGE_BASE}/api/vip/c",
@@ -11598,6 +11684,15 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
                 conn.commit()
                 raise HTTPException(status_code=400, detail=msg)
             masked = "AIC Plus"
+        elif channel == "nitro":
+            data = await _nitro_api_check(card_key)
+            ok = bool(data.get("app_product_name"))
+            if not ok:
+                msg = data.get("message", data.get("msg", "卡密验证失败"))
+                conn.execute("UPDATE gpt_keys SET status='invalid' WHERE id=?", (key_id,))
+                conn.commit()
+                raise HTTPException(status_code=400, detail=msg)
+            masked = data.get("app_product_name", "Nitro Plus")
         else:
             # SBS channel
             async with httpx.AsyncClient(timeout=30) as client:
@@ -11953,6 +12048,27 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                             ok = data.get("success", False) or data.get("code") == 200
                             if not ok:
                                 msg = data.get("msg", data.get("message", "充值失败，请稍后重试"))
+                                _log_gpt_final("failed", msg)
+                                if card_key:
+                                    _release_gpt_key(card_key)
+                                _complete_async_task("gpt", gpt_vid)
+                                _broadcast_submit_failure(
+                                    "gpt",
+                                    msg,
+                                    email=email or "GPT充值",
+                                    user_id=user_id,
+                                    method=f"gpt_{channel}",
+                                    http_status=400,
+                                    refunded=False,
+                                    card_key=card_key,
+                                    channel=channel,
+                                )
+                                raise HTTPException(status_code=400, detail=msg)
+                        elif channel == "nitro":
+                            data = await _nitro_api_submit(card_key, account)
+                            ok = data.get("message") != "token is invalid." and ("invalid" not in str(data.get("message", "")).lower())
+                            if not ok:
+                                msg = data.get("message", "充值失败，AuthSession无效或错误")
                                 _log_gpt_final("failed", msg)
                                 if card_key:
                                     _release_gpt_key(card_key)

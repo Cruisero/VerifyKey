@@ -1499,7 +1499,12 @@ export default function Verify() {
                                                                 const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);
                                                                 const isQueued = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted');
                                                                 return isQueued ? (
-                                                                    <span className="spinner small"></span>
+                                                                    <div className="progress-ring indeterminate">
+                                                                        <svg viewBox="0 0 36 36" className="progress-ring-svg">
+                                                                            <circle className="progress-ring-bg" cx="18" cy="18" r="15.5" />
+                                                                            <circle className="progress-ring-fill" cx="18" cy="18" r="15.5" />
+                                                                        </svg>
+                                                                    </div>
                                                                 ) : (
                                                                     <div className="progress-ring">
                                                                         <svg viewBox="0 0 36 36" className="progress-ring-svg">

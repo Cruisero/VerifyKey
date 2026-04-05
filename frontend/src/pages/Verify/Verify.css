@@ -404,7 +404,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
+    width: 28px;
+    flex-shrink: 0;
 }
 
 .spinner.small {
@@ -414,6 +415,31 @@
     border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+}
+
+/* Indeterminate progress ring (queuing state) — same size as progress ring */
+.progress-ring.indeterminate {
+    animation: indeterminateSpin 1.4s linear infinite;
+}
+
+.progress-ring.indeterminate .progress-ring-svg {
+    transform: rotate(-90deg);
+}
+
+.progress-ring.indeterminate .progress-ring-fill {
+    stroke-dasharray: 25 75;
+    transition: none;
+    animation: indeterminateDash 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminateSpin {
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes indeterminateDash {
+    0% { stroke-dasharray: 5 95; stroke-dashoffset: 0; }
+    50% { stroke-dasharray: 35 65; stroke-dashoffset: -15; }
+    100% { stroke-dasharray: 5 95; stroke-dashoffset: -50; }
 }
 
 .status-icon {

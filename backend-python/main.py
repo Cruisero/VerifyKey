@@ -6124,7 +6124,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     # Get current record to check old status, CDK, VID, and via
     conn = database.get_connection()
     cursor = conn.execute(
-        "SELECT status, cdk, verificationId, via FROM verification_history WHERE id = ?", (record_id,)
+        "SELECT status, cdk, verification_id, via FROM verification_history WHERE id = ?", (record_id,)
     )
     row = cursor.fetchone()
     if not row:
@@ -6132,7 +6132,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     
     old_status = row["status"]
     cdk_code = row["cdk"]
-    vid = row["verificationId"] or ""
+    vid = row["verification_id"] or ""
     via = row["via"] if "via" in row.keys() else ""
     
     # Credit / CDK quota adjustment

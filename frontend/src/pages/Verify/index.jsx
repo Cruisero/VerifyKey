@@ -926,6 +926,43 @@ export default function Verify() {
         return `${Math.floor(minutes / 60)}${t('hoursAgo')}`;
     };
 
+    // Error code translation map
+    const errorCodeMap = {
+        'TOTP_ERROR': '2FA密钥错误',
+        'WRONG_PASSWORD': '密码错误',
+        'INTERNAL_ERROR': '内部错误',
+        'TIMEOUT': '超时',
+        'TIMEOUT_ERROR': '请求超时',
+        'NETWORK_ERROR': '网络错误',
+        'LOGIN_FAILED': '登录失败',
+        'LOGIN_ERROR': '登录失败',
+        'ACCOUNT_LOCKED': '账号被锁定',
+        'ACCOUNT_SUSPENDED': '账号已停用',
+        'ACCOUNT_NOT_FOUND': '账号不存在',
+        'INVALID_CREDENTIALS': '凭证无效',
+        'CAPTCHA_REQUIRED': '需要验证码',
+        'CAPTCHA_FAILED': '验证码失败',
+        'RATE_LIMITED': '请求过于频繁',
+        'RATE_LIMIT': '请求过于频繁',
+        'SESSION_EXPIRED': '会话已过期',
+        'UNKNOWN_ERROR': '未知错误',
+        'PAYMENT_FAILED': '支付失败',
+        'SUBSCRIPTION_ERROR': '订阅错误',
+        'ALREADY_SUBSCRIBED': '已订阅',
+        'VERIFICATION_FAILED': '验证失败',
+        'BROWSER_ERROR': '浏览器错误',
+        'PROXY_ERROR': '代理错误',
+        'DEVICE_ERROR': '设备错误',
+        'QUEUE_TIMEOUT': '排队超时',
+        'POLL_TIMEOUT': '轮询超时',
+        'SERVER_ERROR': '服务器错误',
+    };
+    const translateErrorCodes = (msg) => {
+        if (!msg) return msg;
+        if (errorCodeMap[msg]) return errorCodeMap[msg];
+        return msg.replace(/\b([A-Z][A-Z_]{2,})\b/g, (match) => errorCodeMap[match] || match);
+    };
+
     const maskEmail = (email) => {
         if (!email) return '';
         const [user, domain] = email.split('@');
@@ -1359,17 +1396,30 @@ export default function Verify() {
                                                     let displayStatus = item.status === 'pass' ? 'success' : item.status;
                                                     let displayMsg = item.message || '';
                                                     let displayUrl = item.url;
+                                                    // Extract URL from message if not provided
                                                     if (!displayUrl) {
                                                         const urlMatch = displayMsg.match(/(https?:\/\/[^\s]+)/);
                                                         if (urlMatch) {
                                                             displayUrl = urlMatch[1];
-                                                            displayMsg = displayMsg.replace(displayUrl, '').trim();
                                                         }
                                                     }
+                                                    // Strip URLs from message text
+                                                    displayMsg = displayMsg.replace(/https?:\/\/[^\s]+/g, '').trim();
+                                                    // Strip emoji prefixes
+                                                    displayMsg = displayMsg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '').trim();
+                                                    // Strip channel prefixes like "KPixel 成功:", "VPixel 失败:", etc.
                                                     displayMsg = displayMsg.replace(/^[A-Za-z]*Pixel\s*(成功|失败)?[:：]?\s*/i, '').trim();
                                                     displayMsg = displayMsg.replace(/^Google One URL:?\s*/i, '').trim();
                                                     displayMsg = displayMsg.replace(/^获取成功[:：]?\s*/i, '').trim();
-                                                    displayMsg = displayMsg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
+                                                    // Strip "失败:" / "成功:" prefix
+                                                    displayMsg = displayMsg.replace(/^(失败|成功)[:：]\s*/i, '').trim();
+                                                    // Strip "订阅成功:" / "订阅失败:" prefix
+                                                    displayMsg = displayMsg.replace(/^订阅(成功|失败)[:：]?\s*/i, '').trim();
+                                                    // Remove trailing colon
+                                                    displayMsg = displayMsg.replace(/[:：]\s*$/, '').trim();
+                                                    
+                                                    // Translate error codes
+                                                    displayMsg = translateErrorCodes(displayMsg);
                                                     
                                                     return (
                                                     <div key={item.id} className={`result-item history ${displayStatus}`}>
@@ -1387,11 +1437,16 @@ export default function Verify() {
                                                             {displayStatus === 'success' && displayUrl && (
                                                                 <div className="result-url-row">
                                                                     <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        {displayUrl.length > 45 ? displayUrl.slice(0, 42) + '...' : displayUrl}
+                                                                        {displayUrl.length > 55 ? displayUrl.slice(0, 52) + '...' : displayUrl}
                                                                     </a>
                                                                     <button
                                                                         className="copy-url-btn"
-                                                                        onClick={() => navigator.clipboard.writeText(displayUrl)}
+                                                                        onClick={(e) => {
+                                                                            navigator.clipboard.writeText(displayUrl);
+                                                                            const btn = e.currentTarget;
+                                                                            btn.classList.add('copied');
+                                                                            setTimeout(() => btn.classList.remove('copied'), 1800);
+                                                                        }}
                                                                         title={t('copyLink')}
                                                                     >
                                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1430,14 +1485,16 @@ export default function Verify() {
                                                             {result.status === 'processing' && (() => {
                                                                 const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);
                                                                 const isQueued = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted');
-                                                                return (
-                                                                    <div className={`progress-ring${isQueued ? ' progress-ring-queued' : ''}`}>
+                                                                return isQueued ? (
+                                                                    <span className="spinner small"></span>
+                                                                ) : (
+                                                                    <div className="progress-ring">
                                                                         <svg viewBox="0 0 36 36" className="progress-ring-svg">
                                                                             <circle className="progress-ring-bg" cx="18" cy="18" r="15.5" />
                                                                             <circle className="progress-ring-fill" cx="18" cy="18" r="15.5"
-                                                                                style={{ strokeDasharray: isQueued ? undefined : `${pct} 100` }} />
+                                                                                style={{ strokeDasharray: `${pct} 100` }} />
                                                                         </svg>
-                                                                        {!isQueued && <span className="progress-ring-text">{pct}</span>}
+                                                                        <span className="progress-ring-text">{pct}</span>
                                                                     </div>
                                                                 );
                                                             })()}
@@ -1466,11 +1523,16 @@ export default function Verify() {
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
                                                                     <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        {result.url.length > 45 ? result.url.slice(0, 42) + '...' : result.url}
+                                                                        {result.url.length > 55 ? result.url.slice(0, 52) + '...' : result.url}
                                                                     </a>
                                                                     <button
                                                                         className="copy-url-btn"
-                                                                        onClick={() => navigator.clipboard.writeText(result.url)}
+                                                                        onClick={(e) => {
+                                                                            navigator.clipboard.writeText(result.url);
+                                                                            const btn = e.currentTarget;
+                                                                            btn.classList.add('copied');
+                                                                            setTimeout(() => btn.classList.remove('copied'), 1800);
+                                                                        }}
                                                                         title={t('copyLink')}
                                                                     >
                                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1482,7 +1544,7 @@ export default function Verify() {
                                                             )}
                                                             {result.status !== 'processing' && (
                                                                 <span className="result-message">
-                                                                    {(result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed'))).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
+                                                                    {translateErrorCodes((result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed'))).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '').replace(/^(失败|成功)[:：]\s*/i, '').trim())}
                                                                 </span>
                                                             )}
                                                         </div>

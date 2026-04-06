@@ -234,7 +234,7 @@ def verify_token(token: str) -> Optional[dict]:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, email, username, role, credits, created_at 
+            SELECT id, email, username, role, credits, status, created_at 
             FROM users WHERE id = ?
         """, (decoded["userId"],))
         user_row = cursor.fetchone()

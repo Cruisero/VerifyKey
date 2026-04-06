@@ -8929,6 +8929,8 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     user = auth.verify_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
     cost = 1.5 if request.mode == "auto" else 1.0
@@ -9512,6 +9514,8 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
     user = auth.verify_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
     if credits < credit_cost:
@@ -10893,6 +10897,8 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
     user = auth.verify_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
     if credits < credit_cost:

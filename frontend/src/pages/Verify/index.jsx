@@ -807,6 +807,24 @@ export default function Verify() {
             alert(t('alertLoginFirst'));
             return;
         }
+        if (user.status === 'suspended') {
+            const suspendedResult = {
+                id: Date.now(),
+                email: '',
+                status: 'failed',
+                timestamp: new Date().toISOString(),
+                message: `🚫 ${t('alertAccountSuspended')}`,
+                stage: 0,
+                totalStages: 0,
+                stageLabel: '',
+                url: '',
+                jobId: '',
+                verificationId: '',
+                source: '',
+            };
+            setResults(prev => [suspendedResult, ...prev]);
+            return;
+        }
         if ((user.credits || 0) < tierCost) {
             alert(t('alertInsufficientCredits').replace('{cost}', tierCost).replace('{current}', user.credits || 0));
             return;

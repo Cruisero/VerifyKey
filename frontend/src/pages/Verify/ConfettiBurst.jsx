@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * ConfettiBurst — Canvas-based confetti / falling petals celebration.
- * Renders a fullscreen overlay of colorful particles that burst upward
- * then drift down with gravity, rotation, and slight wind.
+ * ConfettiBurst — Canvas-based confetti that bursts from a specific element.
  *
  * Props:
+ *   origin   — { x, y, width, height } bounding rect (viewport coords) of the source element.
+ *              Particles spray outward from this rect.
  *   trigger  — increment to fire a new burst (number)
- *   duration — how long particles live in ms (default 3500)
+ *   duration — how long particles live in ms (default 3200)
  */
 
 const COLORS = [
@@ -21,29 +21,37 @@ const COLORS = [
 
 const SHAPES = ['rect', 'circle', 'star'];
 
-function createParticle(canvasW, canvasH) {
-  const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2; // mostly upward
-  const speed = 6 + Math.random() * 10;
-  const size = 4 + Math.random() * 6;
+function createParticle(originRect) {
+  // Spawn along the full width of the result bar, vertically centered on it
+  const spawnX = originRect.x + Math.random() * originRect.width;
+  const spawnY = originRect.y + originRect.height * 0.5;
+
+  // Particles spray outward: mostly upward + sideways
+  const angleBase = -Math.PI / 2; // straight up
+  const angleSpread = Math.PI * 0.8; // wide fan
+  const angle = angleBase + (Math.random() - 0.5) * angleSpread;
+  const speed = 4 + Math.random() * 8;
+  const size = 3 + Math.random() * 5;
+
   return {
-    x: canvasW * (0.3 + Math.random() * 0.4),   // spawn in center 40%
-    y: canvasH * (0.4 + Math.random() * 0.2),    // from middle area
-    vx: Math.cos(angle) * speed * (0.7 + Math.random() * 0.6),
-    vy: Math.sin(angle) * speed * (0.8 + Math.random() * 0.5),
+    x: spawnX,
+    y: spawnY,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
     size,
     color: COLORS[Math.floor(Math.random() * COLORS.length)],
     shape: SHAPES[Math.floor(Math.random() * SHAPES.length)],
     rotation: Math.random() * Math.PI * 2,
-    rotationSpeed: (Math.random() - 0.5) * 0.15,
-    gravity: 0.06 + Math.random() * 0.06,
-    drag: 0.985 + Math.random() * 0.01,
-    wind: (Math.random() - 0.5) * 0.3,
+    rotationSpeed: (Math.random() - 0.5) * 0.2,
+    gravity: 0.08 + Math.random() * 0.06,
+    drag: 0.98 + Math.random() * 0.015,
+    wind: (Math.random() - 0.5) * 0.15,
     wobble: Math.random() * Math.PI * 2,
-    wobbleSpeed: 0.03 + Math.random() * 0.05,
+    wobbleSpeed: 0.03 + Math.random() * 0.06,
+    wobbleAmplitude: 0.3 + Math.random() * 0.8,
     opacity: 1,
-    fadeStart: 0.65 + Math.random() * 0.2, // fraction of life when fade begins
+    fadeStart: 0.55 + Math.random() * 0.25,
     life: 0,
-    maxLife: 1,
   };
 }
 
@@ -57,23 +65,23 @@ function drawStar(ctx, x, y, size, rotation) {
   ctx.beginPath();
   for (let i = 0; i < spikes * 2; i++) {
     const r = i % 2 === 0 ? outerR : innerR;
-    const angle = (Math.PI / spikes) * i - Math.PI / 2;
-    if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
-    else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    const a = (Math.PI / spikes) * i - Math.PI / 2;
+    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
   }
   ctx.closePath();
   ctx.fill();
   ctx.restore();
 }
 
-export default function ConfettiBurst({ trigger, duration = 3500 }) {
+export default function ConfettiBurst({ origin, trigger, duration = 3200 }) {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
   const particlesRef = useRef([]);
   const lastTriggerRef = useRef(0);
 
   useEffect(() => {
-    if (!trigger || trigger === lastTriggerRef.current) return;
+    if (!trigger || trigger === lastTriggerRef.current || !origin) return;
     lastTriggerRef.current = trigger;
 
     const canvas = canvasRef.current;
@@ -82,7 +90,6 @@ export default function ConfettiBurst({ trigger, duration = 3500 }) {
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
 
-    // Size canvas to viewport
     const w = window.innerWidth;
     const h = window.innerHeight;
     canvas.width = w * dpr;
@@ -91,17 +98,16 @@ export default function ConfettiBurst({ trigger, duration = 3500 }) {
     canvas.style.height = h + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Generate particles
-    const count = 80 + Math.floor(Math.random() * 40);
+    // Generate particles from origin rect
+    const count = 60 + Math.floor(Math.random() * 30);
     const newParticles = [];
     for (let i = 0; i < count; i++) {
-      newParticles.push(createParticle(w, h));
+      newParticles.push(createParticle(origin));
     }
     particlesRef.current = newParticles;
 
     const startTime = performance.now();
     canvas.style.opacity = '1';
-    canvas.style.pointerEvents = 'none';
 
     function animate(now) {
       const elapsed = now - startTime;
@@ -125,7 +131,7 @@ export default function ConfettiBurst({ trigger, duration = 3500 }) {
         p.wobble += p.wobbleSpeed;
 
         // Wobble lateral drift
-        p.x += Math.sin(p.wobble) * 0.5;
+        p.x += Math.sin(p.wobble) * p.wobbleAmplitude;
 
         // Fade out
         if (progress > p.fadeStart) {
@@ -162,14 +168,13 @@ export default function ConfettiBurst({ trigger, duration = 3500 }) {
       }
     }
 
-    // Cancel any previous animation
     if (animRef.current) cancelAnimationFrame(animRef.current);
     animRef.current = requestAnimationFrame(animate);
 
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [trigger, duration]);
+  }, [trigger, origin, duration]);
 
   return (
     <canvas

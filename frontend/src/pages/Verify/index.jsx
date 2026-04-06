@@ -90,7 +90,9 @@ export default function Verify() {
 
     // Confetti celebration trigger
     const [confettiTrigger, setConfettiTrigger] = useState(0);
+    const [confettiOrigin, setConfettiOrigin] = useState(null);
     const seenSuccessIdsRef = useRef(new Set());
+    const resultItemRefs = useRef({});
 
     // Tips inline state (loaded from config)
     const [tipsContent, setTipsContent] = useState(null);
@@ -997,9 +999,17 @@ export default function Verify() {
         );
         if (newSuccess) {
             seenSuccessIdsRef.current.add(newSuccess.id);
-            setConfettiTrigger(prev => prev + 1);
+            // Wait a frame for DOM to paint the success item, then grab its rect
+            requestAnimationFrame(() => {
+                const el = resultItemRefs.current[newSuccess.id];
+                if (el) {
+                    const rect = el.getBoundingClientRect();
+                    setConfettiOrigin({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+                }
+                setConfettiTrigger(prev => prev + 1);
+            });
         }
-        // Also track failed/processing to not re-fire on page load
+        // Also track to not re-fire on page load
         results.forEach(r => {
             if (r.status === 'success') seenSuccessIdsRef.current.add(r.id);
         });
@@ -1007,7 +1017,7 @@ export default function Verify() {
 
     return (
         <div className="verify-page">
-            <ConfettiBurst trigger={confettiTrigger} duration={3500} />
+            <ConfettiBurst origin={confettiOrigin} trigger={confettiTrigger} duration={3200} />
             <div className="container">
                 {/* Header */}
                 <div className="welcome-section">
@@ -1514,7 +1524,7 @@ export default function Verify() {
                                         ) : (
                                             <div className="results-list">
                                                 {results.map((result) => (
-                                                    <div key={result.id} className={`result-item ${result.status}`}>
+                                                    <div key={result.id} ref={el => { if (el) resultItemRefs.current[result.id] = el; }} className={`result-item ${result.status}`}>
                                                         <div className="result-status">
                                                             {result.status === 'processing' && (() => {
                                                                 const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);

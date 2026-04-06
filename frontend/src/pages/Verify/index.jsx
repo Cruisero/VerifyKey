@@ -94,6 +94,9 @@ export default function Verify() {
     const seenSuccessIdsRef = useRef(new Set());
     const resultItemRefs = useRef({});
 
+    // Track INTERNAL_ERROR counts per email for differentiated messaging
+    const internalErrorCountRef = useRef({});
+
     // Tips inline state (loaded from config)
     const [tipsContent, setTipsContent] = useState(null);
 
@@ -183,6 +186,14 @@ export default function Verify() {
     const ERROR_DESCRIPTIONS = Object.fromEntries(
         Object.entries(ERROR_KEY_MAP).map(([code, key]) => [code, t(key)])
     );
+
+    // Get differentiated INTERNAL_ERROR message based on occurrence count for a given email
+    const getInternalErrorMsg = (email) => {
+        const key = (email || '').toLowerCase();
+        const count = (internalErrorCountRef.current[key] || 0) + 1;
+        internalErrorCountRef.current[key] = count;
+        return count <= 1 ? t('errInternalErrorFirst') : t('errInternalErrorSecond');
+    };
 
     // Sanitize error messages to hide supplier info from users
     const sanitizeError = (msg) => {
@@ -484,11 +495,17 @@ export default function Verify() {
                 } else if (status === 'Failed') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
+                    // Use differentiated message for INTERNAL_ERROR
+                    const currentResult = results.find(r => r.id === resultId);
+                    const isInternalError = message === 'INTERNAL_ERROR' || /INTERNAL_ERROR/i.test(message);
+                    const failMsg = isInternalError
+                        ? getInternalErrorMsg(currentResult?.email)
+                        : (sanitizeError(message) || t('verifyFailed'));
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
                             ...r,
                             status: 'failed',
-                            message: `❌ ${sanitizeError(message) || t('verifyFailed')}`,
+                            message: `❌ ${failMsg}`,
                         } : r
                     ));
                 } else {
@@ -548,7 +565,11 @@ export default function Verify() {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
                     const error = data.error || 'UNKNOWN_ERROR';
-                    const errorDesc = ERROR_DESCRIPTIONS[error] || sanitizeError(error);
+                    // Use differentiated message for INTERNAL_ERROR
+                    const currentResult = results.find(r => r.id === resultId);
+                    const errorDesc = error === 'INTERNAL_ERROR'
+                        ? getInternalErrorMsg(currentResult?.email)
+                        : (ERROR_DESCRIPTIONS[error] || sanitizeError(error));
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
                             ...r,
@@ -614,7 +635,10 @@ export default function Verify() {
         if (mappedStatus === 'failed' && msg) {
             // Strip leading emoji/symbols then check if it's a raw error code
             const stripped = msg.replace(/^[❌✅⏳🔄⚠️\s]+/, '').trim();
-            if (ERROR_DESCRIPTIONS[stripped]) {
+            if (stripped === 'INTERNAL_ERROR') {
+                // Use differentiated message for INTERNAL_ERROR via SSE
+                msg = `❌ ${getInternalErrorMsg(event.submitEmail || event.link || '')}`;
+            } else if (ERROR_DESCRIPTIONS[stripped]) {
                 msg = `❌ ${ERROR_DESCRIPTIONS[stripped]}`;
             } else {
                 msg = `❌ ${sanitizeError(stripped)}`;
@@ -792,6 +816,10 @@ export default function Verify() {
         if (submitMode === 'single') {
             if (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim()) {
                 alert(t('alertFillAll'));
+                return;
+            }
+            if (serviceTab === 'pixel' && !singleEmail.trim().toLowerCase().endsWith('@gmail.com')) {
+                alert(t('alertGmailOnly'));
                 return;
             }
             accounts = [{ email: singleEmail.trim(), password: singlePassword.trim(), totp_secret: singleTotp.trim() }];

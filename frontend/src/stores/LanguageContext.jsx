@@ -98,6 +98,7 @@ const translations = {
         alertInsufficientCredits: '账户积分不足（需要 {cost} 积分，当前 {current}）',
         alertFillAll: '请填写所有字段',
         alertInvalidFormat: '请输入有效的账号信息，格式：邮箱----密码----2FA密钥',
+        alertGmailOnly: '账号类型错误，只支持 Gmail 邮箱',
 
         textareaPlaceholderTelegram: `粘贴验证链接，每行一个...
 例如：
@@ -221,6 +222,8 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
 
         // Verify - error descriptions
         errInternalError: '系统内部错误',
+        errInternalErrorFirst: '验证失败，请重试',
+        errInternalErrorSecond: '账号问题，请查看教程或者联系客服',
         errDeviceUnavailable: '设备不可用',
         errDevicePrepFailed: '设备准备失败',
         errDeviceError: '设备异常',
@@ -457,6 +460,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         alertInsufficientCredits: 'Insufficient credits (need {cost}, current {current})',
         alertFillAll: 'Please fill in all fields',
         alertInvalidFormat: 'Please enter valid account info. Format: email----password----2FA_secret',
+        alertGmailOnly: 'Invalid account type, only Gmail accounts are supported',
 
         textareaPlaceholderTelegram: `Paste verification links, one per line...
 
@@ -576,6 +580,8 @@ Failed verification does not consume quota.`,
 
         // Verify - error descriptions
         errInternalError: 'Internal system error',
+        errInternalErrorFirst: 'Verification failed, please retry',
+        errInternalErrorSecond: 'Account issue, please check the tutorial or contact support',
         errDeviceUnavailable: 'Device unavailable',
         errDevicePrepFailed: 'Device preparation failed',
         errDeviceError: 'Device error',

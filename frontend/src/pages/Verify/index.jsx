@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLang } from '../../stores/LanguageContext';
 import { useAuth } from '../../stores/AuthContext';
+import ConfettiBurst from './ConfettiBurst';
 import './Verify.css';
 
 // API base URL
@@ -86,6 +87,10 @@ export default function Verify() {
     const [showGptHistory, setShowGptHistory] = useState(false);
     const [gptHistoryData, setGptHistoryData] = useState([]);
     const [hoveredItem, setHoveredItem] = useState(null);
+
+    // Confetti celebration trigger
+    const [confettiTrigger, setConfettiTrigger] = useState(0);
+    const seenSuccessIdsRef = useRef(new Set());
 
     // Tips inline state (loaded from config)
     const [tipsContent, setTipsContent] = useState(null);
@@ -985,8 +990,24 @@ export default function Verify() {
 
     const batchCount = submitMode === 'batch' ? parseBatchInput(batchInput).length : 0;
 
+    // Fire confetti when a new success result appears
+    useEffect(() => {
+        const newSuccess = results.find(
+            r => r.status === 'success' && !seenSuccessIdsRef.current.has(r.id)
+        );
+        if (newSuccess) {
+            seenSuccessIdsRef.current.add(newSuccess.id);
+            setConfettiTrigger(prev => prev + 1);
+        }
+        // Also track failed/processing to not re-fire on page load
+        results.forEach(r => {
+            if (r.status === 'success') seenSuccessIdsRef.current.add(r.id);
+        });
+    }, [results]);
+
     return (
         <div className="verify-page">
+            <ConfettiBurst trigger={confettiTrigger} duration={3500} />
             <div className="container">
                 {/* Header */}
                 <div className="welcome-section">

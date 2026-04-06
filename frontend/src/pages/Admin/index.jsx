@@ -4957,11 +4957,11 @@ export default function Admin() {
                     }
                 } else if (data.type === 'history_updated') {
                     // Manual status override from admin — update in-place
-                    const vid = data.id || '';
-                    if (vid && data.status) {
+                    const recordId = data.id || '';
+                    if (recordId && data.status) {
                         setVerifyLog(prev => prev.map(l =>
-                            l.verificationId === vid
-                                ? { ...l, status: data.status === 'pass' ? 'pass' : 'failed', timestamp: new Date().toISOString() }
+                            l.id === recordId
+                                ? { ...l, status: data.status === 'pass' ? 'pass' : 'failed', message: data.message || l.message, timestamp: new Date().toISOString() }
                                 : l
                         ));
                     }

@@ -59,7 +59,7 @@ const translations = {
         guideFamily: '家庭组：',
         guideFamilyDesc: '必须退出，确保无订阅过',
         guideAccount: '账号建议：',
-        guideAccountDesc: '只能Gmail，建议使用老号，新号极其容易封控，导致账号无法登录',
+        guideAccountDesc: '只能Gmail，建议使用老号，新号极其容易封控，请删除账号付款资料信息',
         guideBindCard: '绑卡注意：',
         guideBindCardDesc: '绑卡时浏览器只能登录你要升级的账号，请先退出其他 Google 账号',
         tierNormal: '普通',

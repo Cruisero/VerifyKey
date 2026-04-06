@@ -6211,6 +6211,59 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
 
 
 
+class VidMessageOverrideRequest(BaseModel):
+    vid: str
+    message: str
+
+@app.post("/api/admin/override-message")
+async def override_verification_message(request: VidMessageOverrideRequest, authorization: str = Header(None)):
+    """Admin: Override the message of a verification and push SSE."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT id, status, via FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+        (request.vid,)
+    )
+    existing = cursor.fetchone()
+    
+    if existing:
+        verification_history.update_verification(existing["id"], existing["status"], request.message)
+    else:
+        verification_history.log_verification("failed", request.vid, request.message)
+        
+    cdk_field = ""
+    if existing:
+        cdk_row = conn.execute("SELECT cdk FROM verification_history WHERE id = ?", (existing["id"],)).fetchone()
+        if cdk_row:
+            cdk_field = cdk_row["cdk"] or ""
+
+    event_payload = {
+        "type": "progress",
+        "vid": request.vid,
+        "step": "result",
+        "status": existing["status"] if existing else "failed",
+        "success": (existing["status"] == "pass") if existing else False,
+        "message": request.message,
+    }
+    if cdk_field and cdk_field.startswith("user:"):
+        event_payload["userId"] = cdk_field
+        
+    broadcast_verify_event(event_payload)
+    # Also trigger admin log update
+    record_id_for_sse = existing["id"] if existing else 0
+    if record_id_for_sse:
+        broadcast_verify_event({"type": "history_updated", "id": record_id_for_sse, "status": existing["status"] if existing else "failed", "message": request.message})
+    
+    return {"updated": True, "vid": request.vid, "message": request.message}
+
+
+
 class VidOverrideRequest(BaseModel):
     vid: str
     status: str  # 'pass' or 'failed'

@@ -5929,7 +5929,41 @@ export default function Admin() {
                                                         );
                                                     })()}
                                                 </div>
-                                                {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
+                                                {(r.message || (!isPass && !isProcessing)) && (
+                                                    <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                        {r.message && <span>{r.message}</span>}
+                                                        {(!isPass && !isProcessing && !isSubmissionFailure) && (
+                                                            <span
+                                                                title="编辑报错信息并推送给用户"
+                                                                style={{ cursor: 'pointer', opacity: 0.6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', padding: '1px 6px', background: 'var(--bg-secondary)', borderRadius: '4px', flexShrink: 0, color: 'var(--text-secondary)' }}
+                                                                onMouseOver={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#7c5cfc'; }}
+                                                                onMouseOut={e => { e.currentTarget.style.opacity = 0.6; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    const newMsg = window.prompt("修改报错信息并推送给用户:", r.message || "");
+                                                                    if (newMsg !== null) {
+                                                                        const msgStr = newMsg.trim();
+                                                                        if (msgStr) {
+                                                                            try {
+                                                                                const token = user?.token || localStorage.getItem('verifykey-token');
+                                                                                await fetch(`${API_BASE}/api/admin/override-message`, {
+                                                                                    method: 'POST',
+                                                                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                                                                    body: JSON.stringify({ vid: r.verificationId || '', message: msgStr })
+                                                                                });
+                                                                                setVerifyLog(prev => prev.map(item => 
+                                                                                    item.verificationId === r.verificationId 
+                                                                                        ? { ...item, message: msgStr } 
+                                                                                        : item
+                                                                                ));
+                                                                            } catch(err) { alert('修改失败'); }
+                                                                        }
+                                                                    }
+                                                                }}
+                                                            >✏️ 编辑推送</span>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                     <span>{ts}</span>
                                                     {submitEmail && <span style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>📧 {shortSubmitEmail}</span>}

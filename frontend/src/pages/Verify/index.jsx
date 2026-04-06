@@ -74,6 +74,7 @@ export default function Verify() {
     const [singleEmail, setSingleEmail] = useState('');
     const [singlePassword, setSinglePassword] = useState('');
     const [singleTotp, setSingleTotp] = useState('');
+    const [emailError, setEmailError] = useState('');
 
     // Batch mode field
     const [batchInput, setBatchInput] = useState('');
@@ -819,7 +820,7 @@ export default function Verify() {
                 return;
             }
             if (serviceTab === 'pixel' && !singleEmail.trim().toLowerCase().endsWith('@gmail.com')) {
-                alert(t('alertGmailOnly'));
+                setEmailError(t('alertGmailOnly'));
                 return;
             }
             accounts = [{ email: singleEmail.trim(), password: singlePassword.trim(), totp_secret: singleTotp.trim() }];
@@ -1326,13 +1327,21 @@ export default function Verify() {
                                                 </label>
                                                 <input
                                                     type="email"
-                                                    className="input pixel-field"
+                                                    className={`input pixel-field${emailError ? ' field-error' : ''}`}
                                                     placeholder="user@gmail.com"
                                                     value={singleEmail}
-                                                    onChange={e => setSingleEmail(e.target.value)}
+                                                    onChange={e => {
+                                                        setSingleEmail(e.target.value);
+                                                        if (emailError) setEmailError('');
+                                                    }}
                                                     disabled={verifyStatus === 'processing'}
                                                     autoComplete="off"
                                                 />
+                                                {emailError && (
+                                                    <div className="field-error-msg">
+                                                        <span className="error-icon">⚠️</span> {emailError}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="pixel-input-group">
                                                 <label className="pixel-input-label">

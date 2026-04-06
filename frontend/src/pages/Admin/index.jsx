@@ -1011,6 +1011,8 @@ function GptKeysTab({ config, setConfig }) {
 
     const [stats, setStats] = useState({ total: 0, available: 0, used: 0, channels: {} });
     const [keys, setKeys] = useState([]);
+    const [keySearch, setKeySearch] = useState('');
+    const [keyPage, setKeyPage] = useState(1);
     const [newKeys, setNewKeys] = useState('');
     const [adding, setAdding] = useState(false);
     const [addResult, setAddResult] = useState(null);
@@ -1035,6 +1037,18 @@ function GptKeysTab({ config, setConfig }) {
     const [tgLoginMsg, setTgLoginMsg] = useState('');
     const [gptCfgSaving, setGptCfgSaving] = useState(false);
     const [gptCfgSaved, setGptCfgSaved] = useState(false);
+
+    useEffect(() => {
+        setKeyPage(1);
+    }, [keySearch]);
+
+    const filteredKeys = keys.filter(k => 
+        k.card_key.toLowerCase().includes(keySearch.toLowerCase()) || 
+        (k.used_email && k.used_email.toLowerCase().includes(keySearch.toLowerCase())) ||
+        (k.status && k.status.toLowerCase().includes(keySearch.toLowerCase()))
+    );
+    const keyTotalPages = Math.max(1, Math.ceil(filteredKeys.length / 100));
+    const displayKeys = filteredKeys.slice((keyPage - 1) * 100, keyPage * 100);
 
     const fetchStats = async () => {
         try {
@@ -1481,9 +1495,40 @@ function GptKeysTab({ config, setConfig }) {
 
             {/* Key List */}
             <div className="card" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>📋 卡密列表</span>
-                    <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{keys.length} 条记录</span>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontWeight: 600 }}>📋 卡密列表</span>
+                        <input
+                            type="text"
+                            placeholder="搜索卡密或邮箱..."
+                            className="input"
+                            style={{ padding: '4px 8px', fontSize: '13px', width: '200px' }}
+                            value={keySearch}
+                            onChange={(e) => setKeySearch(e.target.value)}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{filteredKeys.length} 条记录</span>
+                        {keyTotalPages > 1 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <button
+                                    onClick={() => setKeyPage(p => Math.max(1, p - 1))}
+                                    disabled={keyPage === 1}
+                                    style={{ padding: '2px 8px', fontSize: '12px', border: '1px solid var(--border-primary)', borderRadius: '4px', background: 'var(--bg-secondary)', cursor: keyPage === 1 ? 'not-allowed' : 'pointer', opacity: keyPage === 1 ? 0.5 : 1 }}
+                                >
+                                    上一页
+                                </button>
+                                <span style={{ fontSize: '12px', padding: '0 4px' }}>{keyPage} / {keyTotalPages}</span>
+                                <button
+                                    onClick={() => setKeyPage(p => Math.min(keyTotalPages, p + 1))}
+                                    disabled={keyPage === keyTotalPages}
+                                    style={{ padding: '2px 8px', fontSize: '12px', border: '1px solid var(--border-primary)', borderRadius: '4px', background: 'var(--bg-secondary)', cursor: keyPage === keyTotalPages ? 'not-allowed' : 'pointer', opacity: keyPage === keyTotalPages ? 0.5 : 1 }}
+                                >
+                                    下一页
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div style={{ overflow: 'auto', maxHeight: '400px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -1497,7 +1542,7 @@ function GptKeysTab({ config, setConfig }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {keys.map(k => (
+                            {displayKeys.map(k => (
                                 <tr key={k.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
                                     <td style={{ padding: '10px 16px', fontFamily: "'SF Mono', monospace", maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {k.card_key}
@@ -4642,7 +4687,23 @@ export default function Admin() {
 
     // User management state
     const [users, setUsers] = useState([]);
+    const [userSearch, setUserSearch] = useState('');
+    const [userPage, setUserPage] = useState(1);
     const [usersLoading, setUsersLoading] = useState(false);
+
+    useEffect(() => {
+        setUserPage(1);
+    }, [userSearch]);
+
+    const filteredUsers = users.filter(u => 
+        (u.email && u.email.toLowerCase().includes(userSearch.toLowerCase())) ||
+        (u.username && u.username.toLowerCase().includes(userSearch.toLowerCase())) ||
+        (u.id && String(u.id).includes(userSearch)) ||
+        (u.invite_code && u.invite_code.toLowerCase().includes(userSearch.toLowerCase())) ||
+        (u.status && u.status.toLowerCase().includes(userSearch.toLowerCase()))
+    );
+    const userTotalPages = Math.max(1, Math.ceil(filteredUsers.length / 100));
+    const displayUsers = filteredUsers.slice((userPage - 1) * 100, userPage * 100);
     const [editingUser, setEditingUser] = useState(null);
     const [editCredits, setEditCredits] = useState('');
     const [historyUser, setHistoryUser] = useState(null);
@@ -4691,6 +4752,10 @@ export default function Admin() {
     const [tgLoading, setTgLoading] = useState(false);
     const [tgCheckResults, setTgCheckResults] = useState(null);
     const [tgChecking, setTgChecking] = useState(false);
+
+    // Inline edit message state
+    const [editingMsgVid, setEditingMsgVid] = useState(null);
+    const [editingMsgText, setEditingMsgText] = useState('');
 
     // Bot Stats (waterfall priority)
     const [botStats, setBotStats] = useState({ bots: [], windowMinutes: 60 });
@@ -5930,39 +5995,65 @@ export default function Admin() {
                                                     })()}
                                                 </div>
                                                 {(r.message || (!isPass && !isProcessing)) && (
-                                                    <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                                        {r.message && <span>{r.message}</span>}
-                                                        {(!isPass && !isProcessing && !isSubmissionFailure) && (
-                                                            <span
-                                                                title="编辑报错信息并推送给用户"
-                                                                style={{ cursor: 'pointer', opacity: 0.6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', padding: '1px 6px', background: 'var(--bg-secondary)', borderRadius: '4px', flexShrink: 0, color: 'var(--text-secondary)' }}
-                                                                onMouseOver={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#7c5cfc'; }}
-                                                                onMouseOut={e => { e.currentTarget.style.opacity = 0.6; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                                                                onClick={async (e) => {
-                                                                    e.stopPropagation();
-                                                                    const newMsg = window.prompt("修改报错信息并推送给用户:", r.message || "");
-                                                                    if (newMsg !== null) {
-                                                                        const msgStr = newMsg.trim();
-                                                                        if (msgStr) {
+                                                    editingMsgVid === r.verificationId ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', marginTop: '4px', background: 'var(--bg-card)', padding: '10px', borderRadius: '8px', border: `1px solid ${borderColor}` }} onClick={e => e.stopPropagation()}>
+                                                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>编辑失败提示：</div>
+                                                            <textarea 
+                                                                autoFocus
+                                                                className="input" 
+                                                                style={{ minHeight: '60px', padding: '8px', fontSize: '13px', resize: 'vertical' }}
+                                                                value={editingMsgText}
+                                                                onChange={e => setEditingMsgText(e.target.value)}
+                                                                placeholder="输入此条记录的新报错信息..."
+                                                            />
+                                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                                                                <button 
+                                                                    style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--bg-tertiary)', border: 'none', borderRadius: '6px', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500 }}
+                                                                    onClick={(e) => { e.stopPropagation(); setEditingMsgVid(null); }}
+                                                                >取消</button>
+                                                                <button 
+                                                                    style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--color-primary)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        const newMsg = editingMsgText.trim();
+                                                                        if (newMsg) {
                                                                             try {
                                                                                 const token = user?.token || localStorage.getItem('verifykey-token');
                                                                                 await fetch(`${API_BASE}/api/admin/override-message`, {
                                                                                     method: 'POST',
                                                                                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                                                                    body: JSON.stringify({ vid: r.verificationId || '', message: msgStr })
+                                                                                    body: JSON.stringify({ vid: r.verificationId || '', message: newMsg })
                                                                                 });
                                                                                 setVerifyLog(prev => prev.map(item => 
                                                                                     item.verificationId === r.verificationId 
-                                                                                        ? { ...item, message: msgStr } 
+                                                                                        ? { ...item, message: newMsg } 
                                                                                         : item
                                                                                 ));
+                                                                                setEditingMsgVid(null);
                                                                             } catch(err) { alert('修改失败'); }
                                                                         }
-                                                                    }
-                                                                }}
-                                                            >✏️ 编辑推送</span>
-                                                        )}
-                                                    </div>
+                                                                    }}
+                                                                >保存并推送</button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                            {r.message && <span>{r.message}</span>}
+                                                            {(!isPass && !isProcessing && !isSubmissionFailure) && (
+                                                                <span
+                                                                    title="自定义编辑报错信息并推送给用户"
+                                                                    style={{ cursor: 'pointer', opacity: 0.6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', padding: '1px 6px', background: 'var(--bg-secondary)', borderRadius: '4px', flexShrink: 0, color: 'var(--text-secondary)', transition: 'all 0.2s' }}
+                                                                    onMouseOver={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                                                                    onMouseOut={e => { e.currentTarget.style.opacity = 0.6; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEditingMsgText(r.message || "");
+                                                                        setEditingMsgVid(r.verificationId);
+                                                                    }}
+                                                                >✏️ 编辑</span>
+                                                            )}
+                                                        </div>
+                                                    )
                                                 )}
                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                     <span>{ts}</span>
@@ -6091,12 +6182,44 @@ export default function Admin() {
                 {/* Users Tab */}
                 {activeTab === 'users' && (
                     <div className="tab-content">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>共 {users.length} 个用户</span>
-                            <button className="btn btn-sm btn-secondary" onClick={fetchUsers} disabled={usersLoading}
-                                style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '13px' }}>
-                                {usersLoading ? '加载中...' : '🔄 刷新'}
-                            </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>用户管理</span>
+                                <input
+                                    type="text"
+                                    placeholder="搜索邮箱/用户名/ID/状态..."
+                                    className="input"
+                                    style={{ padding: '4px 10px', fontSize: '13px', width: '220px', borderRadius: '6px' }}
+                                    value={userSearch}
+                                    onChange={(e) => setUserSearch(e.target.value)}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>共 {filteredUsers.length} 个用户</span>
+                                {userTotalPages > 1 && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <button
+                                            onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                                            disabled={userPage === 1}
+                                            style={{ padding: '2px 8px', fontSize: '13px', border: '1px solid var(--border-primary)', borderRadius: '4px', background: 'var(--bg-secondary)', cursor: userPage === 1 ? 'not-allowed' : 'pointer', opacity: userPage === 1 ? 0.5 : 1 }}
+                                        >
+                                            上一页
+                                        </button>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', minWidth: '40px', textAlign: 'center' }}>{userPage} / {userTotalPages}</span>
+                                        <button
+                                            onClick={() => setUserPage(p => Math.min(userTotalPages, p + 1))}
+                                            disabled={userPage === userTotalPages}
+                                            style={{ padding: '2px 8px', fontSize: '13px', border: '1px solid var(--border-primary)', borderRadius: '4px', background: 'var(--bg-secondary)', cursor: userPage === userTotalPages ? 'not-allowed' : 'pointer', opacity: userPage === userTotalPages ? 0.5 : 1 }}
+                                        >
+                                            下一页
+                                        </button>
+                                    </div>
+                                )}
+                                <button className="btn btn-sm btn-secondary" onClick={fetchUsers} disabled={usersLoading}
+                                    style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '13px' }}>
+                                    {usersLoading ? '加载中...' : '🔄 刷新'}
+                                </button>
+                            </div>
                         </div>
                         <div className="users-table card">
                             <table className="data-table">
@@ -6121,7 +6244,7 @@ export default function Admin() {
                                     {usersLoading && (
                                         <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>加载中...</td></tr>
                                     )}
-                                    {users.map(u => (
+                                    {displayUsers.map(u => (
                                         <tr key={u.id}>
                                             <td>{u.id}</td>
                                             <td style={{ fontWeight: 600 }}>{u.username || '-'}</td>

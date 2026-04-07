@@ -9064,9 +9064,6 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     credits = user.get("credits", 0)
     cost = 1.5 if request.mode == "auto" else 1.0
     sse_source = "pixel_auto" if request.mode == "auto" else "pixel"
-    if credits < cost:
-        raise HTTPException(status_code=400, detail=f"积分不足（需要 {cost} 积分）")
-
     import verification_history
     import uuid
     existing_success = verification_history.get_successful_history_by_email(request.email, user_id)
@@ -9094,6 +9091,9 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             "queue_position": -1,
             "estimated_wait_seconds": 0,
         }
+
+    if credits < cost:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {cost} 积分）")
 
     _deduct_user_credits_or_raise(user_id, cost, f"积分不足（需要 {cost} 积分）")
 
@@ -9424,6 +9424,85 @@ async def pixel_update_config(request: Request, authorization: Optional[str] = H
     raise HTTPException(status_code=500, detail="保存失败")
 
 
+@app.get("/api/result")
+async def get_result_by_email(email: str, authorization: Optional[str] = Header(None)):
+    """Query verification result by email — no credits required.
+    
+    Allows users who have insufficient credits to still retrieve their
+    already-completed verification result (e.g., UPixel subscription URL).
+    
+    Returns the most recent successful (pass) record for this user's email.
+    If a job is still in progress, returns running status.
+    If not found, returns HTTP 404.
+    """
+    # Auth via JWT token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="账号已被禁用")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="请提供 email 参数")
+
+    user_id = user.get("id")
+    import verification_history
+
+    # 1. Check for a successful (pass) record
+    existing_success = verification_history.get_successful_history_by_email(email, user_id)
+    if existing_success:
+        msg = existing_success.get("message", "")
+        via = existing_success.get("via", "")
+        # Extract URL from message field (stored as "✅ 订阅成功: https://..." or similar)
+        url = (
+            msg.replace("✅ 获取成功: ", "")
+               .replace("✅ 订阅成功: ", "")
+               .replace("✅ 获取成功（补偿确认）", "")
+               .replace("✅ 验证已成功（获取历史记录）", "")
+               .replace("✅ 获取成功", "")
+               .replace("✅ 订阅成功", "")
+               .strip()
+        )
+        if not url.startswith("http"):
+            url = ""
+        return {
+            "email": email,
+            "status": "success",
+            "mode": "auto" if ("auto" in via) else "semi-auto",
+            "url": url,
+            "result_msg": msg,
+            "created_at": existing_success.get("timestamp", ""),
+        }
+
+    # 2. Check if this email has an active in-progress pixel job
+    for job_id, ctx in list(_pixel_job_context.items()):
+        if ctx.get("email") == email and ctx.get("user_id") == user_id:
+            return {
+                "email": email,
+                "status": "running",
+                "mode": "auto" if ctx.get("mode") == "auto" else "semi-auto",
+                "job_id": job_id,
+            }
+
+    # 3. Check other pixel provider contexts
+    for job_id, ctx in list(_kpixel_job_context.items()):
+        if ctx.get("email") == email and ctx.get("user_id") == user_id:
+            return {"email": email, "status": "running", "mode": "semi-auto", "job_id": job_id}
+
+    for job_id, ctx in list(_vpixel_job_context.items()):
+        if ctx.get("email") == email and ctx.get("user_id") == user_id:
+            return {"email": email, "status": "running", "mode": "semi-auto", "job_id": job_id}
+
+    # 4. Not found
+    raise HTTPException(
+        status_code=404,
+        detail={"code": "not_found", "message": "未找到该邮箱的记录"},
+    )
+
+
 # ========== KPixel API (Pro Tier) ==========
 
 def _get_kpixel_config():
@@ -9647,6 +9726,34 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
         raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
+
+    import verification_history
+    import uuid
+    existing_success = verification_history.get_successful_history_by_email(request.email, user_id)
+    if existing_success:
+        job_id = existing_success.get("verificationId") or existing_success.get("id") or ("auto-" + str(uuid.uuid4())[:8])
+        event_meta = _build_verify_event_meta("pro_submit", request.email, user_id, "pro_submit")
+        msg = existing_success.get("message", "")
+        url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 获取成功", "").replace("✅ 订阅成功", "").strip()
+        if not url.startswith("http"):
+            url = ""
+        
+        broadcast_verify_event({
+            "type": "progress",
+            "vid": job_id,
+            "step": "result", "status": "approved",
+            "success": True,
+            "message": "✅ 验证已成功（获取历史记录）",
+            "url": url,
+            "forceTerminalUpdate": True,
+            **event_meta,
+        })
+        return {
+            "task_id": job_id,
+            "status": "success",
+            "message": "获取历史成功"
+        }
+
     if credits < credit_cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {credit_cost} 积分）")
 
@@ -10464,6 +10571,34 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
     user_id = user.get("id")
     credits = user.get("credits", 0)
+
+    import verification_history
+    import uuid
+    existing_success = verification_history.get_successful_history_by_email(request.email, user_id)
+    if existing_success:
+        job_id = existing_success.get("verificationId") or existing_success.get("id") or ("auto-" + str(uuid.uuid4())[:8])
+        event_meta = _build_verify_event_meta("vpixel_card_pool", request.email, user_id, "vpixel_card_pool")
+        msg = existing_success.get("message", "")
+        url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 获取成功", "").replace("✅ 订阅成功", "").strip()
+        if not url.startswith("http"):
+            url = ""
+        
+        broadcast_verify_event({
+            "type": "progress",
+            "vid": job_id,
+            "step": "result", "status": "approved",
+            "success": True,
+            "message": "✅ 验证已成功（获取历史记录）",
+            "url": url,
+            "forceTerminalUpdate": True,
+            **event_meta,
+        })
+        return {
+            "poll_id": job_id,
+            "status": "success",
+            "message": "获取历史成功"
+        }
+
     if credits < credit_cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {credit_cost} 积分）")
 

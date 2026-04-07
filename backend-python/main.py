@@ -1977,6 +1977,25 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     return {"success": True, "user": user}
 
 
+@app.get("/api/auth/invite-stats")
+async def get_invite_stats(authorization: Optional[str] = Header(None)):
+    """Get user's invitation statistics"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+        
+    conn = database.get_connection()
+    cursor = conn.execute("SELECT COUNT(*) FROM users WHERE invited_by = ?", (user["id"],))
+    count = cursor.fetchone()[0]
+    
+    return {"invitedCount": count, "totalRewards": count * 0.2}
+
+
 @app.post("/api/auth/credits")
 async def update_user_credits(authorization: Optional[str] = Header(None)):
     """Update user credits (admin only)"""

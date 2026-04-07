@@ -35,6 +35,8 @@ const ERROR_KEY_MAP = {
     SIGNIN_FAILED: 'errSigninFailed',
     ACCOUNT_NOT_DETECTED: 'errAccountNotDetected',
     BROWSER_LOGIN_FAILED: 'errBrowserLoginFailed',
+    MANUAL_CANCEL: 'errManualCancel',
+    INVALID_ACCOUNT: 'errInvalidAccount',
     UNKNOWN_ERROR: 'errUnknownError',
 };
 
@@ -567,11 +569,16 @@ export default function Verify() {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
                     const error = data.error || 'UNKNOWN_ERROR';
+                    const resultMsg = data.result_msg || '';
                     // Use differentiated message for INTERNAL_ERROR
                     const currentResult = results.find(r => r.id === resultId);
-                    const errorDesc = error === 'INTERNAL_ERROR'
-                        ? getInternalErrorMsg(currentResult?.email)
-                        : (ERROR_DESCRIPTIONS[error] || sanitizeError(error));
+                    // For MANUAL_CANCEL / INVALID_ACCOUNT, prefer the operator's result_msg
+                    const useResultMsg = (error === 'MANUAL_CANCEL' || error === 'INVALID_ACCOUNT') && resultMsg;
+                    const errorDesc = useResultMsg
+                        ? resultMsg
+                        : error === 'INTERNAL_ERROR'
+                            ? getInternalErrorMsg(currentResult?.email)
+                            : (ERROR_DESCRIPTIONS[error] || sanitizeError(error));
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
                             ...r,
@@ -1015,6 +1022,8 @@ export default function Verify() {
         'PROXY_ERROR': '代理错误',
         'DEVICE_ERROR': '设备错误',
         'QUEUE_TIMEOUT': '排队超时',
+        'MANUAL_CANCEL': '任务被人工取消',
+        'INVALID_ACCOUNT': '账号信息有误',
         'POLL_TIMEOUT': '轮询超时',
         'SERVER_ERROR': '服务器错误',
     };

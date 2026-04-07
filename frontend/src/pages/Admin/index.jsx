@@ -706,6 +706,8 @@ function LiveTaskMonitor() {
         SIGNIN_FAILED: '登录失败',
         ACCOUNT_NOT_DETECTED: '未检测到账号',
         BROWSER_LOGIN_FAILED: '浏览器登录失败',
+        MANUAL_CANCEL: '手动取消（操作员取消）',
+        INVALID_ACCOUNT: '账号信息有误（手动标记）',
         UNKNOWN_ERROR: '未知错误',
     };
 

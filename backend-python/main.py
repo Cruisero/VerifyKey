@@ -8966,7 +8966,10 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
 
                 elif status == "failed":
                     error = data.get("error", "UNKNOWN_ERROR")
-                    _finalize_user_failure(job_id, user_id, f"失败: {error}", via=sse_source, refund_cost=cost, email=email)
+                    result_msg = data.get("result_msg", "")
+                    # For operator-marked errors, use the detailed result_msg
+                    display_msg = result_msg if (error in ("MANUAL_CANCEL", "INVALID_ACCOUNT") and result_msg) else error
+                    _finalize_user_failure(job_id, user_id, f"失败: {display_msg}", via=sse_source, refund_cost=cost, email=email)
                     _complete_async_task("pixel", job_id)
                     broadcast_verify_event({
                         "type": "progress",
@@ -8974,8 +8977,9 @@ async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict
                         "step": "result",
                         "status": "failed",
                         "success": False,
-                        "message": f"❌ {error}",
+                        "message": f"❌ {display_msg}",
                         "error": error,
+                        "result_msg": result_msg,
                         "elapsed": round(elapsed, 1),
                         **event_meta,
                     })

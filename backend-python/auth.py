@@ -196,16 +196,26 @@ def login(email: str, password: str) -> dict:
     # Find user
     cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
     user_row = cursor.fetchone()
-    conn.close()
     
     if not user_row:
+        conn.close()
         raise ValueError("邮箱或密码错误")
     
     user = dict(user_row)
     
     # Verify password
     if not bcrypt.checkpw(password.encode(), user["password"].encode()):
+        conn.close()
         raise ValueError("邮箱或密码错误")
+        
+    # Auto-generate invite_code for legacy users who have it as NULL
+    if not user.get("invite_code"):
+        code = _generate_invite_code(cursor)
+        cursor.execute("UPDATE users SET invite_code = ? WHERE id = ?", (code, user["id"]))
+        conn.commit()
+        user["invite_code"] = code
+        
+    conn.close()
     
     # Remove password from response
     del user["password"]
@@ -238,10 +248,18 @@ def verify_token(token: str) -> Optional[dict]:
             FROM users WHERE id = ?
         """, (decoded["userId"],))
         user_row = cursor.fetchone()
-        conn.close()
         
         if user_row:
-            return dict(user_row)
+            u_dict = dict(user_row)
+            if not u_dict.get("invite_code"):
+                code = _generate_invite_code(cursor)
+                cursor.execute("UPDATE users SET invite_code = ? WHERE id = ?", (code, u_dict["id"]))
+                conn.commit()
+                u_dict["invite_code"] = code
+            conn.close()
+            return u_dict
+            
+        conn.close()
         return None
     except:
         return None

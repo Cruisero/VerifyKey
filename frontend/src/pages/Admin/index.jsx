@@ -719,6 +719,24 @@ function LiveTaskMonitor() {
 
     useEffect(() => {
         if (!token) return;
+
+        // Load today's historical tasks on mount
+        const loadHistory = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/admin/today-tasks`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setTasks(data.tasks || []);
+                }
+            } catch (e) {
+                console.warn('Failed to load today tasks:', e);
+            }
+        };
+        loadHistory();
+
+        // SSE real-time updates
         const sseUrl = `${API_BASE}/api/admin/verify-stream?authorization=Bearer ${token}`;
         const es = new EventSource(sseUrl);
         esRef.current = es;
@@ -769,7 +787,7 @@ function LiveTaskMonitor() {
                             updated[existingIdx] = { ...updated[existingIdx], ...entry };
                             return updated;
                         } else {
-                            return [entry, ...prev].slice(0, 200);
+                            return [entry, ...prev].slice(0, 500);
                         }
                     });
                 }

@@ -5923,6 +5923,55 @@ async def get_user_active_verifications(authorization: Optional[str] = Header(No
     return {"items": _build_user_active_verifications(user_id)}
 
 
+@app.get("/api/admin/today-tasks")
+async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
+    """Get today's verification history formatted for LiveTaskMonitor component."""
+    _verify_admin_token(authorization)
+
+    conn = database.get_connection()
+    # Get today's date range (UTC)
+    from datetime import datetime as _dt, timezone as _tz
+    today_start = _dt.now(_tz.utc).strftime("%Y-%m-%dT00:00:00")
+
+    # Query verification_history for today's records from pixel/kpixel/vpixel/ypixel/gpt sources
+    cursor = conn.execute(
+        "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
+        "FROM verification_history "
+        "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
+        "ORDER BY rowid DESC LIMIT 500",
+        (today_start,)
+    )
+    rows = cursor.fetchall()
+
+    # Map DB status names to LiveTaskMonitor status names
+    status_map = {"pass": "success", "failed": "failed", "processing": "processing", "cancel": "failed"}
+
+    tasks = []
+    for r in rows:
+        db_status = r["status"]
+        tasks.append({
+            "vid": r["verification_id"] or r["id"],
+            "source": r["via"] if "via" in r.keys() else "",
+            "email": r["email"] if "email" in r.keys() else "",
+            "status": status_map.get(db_status, db_status),
+            "message": r["message"] or "",
+            "step": "result" if db_status in ("pass", "failed") else "",
+            "stage": 0,
+            "totalStages": 0,
+            "stageLabel": "",
+            "queuePosition": -1,
+            "elapsed": 0,
+            "url": "",
+            "error": "",
+            "channel": "",
+            "userId": r["cdk"] or "",
+            "timestamp": r["timestamp"],
+            "updatedAt": r["timestamp"],
+        })
+
+    return {"tasks": tasks}
+
+
 @app.get("/api/admin/verify-history")
 async def get_admin_verification_history(authorization: Optional[str] = Header(None)):
     """Get full verification history with all fields (admin only)"""

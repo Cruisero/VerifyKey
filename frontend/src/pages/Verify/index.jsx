@@ -75,6 +75,7 @@ export default function Verify() {
     const [singlePassword, setSinglePassword] = useState('');
     const [singleTotp, setSingleTotp] = useState('');
     const [emailError, setEmailError] = useState('');
+    const [totpError, setTotpError] = useState('');
 
     // Batch mode field
     const [batchInput, setBatchInput] = useState('');
@@ -841,7 +842,13 @@ export default function Verify() {
                 setEmailError(t('alertGmailOnly'));
                 return;
             }
-            accounts = [{ email: singleEmail.trim(), password: singlePassword.trim(), totp_secret: singleTotp.trim() }];
+            // Validate TOTP secret: must be Base32 (letters+digits), not a pure-digit code
+            const trimmedTotp = singleTotp.trim();
+            if (/^\d{4,8}$/.test(trimmedTotp)) {
+                setTotpError(t('alertTotpNotSecret'));
+                return;
+            }
+            accounts = [{ email: singleEmail.trim(), password: singlePassword.trim(), totp_secret: trimmedTotp }];
         } else {
             accounts = parseBatchInput(batchInput);
             if (accounts.length === 0) {
@@ -1381,13 +1388,21 @@ export default function Verify() {
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    className="input pixel-field"
+                                                    className={`input pixel-field${totpError ? ' field-error' : ''}`}
                                                     placeholder="JBSWY3DPEHPK3PXP (Base32)"
                                                     value={singleTotp}
-                                                    onChange={e => setSingleTotp(e.target.value.toUpperCase())}
+                                                    onChange={e => {
+                                                        setSingleTotp(e.target.value.toUpperCase());
+                                                        if (totpError) setTotpError('');
+                                                    }}
                                                     disabled={verifyStatus === 'processing'}
                                                     autoComplete="off"
                                                 />
+                                                {totpError && (
+                                                    <div className="field-error-msg">
+                                                        <span className="error-icon">⚠️</span> {totpError}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}

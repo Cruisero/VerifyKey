@@ -99,6 +99,7 @@ const translations = {
         alertFillAll: '请填写所有字段',
         alertInvalidFormat: '请输入有效的账号信息，格式：邮箱----密码----2FA密钥',
         alertGmailOnly: '账号类型错误，只支持 Gmail 邮箱',
+        alertTotpNotSecret: '请输入 2FA 密钥（Base32 格式），不是 6 位数字验证码',
         alertAccountSuspended: '判断恶意使用服务，账号已被禁用，如有异议请联系客服',
 
         textareaPlaceholderTelegram: `粘贴验证链接，每行一个...
@@ -462,6 +463,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         alertFillAll: 'Please fill in all fields',
         alertInvalidFormat: 'Please enter valid account info. Format: email----password----2FA_secret',
         alertGmailOnly: 'Invalid account type, only Gmail accounts are supported',
+        alertTotpNotSecret: 'Please enter the 2FA secret key (Base32 format), not the 6-digit verification code',
         alertAccountSuspended: 'Malicious usage detected. Your account has been suspended. Please contact support if you have any concerns.',
 
         textareaPlaceholderTelegram: `Paste verification links, one per line...

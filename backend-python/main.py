@@ -6191,12 +6191,14 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
             # User credit system (积分)
             try:
                 uid = int(cdk_code.split(":")[1])
-                # Determine credit cost based on VID prefix
-                if vid.startswith("yp_"):
+                # Determine credit cost based on VID prefix and via channel
+                if vid.startswith("yp_") or via == "ypixel":
                     cost = 1.0
-                elif vid.startswith("vp_"):
+                elif vid.startswith("vp_") or via == "vpixel":
                     cost = 1.5
-                elif vid.startswith("kp_"):
+                elif vid.startswith("kp_") or via == "kpixel":
+                    cost = 1.5
+                elif via == "pixel_auto":
                     cost = 1.5
                 else:
                     cost = 1.0
@@ -6390,13 +6392,15 @@ async def override_verification_by_vid(request: VidOverrideRequest):
             # User credit system
             try:
                 uid = int(cdk_field.split(":")[1])
-                # Determine credit cost based on VID prefix
+                # Determine credit cost based on VID prefix and via channel
                 vid = request.vid or ""
-                if vid.startswith("yp_"):
+                if vid.startswith("yp_") or via == "ypixel":
                     cost = 1.0
-                elif vid.startswith("vp_"):
+                elif vid.startswith("vp_") or via == "vpixel":
                     cost = 1.5
-                elif vid.startswith("kp_"):
+                elif vid.startswith("kp_") or via == "kpixel":
+                    cost = 1.5
+                elif via == "pixel_auto":
                     cost = 1.5
                 else:
                     cost = 1.0

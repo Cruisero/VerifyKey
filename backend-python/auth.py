@@ -157,7 +157,7 @@ def register(email: str, password: str, username: str, invite_code: str = None) 
         inviter = cursor.fetchone()
         if inviter:
             invited_by = inviter["id"] if isinstance(inviter, dict) else inviter[0]
-            bonus_credits = 50  # bonus for being invited
+            bonus_credits = 0  # No registration bonus; reward is given upon CDK redemption
     
     # Insert user
     initial_credits = 0 + bonus_credits
@@ -168,11 +168,6 @@ def register(email: str, password: str, username: str, invite_code: str = None) 
     conn.commit()
     
     user_id = cursor.lastrowid
-    
-    # Give inviter bonus credits
-    if invited_by:
-        cursor.execute("UPDATE users SET credits = credits + 50 WHERE id = ?", (invited_by,))
-        conn.commit()
     
     # Get user data
     cursor.execute("""

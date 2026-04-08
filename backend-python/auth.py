@@ -326,6 +326,58 @@ def deduct_credits(user_id: int, amount: float) -> Optional[dict]:
     return get_user_by_id(user_id)
 
 
+def trigger_invite_reward(user_id: int) -> Optional[dict]:
+    """
+    Trigger invite reward when invitee redeems a CDK (i.e. purchases credits).
+    Awards +0.2 credits to the inviter. Only triggers once per invitee.
+    Returns the inviter's updated user data if reward was given, None otherwise.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Check if user exists, has an inviter, and hasn't consumed before
+    cursor.execute("SELECT id, invited_by, has_consumed FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        return None
+    
+    user_dict = dict(user)
+    
+    # Skip if already consumed or no inviter
+    if user_dict.get("has_consumed") or not user_dict.get("invited_by"):
+        conn.close()
+        return None
+    
+    inviter_id = user_dict["invited_by"]
+    reward_amount = 0.2
+    
+    # Mark as consumed
+    cursor.execute("UPDATE users SET has_consumed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+    
+    # Reward inviter
+    cursor.execute("UPDATE users SET credits = credits + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (reward_amount, inviter_id))
+    
+    # Log the reward in invitation_rewards table (in the main onepass.db)
+    try:
+        import database
+        main_conn = database.get_connection()
+        main_conn.execute(
+            "INSERT INTO invitation_rewards (inviter_id, invitee_id, reward_amount) VALUES (?, ?, ?)",
+            (inviter_id, user_id, reward_amount)
+        )
+        main_conn.commit()
+    except Exception as e:
+        print(f"[Invite] Error logging reward to invitation_rewards: {e}")
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"[Invite] User {inviter_id} rewarded +{reward_amount} credits (invitee: {user_id})")
+    return get_user_by_id(inviter_id)
+
+
 def create_reset_token(email: str) -> Optional[str]:
     """Create a password reset token (1 hour expiry)"""
     conn = get_db()

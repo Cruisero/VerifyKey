@@ -177,6 +177,16 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_gtu_time ON gpt_team_usage_records(redeemed_at);
             CREATE INDEX IF NOT EXISTS idx_gtu_email ON gpt_team_usage_records(email);
             CREATE INDEX IF NOT EXISTS idx_gtu_team ON gpt_team_usage_records(team_id);
+
+            CREATE TABLE IF NOT EXISTS invitation_rewards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inviter_id INTEGER NOT NULL,
+                invitee_id INTEGER NOT NULL,
+                reward_amount REAL NOT NULL DEFAULT 0.2,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_ir_inviter ON invitation_rewards(inviter_id);
+            CREATE INDEX IF NOT EXISTS idx_ir_invitee ON invitation_rewards(invitee_id);
         """)
 
         # Migrate existing JSON data
@@ -191,6 +201,7 @@ def init_db():
         _add_quota_columns_to_vpixel_cards(conn)
         _add_quota_columns_to_ypixel_cards(conn)
         _add_email_column_to_verification_history(conn)
+        _add_has_consumed_column_to_users(conn)
 
         conn.commit()
         _initialized = True
@@ -376,6 +387,22 @@ def _add_quota_columns_to_ypixel_cards(conn: sqlite3.Connection):
             print("[DB] Added 'total_count' column to ypixel_cards table")
     except Exception as e:
         print(f"[DB] Error adding quota columns to ypixel_cards: {e}")
+
+
+def _add_has_consumed_column_to_users(conn: sqlite3.Connection):
+    """Add has_consumed column to users table (auth.py DB) if it doesn't exist."""
+    import auth
+    try:
+        auth_conn = auth.get_db()
+        cursor = auth_conn.execute("PRAGMA table_info(users)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "has_consumed" not in columns:
+            auth_conn.execute("ALTER TABLE users ADD COLUMN has_consumed INTEGER DEFAULT 0")
+            auth_conn.commit()
+            print("[DB] Added 'has_consumed' column to users table")
+        auth_conn.close()
+    except Exception as e:
+        print(f"[DB] Error adding has_consumed column: {e}")
 
 
 # ========== Backup Functions ==========

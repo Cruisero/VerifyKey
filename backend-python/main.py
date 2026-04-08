@@ -1989,11 +1989,24 @@ async def get_invite_stats(authorization: Optional[str] = Header(None)):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
         
-    conn = database.get_connection()
-    cursor = conn.execute("SELECT COUNT(*) FROM users WHERE invited_by = ?", (user["id"],))
+    conn = auth.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users WHERE invited_by = ?", (user["id"],))
     count = cursor.fetchone()[0]
+    conn.close()
     
-    return {"invitedCount": count, "totalRewards": count * 0.2}
+    # Get actual reward total from invitation_rewards table
+    try:
+        main_conn = database.get_connection()
+        reward_row = main_conn.execute(
+            "SELECT COALESCE(SUM(reward_amount), 0) as total FROM invitation_rewards WHERE inviter_id = ?",
+            (user["id"],)
+        ).fetchone()
+        total_rewards = reward_row["total"] if reward_row else 0
+    except Exception:
+        total_rewards = count * 0.2  # fallback
+    
+    return {"invitedCount": count, "totalRewards": total_rewards}
 
 
 @app.post("/api/auth/credits")
@@ -5657,6 +5670,12 @@ async def redeem_cdk_endpoint(request: CDKValidateRequest, authorization: Option
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
 
+    # Trigger invite reward: invitee redeemed CDK = purchased credits, reward inviter
+    try:
+        auth.trigger_invite_reward(user["id"])
+    except Exception as e:
+        print(f"[CDK Redeem] Error triggering invite reward: {e}")
+
     # Return updated user credits
     updated_user = auth.get_user_by_id(user["id"])
     return {
@@ -6225,6 +6244,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                 if request.status == "pass" and old_status != "pass":
                     auth.deduct_credits(uid, cost)
                     credit_message = f"已扣除用户 {uid} 积分 {cost}"
+
                 elif request.status == "failed" and old_status == "pass":
                     auth.update_credits(uid, cost)
                     credit_message = f"已返还用户 {uid} 积分 {cost}"
@@ -6426,6 +6446,7 @@ async def override_verification_by_vid(request: VidOverrideRequest):
 
                 if request.status == "pass" and old_status != "pass":
                     auth.deduct_credits(uid, cost)
+
                     credit_message = f"已扣除用户 {uid} 积分 {cost}"
                 elif request.status == "failed" and old_status == "pass":
                     auth.update_credits(uid, cost)
@@ -8703,6 +8724,7 @@ def _deduct_user_credits_or_raise(user_id: int, cost: float, detail: str):
     if not result:
         raise HTTPException(status_code=400, detail=detail)
     logging.info(f"[credits] Reserved {cost} credits from user {user_id}")
+
     return {"deducted": True}
 
 
@@ -12248,6 +12270,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
     if not auth_result:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_TEAM_INVITE_COST} 积分，剩余 {credits}）")
 
+
     try:
         conn = database.get_connection()
         team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team["id"],)).fetchone()
@@ -12686,6 +12709,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         result = auth.deduct_credits(user_id, GPT_RECHARGE_COST)
         if not result:
             print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id} (insufficient credits?)")
+
     except Exception as e:
         print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id}: {e}")
 

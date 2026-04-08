@@ -21,7 +21,7 @@ git push origin main
 
 # 2. 服务器拉取代码并重建容器
 echo "📥 服务器拉取代码..."
-ssh $SERVER "cd $REMOTE_PATH && git pull origin main"
+ssh $SERVER "cd $REMOTE_PATH && git stash && git pull origin main"
 
 echo "🐳 重建 Docker 容器..."
 ssh $SERVER "cd $REMOTE_PATH && docker compose build && docker compose up -d"

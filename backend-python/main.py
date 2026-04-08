@@ -1979,7 +1979,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 
 @app.get("/api/auth/invite-stats")
 async def get_invite_stats(authorization: Optional[str] = Header(None)):
-    """Get user's invitation statistics"""
+    """Get user's invitation statistics with latest 5 invite details"""
     if not authorization:
         raise HTTPException(status_code=401, detail="No authorization header")
     
@@ -1993,7 +1993,37 @@ async def get_invite_stats(authorization: Optional[str] = Header(None)):
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM users WHERE invited_by = ?", (user["id"],))
     count = cursor.fetchone()[0]
+    
+    # Get latest 5 invitees with details
+    cursor.execute("""
+        SELECT id, email, username, created_at, has_consumed
+        FROM users WHERE invited_by = ?
+        ORDER BY id DESC LIMIT 5
+    """, (user["id"],))
+    invitee_rows = cursor.fetchall()
     conn.close()
+    
+    # Build detail list with reward info
+    details = []
+    for row in invitee_rows:
+        r = dict(row)
+        email = r.get("email", "")
+        # Mask email: show first 2 chars + ***@domain
+        if "@" in email:
+            local, domain = email.split("@", 1)
+            masked = local[:2] + "***@" + domain if len(local) > 2 else local[0] + "***@" + domain
+        else:
+            masked = email[:3] + "***" if len(email) > 3 else "***"
+        
+        # Check if this invitee triggered a reward
+        rewarded = bool(r.get("has_consumed"))
+        
+        details.append({
+            "email": masked,
+            "username": r.get("username", ""),
+            "registeredAt": r.get("created_at", ""),
+            "rewarded": rewarded,
+        })
     
     # Get actual reward total from invitation_rewards table
     try:
@@ -2006,7 +2036,7 @@ async def get_invite_stats(authorization: Optional[str] = Header(None)):
     except Exception:
         total_rewards = count * 0.2  # fallback
     
-    return {"invitedCount": count, "totalRewards": total_rewards}
+    return {"invitedCount": count, "totalRewards": total_rewards, "details": details}
 
 
 @app.post("/api/auth/credits")

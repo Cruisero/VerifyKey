@@ -511,6 +511,87 @@
     color: var(--text-tertiary);
 }
 
+/* Invite Details Section */
+.invite-details-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-primary);
+}
+
+.invite-details-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+}
+
+.invite-details-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.invite-detail-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.invite-detail-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.invite-detail-email {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.invite-detail-time {
+    font-size: 10px;
+    color: var(--text-tertiary);
+}
+
+.invite-detail-badge {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.invite-detail-badge.rewarded {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.invite-detail-badge.pending {
+    color: var(--text-tertiary);
+    background: var(--bg-secondary);
+}
+
+.invite-empty-hint {
+    margin-top: 12px;
+    padding: 12px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
 /* Dropdown menu */
 .user-dropdown {
     position: absolute;

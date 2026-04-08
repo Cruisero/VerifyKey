@@ -192,7 +192,7 @@ export default function Layout({ children }) {
                                 <div className="invite-popover">
                                     <div className="invite-popover-title">🎁 邀请好友赚积分</div>
                                     <p className="invite-popover-desc">
-                                        好友通过你的链接注册并消费后，你获得 <strong>+0.2 积分</strong>
+                                        好友通过你的链接注册并购买积分后，你获得 <strong>+0.2 积分</strong>
                                     </p>
                                     {user ? (
                                         <>
@@ -210,17 +210,38 @@ export default function Layout({ children }) {
                                                     {copied ? '✓ 已复制' : '复制'}
                                                 </button>
                                             </div>
-                                            {inviteStats && (
-                                                <div className="invite-stats-row">
-                                                    <div className="invite-stat">
-                                                        <span className="invite-stat-val">{inviteStats.invitedCount}</span>
-                                                        <span className="invite-stat-label">已邀请</span>
-                                                    </div>
-                                                    <div className="invite-stat">
-                                                        <span className="invite-stat-val">+{inviteStats.totalRewards?.toFixed(1) || 0}</span>
-                                                        <span className="invite-stat-label">获得积分</span>
+                                            <div className="invite-stats-row">
+                                                <div className="invite-stat">
+                                                    <span className="invite-stat-val">{inviteStats?.invitedCount ?? 0}</span>
+                                                    <span className="invite-stat-label">已邀请</span>
+                                                </div>
+                                                <div className="invite-stat">
+                                                    <span className="invite-stat-val">+{inviteStats?.totalRewards?.toFixed(1) ?? '0.0'}</span>
+                                                    <span className="invite-stat-label">获得积分</span>
+                                                </div>
+                                            </div>
+                                            {inviteStats?.details && inviteStats.details.length > 0 && (
+                                                <div className="invite-details-section">
+                                                    <div className="invite-details-title">最近邀请记录</div>
+                                                    <div className="invite-details-list">
+                                                        {inviteStats.details.map((d, i) => (
+                                                            <div className="invite-detail-item" key={i}>
+                                                                <div className="invite-detail-left">
+                                                                    <span className="invite-detail-email">{d.email}</span>
+                                                                    <span className="invite-detail-time">
+                                                                        {d.registeredAt ? new Date(d.registeredAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : ''}
+                                                                    </span>
+                                                                </div>
+                                                                <span className={`invite-detail-badge ${d.rewarded ? 'rewarded' : 'pending'}`}>
+                                                                    {d.rewarded ? '✓ 已返利' : '待购买'}
+                                                                </span>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
+                                            )}
+                                            {inviteStats && inviteStats.details && inviteStats.details.length === 0 && (
+                                                <div className="invite-empty-hint">还没有邀请记录，分享链接给好友吧 🚀</div>
                                             )}
                                         </>
                                     ) : (

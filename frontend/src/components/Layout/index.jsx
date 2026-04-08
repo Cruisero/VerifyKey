@@ -63,7 +63,7 @@ export default function Layout({ children }) {
     };
 
     const inviteLink = user?.invite_code
-        ? `${window.location.origin}/?ref=${user.invite_code}`
+        ? `${window.location.origin}/login?ref=${user.invite_code}`
         : '';
 
     const handleCopyInvite = () => {

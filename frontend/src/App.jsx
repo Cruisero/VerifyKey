@@ -101,6 +101,13 @@ function App() {
 
   // Check maintenance status on mount
   useEffect(() => {
+    // Capture invite ref globally so it survives route transitions
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      sessionStorage.setItem('invite_ref', ref);
+    }
+
     const checkMaintenance = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/maintenance`);

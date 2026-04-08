@@ -23,13 +23,14 @@ export default function Home() {
     const { login, register } = useAuth();
     const navigate = useNavigate();
 
-    // Parse invite code from URL
+    // Parse invite code from URL or session storage
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const ref = params.get('ref');
+        const ref = params.get('ref') || sessionStorage.getItem('invite_ref');
         if (ref) {
             setInviteCode(ref);
             setIsLogin(false); // Switch to register tab when coming from invite link
+            sessionStorage.removeItem('invite_ref'); // Clean up after use
         }
     }, []);
 

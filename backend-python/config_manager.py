@@ -8,8 +8,16 @@ import os
 from typing import Optional
 from datetime import datetime
 
-# Config file path (inside docker /app/data, locally in current dir)
-CONFIG_FILE = "/app/data/config.json"
+# Config file path: detect if we are in Docker or local dev
+def _resolve_config_file() -> str:
+    docker_dir = "/app/data"
+    if os.path.isdir(docker_dir) and os.access(docker_dir, os.W_OK):
+        return os.path.join(docker_dir, "config.json")
+    # Fallback to local data dir inside backend-python
+    local_dir = os.path.join(os.path.dirname(__file__), "data")
+    return os.path.join(local_dir, "config.json")
+
+CONFIG_FILE = _resolve_config_file()
 
 # Default configuration
 DEFAULT_CONFIG = {

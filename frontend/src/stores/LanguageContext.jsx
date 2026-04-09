@@ -57,7 +57,7 @@ const translations = {
         guideRegionTitle: '🌍 支持的国家和地区',
         guideRegionCount: '共 33 个',
         guideFamily: '家庭组：',
-        guideFamilyDesc: '必须退出，确保无订阅过',
+        guideFamilyDesc: '必须退出家庭组并确保当前无订阅任何Google one',
         guideAccount: '账号建议：',
         guideAccountDesc: '只能Gmail，建议使用老号，新号极其容易封控，请删除账号付款资料信息',
         guideBindCard: '绑卡注意：',

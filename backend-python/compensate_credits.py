@@ -82,17 +82,30 @@ def main():
         inv_earned = {}
     print(f"Users with invitation rewards: {len(inv_earned)}")
 
-    # Step 4: Get verification costs per user from verification_history
-    # via = pixel_auto → cost 1.5, via = pixel → cost 1.0
-    # Only count pass/failed records (processing records haven't been charged yet... actually they HAVE been charged at submit)
-    # For pass records: credits were legitimately spent
-    # For failed records with refund: credits were returned
-    # We need to be careful here — let's count ALL non-processing records
+    # Step 4: Get ALL verification costs per user from verification_history
+    # Include ALL service types that deduct credits, not just pixel
+    # Cost mapping:
+    #   pixel_auto → 1.5, pixel → 1.0
+    #   vpixel → 1.0, kpixel → 1.0, ypixel → 1.0
+    #   gpt → varies (usually 1.0)
+    #   pro_submit → 1.0
+    #   Others → 1.0 (default)
     
+    COST_MAP = {
+        "pixel_auto": 1.5,
+        "pixel": 1.0,
+        "vpixel": 1.0,
+        "kpixel": 1.0,
+        "ypixel": 1.0,
+        "gpt": 1.0,
+        "pro_submit": 1.0,
+    }
+    
+    # Count ALL pass records (credits legitimately spent)
     vh_rows = conn.execute("""
-        SELECT cdk, via, status, COUNT(*) as cnt 
+        SELECT cdk, via, COUNT(*) as cnt 
         FROM verification_history 
-        WHERE via IN ('pixel', 'pixel_auto') AND status IN ('pass')
+        WHERE status = 'pass'
         GROUP BY cdk, via
     """).fetchall()
     
@@ -107,27 +120,19 @@ def main():
                 continue
         else:
             continue
-        via = r["via"]
-        cost_per = 1.5 if via == "pixel_auto" else 1.0
+        via = r["via"] or ""
+        cost_per = COST_MAP.get(via, 1.0)
         spent = cost_per * r["cnt"]
         user_spent[uid] = user_spent.get(uid, 0) + spent
 
-    # Also count failed records (these were charged but should have been refunded)
-    vh_failed = conn.execute("""
-        SELECT cdk, via, COUNT(*) as cnt 
-        FROM verification_history 
-        WHERE via IN ('pixel', 'pixel_auto') AND status = 'failed'
-        GROUP BY cdk, via
-    """).fetchall()
-    
     # Failed records: originally charged, then refunded → net cost = 0
     # So we don't count them as spent
 
-    # Count processing records (these were charged but not yet finalized)
+    # Count ALL processing records (credits locked, not yet finalized)
     vh_processing = conn.execute("""
         SELECT cdk, via, COUNT(*) as cnt 
         FROM verification_history 
-        WHERE via IN ('pixel', 'pixel_auto') AND status = 'processing'
+        WHERE status = 'processing'
         GROUP BY cdk, via
     """).fetchall()
     
@@ -141,8 +146,8 @@ def main():
                 continue
         else:
             continue
-        via = r["via"]
-        cost_per = 1.5 if via == "pixel_auto" else 1.0
+        via = r["via"] or ""
+        cost_per = COST_MAP.get(via, 1.0)
         spent = cost_per * r["cnt"]
         user_processing_spent[uid] = user_processing_spent.get(uid, 0) + spent
 

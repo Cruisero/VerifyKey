@@ -47,22 +47,26 @@ def main():
     ).fetchall()
     cdk_earned = {r["redeemed_by"]: r["total"] for r in cdk_rows}
 
-    # Filter: only users who redeemed CDK after cutoff OR registered after cutoff
+    # Filter: only users who registered after cutoff AND redeemed CDK after cutoff
     cdk_after_cutoff = conn.execute(
         "SELECT DISTINCT redeemed_by FROM cdkeys WHERE redeemed_by IS NOT NULL AND last_used_at >= ?",
         (CUTOFF_UTC,)
     ).fetchall()
-    active_user_ids = {r["redeemed_by"] for r in cdk_after_cutoff}
+    cdk_active_ids = {r["redeemed_by"] for r in cdk_after_cutoff}
 
-    # Also include users registered after cutoff
+    # Users registered after cutoff
+    registered_after_ids = set()
     for u in all_users:
         created = u["created_at"] or ""
         if created >= CUTOFF_UTC:
-            active_user_ids.add(u["id"])
+            registered_after_ids.add(u["id"])
 
-    # Filter to only active users
+    # Must satisfy BOTH conditions
+    active_user_ids = cdk_active_ids & registered_after_ids
+
+    # Filter to only these users
     users = [u for u in all_users if u["id"] in active_user_ids]
-    print(f"Users active after {CUTOFF_UTC} (Beijing 12:00): {len(users)}")
+    print(f"Users registered AND redeemed CDK after {CUTOFF_UTC} (Beijing 12:00): {len(users)}")
     print(f"Users with CDK redemptions (all time): {len(cdk_earned)}")
 
     # Step 3: Get invitation rewards per user (inviter gets 0.2 per invitee)

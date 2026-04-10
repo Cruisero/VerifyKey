@@ -1,10 +1,10 @@
 """
-Batch recovery script: pull ALL success records from upstream API history,
-cross-reference with our verification_history DB, and recover any missing records.
+Complete recovery script:
 
-For records that exist in upstream but NOT in our DB:
-  - If we can match the email to a user → create the DB record (status=pass)
-  - Credits are NOT re-deducted (they were already deducted at submit time)
+Phase 1: Pull upstream /api/history (success records) → restore missing DB records
+Phase 2: For users who were charged but have NO verification records at all →
+          check upstream /api/result for each missing target email (from pending_tasks.json)
+Phase 3: Report users who need manual credit refund
 
 Run inside Docker container:
   python3 /app/recover_from_upstream.py
@@ -14,12 +14,13 @@ import sqlite3
 import urllib.request
 import time
 import os
-import sys
+import uuid
 
 DB_PATH = "/app/data/onepass.db"
+PENDING_FILE = "/app/data/pending_async_tasks.json"
+
 
 def get_pixel_config():
-    """Load pixel API config."""
     for p in ["/app/data/config.json", "/app/data/onepass_config.json", "/app/config.json"]:
         if os.path.exists(p):
             try:
@@ -35,8 +36,7 @@ def get_pixel_config():
     return "", "https://iqless.icu"
 
 
-def fetch_upstream_history(api_key, base_url, limit=200, max_pages=10):
-    """Fetch all success records from upstream /api/history."""
+def fetch_upstream_history(api_key, base_url, limit=200, max_pages=20):
     all_records = []
     offset = 0
     for page in range(max_pages):
@@ -52,11 +52,26 @@ def fetch_upstream_history(api_key, base_url, limit=200, max_pages=10):
             if len(records) < limit or offset + limit >= total:
                 break
             offset += limit
-            time.sleep(0.5)
+            time.sleep(0.3)
         except Exception as e:
             print(f"  Error fetching page {page+1}: {e}")
             break
     return all_records
+
+
+def fetch_upstream_result(api_key, base_url, email):
+    """Query upstream for a specific email's result."""
+    try:
+        url = f"{base_url}/api/result?email={urllib.request.quote(email)}"
+        req = urllib.request.Request(url, headers={"X-API-Key": api_key})
+        resp = urllib.request.urlopen(req, timeout=15)
+        return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {"status": "not_found"}
+        return {"status": "error", "error": str(e)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 def main():
@@ -68,130 +83,238 @@ def main():
         print("ERROR: No API key found.")
         return
 
-    # Step 1: Fetch upstream history
-    print("\n=== Step 1: Fetching upstream success history ===")
-    upstream_records = fetch_upstream_history(api_key, base_url)
-    print(f"Total upstream success records: {len(upstream_records)}")
-
-    if not upstream_records:
-        print("No records found upstream. Exiting.")
-        return
-
-    # Step 2: Connect to DB
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    # Step 3: Build email -> user_id mapping from users table
-    users = conn.execute("SELECT id, email FROM users").fetchall()
-    # Map the TARGET email (gmail that was verified) -> we need to find users by their account email
-    # But upstream records contain the TARGET gmail, not the user's login email
-    # We need a different approach: check by verification email in our DB
+    # ===== PHASE 1: Recover from upstream success history =====
+    print("\n" + "=" * 60)
+    print("PHASE 1: Recovering from upstream success history")
+    print("=" * 60)
 
-    # Build set of emails already in our verification_history 
-    existing_vids = set()
+    upstream_records = fetch_upstream_history(api_key, base_url)
+    print(f"Total upstream success records: {len(upstream_records)}")
+
+    # Get all existing verified emails in our DB
     existing_emails = set()
-    rows = conn.execute("SELECT verification_id, email FROM verification_history WHERE via IN ('pixel', 'pixel_auto')").fetchall()
+    rows = conn.execute("SELECT email FROM verification_history WHERE via IN ('pixel', 'pixel_auto') AND email != ''").fetchall()
     for r in rows:
-        existing_vids.add(r["verification_id"])
         if r["email"]:
             existing_emails.add(r["email"].lower())
-    print(f"\nExisting pixel records in DB: {len(existing_vids)}")
     print(f"Existing verified emails in DB: {len(existing_emails)}")
 
-    # Step 4: Find missing records
-    missing = []
-    already_have = 0
+    # Find upstream successes missing from our DB
+    missing_successes = []
     for rec in upstream_records:
         email = rec.get("email", "").lower()
-        if email in existing_emails:
-            already_have += 1
-        else:
-            missing.append(rec)
+        if email and email not in existing_emails:
+            missing_successes.append(rec)
 
-    print(f"\nAlready in DB: {already_have}")
-    print(f"Missing from DB: {len(missing)}")
+    print(f"Missing from DB: {len(missing_successes)}")
 
-    if not missing:
-        print("Nothing to recover!")
-        conn.close()
-        return
+    # For each missing success, try to find the user via pending_tasks
+    pending_email_to_user = {}  # target_email -> {user_id, mode}
+    if os.path.exists(PENDING_FILE):
+        with open(PENDING_FILE) as f:
+            pending = json.load(f)
+        for k, v in pending.items():
+            if v.get("type") == "pixel":
+                p = v.get("payload", {})
+                target_email = p.get("email", "").lower()
+                if target_email:
+                    pending_email_to_user[target_email] = {
+                        "user_id": int(p.get("user_id", 0) or 0),
+                        "mode": p.get("mode", "semi-auto"),
+                    }
 
-    # Step 5: Try to match missing emails to users
-    # We need to find which user submitted each email
-    # Since we don't have this mapping for missing records, we'll try:
-    # 1. Check if the email matches a user's login email (unlikely for gmail targets)
-    # 2. Check credit_transactions table for deduction records
-    # 3. If can't match, create record without user_id (orphan)
+    # Also try matching from verification_history where we DO have records for other emails of same user
+    # Build user_email_map (login email -> user_id)
+    user_rows = conn.execute("SELECT id, email FROM users").fetchall()
+    login_email_to_uid = {}
+    for u in user_rows:
+        login_email_to_uid[u["email"].lower()] = u["id"]
 
-    user_email_map = {}
-    for u in users:
-        user_email_map[u["email"].lower()] = u["id"]
+    phase1_recovered = 0
+    phase1_unmatched = 0
+    phase1_unmatched_emails = []
 
-    # Check if there's a credit_transactions or orders table
-    tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-    print(f"\nDB tables: {', '.join(tables)}")
-
-    has_credit_log = "credit_transactions" in tables or "credit_log" in tables
-    credit_table = "credit_transactions" if "credit_transactions" in tables else ("credit_log" if "credit_log" in tables else None)
-
-    recovered = 0
-    unmatched = 0
-
-    print(f"\n=== Step 5: Recovering missing records ===")
-    for rec in missing:
+    for rec in missing_successes:
         email = rec.get("email", "")
         mode = rec.get("mode", "semi-auto")
-        url = rec.get("url", "")
+        url_val = rec.get("url", "")
         result_msg = rec.get("result_msg", "")
         created_at = rec.get("created_at", "")
         via = "pixel_auto" if mode == "auto" else "pixel"
 
-        # Try to find which user owns this email via credit log
+        # Try to find user
         user_id = 0
-        if credit_table:
-            try:
-                # Look for a deduction that mentions this email
-                cr = conn.execute(
-                    f"SELECT user_id FROM {credit_table} WHERE description LIKE ? LIMIT 1",
-                    (f"%{email}%",)
-                ).fetchone()
-                if cr:
-                    user_id = cr["user_id"]
-            except:
-                pass
 
-        # Fallback: check if verified email is also a user login email
-        if not user_id and email.lower() in user_email_map:
-            user_id = user_email_map[email.lower()]
+        # Method 1: From pending tasks
+        if email.lower() in pending_email_to_user:
+            info = pending_email_to_user[email.lower()]
+            user_id = info["user_id"]
 
-        cdk_tag = f"user:{user_id}" if user_id else ""
+        # Method 2: Target email is also login email
+        if not user_id and email.lower() in login_email_to_uid:
+            user_id = login_email_to_uid[email.lower()]
 
         if user_id:
-            # Create recovery record
-            import uuid
             row_id = str(uuid.uuid4())[:8]
-            msg = f"✅ 订阅成功: {url}" if url else f"✅ {result_msg or '订阅成功'}"
+            msg = f"✅ 订阅成功: {url_val}" if url_val else f"✅ {result_msg or '订阅成功'}"
             msg += " （历史恢复）"
-
+            cdk_tag = f"user:{user_id}"
             conn.execute(
                 "INSERT OR IGNORE INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (row_id, "pass", f"recovered-{row_id}", msg, cdk_tag, created_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), via, email)
+                (row_id, "pass", f"recovered-{row_id}", msg, cdk_tag,
+                 created_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), via, email)
             )
             conn.commit()
-            recovered += 1
+            phase1_recovered += 1
             print(f"  ✅ {email} -> user:{user_id} ({mode})")
         else:
-            unmatched += 1
-            if unmatched <= 10:
-                print(f"  ❓ {email} -> no matching user found")
+            phase1_unmatched += 1
+            phase1_unmatched_emails.append(email)
+
+    print(f"\nPhase 1 results: recovered={phase1_recovered}, unmatched={phase1_unmatched}")
+
+    # ===== PHASE 2: Check pending tasks against upstream =====
+    print("\n" + "=" * 60)
+    print("PHASE 2: Checking pending tasks against upstream /api/result")
+    print("=" * 60)
+
+    phase2_success = 0
+    phase2_failed = 0
+    phase2_not_found = 0
+    phase2_refunded = 0
+
+    if os.path.exists(PENDING_FILE):
+        with open(PENDING_FILE) as f:
+            pending = json.load(f)
+        pixel_tasks = {k: v for k, v in pending.items() if v.get("type") == "pixel"}
+        print(f"Pending pixel tasks: {len(pixel_tasks)}")
+
+        for k, v in pixel_tasks.items():
+            p = v.get("payload", {})
+            target_email = p.get("email", "")
+            user_id = int(p.get("user_id", 0) or 0)
+            mode = p.get("mode", "semi-auto")
+            cost = 1.5 if mode == "auto" else 1.0
+            via = "pixel_auto" if mode == "auto" else "pixel"
+            cdk_tag = f"user:{user_id}" if user_id else ""
+
+            if not target_email:
+                continue
+
+            # Check if already in DB
+            existing = conn.execute(
+                "SELECT status FROM verification_history WHERE email = ? AND cdk = ? LIMIT 1",
+                (target_email, cdk_tag)
+            ).fetchone()
+            if existing and existing["status"] in ("pass", "failed"):
+                continue  # Already handled
+
+            # Query upstream
+            result = fetch_upstream_result(api_key, base_url, target_email)
+            status = result.get("status", "")
+
+            if status == "success":
+                url_val = result.get("url", "")
+                result_msg = result.get("result_msg", "")
+                created_at = result.get("created_at", "")
+                row_id = str(uuid.uuid4())[:8]
+                msg = f"✅ 订阅成功: {url_val}" if url_val else f"✅ {result_msg or '订阅成功'}"
+                msg += " （历史恢复）"
+                conn.execute(
+                    "INSERT OR REPLACE INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (row_id, "pass", v["task_id"], msg, cdk_tag,
+                     created_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), via, target_email)
+                )
+                conn.commit()
+                phase2_success += 1
+                print(f"  ✅ {target_email} -> SUCCESS (user:{user_id})")
+
+            elif status == "failed":
+                err = result.get("error", "") or result.get("result_msg", "未知错误")
+                row_id = str(uuid.uuid4())[:8]
+                conn.execute(
+                    "INSERT OR REPLACE INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (row_id, "failed", v["task_id"], f"失败: {err} （历史恢复）", cdk_tag,
+                     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), via, target_email)
+                )
+                conn.commit()
+                # Refund credits
+                if user_id and cost > 0:
+                    current = conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if current:
+                        new_credits = (current[0] or 0) + cost
+                        conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, user_id))
+                        conn.commit()
+                        phase2_refunded += 1
+                        print(f"  ❌ {target_email} -> FAILED + REFUND {cost} (user:{user_id})")
+                    else:
+                        print(f"  ❌ {target_email} -> FAILED, user not found for refund")
+                phase2_failed += 1
+
+            elif status == "not_found":
+                # Upstream doesn't have this email at all — job was lost
+                row_id = str(uuid.uuid4())[:8]
+                conn.execute(
+                    "INSERT OR REPLACE INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (row_id, "failed", v["task_id"], "失败: 上游无记录，任务丢失 （已退积分）", cdk_tag,
+                     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), via, target_email)
+                )
+                conn.commit()
+                # Refund
+                if user_id and cost > 0:
+                    current = conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if current:
+                        new_credits = (current[0] or 0) + cost
+                        conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, user_id))
+                        conn.commit()
+                        phase2_refunded += 1
+                        print(f"  💀 {target_email} -> LOST + REFUND {cost} (user:{user_id})")
+                phase2_not_found += 1
+
+            else:
+                print(f"  ⏳ {target_email} -> {status} (still processing)")
+
+            time.sleep(0.3)
+
+    print(f"\nPhase 2 results: success={phase2_success}, failed={phase2_failed}, not_found={phase2_not_found}, refunded={phase2_refunded}")
+
+    # ===== PHASE 3: Report summary =====
+    print("\n" + "=" * 60)
+    print("PHASE 3: Final Summary")
+    print("=" * 60)
+
+    total_processing = conn.execute(
+        "SELECT COUNT(*) FROM verification_history WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto')"
+    ).fetchone()[0]
+    total_pass = conn.execute(
+        "SELECT COUNT(*) FROM verification_history WHERE status = 'pass' AND via IN ('pixel', 'pixel_auto')"
+    ).fetchone()[0]
+    total_failed = conn.execute(
+        "SELECT COUNT(*) FROM verification_history WHERE status = 'failed' AND via IN ('pixel', 'pixel_auto')"
+    ).fetchone()[0]
+
+    print(f"  DB Processing: {total_processing}")
+    print(f"  DB Pass: {total_pass}")
+    print(f"  DB Failed: {total_failed}")
+    print(f"  Phase 1 recovered (from history): {phase1_recovered}")
+    print(f"  Phase 1 unmatched: {phase1_unmatched}")
+    print(f"  Phase 2 success: {phase2_success}")
+    print(f"  Phase 2 failed+refund: {phase2_failed}")
+    print(f"  Phase 2 lost+refund: {phase2_not_found}")
+    print(f"  Total refunded: {phase2_refunded}")
+
+    if phase1_unmatched_emails:
+        print(f"\n  Unmatched emails (upstream success but no user found):")
+        for e in phase1_unmatched_emails[:20]:
+            print(f"    - {e}")
+        if len(phase1_unmatched_emails) > 20:
+            print(f"    ... and {len(phase1_unmatched_emails)-20} more")
 
     conn.close()
-
-    print(f"\n=== Recovery Summary ===")
-    print(f"  Upstream total: {len(upstream_records)}")
-    print(f"  Already in DB: {already_have}")
-    print(f"  Recovered: {recovered}")
-    print(f"  Unmatched (no user found): {unmatched}")
+    print("\nDone!")
 
 
 if __name__ == "__main__":

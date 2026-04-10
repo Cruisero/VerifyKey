@@ -17,6 +17,7 @@ import os
 import uuid
 
 DB_PATH = "/app/data/onepass.db"
+USERS_DB_PATH = "/app/data/verifykey.db"
 PENDING_FILE = "/app/data/pending_async_tasks.json"
 
 
@@ -39,11 +40,18 @@ def get_pixel_config():
 def fetch_upstream_history(api_key, base_url, limit=200, max_pages=20):
     all_records = []
     offset = 0
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     for page in range(max_pages):
         try:
             url = f"{base_url}/api/history?limit={limit}&offset={offset}"
-            req = urllib.request.Request(url, headers={"X-API-Key": api_key})
-            resp = urllib.request.urlopen(req, timeout=30)
+            req = urllib.request.Request(url, headers={
+                "X-API-Key": api_key,
+                "User-Agent": "OnePass/1.0",
+            })
+            resp = urllib.request.urlopen(req, timeout=30, context=ctx)
             data = json.loads(resp.read())
             records = data.get("records", [])
             total = data.get("total", 0)
@@ -61,10 +69,17 @@ def fetch_upstream_history(api_key, base_url, limit=200, max_pages=20):
 
 def fetch_upstream_result(api_key, base_url, email):
     """Query upstream for a specific email's result."""
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     try:
         url = f"{base_url}/api/result?email={urllib.request.quote(email)}"
-        req = urllib.request.Request(url, headers={"X-API-Key": api_key})
-        resp = urllib.request.urlopen(req, timeout=15)
+        req = urllib.request.Request(url, headers={
+            "X-API-Key": api_key,
+            "User-Agent": "OnePass/1.0",
+        })
+        resp = urllib.request.urlopen(req, timeout=15, context=ctx)
         return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -128,7 +143,10 @@ def main():
 
     # Also try matching from verification_history where we DO have records for other emails of same user
     # Build user_email_map (login email -> user_id)
-    user_rows = conn.execute("SELECT id, email FROM users").fetchall()
+    # Users table is in verifykey.db, not onepass.db
+    users_conn = sqlite3.connect(USERS_DB_PATH)
+    users_conn.row_factory = sqlite3.Row
+    user_rows = users_conn.execute("SELECT id, email FROM users").fetchall()
     login_email_to_uid = {}
     for u in user_rows:
         login_email_to_uid[u["email"].lower()] = u["id"]
@@ -243,11 +261,11 @@ def main():
                 conn.commit()
                 # Refund credits
                 if user_id and cost > 0:
-                    current = conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)).fetchone()
+                    current = users_conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)).fetchone()
                     if current:
-                        new_credits = (current[0] or 0) + cost
-                        conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, user_id))
-                        conn.commit()
+                        new_credits = (current["credits"] or 0) + cost
+                        users_conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, user_id))
+                        users_conn.commit()
                         phase2_refunded += 1
                         print(f"  ❌ {target_email} -> FAILED + REFUND {cost} (user:{user_id})")
                     else:
@@ -265,11 +283,11 @@ def main():
                 conn.commit()
                 # Refund
                 if user_id and cost > 0:
-                    current = conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)).fetchone()
+                    current = users_conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)).fetchone()
                     if current:
-                        new_credits = (current[0] or 0) + cost
-                        conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, user_id))
-                        conn.commit()
+                        new_credits = (current["credits"] or 0) + cost
+                        users_conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, user_id))
+                        users_conn.commit()
                         phase2_refunded += 1
                         print(f"  💀 {target_email} -> LOST + REFUND {cost} (user:{user_id})")
                 phase2_not_found += 1
@@ -314,6 +332,7 @@ def main():
             print(f"    ... and {len(phase1_unmatched_emails)-20} more")
 
     conn.close()
+    users_conn.close()
     print("\nDone!")
 
 

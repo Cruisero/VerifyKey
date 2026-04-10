@@ -9160,8 +9160,16 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             _pixel_job_context[job_id] = {"email": request.email, "user_id": user_id, "cost": cost, "mode": request.mode}
             _register_async_task("pixel", job_id, _pixel_job_context[job_id])
 
-            # Broadcast initial submitted event for admin SSE
+            # Write initial processing record to DB so sweep can find this job
+            # even if the user closes browser and in-memory context is lost
             sse_source_tag = "pixel_auto" if request.mode == "auto" else "pixel"
+            _upsert_user_verification_result(
+                job_id, user_id, "processing",
+                "任务已提交，等待设备处理...",
+                via=sse_source_tag, email=request.email
+            )
+
+            # Broadcast initial submitted event for admin SSE
             event_meta = _build_verify_event_meta(sse_source_tag, request.email, user_id, "pixel_api")
             broadcast_verify_event({
                 "type": "progress",

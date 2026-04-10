@@ -113,9 +113,9 @@ def main():
         
         # Step 2: Query upstream
         try:
+            # Query via local backend proxy which handles auth
             req = urllib.request.Request(
-                f"{base_url}/api/jobs/{tid}",
-                headers={"X-API-Key": api_key}
+                f"http://127.0.0.1:3002/api/pixel/jobs/{tid}",
             )
             resp = urllib.request.urlopen(req, timeout=15)
             result = json.loads(resp.read())

@@ -8761,12 +8761,20 @@ async def _pixel_job_sweep():
                             f"{base_url}/api/jobs/{vid}",
                             headers={"X-API-Key": api_key},
                         )
+                    sse_source = "pixel_auto" if "auto" in (row.get("via") or "") else "pixel"
+                    if resp.status_code in (404, 502, 503):
+                        # Upstream lost this job — mark failed and refund
+                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
+                        _finalize_user_failure(vid, user_id, "失败: 上游任务已丢失", via=sse_source, refund_cost=sweep_cost, email=email)
+                        _complete_async_task("pixel", vid)
+                        _pixel_job_context.pop(vid, None)
+                        finalized_count += 1
+                        continue
                     if resp.status_code != 200:
                         continue
 
                     data = resp.json()
                     upstream_status = data.get("status", "")
-                    sse_source = "pixel_auto" if "auto" in (row.get("via") or "") else "pixel"
 
                     if upstream_status == "success":
                         url = data.get("url", "")
@@ -8779,7 +8787,8 @@ async def _pixel_job_sweep():
                         err = data.get("error", "UNKNOWN_ERROR")
                         rm = data.get("result_msg", "")
                         disp = rm if rm else err
-                        _finalize_user_failure(vid, user_id, f"失败: {disp}", via=sse_source, refund_cost=0, email=email)
+                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
+                        _finalize_user_failure(vid, user_id, f"失败: {disp}", via=sse_source, refund_cost=sweep_cost, email=email)
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1

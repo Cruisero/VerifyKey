@@ -8922,7 +8922,7 @@ async def _repair_timeout_failed_tasks():
             "SELECT verification_id, cdk, email, via FROM verification_history "
             "WHERE status = 'pass' AND via IN ('pixel', 'pixel_auto') "
             "AND message LIKE '%订阅成功%' AND message NOT LIKE '%已修正扣费%' "
-            "AND timestamp > '2026-04-11T04:00:00' "
+            "AND timestamp > '2026-04-10T18:00:00' "
             "ORDER BY rowid DESC LIMIT 500"
         ).fetchall()
 

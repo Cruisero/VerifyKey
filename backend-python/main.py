@@ -8758,8 +8758,8 @@ async def _pixel_job_sweep():
     browser before a job completes.
     """
     import config_manager
-    await asyncio.sleep(30)  # Wait for server to fully start
-    print("[PixelSweep] Background job sweep started (every 5 min)")
+    await asyncio.sleep(5)  # Quick start to catch stuck tasks from restart
+    print("[PixelSweep] Background job sweep started (first run, then every 5 min)")
 
     while True:
         try:
@@ -8838,17 +8838,42 @@ async def _pixel_job_sweep():
                     if upstream_status == "success":
                         url = data.get("url", "")
                         sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
-                        _finalize_user_success(vid, user_id, sweep_cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
+                        msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                        try:
+                            _finalize_user_success(vid, user_id, sweep_cost, msg, via=sse_source, email=email)
+                        except Exception as fin_err:
+                            logging.warning(f"[PixelSweep] _finalize_user_success failed for {vid}, direct DB fallback: {fin_err}")
+                            conn2 = database.get_connection()
+                            conn2.execute("UPDATE verification_history SET status='pass', message=? WHERE verification_id=? AND status='processing'", (msg, vid))
+                            conn2.commit()
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
                         logging.info(f"[PixelSweep] Finalized SUCCESS for {vid} (user {user_id})")
+                        event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
+                        broadcast_verify_event({
+                            "type": "progress", "vid": vid, "step": "result",
+                            "status": "approved", "success": True,
+                            "message": "✅ 获取成功（自动修复）",
+                            "url": url, "recovered": True,
+                            **event_meta,
+                        })
                     elif upstream_status in ("failed", "cancelled"):
                         err = data.get("error", "UNKNOWN_ERROR")
                         rm = data.get("result_msg", "")
                         disp = rm if rm else err
                         sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
-                        _finalize_user_failure(vid, user_id, f"失败: {disp}", via=sse_source, refund_cost=sweep_cost, email=email)
+                        try:
+                            _finalize_user_failure(vid, user_id, f"失败: {disp}", via=sse_source, refund_cost=sweep_cost, email=email)
+                        except Exception as fin_err:
+                            logging.warning(f"[PixelSweep] _finalize_user_failure failed for {vid}, direct DB fallback: {fin_err}")
+                            conn2 = database.get_connection()
+                            conn2.execute("UPDATE verification_history SET status='failed', message=? WHERE verification_id=? AND status='processing'", (f"失败: {disp}", vid))
+                            conn2.commit()
+                            try:
+                                auth.update_credits(user_id, sweep_cost)
+                            except Exception:
+                                pass
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
@@ -8856,7 +8881,17 @@ async def _pixel_job_sweep():
                     elif task_age_hours >= 2:
                         # Task stuck for over 2 hours — force fail and refund
                         sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
-                        _finalize_user_failure(vid, user_id, "失败: 任务超时（超过2小时）", via=sse_source, refund_cost=sweep_cost, email=email)
+                        try:
+                            _finalize_user_failure(vid, user_id, "失败: 任务超时（超过2小时）", via=sse_source, refund_cost=sweep_cost, email=email)
+                        except Exception as fin_err:
+                            logging.warning(f"[PixelSweep] Timeout finalize failed for {vid}: {fin_err}")
+                            conn2 = database.get_connection()
+                            conn2.execute("UPDATE verification_history SET status='failed', message='失败: 任务超时（超过2小时）' WHERE verification_id=? AND status='processing'", (vid,))
+                            conn2.commit()
+                            try:
+                                auth.update_credits(user_id, sweep_cost)
+                            except Exception:
+                                pass
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1

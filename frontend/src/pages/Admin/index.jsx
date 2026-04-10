@@ -4928,7 +4928,11 @@ export default function Admin() {
                 const apiLog = (logData.history || []).filter(r => r.verificationId?.trim() && !r.verificationId.startsWith('auto-'));
                 setVLogTotal(logData.total || 0);
                 setVLogTotalPages(logData.totalPages || 1);
-                if (p === 1) {
+                // When searching, show only API results (no SSE merge)
+                // When not searching and on page 1, merge SSE live entries
+                if (vLogSearchRef.current || p !== 1) {
+                    setVerifyLog(apiLog);
+                } else {
                     setVerifyLog(prev => {
                         const sseOnly = prev.filter(e =>
                             typeof e.id === 'string' && e.id.startsWith('sse-') &&
@@ -4936,8 +4940,6 @@ export default function Admin() {
                         );
                         return sseOnly.length > 0 ? [...sseOnly, ...apiLog] : apiLog;
                     });
-                } else {
-                    setVerifyLog(apiLog);
                 }
             }
         } catch (e) { console.error('Failed to fetch verify history:', e); }
@@ -4972,8 +4974,8 @@ export default function Admin() {
         es.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                // Only apply SSE live updates when viewing page 1
-                if (vLogPageRef.current !== 1) return;
+                // Only apply SSE live updates when viewing page 1 with no search active
+                if (vLogPageRef.current !== 1 || vLogSearchRef.current) return;
 
                 if (data.type === 'progress') {
                     const vid = data.vid || '';

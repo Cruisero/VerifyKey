@@ -8843,28 +8843,8 @@ def _finalize_user_failure(verification_id: str, user_id: int, message: str, via
     result["refunded"] = refund_result.get("refunded", False)
     return result
 
-
 def _is_timeout_error(exc: Exception) -> bool:
     return isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException))
-
-
-PIXEL_QUEUE_TIMEOUT_SECONDS = 45 * 60
-PIXEL_RUN_TIMEOUT_SECONDS = 8 * 60
-
-
-def _get_pixel_poll_interval(total_elapsed: float, running_elapsed: float, last_status: str):
-    if last_status == "queued":
-        if total_elapsed >= PIXEL_QUEUE_TIMEOUT_SECONDS:
-            return None, "失败: 排队超时"
-        interval = 10 if total_elapsed < 5 * 60 else (20 if total_elapsed < 15 * 60 else 30)
-        remaining = PIXEL_QUEUE_TIMEOUT_SECONDS - total_elapsed
-        return max(1, min(interval, int(remaining))), ""
-    else:
-        if running_elapsed >= PIXEL_RUN_TIMEOUT_SECONDS:
-            return None, "失败: 运行/验证超时"
-        interval = 10 if running_elapsed < 3 * 60 else (15 if running_elapsed < 6 * 60 else 30)
-        remaining = PIXEL_RUN_TIMEOUT_SECONDS - running_elapsed
-        return max(1, min(interval, int(remaining))), ""
 
 
 def _register_async_task(task_type: str, task_id: str, payload: dict):
@@ -8876,12 +8856,63 @@ def _complete_async_task(task_type: str, task_id: str):
 
 
 async def _resume_pending_pixel_task(task_id: str, payload: dict):
+    """Recover a pending Pixel task after service restart: one-shot upstream query to finalize."""
+    cost = payload.get("cost", 1.0)
+    mode = payload.get("mode", "semi-auto")
+    user_id = int(payload.get("user_id", 0) or 0)
+    email = payload.get("email", "")
+    sse_source = "pixel_auto" if mode == "auto" else "pixel"
+    event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
+
+    # Store context so GET endpoint can also finalize if frontend polls
+    _pixel_job_context[task_id] = payload
+
     try:
-        cost = payload.get("cost", 1.0)
-        mode = payload.get("mode", "semi-auto")
-        await _pixel_poll_job(task_id, payload["email"], int(payload["user_id"]), _get_pixel_config(), cost, mode)
+        pixel_cfg = _get_pixel_config()
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/jobs/{task_id}",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+            )
+        if resp.status_code != 200:
+            logging.warning(f"[Pixel] Restart recovery: upstream returned {resp.status_code} for {task_id}")
+            return
+
+        data = resp.json()
+        status = data.get("status", "")
+
+        if status == "success":
+            url = data.get("url", "")
+            result = _finalize_user_success(task_id, user_id, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
+            _complete_async_task("pixel", task_id)
+            if not result.get("already_done"):
+                broadcast_verify_event({
+                    "type": "progress", "vid": task_id, "step": "result",
+                    "status": "approved", "success": True,
+                    "message": "✅ 获取成功（重启恢复）",
+                    "url": url, "recovered": True,
+                    **event_meta,
+                })
+        elif status == "failed":
+            error = data.get("error", "UNKNOWN_ERROR")
+            _finalize_user_failure(task_id, user_id, f"失败: {error}", via=sse_source, refund_cost=cost, email=email)
+            _complete_async_task("pixel", task_id)
+            broadcast_verify_event({
+                "type": "progress", "vid": task_id, "step": "result",
+                "status": "failed", "success": False,
+                "message": f"❌ {error}（重启恢复）",
+                "recovered": True,
+                **event_meta,
+            })
+        else:
+            # Still queued/running — leave in pending tasks, frontend GET endpoint will finalize when ready
+            logging.info(f"[Pixel] Restart recovery: {task_id} still {status}, leaving as pending")
+    except Exception as e:
+        logging.warning(f"[Pixel] Restart recovery error for {task_id}: {e}")
     finally:
-        _pixel_job_context.pop(task_id, None)
+        if task_id not in _pixel_job_context:
+            _pixel_job_context.pop(task_id, None)
+
 
 
 async def _resume_pending_kpixel_task(task_id: str, payload: dict):
@@ -8925,166 +8956,6 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     _complete_async_task("gpt", task_id)
 
 
-async def _pixel_poll_job(job_id: str, email: str, user_id: int, pixel_cfg: dict, cost: float = 1.0, mode: str = "semi-auto"):
-    """Background task: poll Pixel API job status and broadcast SSE events to admin."""
-    import time
-    base_url = pixel_cfg["baseUrl"]
-    headers = {"X-API-Key": pixel_cfg["apiKey"]}
-    start_time = time.time()
-    sse_source = "pixel_auto" if mode == "auto" else "pixel"
-    event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
-
-    # Broadcast initial submitted event
-    broadcast_verify_event({
-        "type": "progress",
-        "vid": job_id,
-        "step": "submitted",
-        "message": "任务已提交，等待设备处理...",
-        **event_meta,
-    })
-
-    last_known_status = "queued"
-    running_start_time = None
-
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            while True:
-                total_elapsed = time.time() - start_time
-                running_elapsed = (time.time() - running_start_time) if running_start_time else 0.0
-                
-                wait_seconds, timeout_msg = _get_pixel_poll_interval(total_elapsed, running_elapsed, last_known_status)
-                
-                if wait_seconds is None:
-                    _finalize_user_failure(job_id, user_id, timeout_msg, via=sse_source, refund_cost=cost, email=email)
-                    _complete_async_task("pixel", job_id)
-                    broadcast_verify_event({
-                        "type": "progress",
-                        "vid": job_id,
-                        "step": "result",
-                        "status": "failed",
-                        "success": False,
-                        "message": f"❌ {timeout_msg}",
-                        "elapsed": round(total_elapsed, 1),
-                        **event_meta,
-                    })
-                    break
-
-                await asyncio.sleep(wait_seconds)
-                try:
-                    resp = await client.get(f"{base_url}/api/jobs/{job_id}", headers=headers)
-                    if resp.status_code != 200:
-                        continue
-                    data = resp.json()
-                except Exception:
-                    continue
-
-                status = data.get("status", "")
-                if status != "queued" and last_known_status == "queued" and running_start_time is None:
-                    running_start_time = time.time()
-                if status:
-                    last_known_status = status
-
-                stage = data.get("stage", 0)
-                total_stages = data.get("total_stages", 6)
-                stage_label = data.get("stage_label", "")
-                elapsed = data.get("elapsed_seconds", time.time() - start_time)
-
-                # Broadcast progress (only for non-terminal states; success/failed have their own broadcasts below)
-                queue_pos = data.get("queue_position", -1)
-                # Upstream UPixel doesn't return queue_position in /api/jobs/{id},
-                # so fetch /api/queue for pending_count when queued
-                if status == "queued" and queue_pos < 0:
-                    try:
-                        q_resp = await client.get(f"{base_url}/api/queue", headers=headers)
-                        if q_resp.status_code == 200:
-                            q_data = q_resp.json()
-                            pending = q_data.get("pending_count", -1)
-                            if pending >= 0:
-                                queue_pos = pending
-                    except Exception:
-                        pass
-                if status == "queued":
-                    msg = f"⏳ 排队中 (位置: {queue_pos})" if queue_pos >= 0 else "⏳ 排队中..."
-                elif status == "running":
-                    pct = min(round((stage / total_stages) * 100), 99) if total_stages > 0 else 0
-                    msg = f"🔄 {pct}%"
-                else:
-                    msg = stage_label or status
-
-                if status in ("queued", "running"):
-                    broadcast_verify_event({
-                        "type": "progress",
-                        "vid": job_id,
-                        "step": "processing",
-                        "status": status,
-                        "stage": stage,
-                        "totalStages": total_stages,
-                        "stageLabel": stage_label,
-                        "queuePosition": queue_pos,
-                        "message": msg,
-                        "elapsed": round(elapsed, 1),
-                        **event_meta,
-                    })
-
-                if status == "success":
-                    url = data.get("url", "")
-                    result = _finalize_user_success(job_id, user_id, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
-                    _complete_async_task("pixel", job_id)
-                    # Broadcast final result
-                    broadcast_verify_event({
-                        "type": "progress",
-                        "vid": job_id,
-                        "step": "result",
-                        "status": "approved",
-                        "success": True,
-                        "message": "✅ 获取成功（补偿确认）" if result.get("reconciled") else "✅ 获取成功",
-                        "url": url,
-                        "elapsed": round(elapsed, 1),
-                        "forceTerminalUpdate": bool(result.get("reconciled")),
-                        "reconciledLateSuccess": bool(result.get("reconciled")),
-                        **event_meta,
-                    })
-                    break
-
-                elif status == "failed":
-                    error = data.get("error", "UNKNOWN_ERROR")
-                    result_msg = data.get("result_msg", "")
-                    # For operator-marked errors, use the detailed result_msg
-                    display_msg = result_msg if (error in ("MANUAL_CANCEL", "INVALID_ACCOUNT") and result_msg) else error
-                    _finalize_user_failure(job_id, user_id, f"失败: {display_msg}", via=sse_source, refund_cost=cost, email=email)
-                    _complete_async_task("pixel", job_id)
-                    broadcast_verify_event({
-                        "type": "progress",
-                        "vid": job_id,
-                        "step": "result",
-                        "status": "failed",
-                        "success": False,
-                        "message": f"❌ {display_msg}",
-                        "error": error,
-                        "result_msg": result_msg,
-                        "elapsed": round(elapsed, 1),
-                        **event_meta,
-                    })
-                    break
-
-    except asyncio.CancelledError:
-        _finalize_user_failure(job_id, user_id, "失败: 轮询取消", via=sse_source, refund_cost=cost, email=email)
-        _complete_async_task("pixel", job_id)
-    except Exception as e:
-        print(f"[Pixel] Poll error for {job_id}: {e}")
-        _finalize_user_failure(job_id, user_id, f"失败: {'轮询超时' if _is_timeout_error(e) else f'轮询错误: {str(e)}'}", via=sse_source, refund_cost=cost, email=email)
-        _complete_async_task("pixel", job_id)
-        broadcast_verify_event({
-            "type": "progress",
-            "vid": job_id,
-            "step": "result",
-            "status": "failed",
-            "success": False,
-            "message": f"❌ 轮询错误: {str(e)}",
-            **event_meta,
-        })
-    finally:
-        _pixel_polling_tasks.pop(job_id, None)
 
 
 class PixelJobRequest(BaseModel):
@@ -9178,12 +9049,21 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         if resp.status_code == 200:
             data = resp.json()
             job_id = data.get("job_id", "")
-
-            # Start background polling task (pass user_id for credit deduction)
-            task = asyncio.create_task(_pixel_poll_job(job_id, request.email, user_id, pixel_cfg, cost, request.mode))
-            _pixel_polling_tasks[job_id] = task
+            # Store job context for GET endpoint to use during finalization
+            # (no background polling — frontend polls GET /api/pixel/jobs/{id} which auto-finalizes)
             _pixel_job_context[job_id] = {"email": request.email, "user_id": user_id, "cost": cost, "mode": request.mode}
             _register_async_task("pixel", job_id, _pixel_job_context[job_id])
+
+            # Broadcast initial submitted event for admin SSE
+            sse_source_tag = "pixel_auto" if request.mode == "auto" else "pixel"
+            event_meta = _build_verify_event_meta(sse_source_tag, request.email, user_id, "pixel_api")
+            broadcast_verify_event({
+                "type": "progress",
+                "vid": job_id,
+                "step": "submitted",
+                "message": "任务已提交，等待设备处理...",
+                **event_meta,
+            })
 
             return {
                 "job_id": job_id,
@@ -9240,9 +9120,10 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
 
 @app.get("/api/pixel/jobs/{job_id}")
 async def pixel_get_job(job_id: str):
-    """Proxy: get Pixel API job status."""
+    """Get Pixel job status. Auto-finalizes on terminal states (success/failed)."""
     import database
     conn = database.get_connection()
+    # Check local DB first for already-finalized jobs
     row = conn.execute("SELECT status, message FROM verification_history WHERE verification_id = ? AND status IN ('pass', 'failed') ORDER BY rowid DESC LIMIT 1", (job_id,)).fetchone()
     if row:
         status = row["status"]
@@ -9251,9 +9132,9 @@ async def pixel_get_job(job_id: str):
             url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 验证已成功（获取历史记录）", "").strip()
             if not url.startswith("http"):
                 url = ""
-            return {"job_id": job_id, "status": "success", "url": url}
+            return {"job_id": job_id, "status": "success", "url": url, "queue_position": -1, "estimated_wait_seconds": 0}
         else:
-            return {"job_id": job_id, "status": "failed", "error": msg}
+            return {"job_id": job_id, "status": "failed", "error": msg, "queue_position": -1, "estimated_wait_seconds": 0}
 
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["apiKey"]:
@@ -9265,24 +9146,97 @@ async def pixel_get_job(job_id: str):
                 f"{pixel_cfg['baseUrl']}/api/jobs/{job_id}",
                 headers={"X-API-Key": pixel_cfg["apiKey"]},
             )
-        if resp.status_code == 200:
-            data = resp.json()
-            # Upstream UPixel doesn't include queue_position in job status;
-            # fetch /api/queue and inject pending_count as queue_position
-            if data.get("status") == "queued" and "queue_position" not in data:
-                try:
-                    async with httpx.AsyncClient(timeout=5) as qc:
-                        q_resp = await qc.get(
-                            f"{pixel_cfg['baseUrl']}/api/queue",
-                            headers={"X-API-Key": pixel_cfg["apiKey"]},
-                        )
-                    if q_resp.status_code == 200:
-                        q_data = q_resp.json()
-                        data["queue_position"] = q_data.get("pending_count", -1)
-                except Exception:
-                    pass
-            return data
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+
+        data = resp.json()
+        upstream_status = data.get("status", "")
+        ctx = _pixel_job_context.get(job_id) or {}
+        cost = ctx.get("cost", 1.0)
+        user_id = ctx.get("user_id")
+        email = ctx.get("email", "")
+        sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+        event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api") if user_id else {}
+
+        # Auto-finalize on terminal states (idempotent via _finalize_user_*)
+        if upstream_status == "success" and user_id:
+            url = data.get("url", "")
+            result = _finalize_user_success(job_id, user_id, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
+            _complete_async_task("pixel", job_id)
+            # Stop any lingering background poll
+            task = _pixel_polling_tasks.pop(job_id, None)
+            if task and not task.done():
+                task.cancel()
+            if not result.get("already_done"):
+                broadcast_verify_event({
+                    "type": "progress",
+                    "vid": job_id,
+                    "step": "result",
+                    "status": "approved",
+                    "success": True,
+                    "message": "✅ 获取成功（补偿确认）" if result.get("reconciled") else "✅ 获取成功",
+                    "url": url,
+                    "forceTerminalUpdate": bool(result.get("reconciled")),
+                    "reconciledLateSuccess": bool(result.get("reconciled")),
+                    **event_meta,
+                })
+            _pixel_job_context.pop(job_id, None)
+            data["status"] = "success"
+
+        elif upstream_status == "failed" and user_id:
+            error = data.get("error", "UNKNOWN_ERROR")
+            result_msg = data.get("result_msg", "")
+            display_msg = result_msg if (error in ("MANUAL_CANCEL", "INVALID_ACCOUNT") and result_msg) else error
+            result = _finalize_user_failure(job_id, user_id, f"失败: {display_msg}", via=sse_source, refund_cost=cost, email=email)
+            _complete_async_task("pixel", job_id)
+            task = _pixel_polling_tasks.pop(job_id, None)
+            if task and not task.done():
+                task.cancel()
+            if not result.get("already_done"):
+                broadcast_verify_event({
+                    "type": "progress",
+                    "vid": job_id,
+                    "step": "result",
+                    "status": "failed",
+                    "success": False,
+                    "message": f"❌ {display_msg}",
+                    "error": error,
+                    "result_msg": result_msg,
+                    **event_meta,
+                })
+            _pixel_job_context.pop(job_id, None)
+
+        elif upstream_status in ("queued", "running") and event_meta:
+            # Broadcast progress for admin SSE
+            queue_pos = data.get("queue_position", -1)
+            estimated_wait = data.get("estimated_wait_seconds", 0)
+            stage = data.get("stage", 0)
+            total_stages = data.get("total_stages", 6)
+            stage_label = data.get("stage_label", "")
+            if upstream_status == "queued":
+                if queue_pos >= 0:
+                    wait_str = f"，预计等待 {estimated_wait // 60}分钟" if estimated_wait > 60 else (f"，预计等待 {estimated_wait}秒" if estimated_wait > 0 else "")
+                    msg = f"⏳ 排队中 (前方 {queue_pos} 个任务{wait_str})"
+                else:
+                    msg = "⏳ 排队中..."
+            else:
+                pct = min(round((stage / total_stages) * 100), 99) if total_stages > 0 else 0
+                msg = f"🔄 {pct}%"
+            broadcast_verify_event({
+                "type": "progress",
+                "vid": job_id,
+                "step": "processing",
+                "status": upstream_status,
+                "stage": stage,
+                "totalStages": total_stages,
+                "stageLabel": stage_label,
+                "queuePosition": queue_pos,
+                "message": msg,
+                **event_meta,
+            })
+
+        return data
+
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -9421,6 +9375,142 @@ async def pixel_queue():
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/admin/recover-timeout-jobs")
+async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)):
+    """Recover jobs that were marked as timeout failures — re-query upstream for actual status."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    admin = auth.verify_token(token)
+    if not admin or admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可操作")
+
+    import database
+    conn = database.get_connection()
+
+    # Find all timeout failures (Pixel/UPixel only) from today
+    today = datetime.now().strftime("%Y-%m-%d")
+    rows = conn.execute(
+        """SELECT id, verification_id, message, via, email
+           FROM verification_history
+           WHERE status = 'failed'
+             AND timestamp >= ?
+             AND (message LIKE '%排队超时%' OR message LIKE '%轮询超时%' OR message LIKE '%运行%超时%')
+             AND (via IN ('pixel', 'pixel_auto') OR via = '')
+           ORDER BY rowid DESC""",
+        (today,)
+    ).fetchall()
+
+    if not rows:
+        return {"recovered": 0, "total": 0, "results": [], "message": "没有找到今天的超时记录"}
+
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg["apiKey"]:
+        raise HTTPException(status_code=503, detail="Pixel API 未配置")
+
+    results = []
+    recovered = 0
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        for row in rows:
+            vid = row["verification_id"]
+            email = row["email"] or ""
+            via = row["via"] or "pixel"
+
+            if not vid:
+                results.append({"vid": vid, "action": "skip", "reason": "no verification_id"})
+                continue
+
+            try:
+                resp = await client.get(
+                    f"{pixel_cfg['baseUrl']}/api/jobs/{vid}",
+                    headers={"X-API-Key": pixel_cfg["apiKey"]},
+                )
+                if resp.status_code != 200:
+                    results.append({"vid": vid, "action": "skip", "reason": f"upstream HTTP {resp.status_code}"})
+                    continue
+
+                data = resp.json()
+                upstream_status = data.get("status", "unknown")
+
+                if upstream_status == "success":
+                    url = data.get("url", "")
+                    # Find user_id from the cdk field (format: "user:123")
+                    cdk = conn.execute("SELECT cdk FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1", (vid,)).fetchone()
+                    cdk_val = cdk["cdk"] if cdk else ""
+                    user_id = 0
+                    if cdk_val and cdk_val.startswith("user:"):
+                        try:
+                            user_id = int(cdk_val.replace("user:", ""))
+                        except ValueError:
+                            pass
+
+                    if user_id:
+                        # Update record to success (this will also handle credit reconciliation)
+                        result = _finalize_user_success(vid, user_id, 0, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=via, email=email)
+                        sse_source = via or "pixel"
+                        event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
+                        broadcast_verify_event({
+                            "type": "progress", "vid": vid, "step": "result",
+                            "status": "approved", "success": True,
+                            "message": "✅ 获取成功（超时恢复）",
+                            "url": url, "recovered": True,
+                            **event_meta,
+                        })
+                        recovered += 1
+                        results.append({"vid": vid, "email": email, "action": "recovered_success", "url": url})
+                    else:
+                        # Can't find user_id, just update the record directly
+                        conn.execute(
+                            "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ? AND status = 'failed'",
+                            (f"✅ 订阅成功: {url}" if url else "✅ 订阅成功（超时恢复）", vid)
+                        )
+                        conn.commit()
+                        recovered += 1
+                        results.append({"vid": vid, "email": email, "action": "recovered_success_no_user", "url": url})
+
+                elif upstream_status == "failed":
+                    error = data.get("error", "UNKNOWN_ERROR")
+                    results.append({"vid": vid, "email": email, "action": "confirmed_failed", "error": error})
+
+                elif upstream_status in ("queued", "running"):
+                    # Still active! Restore job context so GET endpoint can pick it up
+                    cdk = conn.execute("SELECT cdk FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1", (vid,)).fetchone()
+                    cdk_val = cdk["cdk"] if cdk else ""
+                    user_id = 0
+                    if cdk_val and cdk_val.startswith("user:"):
+                        try:
+                            user_id = int(cdk_val.replace("user:", ""))
+                        except ValueError:
+                            pass
+
+                    if user_id:
+                        # Restore context and revert status to processing
+                        _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": 0, "mode": "semi-auto"}
+                        conn.execute(
+                            "UPDATE verification_history SET status = 'processing', message = '⏳ 已恢复，等待上游完成...' WHERE verification_id = ? AND status = 'failed'",
+                            (vid,)
+                        )
+                        conn.commit()
+                        recovered += 1
+                        results.append({"vid": vid, "email": email, "action": "restored_active", "upstream_status": upstream_status})
+                    else:
+                        results.append({"vid": vid, "email": email, "action": "skip_active_no_user", "upstream_status": upstream_status})
+                else:
+                    results.append({"vid": vid, "email": email, "action": "unknown_status", "upstream_status": upstream_status})
+
+            except Exception as e:
+                results.append({"vid": vid, "action": "error", "error": str(e)})
+
+    return {
+        "total": len(rows),
+        "recovered": recovered,
+        "results": results,
+        "message": f"共 {len(rows)} 条超时记录，恢复了 {recovered} 条",
+    }
+
 
 
 @app.get("/api/pixel/history")

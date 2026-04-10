@@ -4678,6 +4678,9 @@ export default function Admin() {
     const [vLogTotalPages, setVLogTotalPages] = useState(1);
     const [vLogTotal, setVLogTotal] = useState(0);
     const vLogPageRef = useRef(1);
+    const [vLogSearch, setVLogSearch] = useState('');
+    const vLogSearchRef = useRef('');
+    const vLogSearchTimer = useRef(null);
     const [config, setConfig] = useState(null);
     const [showSaveNotice, setShowSaveNotice] = useState(false);
     const [testResult, setTestResult] = useState(null);
@@ -4918,7 +4921,8 @@ export default function Admin() {
         try {
             const token = user?.token || localStorage.getItem('verifykey-token');
             const headers = { 'Authorization': `Bearer ${token}` };
-            const logRes = await fetch(`${API_BASE}/api/admin/verify-history?page=${p}&pageSize=100`, { headers });
+            const searchParam = vLogSearchRef.current ? `&search=${encodeURIComponent(vLogSearchRef.current)}` : '';
+            const logRes = await fetch(`${API_BASE}/api/admin/verify-history?page=${p}&pageSize=100${searchParam}`, { headers });
             if (logRes.ok) {
                 const logData = await logRes.json();
                 const apiLog = (logData.history || []).filter(r => r.verificationId?.trim() && !r.verificationId.startsWith('auto-'));
@@ -4945,6 +4949,17 @@ export default function Admin() {
         vLogPageRef.current = p;
         fetchVerifyHistory(p);
     }, [vLogTotalPages, fetchVerifyHistory]);
+
+    const handleVLogSearch = useCallback((value) => {
+        setVLogSearch(value);
+        vLogSearchRef.current = value;
+        if (vLogSearchTimer.current) clearTimeout(vLogSearchTimer.current);
+        vLogSearchTimer.current = setTimeout(() => {
+            setVLogPage(1);
+            vLogPageRef.current = 1;
+            fetchVerifyHistory(1);
+        }, 400);
+    }, [fetchVerifyHistory]);
 
     // SSE Real-time updates for overview verification log
     useEffect(() => {
@@ -6041,8 +6056,40 @@ export default function Admin() {
 
                         {/* Verification Log */}
                         <div className="card" style={{ marginTop: 'var(--spacing-lg)', padding: 'var(--spacing-lg)' }}>
+                            {/* Search Bar */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }}>🔍</span>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="搜索 VID、邮箱、消息、来源、状态..."
+                                        value={vLogSearch}
+                                        onChange={e => handleVLogSearch(e.target.value)}
+                                        style={{
+                                            paddingLeft: '36px',
+                                            paddingRight: vLogSearch ? '36px' : '12px',
+                                            height: '38px',
+                                            fontSize: '13px',
+                                            borderRadius: '8px',
+                                            width: '100%',
+                                        }}
+                                    />
+                                    {vLogSearch && (
+                                        <span
+                                            onClick={() => handleVLogSearch('')}
+                                            style={{
+                                                position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                                                cursor: 'pointer', fontSize: '14px', color: 'var(--text-muted)',
+                                                width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                borderRadius: '50%', background: 'var(--bg-tertiary)',
+                                            }}
+                                        >✕</span>
+                                    )}
+                                </div>
+                            </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px', flexWrap: 'wrap' }}>
-                                <span>{t('logTotal')} <strong>{vLogTotal}</strong> {t('logEntries')}</span>
+                                <span>{t('logTotal')} <strong>{vLogTotal}</strong> {t('logEntries')}{vLogSearch && <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '4px' }}>(搜索中)</span>}</span>
                                 <span>|</span>
                                 {verifyLog.filter(r => r.status === 'processing').length > 0 && (
                                     <span style={{ color: '#f59e0b', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'processing').length} 处理中</span>

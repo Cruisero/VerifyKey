@@ -161,13 +161,14 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
     ]
 
 
-def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: bool = True) -> Dict:
+def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: bool = True, search: str = "") -> Dict:
     """Get paginated verification history for admin dashboard.
 
     Args:
         page: Page number (1-indexed)
         page_size: Number of entries per page
         ignore_reset: If True, ignore the display reset point
+        search: Optional search keyword (searches vid, message, cdk, via, email)
 
     Returns:
         Dict with 'history', 'total', 'page', 'pageSize', 'totalPages'
@@ -179,15 +180,21 @@ def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: boo
     # Build WHERE clause
     if _display_reset_at and not ignore_reset:
         where = f"WHERE timestamp > ? {USER_ERROR_FILTER}"
-        params_count = (_display_reset_at,)
+        params_base = [_display_reset_at]
     else:
         where = f"WHERE 1=1 {USER_ERROR_FILTER}"
-        params_count = ()
+        params_base = []
+
+    # Add search filter
+    if search and search.strip():
+        keyword = f"%{search.strip()}%"
+        where += " AND (verification_id LIKE ? OR message LIKE ? OR cdk LIKE ? OR via LIKE ? OR email LIKE ? OR status LIKE ?)"
+        params_base.extend([keyword, keyword, keyword, keyword, keyword, keyword])
 
     # Total count
     count_cursor = conn.execute(
         f"SELECT COUNT(*) as cnt FROM verification_history {where}",
-        params_count
+        params_base
     )
     total = count_cursor.fetchone()["cnt"]
     total_pages = max(1, (total + page_size - 1) // page_size)
@@ -195,16 +202,10 @@ def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: boo
     offset = (page - 1) * page_size
 
     # Paginated query (newest first)
-    if _display_reset_at and not ignore_reset:
-        cursor = conn.execute(
-            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
-            (*params_count, page_size, offset)
-        )
-    else:
-        cursor = conn.execute(
-            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
-            (page_size, offset)
-        )
+    cursor = conn.execute(
+        f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
+        params_base + [page_size, offset]
+    )
 
     history = [
         {

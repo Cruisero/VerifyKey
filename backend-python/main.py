@@ -6049,10 +6049,11 @@ async def get_admin_verification_history(
     authorization: Optional[str] = Header(None),
     page: int = Query(1, ge=1),
     pageSize: int = Query(100, ge=1, le=500),
+    search: str = Query("", description="Search keyword"),
 ):
     """Get paginated verification history with all fields (admin only)"""
     _verify_admin_token(authorization)
-    result = verification_history.get_paginated_history(page=page, page_size=pageSize, ignore_reset=True)
+    result = verification_history.get_paginated_history(page=page, page_size=pageSize, ignore_reset=True, search=search)
     stats = verification_history.get_history_stats(respect_reset=False)
     result["stats"] = stats
     return result

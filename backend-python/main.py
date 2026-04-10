@@ -8864,7 +8864,7 @@ async def _pixel_job_sweep():
                     # else: queued/running and < 2h — leave for next sweep
 
                 except Exception as e:
-                    logging.debug(f"[PixelSweep] Error checking {vid}: {e}")
+                    logging.warning(f"[PixelSweep] Error checking {vid}: {e}", exc_info=True)
                     continue
 
                 await asyncio.sleep(0.5)  # Rate limit upstream calls

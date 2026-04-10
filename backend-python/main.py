@@ -12792,6 +12792,14 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     if channel not in GPT_CHANNELS:
         raise HTTPException(status_code=400, detail=f"无效通道: {channel}")
 
+    # 先扣积分：检查余额并预扣
+    credits = user.get("credits", 0)
+    if credits < GPT_RECHARGE_COST:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_RECHARGE_COST} 积分，剩余 {credits}）")
+    deduct_result = auth.deduct_credits(user_id, GPT_RECHARGE_COST)
+    if not deduct_result:
+        raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_RECHARGE_COST} 积分）")
+
     import time as _gpt_time
     gpt_vid = f"gpt_{int(_gpt_time.time())}_{email[:8] if email else 'unknown'}"
     cdk_label = f"user:{user_id}" if user_id else ""
@@ -13091,12 +13099,16 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                 )
                 raise HTTPException(status_code=400, detail=msg)
     except HTTPException:
+        # 充值失败，退还预扣积分
+        auth.update_credits(user_id, GPT_RECHARGE_COST)
         raise
     except Exception as e:
         if card_key:
             _release_gpt_key(card_key)
         _complete_async_task("gpt", gpt_vid)
         failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
+        # 退还预扣积分
+        auth.update_credits(user_id, GPT_RECHARGE_COST)
         _log_gpt_final("failed", failure_msg)
         _broadcast_submit_failure(
             "gpt",
@@ -13111,14 +13123,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         )
         raise HTTPException(status_code=502, detail=failure_msg)
 
-    # Success — deduct user credits
-    try:
-        result = auth.deduct_credits(user_id, GPT_RECHARGE_COST)
-        if not result:
-            print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id} (insufficient credits?)")
-
-    except Exception as e:
-        print(f"[GPT Recharge] WARNING: Credit deduction failed for user {user_id}: {e}")
+    # Success — credits already pre-deducted, no further deduction needed
 
     # Mark card key as used
     if card_key:

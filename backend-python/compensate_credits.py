@@ -97,7 +97,7 @@ def main():
         "vpixel": 1.0,
         "kpixel": 1.0,
         "ypixel": 1.0,
-        "gpt": 1.0,
+        "gpt": 1.5,
         "pro_submit": 1.0,
     }
     

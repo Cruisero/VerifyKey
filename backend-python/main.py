@@ -6271,6 +6271,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
     
     # Credit / CDK quota adjustment
     credit_message = ""
+    cost = 0
     if cdk_code and cdk_code != "__BOT_INTERNAL__":
         if cdk_code.startswith("user:"):
             # User credit system (积分)
@@ -6337,7 +6338,10 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
             "status": "approved" if request.status == "pass" else "failed",
             "success": request.status == "pass",
             "message": override_msg,
+            "source": via or "",
         }
+        if request.status == "pass" and cost:
+            event_payload["creditCost"] = cost
         if real_url:
             event_payload["url"] = real_url
         if cdk_code and cdk_code.startswith("user:"):
@@ -6387,6 +6391,7 @@ async def override_verification_message(request: VidMessageOverrideRequest, auth
         "status": existing["status"] if existing else "failed",
         "success": (existing["status"] == "pass") if existing else False,
         "message": request.message,
+        "source": existing["via"] if existing and "via" in existing.keys() else "",
     }
     if cdk_field and cdk_field.startswith("user:"):
         event_payload["userId"] = cdk_field
@@ -6453,24 +6458,9 @@ async def override_verification_by_vid(request: VidOverrideRequest):
         if cdk_row:
             cdk_field = cdk_row["cdk"] or ""
 
-    # Broadcast a per-link result event so admin SSE log updates immediately
-    event_payload = {
-        "type": "progress",
-        "vid": request.vid,
-        "step": "result",
-        "status": "approved" if request.status == "pass" else "failed",
-        "success": request.status == "pass",
-        "message": override_msg,
-    }
-    if real_url:
-        event_payload["url"] = real_url
-    if cdk_field and cdk_field.startswith("user:"):
-        event_payload["userId"] = cdk_field
-        
-    broadcast_verify_event(event_payload)
-
     # Credit handling: check existing record for cdk field
     credit_message = ""
+    cost = 0
     if existing:
         old_status = existing["status"]
 
@@ -6479,12 +6469,12 @@ async def override_verification_by_vid(request: VidOverrideRequest):
             try:
                 uid = int(cdk_field.split(":")[1])
                 # Determine credit cost based on VID prefix and via channel
-                vid = request.vid or ""
-                if vid.startswith("yp_") or via == "ypixel":
+                vid_str = request.vid or ""
+                if vid_str.startswith("yp_") or via == "ypixel":
                     cost = 1.0
-                elif vid.startswith("vp_") or via == "vpixel":
+                elif vid_str.startswith("vp_") or via == "vpixel":
                     cost = 1.5
-                elif vid.startswith("kp_") or via == "kpixel":
+                elif vid_str.startswith("kp_") or via == "kpixel":
                     cost = 1.5
                 elif via == "pixel_auto":
                     cost = 1.5
@@ -6508,6 +6498,25 @@ async def override_verification_by_vid(request: VidOverrideRequest):
             elif request.status == "failed" and old_status == "pass":
                 result = cdk_manager.refund_cdk(cdk_field, 1)
                 credit_message = f"CDK {cdk_field}: {result['message']}"
+
+    # Broadcast a per-link result event so admin SSE log updates immediately
+    event_payload = {
+        "type": "progress",
+        "vid": request.vid,
+        "step": "result",
+        "status": "approved" if request.status == "pass" else "failed",
+        "success": request.status == "pass",
+        "message": override_msg,
+        "source": via or "",
+    }
+    if request.status == "pass" and cost:
+        event_payload["creditCost"] = cost
+    if real_url:
+        event_payload["url"] = real_url
+    if cdk_field and cdk_field.startswith("user:"):
+        event_payload["userId"] = cdk_field
+        
+    broadcast_verify_event(event_payload)
 
     return {"ok": True, "vid": request.vid, "status": request.status, "creditMessage": credit_message, "url": real_url}
 

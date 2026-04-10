@@ -8887,7 +8887,91 @@ async def _pixel_job_sweep():
 
 @app.on_event("startup")
 async def startup_pixel_sweep():
+    asyncio.create_task(_repair_timeout_failed_tasks())
     asyncio.create_task(_pixel_job_sweep())
+
+
+async def _repair_timeout_failed_tasks():
+    """One-time repair: re-check tasks that were incorrectly force-failed by the old timeout logic."""
+    import config_manager
+    await asyncio.sleep(3)
+    try:
+        cfg = config_manager.load_config()
+        pixel = cfg.get("pixelApi", {})
+        api_key = pixel.get("apiKey", "")
+        base_url = pixel.get("baseUrl", "https://iqless.icu")
+        if not api_key:
+            return
+
+        conn = database.get_connection()
+        rows = conn.execute(
+            "SELECT verification_id, cdk, email, via FROM verification_history "
+            "WHERE status = 'failed' AND message LIKE '%任务超时%' "
+            "ORDER BY rowid DESC LIMIT 500"
+        ).fetchall()
+
+        if not rows:
+            print("[PixelRepair] No timeout-failed tasks to repair")
+            return
+
+        print(f"[PixelRepair] Found {len(rows)} timeout-failed tasks, re-checking upstream...")
+        repaired = 0
+        for row in rows:
+            vid = row["verification_id"]
+            cdk_val = row["cdk"] or ""
+            email = row["email"] or ""
+            user_id = 0
+            if cdk_val.startswith("user:"):
+                try:
+                    user_id = int(cdk_val.replace("user:", ""))
+                except ValueError:
+                    pass
+            if not user_id:
+                continue
+
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    resp = await client.get(
+                        f"{base_url}/api/jobs/{vid}",
+                        headers={"X-API-Key": api_key},
+                    )
+                if resp.status_code != 200:
+                    continue
+
+                data = resp.json()
+                upstream_status = data.get("status", "")
+                sse_source = "pixel_auto" if "auto" in (row["via"] or "") else "pixel"
+                sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
+
+                if upstream_status == "success":
+                    url = data.get("url", "")
+                    msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                    conn2 = database.get_connection()
+                    conn2.execute(
+                        "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ? AND status = 'failed'",
+                        (msg, vid),
+                    )
+                    conn2.commit()
+                    repaired += 1
+                    logging.info(f"[PixelRepair] Repaired {vid} -> SUCCESS (user {user_id})")
+                    # Broadcast SSE update
+                    event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
+                    broadcast_verify_event({
+                        "type": "progress", "vid": vid, "step": "result",
+                        "status": "approved", "success": True,
+                        "message": "✅ 获取成功（已修正）",
+                        "url": url, "recovered": True,
+                        **event_meta,
+                    })
+                # If upstream is truly failed/cancelled, leave as-is (already failed)
+            except Exception as e:
+                logging.debug(f"[PixelRepair] Error re-checking {vid}: {e}")
+
+            await asyncio.sleep(0.3)
+
+        print(f"[PixelRepair] Repaired {repaired} out of {len(rows)} timeout-failed tasks")
+    except Exception as e:
+        logging.warning(f"[PixelRepair] Repair error: {e}")
 
 
 def _get_pixel_config():

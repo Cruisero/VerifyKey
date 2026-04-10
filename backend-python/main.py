@@ -6045,15 +6045,17 @@ async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
 
 
 @app.get("/api/admin/verify-history")
-async def get_admin_verification_history(authorization: Optional[str] = Header(None)):
-    """Get full verification history with all fields (admin only)"""
+async def get_admin_verification_history(
+    authorization: Optional[str] = Header(None),
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(100, ge=1, le=500),
+):
+    """Get paginated verification history with all fields (admin only)"""
     _verify_admin_token(authorization)
-    history = verification_history.get_recent_history(200, ignore_reset=True)
+    result = verification_history.get_paginated_history(page=page, page_size=pageSize, ignore_reset=True)
     stats = verification_history.get_history_stats(respect_reset=False)
-    return {
-        "history": history,
-        "stats": stats
-    }
+    result["stats"] = stats
+    return result
 
 
 class AddVerificationRecord(BaseModel):

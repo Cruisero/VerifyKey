@@ -4674,6 +4674,10 @@ export default function Admin() {
     const [activeTab, setActiveTab] = useState('overview');
     const [siteStats, setSiteStats] = useState({});
     const [verifyLog, setVerifyLog] = useState([]);
+    const [vLogPage, setVLogPage] = useState(1);
+    const [vLogTotalPages, setVLogTotalPages] = useState(1);
+    const [vLogTotal, setVLogTotal] = useState(0);
+    const vLogPageRef = useRef(1);
     const [config, setConfig] = useState(null);
     const [showSaveNotice, setShowSaveNotice] = useState(false);
     const [testResult, setTestResult] = useState(null);
@@ -4887,29 +4891,13 @@ export default function Admin() {
         fetchTgAccounts();
         fetchUsers();
         // Fetch site-wide stats for Overview tab
-        const fetchSiteData = async () => {
+        const fetchSiteStats = async () => {
             try {
                 const token = user?.token || localStorage.getItem('verifykey-token');
                 const headers = { 'Authorization': `Bearer ${token}` };
-                const [statsRes, logRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/admin/bot-stats`, { headers }),
-                    fetch(`${API_BASE}/api/admin/verify-history`, { headers })
-                ]);
+                const statsRes = await fetch(`${API_BASE}/api/admin/bot-stats`, { headers });
                 if (statsRes.ok) setSiteStats(await statsRes.json());
-                if (logRes.ok) {
-                    const logData = await logRes.json();
-                    const all = (logData.history || []).filter(r => r.verificationId?.trim() && !r.verificationId.startsWith('auto-'));
-                    const apiLog = all.slice(-50).reverse();
-                    // Merge: preserve SSE-originated entries that aren't in API data yet
-                    setVerifyLog(prev => {
-                        const sseOnly = prev.filter(e =>
-                            typeof e.id === 'string' && e.id.startsWith('sse-') &&
-                            !apiLog.some(a => a.verificationId === e.verificationId)
-                        );
-                        return sseOnly.length > 0 ? [...sseOnly, ...apiLog].slice(0, 300) : apiLog;
-                    });
-                }
-            } catch (e) { console.error('Failed to fetch site data:', e); }
+            } catch (e) { console.error('Failed to fetch site stats:', e); }
             // Also fetch node health data
             try {
                 const token = user?.token || localStorage.getItem('verifykey-token');
@@ -4917,10 +4905,46 @@ export default function Admin() {
                 if (nhRes.ok) setNodeHealth(await nhRes.json());
             } catch (e) { /* ignore */ }
         };
-        fetchSiteData();
-        const interval = setInterval(fetchSiteData, 15000);
-        return () => clearInterval(interval);
+        fetchSiteStats();
+        fetchVerifyHistory(1);
+        const statsInterval = setInterval(fetchSiteStats, 15000);
+        const logInterval = setInterval(() => fetchVerifyHistory(), 10000);
+        return () => { clearInterval(statsInterval); clearInterval(logInterval); };
     }, []);
+
+    // Fetch verification history with pagination
+    const fetchVerifyHistory = useCallback(async (page) => {
+        const p = page ?? vLogPageRef.current;
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const logRes = await fetch(`${API_BASE}/api/admin/verify-history?page=${p}&pageSize=100`, { headers });
+            if (logRes.ok) {
+                const logData = await logRes.json();
+                const apiLog = (logData.history || []).filter(r => r.verificationId?.trim() && !r.verificationId.startsWith('auto-'));
+                setVLogTotal(logData.total || 0);
+                setVLogTotalPages(logData.totalPages || 1);
+                if (p === 1) {
+                    setVerifyLog(prev => {
+                        const sseOnly = prev.filter(e =>
+                            typeof e.id === 'string' && e.id.startsWith('sse-') &&
+                            !apiLog.some(a => a.verificationId === e.verificationId)
+                        );
+                        return sseOnly.length > 0 ? [...sseOnly, ...apiLog] : apiLog;
+                    });
+                } else {
+                    setVerifyLog(apiLog);
+                }
+            }
+        } catch (e) { console.error('Failed to fetch verify history:', e); }
+    }, []);
+
+    const handleVLogPageChange = useCallback((newPage) => {
+        const p = Math.max(1, Math.min(newPage, vLogTotalPages));
+        setVLogPage(p);
+        vLogPageRef.current = p;
+        fetchVerifyHistory(p);
+    }, [vLogTotalPages, fetchVerifyHistory]);
 
     // SSE Real-time updates for overview verification log
     useEffect(() => {
@@ -4933,6 +4957,9 @@ export default function Admin() {
         es.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                // Only apply SSE live updates when viewing page 1
+                if (vLogPageRef.current !== 1) return;
+
                 if (data.type === 'progress') {
                     const vid = data.vid || '';
                     if (!vid) return;
@@ -4982,7 +5009,7 @@ export default function Admin() {
                             newLog[existingIdx] = { ...newLog[existingIdx], ...newEntry };
                             return newLog;
                         } else {
-                            return [newEntry, ...prev].slice(0, 300);
+                            return [newEntry, ...prev];
                         }
                     });
                 } else if (data.type === 'done') {
@@ -5026,7 +5053,7 @@ export default function Admin() {
                                 });
                             }
                         }
-                        return newLog.slice(0, 300);
+                        return newLog;
                     });
                 } else if (data.type === 'recheck_success') {
                     // Delayed recheck discovered a timed-out VID actually succeeded
@@ -5051,7 +5078,7 @@ export default function Admin() {
                                     message: data.message || '延迟复查：验证已通过',
                                     timestamp: new Date().toISOString(),
                                     cdk: '',
-                                }, ...prev].slice(0, 300);
+                                }, ...prev];
                             }
                         });
                     }
@@ -6015,15 +6042,18 @@ export default function Admin() {
                         {/* Verification Log */}
                         <div className="card" style={{ marginTop: 'var(--spacing-lg)', padding: 'var(--spacing-lg)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px', flexWrap: 'wrap' }}>
-                                <span>{t('logTotal')} <strong>{verifyLog.length}</strong> {t('logEntries')}</span>
+                                <span>{t('logTotal')} <strong>{vLogTotal}</strong> {t('logEntries')}</span>
                                 <span>|</span>
                                 {verifyLog.filter(r => r.status === 'processing').length > 0 && (
                                     <span style={{ color: '#f59e0b', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'processing').length} 处理中</span>
                                 )}
                                 <span style={{ color: '#16a34a', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'pass').length} {t('logSuccess')}</span>
                                 <span style={{ color: '#dc2626', fontWeight: 600 }}>{verifyLog.filter(r => r.status === 'failed').length} {t('logFailed')}</span>
+                                <span style={{ marginLeft: 'auto', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                                    第 {vLogPage}/{vLogTotalPages} 页
+                                </span>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '600px', overflowY: 'auto' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '800px', overflowY: 'auto' }}>
                                 {verifyLog.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '24px' }}>{t('logNoRecords')}</div>}
                                 {verifyLog.map(r => {
                                     const isPass = r.status === 'pass';
@@ -6252,6 +6282,62 @@ export default function Admin() {
                                     );
                                 })}
                             </div>
+                            {/* Pagination Controls */}
+                            {vLogTotalPages > 1 && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    gap: '8px', marginTop: '20px', padding: '12px 0',
+                                    borderTop: '1px solid var(--border-color, rgba(128,128,128,0.15))',
+                                }}>
+                                    <button
+                                        className="btn btn-sm btn-secondary"
+                                        disabled={vLogPage <= 1}
+                                        onClick={() => handleVLogPageChange(1)}
+                                        style={{ minWidth: '36px' }}
+                                    >«</button>
+                                    <button
+                                        className="btn btn-sm btn-secondary"
+                                        disabled={vLogPage <= 1}
+                                        onClick={() => handleVLogPageChange(vLogPage - 1)}
+                                        style={{ minWidth: '36px' }}
+                                    >‹</button>
+                                    {(() => {
+                                        const pages = [];
+                                        let start = Math.max(1, vLogPage - 2);
+                                        let end = Math.min(vLogTotalPages, vLogPage + 2);
+                                        if (end - start < 4) {
+                                            if (start === 1) end = Math.min(vLogTotalPages, start + 4);
+                                            else start = Math.max(1, end - 4);
+                                        }
+                                        for (let p = start; p <= end; p++) {
+                                            pages.push(
+                                                <button
+                                                    key={p}
+                                                    className={`btn btn-sm ${p === vLogPage ? 'btn-primary' : 'btn-secondary'}`}
+                                                    onClick={() => handleVLogPageChange(p)}
+                                                    style={{ minWidth: '36px' }}
+                                                >{p}</button>
+                                            );
+                                        }
+                                        return pages;
+                                    })()}
+                                    <button
+                                        className="btn btn-sm btn-secondary"
+                                        disabled={vLogPage >= vLogTotalPages}
+                                        onClick={() => handleVLogPageChange(vLogPage + 1)}
+                                        style={{ minWidth: '36px' }}
+                                    >›</button>
+                                    <button
+                                        className="btn btn-sm btn-secondary"
+                                        disabled={vLogPage >= vLogTotalPages}
+                                        onClick={() => handleVLogPageChange(vLogTotalPages)}
+                                        style={{ minWidth: '36px' }}
+                                    >»</button>
+                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginLeft: '12px' }}>
+                                        共 {vLogTotal} 条
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

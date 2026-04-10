@@ -161,6 +161,74 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
     ]
 
 
+def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: bool = True) -> Dict:
+    """Get paginated verification history for admin dashboard.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of entries per page
+        ignore_reset: If True, ignore the display reset point
+
+    Returns:
+        Dict with 'history', 'total', 'page', 'pageSize', 'totalPages'
+    """
+    _load_reset_timestamp()
+    global _display_reset_at
+    conn = database.get_connection()
+
+    # Build WHERE clause
+    if _display_reset_at and not ignore_reset:
+        where = f"WHERE timestamp > ? {USER_ERROR_FILTER}"
+        params_count = (_display_reset_at,)
+    else:
+        where = f"WHERE 1=1 {USER_ERROR_FILTER}"
+        params_count = ()
+
+    # Total count
+    count_cursor = conn.execute(
+        f"SELECT COUNT(*) as cnt FROM verification_history {where}",
+        params_count
+    )
+    total = count_cursor.fetchone()["cnt"]
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * page_size
+
+    # Paginated query (newest first)
+    if _display_reset_at and not ignore_reset:
+        cursor = conn.execute(
+            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
+            (*params_count, page_size, offset)
+        )
+    else:
+        cursor = conn.execute(
+            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
+            (page_size, offset)
+        )
+
+    history = [
+        {
+            "id": r["id"],
+            "status": r["status"],
+            "verificationId": r["verification_id"],
+            "message": r["message"],
+            "cdk": r["cdk"],
+            "via": r["via"] if "via" in r.keys() else "",
+            "submitEmail": r["email"] if "email" in r.keys() else "",
+            "timestamp": r["timestamp"]
+        }
+        for r in cursor.fetchall()
+    ]
+
+    return {
+        "history": history,
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "totalPages": total_pages,
+    }
+
+
 def reset_display() -> str:
     """Set the display reset point to now. Records before this won't be shown."""
     global _display_reset_at

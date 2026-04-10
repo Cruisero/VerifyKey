@@ -5398,11 +5398,15 @@ async def get_bot_orders(authorization: Optional[str] = Header(None)):
     return {"orders": orders}
 
 @app.get("/api/admin/bot-verify-log")
-async def get_bot_verify_log(authorization: Optional[str] = Header(None)):
-    """Get recent bot verification log entries."""
+async def get_bot_verify_log(
+    authorization: Optional[str] = Header(None),
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(100, ge=1, le=500),
+):
+    """Get paginated bot verification log entries."""
     _verify_admin_token(authorization)
     import bot_verify_log
-    return {"log": bot_verify_log.get_recent(50)}
+    return bot_verify_log.get_paginated(page=page, page_size=pageSize)
 
 
 @app.get("/api/admin/verify-stream")

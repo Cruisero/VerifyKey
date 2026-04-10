@@ -95,3 +95,54 @@ def get_recent(limit: int = 300) -> List[Dict]:
         }
         for r in cursor.fetchall()
     ]
+
+
+def get_total_count() -> int:
+    """Get total number of bot verification log entries."""
+    conn = database.get_connection()
+    cursor = conn.execute("SELECT COUNT(*) as cnt FROM bot_verify_log")
+    row = cursor.fetchone()
+    return row["cnt"] if row else 0
+
+
+def get_paginated(page: int = 1, page_size: int = 100) -> Dict:
+    """Get paginated bot verification log entries.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of entries per page
+
+    Returns:
+        Dict with 'log', 'total', 'page', 'pageSize', 'totalPages'
+    """
+    total = get_total_count()
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * page_size
+
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT id, link, username, user_id, status, message, vid, timestamp FROM bot_verify_log ORDER BY id DESC LIMIT ? OFFSET ?",
+        (page_size, offset)
+    )
+    log = [
+        {
+            "id": r["id"],
+            "link": r["link"],
+            "username": r["username"],
+            "user_id": r["user_id"],
+            "status": r["status"],
+            "message": r["message"],
+            "vid": r["vid"] if "vid" in r.keys() else "",
+            "timestamp": r["timestamp"]
+        }
+        for r in cursor.fetchall()
+    ]
+
+    return {
+        "log": log,
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "totalPages": total_pages,
+    }

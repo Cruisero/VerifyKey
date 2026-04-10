@@ -22,6 +22,10 @@ function TelegramBotTab() {
     const [activeSection, setActiveSection] = useState('stats');
     const [newService, setNewService] = useState({ name: '', emoji: '🔹', credits: 5 });
     const [botVerifyLog, setBotVerifyLog] = useState([]);
+    const [logPage, setLogPage] = useState(1);
+    const [logTotalPages, setLogTotalPages] = useState(1);
+    const [logTotal, setLogTotal] = useState(0);
+    const logPageRef = useRef(1);
 
     const fetchBotConfig = async () => {
         try {
@@ -57,27 +61,42 @@ function TelegramBotTab() {
         } catch (e) { console.error('Failed to fetch bot orders:', e); }
     };
 
+    const fetchLog = useCallback(async (page) => {
+        const p = page ?? logPageRef.current;
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/bot-verify-log?page=${p}&pageSize=100`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                const apiLog = data.log || [];
+                setLogTotal(data.total || 0);
+                setLogTotalPages(data.totalPages || 1);
+                // On page 1, merge SSE live entries; on other pages, just show API data
+                if (p === 1) {
+                    setBotVerifyLog(prev => {
+                        const sseProcessing = prev.filter(e => (e.status === 'processing' || e.status === 'submitted') && !apiLog.some(a => a.vid === e.vid || a.link === e.link));
+                        return sseProcessing.length > 0 ? [...sseProcessing, ...apiLog] : apiLog;
+                    });
+                } else {
+                    setBotVerifyLog(apiLog);
+                }
+            }
+        } catch (e) { console.error('Failed to fetch bot verify log:', e); }
+    }, []);
+
+    const handleLogPageChange = useCallback((newPage) => {
+        const p = Math.max(1, Math.min(newPage, logTotalPages));
+        setLogPage(p);
+        logPageRef.current = p;
+        fetchLog(p);
+    }, [logTotalPages, fetchLog]);
+
     useEffect(() => {
         fetchBotConfig();
         fetchBotStats();
         fetchBotUsers();
         fetchBotOrders();
-        const fetchLog = async () => {
-            try {
-                const res = await fetch(`${API_BASE}/api/admin/bot-verify-log`, { headers: authHeaders });
-                if (res.ok) {
-                    const data = await res.json();
-                    const apiLog = data.log || [];
-                    // Merge: preserve SSE "processing"/"submitted" entries that aren't in API data yet
-                    setBotVerifyLog(prev => {
-                        const sseProcessing = prev.filter(e => (e.status === 'processing' || e.status === 'submitted') && !apiLog.some(a => a.vid === e.vid || a.link === e.link));
-                        return sseProcessing.length > 0 ? [...sseProcessing, ...apiLog].slice(0, 300) : apiLog;
-                    });
-                }
-            } catch (e) { console.error('Failed to fetch bot verify log:', e); }
-        };
-        fetchLog();
-        const interval = setInterval(fetchLog, 5000);
+        fetchLog(1);
+        const interval = setInterval(() => fetchLog(), 8000);
         return () => clearInterval(interval);
     }, []);
 
@@ -92,6 +111,9 @@ function TelegramBotTab() {
         es.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                // Only apply SSE live updates when viewing page 1
+                if (logPageRef.current !== 1) return;
+
                 if (data.type === 'progress') {
                     setBotVerifyLog(prev => {
                         const existingIdx = prev.findIndex(l => l.vid === data.vid || l.link === data.link);
@@ -99,7 +121,6 @@ function TelegramBotTab() {
                         // Determine status from the event
                         let entryStatus = 'processing';
                         if (data.step === 'result') {
-                            // Per-link result: use actual status
                             entryStatus = data.success ? 'success' : (data.status === 'error' ? 'error' : 'failed');
                         } else if (data.step === 'failed') {
                             entryStatus = 'failed';
@@ -124,7 +145,7 @@ function TelegramBotTab() {
                             newLog[existingIdx] = { ...newLog[existingIdx], ...newEntry };
                             return newLog;
                         } else {
-                            return [newEntry, ...prev].slice(0, 300);
+                            return [newEntry, ...prev];
                         }
                     });
                 } else if (data.type === 'done') {
@@ -158,7 +179,7 @@ function TelegramBotTab() {
                                 });
                             }
                         }
-                        return newLog.slice(0, 300);
+                        return newLog;
                     });
                 }
             } catch (err) {
@@ -335,7 +356,7 @@ function TelegramBotTab() {
             {activeSection === 'verify-log' && (
                 <div className="card" style={{ padding: 'var(--spacing-lg)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontSize: '14px', flexWrap: 'wrap' }}>
-                        <span>{t('logTotal')} <strong>{botVerifyLog.length}</strong> {t('logEntries')}</span>
+                        <span>{t('logTotal')} <strong>{logTotal}</strong> {t('logEntries')}</span>
                         <span>|</span>
                         <span style={{ color: '#3b82f6', fontWeight: 600 }}>
                             {botVerifyLog.filter(r => r.status === 'submitted').length} 已提交
@@ -345,6 +366,9 @@ function TelegramBotTab() {
                         </span>
                         <span style={{ color: '#16a34a', fontWeight: 600 }}>{botVerifyLog.filter(r => r.status === 'success').length} {t('logSuccess')}</span>
                         <span style={{ color: '#dc2626', fontWeight: 600 }}>{botVerifyLog.filter(r => !['success', 'submitted', 'processing'].includes(r.status)).length} {t('logFailed')}</span>
+                        <span style={{ marginLeft: 'auto', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                            第 {logPage}/{logTotalPages} 页
+                        </span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '800px', overflowY: 'auto' }}>
                         {botVerifyLog.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>{t('tgNoBotLog')}</div>}
@@ -414,6 +438,62 @@ function TelegramBotTab() {
                             );
                         })}
                     </div>
+                    {/* Pagination Controls */}
+                    {logTotalPages > 1 && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            gap: '8px', marginTop: '20px', padding: '12px 0',
+                            borderTop: '1px solid var(--border-color, rgba(128,128,128,0.15))',
+                        }}>
+                            <button
+                                className="btn btn-sm btn-secondary"
+                                disabled={logPage <= 1}
+                                onClick={() => handleLogPageChange(1)}
+                                style={{ minWidth: '36px' }}
+                            >«</button>
+                            <button
+                                className="btn btn-sm btn-secondary"
+                                disabled={logPage <= 1}
+                                onClick={() => handleLogPageChange(logPage - 1)}
+                                style={{ minWidth: '36px' }}
+                            >‹</button>
+                            {(() => {
+                                const pages = [];
+                                let start = Math.max(1, logPage - 2);
+                                let end = Math.min(logTotalPages, logPage + 2);
+                                if (end - start < 4) {
+                                    if (start === 1) end = Math.min(logTotalPages, start + 4);
+                                    else start = Math.max(1, end - 4);
+                                }
+                                for (let p = start; p <= end; p++) {
+                                    pages.push(
+                                        <button
+                                            key={p}
+                                            className={`btn btn-sm ${p === logPage ? 'btn-primary' : 'btn-secondary'}`}
+                                            onClick={() => handleLogPageChange(p)}
+                                            style={{ minWidth: '36px' }}
+                                        >{p}</button>
+                                    );
+                                }
+                                return pages;
+                            })()}
+                            <button
+                                className="btn btn-sm btn-secondary"
+                                disabled={logPage >= logTotalPages}
+                                onClick={() => handleLogPageChange(logPage + 1)}
+                                style={{ minWidth: '36px' }}
+                            >›</button>
+                            <button
+                                className="btn btn-sm btn-secondary"
+                                disabled={logPage >= logTotalPages}
+                                onClick={() => handleLogPageChange(logTotalPages)}
+                                style={{ minWidth: '36px' }}
+                            >»</button>
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginLeft: '12px' }}>
+                                共 {logTotal} 条
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
 

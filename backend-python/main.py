@@ -8952,6 +8952,12 @@ async def _repair_timeout_failed_tasks():
                         (msg, vid),
                     )
                     conn2.commit()
+                    # Re-deduct credits (they were wrongly refunded by the old timeout logic)
+                    try:
+                        auth.deduct_credits(user_id, sweep_cost)
+                        logging.info(f"[PixelRepair] Re-deducted {sweep_cost} credits from user {user_id} for {vid}")
+                    except Exception as deduct_err:
+                        logging.warning(f"[PixelRepair] Failed to re-deduct credits for user {user_id}: {deduct_err}")
                     repaired += 1
                     logging.info(f"[PixelRepair] Repaired {vid} -> SUCCESS (user {user_id})")
                     # Broadcast SSE update

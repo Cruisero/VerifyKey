@@ -8804,16 +8804,6 @@ async def _pixel_job_sweep():
                 if not user_id:
                     continue
 
-                # Check if task has been processing too long (2 hours)
-                task_age_hours = 0
-                try:
-                    ts = row["timestamp"] if "timestamp" in row.keys() else ""
-                    if ts:
-                        created = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                        task_age_hours = (datetime.now(created.tzinfo) - created).total_seconds() / 3600
-                except Exception:
-                    pass
-
                 try:
                     async with httpx.AsyncClient(timeout=15) as client:
                         resp = await client.get(
@@ -8878,25 +8868,7 @@ async def _pixel_job_sweep():
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
                         logging.info(f"[PixelSweep] Finalized FAILED for {vid} (user {user_id})")
-                    elif task_age_hours >= 2:
-                        # Task stuck for over 2 hours — force fail and refund
-                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
-                        try:
-                            _finalize_user_failure(vid, user_id, "失败: 任务超时（超过2小时）", via=sse_source, refund_cost=sweep_cost, email=email)
-                        except Exception as fin_err:
-                            logging.warning(f"[PixelSweep] Timeout finalize failed for {vid}: {fin_err}")
-                            conn2 = database.get_connection()
-                            conn2.execute("UPDATE verification_history SET status='failed', message='失败: 任务超时（超过2小时）' WHERE verification_id=? AND status='processing'", (vid,))
-                            conn2.commit()
-                            try:
-                                auth.update_credits(user_id, sweep_cost)
-                            except Exception:
-                                pass
-                        _complete_async_task("pixel", vid)
-                        _pixel_job_context.pop(vid, None)
-                        finalized_count += 1
-                        logging.warning(f"[PixelSweep] Force-failed TIMEOUT for {vid} (user {user_id}, age={task_age_hours:.1f}h)")
-                    # else: queued/running and < 2h — leave for next sweep
+                    # else: queued/running — leave for next sweep
 
                 except Exception as e:
                     logging.warning(f"[PixelSweep] Error checking {vid}: {e}", exc_info=True)

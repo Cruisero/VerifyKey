@@ -1,157 +1,261 @@
 """
-Credit compensation script v2.
+Credit compensation script: find users who lost verification records
+by comparing their credit income vs outcomes.
 
-Since CDK redeemed_by is not tracked, we use a simpler heuristic:
-  For users registered after cutoff (today 12:00 Beijing):
-    - If credits = 0 AND no verification_history records → lost all credits
-    - If credits > 0 but fewer records than expected → partially lost
+Logic:
+  total_earned = CDK redeemed credits + registration bonus (1.5) + invitation rewards
+  total_spent_in_db = sum of verification costs from verification_history
+  current_balance = users.credits
+  
+  expected_balance = total_earned - total_spent_in_db
+  if expected_balance > current_balance:
+      lost_credits = expected_balance - current_balance
+      → Should compensate user with lost_credits
 
-Compensation: give back enough credits for 1 auto verification (1.5 credits)
-since we can't determine exact amount lost.
+Scope: only users registered after 2026-04-10 04:00:00 UTC (12:00 Beijing)
 
 Run inside Docker container:
-  python3 /app/compensate_credits.py          # Preview only
-  python3 /app/compensate_credits.py --apply  # Actually compensate
+  python3 /app/compensate_credits.py
 """
+import json
 import sqlite3
-import sys
+import time
+import os
 
 DB_PATH = "/app/data/onepass.db"
 USERS_DB_PATH = "/app/data/verifykey.db"
 
 # Beijing 12:00 = UTC 04:00 on 2026-04-10
-CUTOFF_UTC_SPACE = "2026-04-10 04:00:00"
-CUTOFF_UTC_T = "2026-04-10T04:00:00"
-
-# Fixed compensation amount (max single-use cost)
-COMPENSATE_AMOUNT = 1.5
+CUTOFF_UTC_T = "2026-04-10T04:00:00"      # Python isoformat (CDK last_used_at)
+CUTOFF_UTC_SPACE = "2026-04-10 04:00:00"   # SQLite CURRENT_TIMESTAMP (users.created_at)
 
 
 def main():
+    # Connect to both DBs
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     users_conn = sqlite3.connect(USERS_DB_PATH)
     users_conn.row_factory = sqlite3.Row
 
-    # Step 1: Get users registered after cutoff
+    # Step 1: Get all users
     all_users = users_conn.execute("SELECT id, email, credits, created_at FROM users").fetchall()
-    
-    cutoff_users = []
-    for u in all_users:
-        created = (u["created_at"] or "").replace("T", " ")
-        if created >= CUTOFF_UTC_SPACE:
-            cutoff_users.append(u)
-
     print(f"Total users in DB: {len(all_users)}")
-    print(f"Users registered after cutoff: {len(cutoff_users)}")
 
-    # Step 2: For each cutoff user, count their verification records
+    # Step 2: Get CDK redemptions (total credits earned per user)
+    # Get ALL CDK redemptions for balance calculation
+    cdk_rows = conn.execute(
+        "SELECT redeemed_by, SUM(quota) as total FROM cdkeys WHERE redeemed_by IS NOT NULL AND status = 'used' GROUP BY redeemed_by"
+    ).fetchall()
+    cdk_earned = {r["redeemed_by"]: r["total"] for r in cdk_rows}
+
+    # Filter: users who registered after cutoff AND redeemed CDK after cutoff
+    cdk_after_cutoff = conn.execute(
+        "SELECT DISTINCT redeemed_by FROM cdkeys WHERE redeemed_by IS NOT NULL AND last_used_at >= ?",
+        (CUTOFF_UTC_T,)
+    ).fetchall()
+    cdk_active_ids = {r["redeemed_by"] for r in cdk_after_cutoff}
+
+    # Users registered after cutoff (SQLite uses space format)
+    registered_after_ids = set()
+    for u in all_users:
+        created = (u["created_at"] or "").replace("T", " ")  # normalize
+        if created >= CUTOFF_UTC_SPACE:
+            registered_after_ids.add(u["id"])
+
+    # Must satisfy BOTH: registered after cutoff AND redeemed CDK after cutoff
+    active_user_ids = cdk_active_ids & registered_after_ids
+
+    # Filter to only these users
+    users = [u for u in all_users if u["id"] in active_user_ids]
+    print(f"Registered after cutoff: {len(registered_after_ids)}")
+    print(f"Redeemed CDK after cutoff: {len(cdk_active_ids)}")
+    print(f"Both (registered AND redeemed): {len(users)}")
+    print(f"Users with CDK redemptions (all time): {len(cdk_earned)}")
+
+    # Step 3: Get invitation rewards per user (inviter gets 0.2 per invitee)
+    try:
+        inv_rows = users_conn.execute(
+            "SELECT inviter_id, SUM(reward_amount) as total FROM invitation_rewards GROUP BY inviter_id"
+        ).fetchall()
+        inv_earned = {r["inviter_id"]: r["total"] for r in inv_rows}
+    except:
+        inv_earned = {}
+    print(f"Users with invitation rewards: {len(inv_earned)}")
+
+    # Step 4: Get ALL verification costs per user from verification_history
+    # Include ALL service types that deduct credits, not just pixel
+    # Cost mapping:
+    #   pixel_auto → 1.5, pixel → 1.0
+    #   vpixel → 1.0, kpixel → 1.0, ypixel → 1.0
+    #   gpt → varies (usually 1.0)
+    #   pro_submit → 1.0
+    #   Others → 1.0 (default)
+    
+    COST_MAP = {
+        "pixel_auto": 1.5,
+        "pixel": 1.0,
+        "vpixel": 1.0,
+        "kpixel": 1.0,
+        "ypixel": 1.0,
+        "gpt": 1.0,
+        "pro_submit": 1.0,
+    }
+    
+    # Count ALL pass records (credits legitimately spent)
+    vh_rows = conn.execute("""
+        SELECT cdk, via, COUNT(*) as cnt 
+        FROM verification_history 
+        WHERE status = 'pass'
+        GROUP BY cdk, via
+    """).fetchall()
+    
+    # Parse user_id from cdk field (format: "user:123")
+    user_spent = {}  # user_id -> total credits spent on successful verifications
+    for r in vh_rows:
+        cdk_val = r["cdk"] or ""
+        if cdk_val.startswith("user:"):
+            try:
+                uid = int(cdk_val.split(":")[1])
+            except:
+                continue
+        else:
+            continue
+        via = r["via"] or ""
+        cost_per = COST_MAP.get(via, 1.0)
+        spent = cost_per * r["cnt"]
+        user_spent[uid] = user_spent.get(uid, 0) + spent
+
+    # Failed records: originally charged, then refunded → net cost = 0
+    # So we don't count them as spent
+
+    # Count ALL processing records (credits locked, not yet finalized)
+    vh_processing = conn.execute("""
+        SELECT cdk, via, COUNT(*) as cnt 
+        FROM verification_history 
+        WHERE status = 'processing'
+        GROUP BY cdk, via
+    """).fetchall()
+    
+    user_processing_spent = {}
+    for r in vh_processing:
+        cdk_val = r["cdk"] or ""
+        if cdk_val.startswith("user:"):
+            try:
+                uid = int(cdk_val.split(":")[1])
+            except:
+                continue
+        else:
+            continue
+        via = r["via"] or ""
+        cost_per = COST_MAP.get(via, 1.0)
+        spent = cost_per * r["cnt"]
+        user_processing_spent[uid] = user_processing_spent.get(uid, 0) + spent
+
+    print(f"Users with pass records: {len(user_spent)}")
+    print(f"Users with processing records: {len(user_processing_spent)}")
+
+    # Step 5: Calculate expected vs actual balance
+    # Only compensate users who:
+    #   1. Registered after cutoff (already filtered)
+    #   2. Redeemed CDK (earned_cdk > 0)
+    #   3. Credits were consumed (current < earned)
+    #   4. Verification records don't account for the consumed credits
+
     compensate_list = []
     
-    for u in cutoff_users:
+    for u in users:
         uid = u["id"]
         email = u["email"]
-        credits = float(u["credits"] or 0)
+        current_credits = float(u["credits"] or 0)
+        created_at = u["created_at"] or ""
         
-        cdk_tag = f"user:{uid}"
+        # Must have redeemed CDK
+        earned_cdk = float(cdk_earned.get(uid, 0))
+        if earned_cdk <= 0:
+            continue  # Never redeemed CDK, skip
         
-        # Count ALL records for this user
-        row = conn.execute(
-            "SELECT COUNT(*) as total FROM verification_history WHERE cdk = ?",
-            (cdk_tag,)
-        ).fetchone()
-        total_records = row["total"]
+        earned_inv = float(inv_earned.get(uid, 0))
+        total_earned = earned_cdk + earned_inv
         
-        # Count by status
-        pass_cnt = conn.execute(
-            "SELECT COUNT(*) as c FROM verification_history WHERE cdk = ? AND status = 'pass'",
-            (cdk_tag,)
-        ).fetchone()["c"]
+        # Credits consumed = earned - current
+        credits_consumed = total_earned - current_credits
+        if credits_consumed < 0.1:
+            continue  # Credits not consumed, skip
         
-        failed_cnt = conn.execute(
-            "SELECT COUNT(*) as c FROM verification_history WHERE cdk = ? AND status = 'failed'",
-            (cdk_tag,)
-        ).fetchone()["c"]
+        # Total accounted for in verification_history
+        total_pass_spent = float(user_spent.get(uid, 0))
+        total_processing = float(user_processing_spent.get(uid, 0))
+        total_accounted = total_pass_spent + total_processing
         
-        processing_cnt = conn.execute(
-            "SELECT COUNT(*) as c FROM verification_history WHERE cdk = ? AND status = 'processing'",
-            (cdk_tag,)
-        ).fetchone()["c"]
+        # Unaccounted credits = consumed but not in verification_history
+        unaccounted = credits_consumed - total_accounted
         
-        # Determine if compensation needed:
-        # credits=0 and no records at all → definitely lost credits
-        # credits=0 and only has pass records → credits legitimately spent, no compensation
-        # credits=0 and no records → lost
-        needs_comp = False
-        reason = ""
-        
-        if credits == 0 and total_records == 0:
-            needs_comp = True
-            reason = "积分=0 且无任何记录"
-        elif credits == 0 and pass_cnt == 0 and failed_cnt == 0 and processing_cnt == 0:
-            needs_comp = True
-            reason = "积分=0 且无有效记录"
-        
-        if needs_comp:
+        # If unaccounted > 0.1, user lost records
+        if unaccounted > 0.1:
             compensate_list.append({
                 "user_id": uid,
                 "email": email,
-                "credits": credits,
-                "total_records": total_records,
-                "pass": pass_cnt,
-                "failed": failed_cnt,
-                "processing": processing_cnt,
-                "reason": reason,
-                "compensate": COMPENSATE_AMOUNT,
+                "created_at": created_at,
+                "earned_cdk": earned_cdk,
+                "earned_inv": earned_inv,
+                "total_earned": total_earned,
+                "pass_spent": total_pass_spent,
+                "processing_spent": total_processing,
+                "credits_consumed": round(credits_consumed, 2),
+                "accounted": round(total_accounted, 2),
+                "expected": round(total_earned - total_accounted, 2),
+                "actual": current_credits,
+                "diff": round(unaccounted, 2),
             })
 
-    # Print results
     print(f"\n{'='*60}")
     print(f"Users needing compensation: {len(compensate_list)}")
-    print(f"Compensation per user: {COMPENSATE_AMOUNT} credits")
     print(f"{'='*60}")
     
-    total_cost = 0
-    for c in compensate_list:
+    total_compensate = 0
+    for c in sorted(compensate_list, key=lambda x: x["diff"], reverse=True):
         print(f"  user:{c['user_id']} | {c['email']}")
-        print(f"    credits={c['credits']}, records={c['total_records']} (pass={c['pass']}, failed={c['failed']}, processing={c['processing']})")
-        print(f"    reason: {c['reason']} → 补偿 {c['compensate']}")
-        total_cost += c["compensate"]
+        print(f"    CDK充值={c['earned_cdk']}, 邀请奖励={c['earned_inv']}, 总获得={c['total_earned']}")
+        print(f"    当前余额={c['actual']}, 已消耗={c['credits_consumed']}")
+        print(f"    DB已记录: pass={c['pass_spent']}, processing={c['processing_spent']}, 合计={c['accounted']}")
+        print(f"    丢失积分(需补偿)={c['diff']}")
+        total_compensate += c["diff"]
     
-    print(f"\nTotal compensation: {total_cost} credits for {len(compensate_list)} users")
-
+    print(f"\nTotal credits to compensate: {total_compensate}")
+    
     if not compensate_list:
         print("No compensation needed!")
         conn.close()
         users_conn.close()
         return
-
-    # Check --apply flag
+    
+    # Check if --apply flag is provided
+    import sys
     if "--apply" not in sys.argv:
-        print(f"\n⚠️  DRY RUN — 预览模式，未执行任何修改")
-        print(f"   确认无误后运行: python3 /app/compensate_credits.py --apply")
+        print(f"\n⚠️  DRY RUN — 以上为预览，未执行任何修改")
+        print(f"   确认无误后，运行: python3 /app/compensate_credits.py --apply")
         conn.close()
         users_conn.close()
         return
-
-    # Apply compensation
-    print(f"\n>>> 正在补偿 {len(compensate_list)} 个用户...")
-    done = 0
+    
+    print(f"\n>>> Applying compensation to {len(compensate_list)} users...")
+    compensated = 0
     for c in compensate_list:
         uid = c["user_id"]
-        amt = c["compensate"]
-        cur = users_conn.execute("SELECT credits FROM users WHERE id = ?", (uid,)).fetchone()
-        if cur:
-            new_val = round(float(cur["credits"] or 0) + amt, 2)
-            users_conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_val, uid))
-            done += 1
-            print(f"  ✅ user:{uid} ({c['email']}): {cur['credits']} + {amt} = {new_val}")
+        diff = c["diff"]
+        current = users_conn.execute("SELECT credits FROM users WHERE id = ?", (uid,)).fetchone()
+        if current:
+            new_credits = round(float(current["credits"] or 0) + diff, 2)
+            users_conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, uid))
+            compensated += 1
+            print(f"  ✅ user:{uid} ({c['email']}): {current['credits']} + {diff} = {new_credits}")
     
     users_conn.commit()
-    print(f"\n完成! 补偿了 {done} 个用户，共 {total_cost} 积分")
+    print(f"\nCompensated {compensated} users, total {total_compensate} credits")
     
     conn.close()
     users_conn.close()
+    print("Done!")
 
 
 if __name__ == "__main__":

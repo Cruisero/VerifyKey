@@ -9152,6 +9152,30 @@ async def pixel_get_job(job_id: str):
         data = resp.json()
         upstream_status = data.get("status", "")
         ctx = _pixel_job_context.get(job_id) or {}
+
+        # Fallback: if no in-memory context (e.g. server restarted), recover from DB
+        if not ctx.get("user_id") and upstream_status in ("success", "failed", "cancelled"):
+            try:
+                conn = get_db()
+                row = conn.execute(
+                    "SELECT cdk, email FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+                    (job_id,)
+                ).fetchone()
+                if row:
+                    cdk_val = row["cdk"] or ""
+                    db_email = row["email"] or ""
+                    uid_from_db = 0
+                    if cdk_val.startswith("user:"):
+                        try:
+                            uid_from_db = int(cdk_val.replace("user:", ""))
+                        except ValueError:
+                            pass
+                    if uid_from_db:
+                        ctx = {"user_id": uid_from_db, "email": db_email, "cost": 0, "mode": "semi-auto"}
+                        _pixel_job_context[job_id] = ctx
+            except Exception:
+                pass
+
         cost = ctx.get("cost", 1.0)
         user_id = ctx.get("user_id")
         email = ctx.get("email", "")

@@ -6286,16 +6286,34 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                     cost = 1.5
                 elif via == "pixel_auto":
                     cost = 1.5
+                elif via == "gpt" or vid.startswith("gpt_"):
+                    cost = 1.5
+                elif via == "gpt_team":
+                    cost = 0.3
                 else:
                     cost = 1.0
 
+                # Pre-deduction model: credits are deducted at submission time.
+                # processing → pass: already deducted, do NOT deduct again
+                # processing → failed: need to REFUND the pre-deducted credits
+                # failed → pass: need to deduct (was refunded on failure)
+                # pass → failed: need to refund
                 if request.status == "pass" and old_status != "pass":
-                    auth.deduct_credits(uid, cost)
-                    credit_message = f"已扣除用户 {uid} 积分 {cost}"
+                    if old_status == "processing":
+                        # Already pre-deducted at submission, no action needed
+                        credit_message = f"用户 {uid} 提交时已预扣 {cost} 积分，无需重复扣除"
+                    else:
+                        auth.deduct_credits(uid, cost)
+                        credit_message = f"已扣除用户 {uid} 积分 {cost}"
 
                 elif request.status == "failed" and old_status == "pass":
                     auth.update_credits(uid, cost)
                     credit_message = f"已返还用户 {uid} 积分 {cost}"
+                elif request.status == "failed" and old_status == "processing":
+                    # Was pre-deducted at submission, need to refund
+                    auth.update_credits(uid, cost)
+                    credit_message = f"已返还用户 {uid} 预扣积分 {cost}"
+
             except Exception as e:
                 credit_message = f"积分操作失败: {e}"
         else:
@@ -6478,16 +6496,28 @@ async def override_verification_by_vid(request: VidOverrideRequest):
                     cost = 1.5
                 elif via == "pixel_auto":
                     cost = 1.5
+                elif via == "gpt" or vid_str.startswith("gpt_"):
+                    cost = 1.5
+                elif via == "gpt_team":
+                    cost = 0.3
                 else:
                     cost = 1.0
 
+                # Pre-deduction model: credits are deducted at submission time.
                 if request.status == "pass" and old_status != "pass":
-                    auth.deduct_credits(uid, cost)
+                    if old_status == "processing":
+                        credit_message = f"用户 {uid} 提交时已预扣 {cost} 积分，无需重复扣除"
+                    else:
+                        auth.deduct_credits(uid, cost)
+                        credit_message = f"已扣除用户 {uid} 积分 {cost}"
 
-                    credit_message = f"已扣除用户 {uid} 积分 {cost}"
                 elif request.status == "failed" and old_status == "pass":
                     auth.update_credits(uid, cost)
                     credit_message = f"已返还用户 {uid} 积分 {cost}"
+                elif request.status == "failed" and old_status == "processing":
+                    auth.update_credits(uid, cost)
+                    credit_message = f"已返还用户 {uid} 预扣积分 {cost}"
+
             except Exception as e:
                 credit_message = f"积分操作失败: {e}"
         elif cdk_field and cdk_field != "__BOT_INTERNAL__":
@@ -12744,6 +12774,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
             "message": "✅ Team 邀请已发送",
             "teamId": int(team["id"]),
             "teamName": team_row["team_name"] or "",
+            "creditCost": GPT_TEAM_INVITE_COST,
             **event_meta,
         })
         return {

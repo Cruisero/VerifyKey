@@ -9069,13 +9069,18 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
                 **event_meta,
             })
         else:
-            # Still queued/running — leave in pending tasks, frontend GET endpoint will finalize when ready
-            logging.info(f"[Pixel] Restart recovery: {task_id} still {status}, leaving as pending")
+            # Still queued/running — remove from in-memory context so the periodic sweep
+            # can pick it up and finalize when upstream completes.
+            # Previously we left context intact, but the sweep skips jobs with context
+            # assuming frontend is actively polling — which is not true after a restart.
+            _pixel_job_context.pop(task_id, None)
+            logging.info(f"[Pixel] Restart recovery: {task_id} still {status}, removed context so sweep can track it")
     except Exception as e:
         logging.warning(f"[Pixel] Restart recovery error for {task_id}: {e}")
     finally:
-        if task_id not in _pixel_job_context:
-            _pixel_job_context.pop(task_id, None)
+        # For success/failed cases, context was already popped above or never set.
+        # No action needed here.
+        pass
 
 
 

@@ -6610,7 +6610,7 @@ export default function Admin() {
                                             {userHistory.map(item => {
                                                 const isPass = item.status === 'pass';
                                                 const isFailed = item.status === 'failed';
-                                                const badgeBg = item.type === 'gpt' ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : '#059669');
+                                                const badgeBg = (item.via === 'gpt' || item.type === 'gpt') ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : item.via === 'pixel_auto' ? '#ea580c' : '#059669');
                                                 return (
                                                     <div key={item.id} style={{
                                                         border: '1px solid var(--border-primary)',
@@ -6622,7 +6622,7 @@ export default function Admin() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                                 <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.verificationId || item.id}</span>
                                                                 <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', background: badgeBg, color: '#fff', fontWeight: 600 }}>
-                                                                    {(item.type || item.via || 'task').toUpperCase()}
+                                                                    {(item.via || item.type || 'task').toUpperCase()}
                                                                 </span>
                                                                 <span style={{ fontSize: '12px', color: isPass ? '#16a34a' : isFailed ? '#dc2626' : '#64748b', fontWeight: 600 }}>
                                                                     {isPass ? '成功' : isFailed ? '失败' : item.status}

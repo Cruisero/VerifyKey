@@ -9531,7 +9531,15 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                 elif upstream_status == "failed":
                     error = data.get("error", "UNKNOWN_ERROR")
-                    results.append({"vid": vid, "email": email, "action": "confirmed_failed", "error": error})
+                    result_msg = data.get("result_msg", "")
+                    display_error = result_msg if result_msg else error
+                    # Update DB record with real error (replace misleading timeout message)
+                    conn.execute(
+                        "UPDATE verification_history SET message = ? WHERE verification_id = ? AND status = 'failed'",
+                        (f"失败: {display_error}", vid)
+                    )
+                    conn.commit()
+                    results.append({"vid": vid, "email": email, "action": "confirmed_failed", "error": error, "updated": True})
 
                 elif upstream_status in ("queued", "running"):
                     # Still active! Restore job context so GET endpoint can pick it up

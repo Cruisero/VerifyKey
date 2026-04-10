@@ -543,6 +543,16 @@ def broadcast_verify_event(event: dict):
         if event.get("step") == "result":
             final_status = "pass" if event.get("success") else (event.get("status") or "failed")
             _remember_terminal_verify_event(vid, final_status)
+            # Auto-inject creditCost for successful events if not already set
+            if event.get("success") and "creditCost" not in event:
+                _source = event.get("source", "")
+                _COST_BY_SOURCE = {
+                    "pixel": 1.0, "pixel_auto": 1.5,
+                    "kpixel": 1.5, "vpixel": 1.5, "ypixel": 1.0,
+                    "gpt": 1.5,
+                }
+                if _source in _COST_BY_SOURCE:
+                    event["creditCost"] = _COST_BY_SOURCE[_source]
     elif event.get("type") == "done":
         for result in event.get("results", []) or []:
             vid = result.get("verificationId") or result.get("vid") or ""

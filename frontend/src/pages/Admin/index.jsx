@@ -137,6 +137,7 @@ function TelegramBotTab() {
                             message: data.message || '',
                             vid: data.vid || '',
                             via: data.via || data.botType || data.source || '',
+                            creditCost: data.creditCost || (existingIdx >= 0 ? prev[existingIdx].creditCost : null),
                             timestamp: new Date().toISOString()
                         };
 
@@ -433,6 +434,13 @@ function TelegramBotTab() {
                                         {vid && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>🔑 @{r.username || r.user_id}</div>}
                                         {shortLink && <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', wordBreak: 'break-all' }}>{shortLink}</div>}
                                         {r.message && <div style={{ fontSize: '13px', fontWeight: 600, color: cfg.color, marginTop: '3px', wordBreak: 'break-all' }}>{r.message}</div>}
+                                        {isPass && r.creditCost > 0 && (
+                                            <span style={{
+                                                display: 'inline-block', marginTop: '4px',
+                                                fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
+                                                background: 'rgba(220, 38, 38, 0.08)', color: '#dc2626',
+                                            }}>💰 扣除 {r.creditCost} 积分</span>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -1078,6 +1086,15 @@ function LiveTaskMonitor() {
                                             onClick={() => navigator.clipboard.writeText(t.url)}
                                         >📋</button>
                                     </div>
+                                )}
+
+                                {/* Credit Cost */}
+                                {isSuccess && t.creditCost > 0 && (
+                                    <span style={{
+                                        display: 'inline-block', marginTop: '4px',
+                                        fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
+                                        background: 'rgba(220, 38, 38, 0.08)', color: '#dc2626',
+                                    }}>💰 扣除 {t.creditCost} 积分</span>
                                 )}
 
                                 {/* Private Info (parenthesized) */}
@@ -3205,6 +3222,7 @@ function PixelApiTab() {
                         timestamp: new Date().toISOString(),
                         source: data.source || 'pixel',
                         channel: data.channel || (existingIdx >= 0 ? prev[existingIdx].channel : ''),
+                        creditCost: data.creditCost || (existingIdx >= 0 ? prev[existingIdx].creditCost : null),
                     };
 
                     if (existingIdx >= 0) {
@@ -3703,6 +3721,14 @@ function PixelApiTab() {
                                                     title="复制链接"
                                                 >📋</button>
                                             </div>
+                                        )}
+                                        {/* Credit Cost */}
+                                        {job.status === 'success' && job.creditCost > 0 && (
+                                            <span style={{
+                                                display: 'inline-block', marginTop: '4px',
+                                                fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
+                                                background: 'rgba(220, 38, 38, 0.08)', color: '#dc2626',
+                                            }}>💰 扣除 {job.creditCost} 积分</span>
                                         )}
                                         {/* Job ID */}
                                         <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
@@ -5020,6 +5046,7 @@ export default function Admin() {
                             httpStatus: data.httpStatus || (existingIdx >= 0 ? prev[existingIdx].httpStatus : ''),
                             upstreamStatus: data.upstreamStatus || (existingIdx >= 0 ? prev[existingIdx].upstreamStatus : ''),
                             refunded: typeof data.refunded === 'boolean' ? data.refunded : (existingIdx >= 0 ? prev[existingIdx].refunded : false),
+                            creditCost: data.creditCost || (existingIdx >= 0 ? prev[existingIdx].creditCost : null),
                         };
                         if (existingIdx >= 0) {
                             const newLog = [...prev];

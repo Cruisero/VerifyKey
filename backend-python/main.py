@@ -8820,7 +8820,7 @@ async def _pixel_job_sweep():
                             f"{base_url}/api/jobs/{vid}",
                             headers={"X-API-Key": api_key},
                         )
-                    sse_source = "pixel_auto" if "auto" in (row.get("via") or "") else "pixel"
+                    sse_source = "pixel_auto" if "auto" in (row["via"] or "") else "pixel"
                     if resp.status_code in (404, 502, 503):
                         # Upstream lost this job — mark failed and refund
                         sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0

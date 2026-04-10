@@ -1699,9 +1699,21 @@ export default function Verify() {
                                                                     </div>
                                                                 );
                                                             })() : result.status === 'processing' ? (
-                                                                <span className="result-message">
-                                                                    {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
-                                                                </span>
+                                                                <div className="result-message-row">
+                                                                    <span className="result-message">
+                                                                        {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
+                                                                    </span>
+                                                                    {result.jobId && (result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted')) && (
+                                                                        <button
+                                                                            className="cancel-job-btn"
+                                                                            onClick={() => handleCancelJob(result.jobId, result.id)}
+                                                                            disabled={cancellingJobs.has(result.jobId)}
+                                                                            title={t('cancelJob')}
+                                                                        >
+                                                                            {cancellingJobs.has(result.jobId) ? t('cancelling') : t('cancelJob')}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             ) : null}
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
@@ -1732,19 +1744,6 @@ export default function Verify() {
                                                             )}
                                                         </div>
                                                         <div className="result-meta">
-                                                            {result.status === 'processing' && result.jobId && (() => {
-                                                                const isQueuedItem = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted');
-                                                                return isQueuedItem ? (
-                                                                    <button
-                                                                        className="cancel-job-btn"
-                                                                        onClick={() => handleCancelJob(result.jobId, result.id)}
-                                                                        disabled={cancellingJobs.has(result.jobId)}
-                                                                        title={t('cancelJob')}
-                                                                    >
-                                                                        {cancellingJobs.has(result.jobId) ? t('cancelling') : t('cancelJob')}
-                                                                    </button>
-                                                                ) : null;
-                                                            })()}
                                                             {result.elapsed > 0 && (
                                                                 <span className="result-elapsed">{result.elapsed}s</span>
                                                             )}

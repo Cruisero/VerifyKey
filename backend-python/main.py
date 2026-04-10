@@ -9234,8 +9234,7 @@ async def pixel_get_job(job_id: str):
             stage_label = data.get("stage_label", "")
             if upstream_status == "queued":
                 if queue_pos >= 0:
-                    wait_str = f"，预计等待 {estimated_wait // 60}分钟" if estimated_wait > 60 else (f"，预计等待 {estimated_wait}秒" if estimated_wait > 0 else "")
-                    msg = f"⏳ 排队中 (前方 {queue_pos} 个任务{wait_str})"
+                    msg = f"⏳ 排队中 (前方 {queue_pos} 个任务)"
                 else:
                     msg = "⏳ 排队中..."
             else:

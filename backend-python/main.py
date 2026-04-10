@@ -8774,7 +8774,7 @@ async def _pixel_job_sweep():
 
             conn = database.get_connection()
             rows = conn.execute(
-                "SELECT verification_id, cdk, email, via FROM verification_history "
+                "SELECT verification_id, cdk, email, via, timestamp FROM verification_history "
                 "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto') "
                 "ORDER BY rowid DESC LIMIT 200"
             ).fetchall()
@@ -8804,6 +8804,16 @@ async def _pixel_job_sweep():
                 if not user_id:
                     continue
 
+                # Check if task has been processing too long (2 hours)
+                task_age_hours = 0
+                try:
+                    ts = row["timestamp"] if "timestamp" in row.keys() else ""
+                    if ts:
+                        created = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        task_age_hours = (datetime.now(created.tzinfo) - created).total_seconds() / 3600
+                except Exception:
+                    pass
+
                 try:
                     async with httpx.AsyncClient(timeout=15) as client:
                         resp = await client.get(
@@ -8832,6 +8842,7 @@ async def _pixel_job_sweep():
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
+                        logging.info(f"[PixelSweep] Finalized SUCCESS for {vid} (user {user_id})")
                     elif upstream_status in ("failed", "cancelled"):
                         err = data.get("error", "UNKNOWN_ERROR")
                         rm = data.get("result_msg", "")
@@ -8841,7 +8852,16 @@ async def _pixel_job_sweep():
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
-                    # queued/running — leave for next sweep
+                        logging.info(f"[PixelSweep] Finalized FAILED for {vid} (user {user_id})")
+                    elif task_age_hours >= 2:
+                        # Task stuck for over 2 hours — force fail and refund
+                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
+                        _finalize_user_failure(vid, user_id, "失败: 任务超时（超过2小时）", via=sse_source, refund_cost=sweep_cost, email=email)
+                        _complete_async_task("pixel", vid)
+                        _pixel_job_context.pop(vid, None)
+                        finalized_count += 1
+                        logging.warning(f"[PixelSweep] Force-failed TIMEOUT for {vid} (user {user_id}, age={task_age_hours:.1f}h)")
+                    # else: queued/running and < 2h — leave for next sweep
 
                 except Exception as e:
                     logging.debug(f"[PixelSweep] Error checking {vid}: {e}")
@@ -9465,6 +9485,29 @@ async def pixel_get_job(job_id: str):
                 "message": msg,
                 **event_meta,
             })
+
+        # Safety net: if upstream reached terminal state but user_id was not available,
+        # at least update verification_history so the task doesn't stay stuck in 'processing' forever
+        if upstream_status in ("success", "failed", "cancelled") and not user_id:
+            logging.warning(f"[Pixel] GET auto-finalize: upstream={upstream_status} but no user_id for {job_id}, updating DB directly")
+            try:
+                conn = database.get_connection()
+                if upstream_status == "success":
+                    url = data.get("url", "")
+                    conn.execute(
+                        "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ? AND status = 'processing'",
+                        (f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", job_id),
+                    )
+                else:
+                    err = data.get("error", "UNKNOWN_ERROR")
+                    conn.execute(
+                        "UPDATE verification_history SET status = 'failed', message = ? WHERE verification_id = ? AND status = 'processing'",
+                        (f"失败: {err}", job_id),
+                    )
+                conn.commit()
+                _complete_async_task("pixel", job_id)
+            except Exception as safety_err:
+                logging.error(f"[Pixel] Safety-net DB update failed for {job_id}: {safety_err}")
 
         return data
 

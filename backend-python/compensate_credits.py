@@ -26,7 +26,8 @@ DB_PATH = "/app/data/onepass.db"
 USERS_DB_PATH = "/app/data/verifykey.db"
 
 # Beijing 12:00 = UTC 04:00 on 2026-04-10
-CUTOFF_UTC = "2026-04-10T04:00:00"
+CUTOFF_UTC_T = "2026-04-10T04:00:00"      # Python isoformat (CDK last_used_at)
+CUTOFF_UTC_SPACE = "2026-04-10 04:00:00"   # SQLite CURRENT_TIMESTAMP (users.created_at)
 
 
 def main():
@@ -47,26 +48,28 @@ def main():
     ).fetchall()
     cdk_earned = {r["redeemed_by"]: r["total"] for r in cdk_rows}
 
-    # Filter: only users who registered after cutoff AND redeemed CDK after cutoff
+    # Filter: users who registered after cutoff AND redeemed CDK after cutoff
     cdk_after_cutoff = conn.execute(
         "SELECT DISTINCT redeemed_by FROM cdkeys WHERE redeemed_by IS NOT NULL AND last_used_at >= ?",
-        (CUTOFF_UTC,)
+        (CUTOFF_UTC_T,)
     ).fetchall()
     cdk_active_ids = {r["redeemed_by"] for r in cdk_after_cutoff}
 
-    # Users registered after cutoff
+    # Users registered after cutoff (SQLite uses space format)
     registered_after_ids = set()
     for u in all_users:
-        created = u["created_at"] or ""
-        if created >= CUTOFF_UTC:
+        created = (u["created_at"] or "").replace("T", " ")  # normalize
+        if created >= CUTOFF_UTC_SPACE:
             registered_after_ids.add(u["id"])
 
-    # Must satisfy BOTH conditions
+    # Must satisfy BOTH: registered after cutoff AND redeemed CDK after cutoff
     active_user_ids = cdk_active_ids & registered_after_ids
 
     # Filter to only these users
     users = [u for u in all_users if u["id"] in active_user_ids]
-    print(f"Users registered AND redeemed CDK after {CUTOFF_UTC} (Beijing 12:00): {len(users)}")
+    print(f"Registered after cutoff: {len(registered_after_ids)}")
+    print(f"Redeemed CDK after cutoff: {len(cdk_active_ids)}")
+    print(f"Both (registered AND redeemed): {len(users)}")
     print(f"Users with CDK redemptions (all time): {len(cdk_earned)}")
 
     # Step 3: Get invitation rewards per user (inviter gets 0.2 per invitee)

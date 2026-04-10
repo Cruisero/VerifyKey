@@ -9109,10 +9109,19 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     event_meta = _build_verify_event_meta("gpt", email or "GPT充值", user_id, f"gpt_{channel}", card_key, channel)
     if card_key:
         _release_gpt_key(card_key)
+    # Refund pre-deducted credits
+    if user_id:
+        try:
+            auth.update_credits(user_id, GPT_RECHARGE_COST)
+            logging.info(f"[GPT] Restart recovery: refunded {GPT_RECHARGE_COST} credits to user {user_id} for {task_id}")
+        except Exception as e:
+            logging.warning(f"[GPT] Restart recovery: refund failed for user {user_id}: {e}")
+    # Persist failure to DB
+    _persist_verification_history_strict("failed", task_id, "充值任务因服务重启中断", cdk=f"user:{user_id}" if user_id else "", via="gpt")
     broadcast_verify_event({
         "type": "progress",
         "step": "result", "status": "failed", "success": False,
-        "message": "❌ 充值任务因服务重启中断，已恢复为失败",
+        "message": "❌ 充值任务因服务重启中断，积分已退还",
         "recovered": True,
         "vid": task_id,
         **event_meta,
@@ -13164,14 +13173,18 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                     method=f"gpt_{channel}",
                     http_status=resp.status_code or 400,
                     upstream_status=resp.status_code,
-                    refunded=False,
+                    refunded=True,
                     card_key=card_key,
                     channel=channel,
                 )
                 raise HTTPException(status_code=400, detail=msg)
     except HTTPException:
         # 充值失败，退还预扣积分
-        auth.update_credits(user_id, GPT_RECHARGE_COST)
+        try:
+            auth.update_credits(user_id, GPT_RECHARGE_COST)
+            logging.info(f"[GPT] Refunded {GPT_RECHARGE_COST} credits to user {user_id} for {gpt_vid}")
+        except Exception as refund_err:
+            logging.error(f"[GPT] CRITICAL: refund failed for user {user_id}, cost={GPT_RECHARGE_COST}, vid={gpt_vid}: {refund_err}")
         raise
     except Exception as e:
         if card_key:
@@ -13179,7 +13192,11 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         _complete_async_task("gpt", gpt_vid)
         failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
         # 退还预扣积分
-        auth.update_credits(user_id, GPT_RECHARGE_COST)
+        try:
+            auth.update_credits(user_id, GPT_RECHARGE_COST)
+            logging.info(f"[GPT] Refunded {GPT_RECHARGE_COST} credits to user {user_id} for {gpt_vid}")
+        except Exception as refund_err:
+            logging.error(f"[GPT] CRITICAL: refund failed for user {user_id}, cost={GPT_RECHARGE_COST}, vid={gpt_vid}: {refund_err}")
         _log_gpt_final("failed", failure_msg)
         _broadcast_submit_failure(
             "gpt",
@@ -13188,7 +13205,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
             user_id=user_id,
             method=f"gpt_{channel}",
             http_status=502,
-            refunded=False,
+            refunded=True,
             card_key=card_key,
             channel=channel,
         )

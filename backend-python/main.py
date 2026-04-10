@@ -9206,6 +9206,25 @@ async def pixel_get_job(job_id: str):
                 })
             _pixel_job_context.pop(job_id, None)
 
+        elif upstream_status == "cancelled" and user_id:
+            error = data.get("error", "MANUAL_CANCEL")
+            result = _finalize_user_failure(job_id, user_id, f"已取消: {error}", via=sse_source, refund_cost=cost, email=email)
+            _complete_async_task("pixel", job_id)
+            task = _pixel_polling_tasks.pop(job_id, None)
+            if task and not task.done():
+                task.cancel()
+            if not result.get("already_done"):
+                broadcast_verify_event({
+                    "type": "progress",
+                    "vid": job_id,
+                    "step": "result",
+                    "status": "cancelled",
+                    "success": False,
+                    "message": "🚫 任务已取消，积分已退还",
+                    **event_meta,
+                })
+            _pixel_job_context.pop(job_id, None)
+
         elif upstream_status in ("queued", "running") and event_meta:
             # Broadcast progress for admin SSE
             queue_pos = data.get("queue_position", -1)
@@ -9292,22 +9311,61 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
 
 @app.post("/api/pixel/jobs/{job_id}/cancel")
 async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(None)):
-    """Admin: cancel a stuck Pixel API polling task."""
-    _verify_admin_token(authorization)
+    """Cancel a queued Pixel job — calls upstream cancel API, refunds credits."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+
     ctx = _pixel_job_context.get(job_id) or {}
     user_id = ctx.get("user_id", 0)
     cost = ctx.get("cost", 1.0)
     email = ctx.get("email", "")
     sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
-    event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
 
-    # Cancel the asyncio polling task if running
+    # Regular users can only cancel their own jobs
+    is_admin = user.get("role") == "admin"
+    if not is_admin and user.get("id") != user_id:
+        raise HTTPException(status_code=403, detail="只能取消自己的任务")
+
+    # Call upstream cancel API
+    pixel_cfg = _get_pixel_config()
+    upstream_cancelled = False
+    upstream_error = ""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{pixel_cfg['baseUrl']}/api/jobs/{job_id}/cancel",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            upstream_cancelled = data.get("success", False)
+        else:
+            try:
+                err_data = resp.json()
+                upstream_error = err_data.get("message", f"HTTP {resp.status_code}")
+            except Exception:
+                upstream_error = f"HTTP {resp.status_code}"
+    except Exception as e:
+        upstream_error = str(e)
+
+    if not upstream_cancelled and upstream_error:
+        # If upstream says task is not cancellable (e.g. already running), return error
+        if "running" in upstream_error.lower() or "invalid_status" in upstream_error.lower():
+            raise HTTPException(status_code=409, detail=f"任务无法取消: {upstream_error}")
+
+    # Cancel local polling task if any
     task = _pixel_polling_tasks.pop(job_id, None)
     if task and not task.done():
         task.cancel()
 
     # Finalize as failed + refund
-    _finalize_user_failure(job_id, user_id, "管理员手动取消", via=sse_source, refund_cost=cost, email=email)
+    cancel_msg = "用户取消" if not is_admin else "管理员取消"
+    event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api") if user_id else {}
+    _finalize_user_failure(job_id, user_id or user.get("id", 0), f"已取消: {cancel_msg}", via=sse_source, refund_cost=cost, email=email)
     _complete_async_task("pixel", job_id)
     _pixel_job_context.pop(job_id, None)
 
@@ -9315,13 +9373,13 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
         "type": "progress",
         "vid": job_id,
         "step": "result",
-        "status": "failed",
+        "status": "cancelled",
         "success": False,
-        "message": "❌ 管理员手动取消",
+        "message": f"🚫 {cancel_msg}，积分已退还",
         "forceTerminalUpdate": True,
         **event_meta,
     })
-    return {"success": True, "cancelled": True, "job_id": job_id}
+    return {"success": True, "cancelled": True, "job_id": job_id, "refunded": True}
 
 
 @app.get("/api/pixel/health")

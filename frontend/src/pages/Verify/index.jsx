@@ -119,6 +119,9 @@ export default function Verify() {
     const standardRouteRef = useRef(null);
     const userSseRef = useRef(null);
 
+    // Cancel job state
+    const [cancellingJobs, setCancellingJobs] = useState(new Set());
+
     // Visual progress interpolation: smoothly creep between discrete stages
     const stageSnapshotRef = useRef({}); // { [resultId]: { stage, ts, fromPct } }
     const [visualProgress, setVisualProgress] = useState({}); // { [resultId]: displayPct }
@@ -532,6 +535,46 @@ export default function Verify() {
     };
 
     // Poll a job until success/failed
+    const handleCancelJob = async (jobId, resultId) => {
+        if (!jobId || cancellingJobs.has(jobId)) return;
+        if (!window.confirm(t('cancelConfirm'))) return;
+
+        setCancellingJobs(prev => new Set(prev).add(jobId));
+        try {
+            const token = getToken();
+            const resp = await fetch(`${API_BASE}/api/pixel/jobs/${jobId}/cancel`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                // Stop polling for this job
+                if (pollingRefs.current[resultId]) {
+                    clearInterval(pollingRefs.current[resultId]);
+                    delete pollingRefs.current[resultId];
+                }
+                // Update result status
+                setResults(prev => prev.map(r =>
+                    (r.id === resultId || r.jobId === jobId)
+                        ? { ...r, status: 'failed', message: `🚫 ${t('cancelSuccess')}` }
+                        : r
+                ));
+                refreshUser();
+            } else {
+                alert(data.detail || t('cancelFailed'));
+            }
+        } catch (e) {
+            console.error('Cancel job error:', e);
+            alert(t('cancelFailed'));
+        } finally {
+            setCancellingJobs(prev => {
+                const next = new Set(prev);
+                next.delete(jobId);
+                return next;
+            });
+        }
+    };
+
     const pollJob = (jobId, resultId) => {
         const intervalId = setInterval(async () => {
             try {
@@ -591,6 +634,18 @@ export default function Verify() {
                             elapsed: Math.round(elapsed),
                         } : r
                     ));
+                } else if (status === 'cancelled') {
+                    clearInterval(intervalId);
+                    delete pollingRefs.current[resultId];
+                    setResults(prev => prev.map(r =>
+                        r.id === resultId ? {
+                            ...r,
+                            status: 'failed',
+                            message: `🚫 ${t('cancelSuccess')}`,
+                            elapsed: Math.round(elapsed),
+                        } : r
+                    ));
+                    await refreshUser();
                 } else {
                     // queued or running — update progress
                     setResults(prev => prev.map(r =>
@@ -1677,6 +1732,19 @@ export default function Verify() {
                                                             )}
                                                         </div>
                                                         <div className="result-meta">
+                                                            {result.status === 'processing' && result.jobId && (() => {
+                                                                const isQueuedItem = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted');
+                                                                return isQueuedItem ? (
+                                                                    <button
+                                                                        className="cancel-job-btn"
+                                                                        onClick={() => handleCancelJob(result.jobId, result.id)}
+                                                                        disabled={cancellingJobs.has(result.jobId)}
+                                                                        title={t('cancelJob')}
+                                                                    >
+                                                                        {cancellingJobs.has(result.jobId) ? t('cancelling') : t('cancelJob')}
+                                                                    </button>
+                                                                ) : null;
+                                                            })()}
                                                             {result.elapsed > 0 && (
                                                                 <span className="result-elapsed">{result.elapsed}s</span>
                                                             )}

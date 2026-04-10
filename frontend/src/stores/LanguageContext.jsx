@@ -221,6 +221,11 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         subscribeSuccess: '✅ 订阅成功',
         processingMsg: '处理中...',
         queueWaiting: '⏳ 排队中 (位置: {pos})',
+        cancelJob: '取消任务',
+        cancelConfirm: '确定要取消此任务吗？积分将退还到账户',
+        cancelSuccess: '任务已取消，积分已退还',
+        cancelFailed: '取消失败',
+        cancelling: '取消中...',
 
         // Verify - error descriptions
         errInternalError: '系统内部错误',
@@ -583,6 +588,11 @@ Failed verification does not consume quota.`,
         subscribeSuccess: '✅ Subscribed',
         processingMsg: 'Processing...',
         queueWaiting: '⏳ In queue (position: {pos})',
+        cancelJob: 'Cancel',
+        cancelConfirm: 'Are you sure you want to cancel this job? Credits will be refunded.',
+        cancelSuccess: 'Job cancelled, credits refunded',
+        cancelFailed: 'Cancel failed',
+        cancelling: 'Cancelling...',
 
         // Verify - error descriptions
         errInternalError: 'Internal system error',

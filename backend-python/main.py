@@ -8892,7 +8892,11 @@ async def startup_pixel_sweep():
 
 
 async def _repair_timeout_failed_tasks():
-    """One-time repair: re-check tasks that were incorrectly force-failed by the old timeout logic."""
+    """One-time repair: fix tasks incorrectly force-failed by old timeout logic.
+    Handles two cases:
+    1. status='failed' + message='任务超时' → re-check upstream, fix status + deduct
+    2. status='pass' but was repaired without deduction (no '已修正扣费' marker) → deduct
+    """
     import config_manager
     await asyncio.sleep(3)
     try:
@@ -8904,22 +8908,37 @@ async def _repair_timeout_failed_tasks():
             return
 
         conn = database.get_connection()
-        rows = conn.execute(
+
+        # Case 1: Still marked as timeout-failed
+        failed_rows = conn.execute(
             "SELECT verification_id, cdk, email, via FROM verification_history "
             "WHERE status = 'failed' AND message LIKE '%任务超时%' "
             "ORDER BY rowid DESC LIMIT 500"
         ).fetchall()
 
-        if not rows:
-            print("[PixelRepair] No timeout-failed tasks to repair")
+        # Case 2: Already repaired to pass but credits not deducted (no marker)
+        # These were fixed by previous deployment without the deduct code
+        pass_rows = conn.execute(
+            "SELECT verification_id, cdk, email, via FROM verification_history "
+            "WHERE status = 'pass' AND via IN ('pixel', 'pixel_auto') "
+            "AND message LIKE '%订阅成功%' AND message NOT LIKE '%已修正扣费%' "
+            "AND timestamp > '2026-04-11T04:00:00' "
+            "ORDER BY rowid DESC LIMIT 500"
+        ).fetchall()
+
+        all_rows = list(failed_rows) + list(pass_rows)
+        if not all_rows:
+            print("[PixelRepair] No tasks to repair")
             return
 
-        print(f"[PixelRepair] Found {len(rows)} timeout-failed tasks, re-checking upstream...")
+        print(f"[PixelRepair] Found {len(failed_rows)} timeout-failed + {len(pass_rows)} pass-but-undeducted tasks")
         repaired = 0
-        for row in rows:
+        deducted = 0
+        for row in all_rows:
             vid = row["verification_id"]
             cdk_val = row["cdk"] or ""
             email = row["email"] or ""
+            current_via = row["via"] or ""
             user_id = 0
             if cdk_val.startswith("user:"):
                 try:
@@ -8928,6 +8947,9 @@ async def _repair_timeout_failed_tasks():
                     pass
             if not user_id:
                 continue
+
+            sse_source = "pixel_auto" if "auto" in current_via else "pixel"
+            sweep_cost = 1.5 if "auto" in sse_source else 1.0
 
             try:
                 async with httpx.AsyncClient(timeout=15) as client:
@@ -8940,27 +8962,25 @@ async def _repair_timeout_failed_tasks():
 
                 data = resp.json()
                 upstream_status = data.get("status", "")
-                sse_source = "pixel_auto" if "auto" in (row["via"] or "") else "pixel"
-                sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
 
                 if upstream_status == "success":
                     url = data.get("url", "")
-                    msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                    msg = f"✅ 订阅成功（已修正扣费）: {url}" if url else "✅ 订阅成功（已修正扣费）"
                     conn2 = database.get_connection()
                     conn2.execute(
-                        "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ? AND status = 'failed'",
+                        "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ?",
                         (msg, vid),
                     )
                     conn2.commit()
-                    # Re-deduct credits (they were wrongly refunded by the old timeout logic)
+                    # Deduct credits
                     try:
                         auth.deduct_credits(user_id, sweep_cost)
-                        logging.info(f"[PixelRepair] Re-deducted {sweep_cost} credits from user {user_id} for {vid}")
+                        deducted += 1
+                        logging.info(f"[PixelRepair] Deducted {sweep_cost} from user {user_id} for {vid}")
                     except Exception as deduct_err:
-                        logging.warning(f"[PixelRepair] Failed to re-deduct credits for user {user_id}: {deduct_err}")
+                        logging.warning(f"[PixelRepair] Deduct failed for user {user_id}: {deduct_err}")
                     repaired += 1
                     logging.info(f"[PixelRepair] Repaired {vid} -> SUCCESS (user {user_id})")
-                    # Broadcast SSE update
                     event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
                     broadcast_verify_event({
                         "type": "progress", "vid": vid, "step": "result",
@@ -8969,13 +8989,12 @@ async def _repair_timeout_failed_tasks():
                         "url": url, "recovered": True,
                         **event_meta,
                     })
-                # If upstream is truly failed/cancelled, leave as-is (already failed)
             except Exception as e:
                 logging.debug(f"[PixelRepair] Error re-checking {vid}: {e}")
 
             await asyncio.sleep(0.3)
 
-        print(f"[PixelRepair] Repaired {repaired} out of {len(rows)} timeout-failed tasks")
+        print(f"[PixelRepair] Done: repaired={repaired}, deducted={deducted}")
     except Exception as e:
         logging.warning(f"[PixelRepair] Repair error: {e}")
 

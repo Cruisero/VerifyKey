@@ -121,6 +121,7 @@ export default function Verify() {
 
     // Cancel job state
     const [cancellingJobs, setCancellingJobs] = useState(new Set());
+    const [cancelConfirmData, setCancelConfirmData] = useState(null); // { jobId, resultId, email }
 
     // Visual progress interpolation: smoothly creep between discrete stages
     const stageSnapshotRef = useRef({}); // { [resultId]: { stage, ts, fromPct } }
@@ -537,7 +538,15 @@ export default function Verify() {
     // Poll a job until success/failed
     const handleCancelJob = async (jobId, resultId) => {
         if (!jobId || cancellingJobs.has(jobId)) return;
-        if (!window.confirm(t('cancelConfirm'))) return;
+        // Find the email for this result to show in the confirm dialog
+        const targetResult = results.find(r => r.id === resultId || r.jobId === jobId);
+        setCancelConfirmData({ jobId, resultId, email: targetResult?.email || '' });
+    };
+
+    const executeCancelJob = async () => {
+        if (!cancelConfirmData) return;
+        const { jobId, resultId } = cancelConfirmData;
+        setCancelConfirmData(null);
 
         setCancellingJobs(prev => new Set(prev).add(jobId));
         try {
@@ -1134,6 +1143,7 @@ export default function Verify() {
     }, [results]);
 
     return (
+        <>
         <div className="verify-page">
             <ConfettiBurst origin={confettiOrigin} trigger={confettiTrigger} duration={3200} />
             <div className="container">
@@ -2266,5 +2276,34 @@ export default function Verify() {
                 </div>
             </div>
         </div>
+
+            {/* Cancel Confirm Modal */}
+            {cancelConfirmData && (
+                <div className="cancel-confirm-overlay" onClick={() => setCancelConfirmData(null)}>
+                    <div className="cancel-confirm-modal" onClick={e => e.stopPropagation()}>
+                        <div className="cancel-confirm-icon">
+                            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </div>
+                        <h3 className="cancel-confirm-title">{t('cancelJob')}</h3>
+                        {cancelConfirmData.email && (
+                            <div className="cancel-confirm-email">{maskEmail(cancelConfirmData.email)}</div>
+                        )}
+                        <p className="cancel-confirm-desc">{t('cancelConfirm')}</p>
+                        <div className="cancel-confirm-actions">
+                            <button className="cancel-confirm-btn cancel-confirm-no" onClick={() => setCancelConfirmData(null)}>
+                                {lang === 'en' ? 'Keep Waiting' : '继续等待'}
+                            </button>
+                            <button className="cancel-confirm-btn cancel-confirm-yes" onClick={executeCancelJob}>
+                                {lang === 'en' ? 'Cancel Job' : '确认取消'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }

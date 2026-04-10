@@ -8699,6 +8699,111 @@ _vpixel_job_context: dict = {}
 _ypixel_job_context: dict = {}
 
 
+# ========== Pixel Job Sweep (server-side safety net) ==========
+
+async def _pixel_job_sweep():
+    """
+    Periodic sweep: every 5 minutes, find all 'processing' pixel jobs
+    and check their upstream status. Auto-finalize any that reached a
+    terminal state. This is the safety net for when users close their
+    browser before a job completes.
+    """
+    import config_manager
+    await asyncio.sleep(30)  # Wait for server to fully start
+    print("[PixelSweep] Background job sweep started (every 5 min)")
+
+    while True:
+        try:
+            cfg = config_manager.load_config()
+            pixel = cfg.get("pixelApi", {})
+            api_key = pixel.get("apiKey", "")
+            base_url = pixel.get("baseUrl", "https://iqless.icu")
+
+            if not api_key:
+                await asyncio.sleep(300)
+                continue
+
+            conn = database.get_connection()
+            rows = conn.execute(
+                "SELECT verification_id, cdk, email FROM verification_history "
+                "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto') "
+                "ORDER BY rowid DESC LIMIT 200"
+            ).fetchall()
+
+            if not rows:
+                await asyncio.sleep(300)
+                continue
+
+            finalized_count = 0
+            for row in rows:
+                vid = row["verification_id"]
+                if not vid:
+                    continue
+
+                # Skip if frontend is actively polling (context exists)
+                if _pixel_job_context.get(vid):
+                    continue
+
+                cdk_val = row["cdk"] or ""
+                email = row["email"] or ""
+                user_id = 0
+                if cdk_val.startswith("user:"):
+                    try:
+                        user_id = int(cdk_val.replace("user:", ""))
+                    except ValueError:
+                        pass
+                if not user_id:
+                    continue
+
+                try:
+                    async with httpx.AsyncClient(timeout=15) as client:
+                        resp = await client.get(
+                            f"{base_url}/api/jobs/{vid}",
+                            headers={"X-API-Key": api_key},
+                        )
+                    if resp.status_code != 200:
+                        continue
+
+                    data = resp.json()
+                    upstream_status = data.get("status", "")
+                    sse_source = "pixel_auto" if "auto" in (row.get("via") or "") else "pixel"
+
+                    if upstream_status == "success":
+                        url = data.get("url", "")
+                        _finalize_user_success(vid, user_id, 0, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
+                        _complete_async_task("pixel", vid)
+                        _pixel_job_context.pop(vid, None)
+                        finalized_count += 1
+                    elif upstream_status in ("failed", "cancelled"):
+                        err = data.get("error", "UNKNOWN_ERROR")
+                        rm = data.get("result_msg", "")
+                        disp = rm if rm else err
+                        _finalize_user_failure(vid, user_id, f"失败: {disp}", via=sse_source, refund_cost=0, email=email)
+                        _complete_async_task("pixel", vid)
+                        _pixel_job_context.pop(vid, None)
+                        finalized_count += 1
+                    # queued/running — leave for next sweep
+
+                except Exception as e:
+                    logging.debug(f"[PixelSweep] Error checking {vid}: {e}")
+                    continue
+
+                await asyncio.sleep(0.5)  # Rate limit upstream calls
+
+            if finalized_count > 0:
+                print(f"[PixelSweep] Finalized {finalized_count} orphaned jobs out of {len(rows)} processing")
+
+        except Exception as e:
+            logging.warning(f"[PixelSweep] Sweep error: {e}")
+
+        await asyncio.sleep(300)  # Every 5 minutes
+
+
+@app.on_event("startup")
+async def startup_pixel_sweep():
+    asyncio.create_task(_pixel_job_sweep())
+
+
 def _get_pixel_config():
     """Get Pixel API config from config_manager."""
     import config_manager

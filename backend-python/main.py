@@ -9541,7 +9541,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
                     results.append({"vid": vid, "email": email, "action": "confirmed_failed", "error": error, "updated": True})
 
                 elif upstream_status in ("queued", "running"):
-                    # Still active! Restore job context so GET endpoint can pick it up
+                    # Still active — spawn background poller to track to completion
                     cdk = conn.execute("SELECT cdk FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1", (vid,)).fetchone()
                     cdk_val = cdk["cdk"] if cdk else ""
                     user_id = 0
@@ -9552,15 +9552,79 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
                             pass
 
                     if user_id:
-                        # Restore context and revert status to processing
+                        # Restore context
                         _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": 0, "mode": "semi-auto"}
                         conn.execute(
-                            "UPDATE verification_history SET status = 'processing', message = '⏳ 已恢复，等待上游完成...' WHERE verification_id = ? AND status = 'failed'",
+                            "UPDATE verification_history SET status = 'processing', message = '⏳ 已恢复，正在查询上游...' WHERE verification_id = ? AND status = 'failed'",
                             (vid,)
                         )
                         conn.commit()
+
+                        # Spawn background poller for this job
+                        async def _recovery_poll(job_id, api_key, base_url):
+                            """Poll upstream every 15s until terminal state, then finalize."""
+                            import asyncio
+                            max_attempts = 240  # 240 × 15s = 1 hour max
+                            for attempt in range(max_attempts):
+                                await asyncio.sleep(15)
+                                try:
+                                    ctx = _pixel_job_context.get(job_id)
+                                    if not ctx:
+                                        return  # Already finalized by another path (e.g. frontend GET)
+                                    async with httpx.AsyncClient(timeout=15) as c:
+                                        r = await c.get(
+                                            f"{base_url}/api/jobs/{job_id}",
+                                            headers={"X-API-Key": api_key},
+                                        )
+                                    if r.status_code != 200:
+                                        continue
+                                    d = r.json()
+                                    st = d.get("status", "")
+                                    uid = ctx.get("user_id")
+                                    cost = ctx.get("cost", 0)
+                                    em = ctx.get("email", "")
+                                    sse_src = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+                                    evt_meta = _build_verify_event_meta(sse_src, em, uid, "pixel_api") if uid else {}
+
+                                    if st == "success":
+                                        url = d.get("url", "")
+                                        result = _finalize_user_success(job_id, uid, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_src, email=em)
+                                        _complete_async_task("pixel", job_id)
+                                        if not result.get("already_done"):
+                                            broadcast_verify_event({"type": "progress", "vid": job_id, "step": "result", "status": "approved", "success": True, "message": "✅ 获取成功（恢复确认）", "url": url, **evt_meta})
+                                        _pixel_job_context.pop(job_id, None)
+                                        return
+                                    elif st in ("failed", "cancelled"):
+                                        err = d.get("error", "UNKNOWN_ERROR")
+                                        rm = d.get("result_msg", "")
+                                        disp = rm if rm else err
+                                        _finalize_user_failure(job_id, uid, f"失败: {disp}", via=sse_src, refund_cost=cost, email=em)
+                                        _complete_async_task("pixel", job_id)
+                                        broadcast_verify_event({"type": "progress", "vid": job_id, "step": "result", "status": "failed", "success": False, "message": f"❌ {disp}", **evt_meta})
+                                        _pixel_job_context.pop(job_id, None)
+                                        return
+                                    # Still queued/running — broadcast progress
+                                    qp = d.get("queue_position", -1)
+                                    stg = d.get("stage", 0)
+                                    ts = d.get("total_stages", 6)
+                                    if st == "queued" and qp >= 0:
+                                        msg = f"⏳ 排队中 (前方 {qp} 个任务)"
+                                    elif st == "running":
+                                        pct = min(round((stg / ts) * 100), 99) if ts > 0 else 0
+                                        msg = f"🔄 {pct}%"
+                                    else:
+                                        msg = "⏳ 排队中..."
+                                    if evt_meta:
+                                        broadcast_verify_event({"type": "progress", "vid": job_id, "step": "processing", "status": st, "message": msg, **evt_meta})
+                                except Exception as poll_err:
+                                    print(f"[Recovery Poll] {job_id} error: {poll_err}")
+                                    continue
+                            # Timed out after 1 hour of polling
+                            _pixel_job_context.pop(job_id, None)
+
+                        asyncio.create_task(_recovery_poll(vid, pixel_cfg["apiKey"], pixel_cfg["baseUrl"]))
                         recovered += 1
-                        results.append({"vid": vid, "email": email, "action": "restored_active", "upstream_status": upstream_status})
+                        results.append({"vid": vid, "email": email, "action": "restored_polling", "upstream_status": upstream_status})
                     else:
                         results.append({"vid": vid, "email": email, "action": "skip_active_no_user", "upstream_status": upstream_status})
                 else:

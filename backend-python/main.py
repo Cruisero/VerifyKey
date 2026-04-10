@@ -8770,7 +8770,8 @@ async def _pixel_job_sweep():
 
                     if upstream_status == "success":
                         url = data.get("url", "")
-                        _finalize_user_success(vid, user_id, 0, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
+                        sweep_cost = pixel.get("creditCost", 1.0)
+                        _finalize_user_success(vid, user_id, sweep_cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
@@ -9276,7 +9277,7 @@ async def pixel_get_job(job_id: str):
                         except ValueError:
                             pass
                     if uid_from_db:
-                        ctx = {"user_id": uid_from_db, "email": db_email, "cost": 0, "mode": "semi-auto"}
+                        ctx = {"user_id": uid_from_db, "email": db_email, "cost": pixel_cfg.get("creditCost", 1.0), "mode": "semi-auto"}
                         _pixel_job_context[job_id] = ctx
             except Exception:
                 pass
@@ -9682,7 +9683,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                     if user_id:
                         # Restore context
-                        _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": 0, "mode": "semi-auto"}
+                        _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": pixel_cfg.get("creditCost", 1.0), "mode": "semi-auto"}
                         conn.execute(
                             "UPDATE verification_history SET status = 'processing', message = '⏳ 已恢复，正在查询上游...' WHERE verification_id = ? AND status = 'failed'",
                             (vid,)

@@ -8725,7 +8725,7 @@ async def _pixel_job_sweep():
 
             conn = database.get_connection()
             rows = conn.execute(
-                "SELECT verification_id, cdk, email FROM verification_history "
+                "SELECT verification_id, cdk, email, via FROM verification_history "
                 "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto') "
                 "ORDER BY rowid DESC LIMIT 200"
             ).fetchall()
@@ -8770,7 +8770,7 @@ async def _pixel_job_sweep():
 
                     if upstream_status == "success":
                         url = data.get("url", "")
-                        sweep_cost = pixel.get("creditCost", 1.0)
+                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
                         _finalize_user_success(vid, user_id, sweep_cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
@@ -9264,7 +9264,7 @@ async def pixel_get_job(job_id: str):
             try:
                 conn = database.get_connection()
                 row = conn.execute(
-                    "SELECT cdk, email FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+                    "SELECT cdk, email, via FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
                     (job_id,)
                 ).fetchone()
                 if row:
@@ -9277,7 +9277,10 @@ async def pixel_get_job(job_id: str):
                         except ValueError:
                             pass
                     if uid_from_db:
-                        ctx = {"user_id": uid_from_db, "email": db_email, "cost": pixel_cfg.get("creditCost", 1.0), "mode": "semi-auto"}
+                        # Determine cost by via/mode: pixel_auto=1.5, pixel=1.0
+                        row_via = row["via"] if "via" in row.keys() else ""
+                        recover_cost = 1.5 if "auto" in (row_via or "") else 1.0
+                        ctx = {"user_id": uid_from_db, "email": db_email, "cost": recover_cost, "mode": "auto" if "auto" in (row_via or "") else "semi-auto"}
                         _pixel_job_context[job_id] = ctx
             except Exception:
                 pass
@@ -9683,7 +9686,8 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                     if user_id:
                         # Restore context
-                        _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": pixel_cfg.get("creditCost", 1.0), "mode": "semi-auto"}
+                        recover_cost = 1.5 if "auto" in (row.get("via") or "") else 1.0
+                        _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": recover_cost, "mode": "auto" if "auto" in (row.get("via") or "") else "semi-auto"}
                         conn.execute(
                             "UPDATE verification_history SET status = 'processing', message = '⏳ 已恢复，正在查询上游...' WHERE verification_id = ? AND status = 'failed'",
                             (vid,)

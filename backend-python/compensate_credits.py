@@ -155,7 +155,7 @@ def main():
     print(f"Users with processing records: {len(user_processing_spent)}")
 
     # Step 5: Calculate expected vs actual balance
-    REGISTRATION_BONUS = 1.5
+    REGISTRATION_BONUS = 0  # Registration gives 0 credits; all credits come from CDK
 
     compensate_list = []
     

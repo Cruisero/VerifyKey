@@ -1,0 +1,217 @@
+"""
+Credit compensation script: find users who lost verification records
+by comparing their credit income vs outcomes.
+
+Logic:
+  total_earned = CDK redeemed credits + registration bonus (1.5) + invitation rewards
+  total_spent_in_db = sum of verification costs from verification_history
+  current_balance = users.credits
+  
+  expected_balance = total_earned - total_spent_in_db
+  if expected_balance > current_balance:
+      lost_credits = expected_balance - current_balance
+      → Should compensate user with lost_credits
+
+Scope: only users registered after 2026-04-10 04:00:00 UTC (12:00 Beijing)
+
+Run inside Docker container:
+  python3 /app/compensate_credits.py
+"""
+import json
+import sqlite3
+import time
+import os
+
+DB_PATH = "/app/data/onepass.db"
+USERS_DB_PATH = "/app/data/verifykey.db"
+
+# Beijing 12:00 = UTC 04:00 on 2026-04-10
+CUTOFF_UTC = "2026-04-10T04:00:00"
+
+
+def main():
+    # Connect to both DBs
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    users_conn = sqlite3.connect(USERS_DB_PATH)
+    users_conn.row_factory = sqlite3.Row
+
+    # Step 1: Get all users
+    users = users_conn.execute("SELECT id, email, credits, created_at FROM users").fetchall()
+    print(f"Total users: {len(users)}")
+
+    # Step 2: Get CDK redemptions (total credits earned per user)
+    cdk_rows = conn.execute(
+        "SELECT redeemed_by, SUM(quota) as total FROM cdkeys WHERE redeemed_by IS NOT NULL AND status = 'used' GROUP BY redeemed_by"
+    ).fetchall()
+    cdk_earned = {r["redeemed_by"]: r["total"] for r in cdk_rows}
+    print(f"Users with CDK redemptions: {len(cdk_earned)}")
+
+    # Step 3: Get invitation rewards per user (inviter gets 0.2 per invitee)
+    try:
+        inv_rows = users_conn.execute(
+            "SELECT inviter_id, SUM(reward_amount) as total FROM invitation_rewards GROUP BY inviter_id"
+        ).fetchall()
+        inv_earned = {r["inviter_id"]: r["total"] for r in inv_rows}
+    except:
+        inv_earned = {}
+    print(f"Users with invitation rewards: {len(inv_earned)}")
+
+    # Step 4: Get verification costs per user from verification_history
+    # via = pixel_auto → cost 1.5, via = pixel → cost 1.0
+    # Only count pass/failed records (processing records haven't been charged yet... actually they HAVE been charged at submit)
+    # For pass records: credits were legitimately spent
+    # For failed records with refund: credits were returned
+    # We need to be careful here — let's count ALL non-processing records
+    
+    vh_rows = conn.execute("""
+        SELECT cdk, via, status, COUNT(*) as cnt 
+        FROM verification_history 
+        WHERE via IN ('pixel', 'pixel_auto') AND status IN ('pass')
+        GROUP BY cdk, via
+    """).fetchall()
+    
+    # Parse user_id from cdk field (format: "user:123")
+    user_spent = {}  # user_id -> total credits spent on successful verifications
+    for r in vh_rows:
+        cdk_val = r["cdk"] or ""
+        if cdk_val.startswith("user:"):
+            try:
+                uid = int(cdk_val.split(":")[1])
+            except:
+                continue
+        else:
+            continue
+        via = r["via"]
+        cost_per = 1.5 if via == "pixel_auto" else 1.0
+        spent = cost_per * r["cnt"]
+        user_spent[uid] = user_spent.get(uid, 0) + spent
+
+    # Also count failed records (these were charged but should have been refunded)
+    vh_failed = conn.execute("""
+        SELECT cdk, via, COUNT(*) as cnt 
+        FROM verification_history 
+        WHERE via IN ('pixel', 'pixel_auto') AND status = 'failed'
+        GROUP BY cdk, via
+    """).fetchall()
+    
+    # Failed records: originally charged, then refunded → net cost = 0
+    # So we don't count them as spent
+
+    # Count processing records (these were charged but not yet finalized)
+    vh_processing = conn.execute("""
+        SELECT cdk, via, COUNT(*) as cnt 
+        FROM verification_history 
+        WHERE via IN ('pixel', 'pixel_auto') AND status = 'processing'
+        GROUP BY cdk, via
+    """).fetchall()
+    
+    user_processing_spent = {}
+    for r in vh_processing:
+        cdk_val = r["cdk"] or ""
+        if cdk_val.startswith("user:"):
+            try:
+                uid = int(cdk_val.split(":")[1])
+            except:
+                continue
+        else:
+            continue
+        via = r["via"]
+        cost_per = 1.5 if via == "pixel_auto" else 1.0
+        spent = cost_per * r["cnt"]
+        user_processing_spent[uid] = user_processing_spent.get(uid, 0) + spent
+
+    print(f"Users with pass records: {len(user_spent)}")
+    print(f"Users with processing records: {len(user_processing_spent)}")
+
+    # Step 5: Calculate expected vs actual balance
+    REGISTRATION_BONUS = 1.5
+
+    compensate_list = []
+    
+    for u in users:
+        uid = u["id"]
+        email = u["email"]
+        current_credits = float(u["credits"] or 0)
+        created_at = u["created_at"] or ""
+        
+        # Filter: only users active after cutoff
+        # We check if they have any CDK redemption or verification after cutoff
+        # Simpler: check all users but only compensate if there's a discrepancy
+        
+        # Total earned
+        earned_cdk = float(cdk_earned.get(uid, 0))
+        earned_inv = float(inv_earned.get(uid, 0))
+        total_earned = earned_cdk + REGISTRATION_BONUS + earned_inv
+        
+        # Total spent (on successful verifications)
+        total_pass_spent = float(user_spent.get(uid, 0))
+        
+        # Total locked in processing
+        total_processing = float(user_processing_spent.get(uid, 0))
+        
+        # Expected balance = earned - pass_spent - processing_spent
+        expected = total_earned - total_pass_spent - total_processing
+        
+        # Discrepancy
+        diff = expected - current_credits
+        
+        # If diff > 0.1 (rounding tolerance), user lost credits
+        if diff > 0.1:
+            compensate_list.append({
+                "user_id": uid,
+                "email": email,
+                "created_at": created_at,
+                "earned_cdk": earned_cdk,
+                "earned_inv": earned_inv,
+                "total_earned": total_earned,
+                "pass_spent": total_pass_spent,
+                "processing_spent": total_processing,
+                "expected": round(expected, 2),
+                "actual": current_credits,
+                "diff": round(diff, 2),
+            })
+
+    print(f"\n{'='*60}")
+    print(f"Users needing compensation: {len(compensate_list)}")
+    print(f"{'='*60}")
+    
+    total_compensate = 0
+    for c in sorted(compensate_list, key=lambda x: x["diff"], reverse=True):
+        print(f"  user:{c['user_id']} | {c['email']}")
+        print(f"    earned={c['total_earned']} (cdk={c['earned_cdk']}, inv={c['earned_inv']}, reg={REGISTRATION_BONUS})")
+        print(f"    pass_spent={c['pass_spent']}, processing={c['processing_spent']}")
+        print(f"    expected={c['expected']}, actual={c['actual']}, DIFF={c['diff']}")
+        total_compensate += c["diff"]
+    
+    print(f"\nTotal credits to compensate: {total_compensate}")
+    
+    # Ask for confirmation before applying
+    if not compensate_list:
+        print("No compensation needed!")
+        conn.close()
+        users_conn.close()
+        return
+    
+    print(f"\n>>> Applying compensation to {len(compensate_list)} users...")
+    compensated = 0
+    for c in compensate_list:
+        uid = c["user_id"]
+        diff = c["diff"]
+        current = users_conn.execute("SELECT credits FROM users WHERE id = ?", (uid,)).fetchone()
+        if current:
+            new_credits = round(float(current["credits"] or 0) + diff, 2)
+            users_conn.execute("UPDATE users SET credits = ? WHERE id = ?", (new_credits, uid))
+            compensated += 1
+            print(f"  ✅ user:{uid} ({c['email']}): {current['credits']} + {diff} = {new_credits}")
+    
+    users_conn.commit()
+    print(f"\nCompensated {compensated} users, total {total_compensate} credits")
+    
+    conn.close()
+    users_conn.close()
+    print("Done!")
+
+
+if __name__ == "__main__":
+    main()

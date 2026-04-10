@@ -9523,6 +9523,27 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
     email = ctx.get("email", "")
     sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
 
+    # Fallback: if in-memory context was lost (e.g. server restart), recover from DB
+    if not user_id:
+        import database as _db_cancel
+        _conn = _db_cancel.get_connection()
+        _row = _conn.execute(
+            "SELECT cdk, via, email FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+            (job_id,)
+        ).fetchone()
+        if _row:
+            _cdk = _row["cdk"] or ""
+            if _cdk.startswith("user:"):
+                try:
+                    user_id = int(_cdk.split(":")[1])
+                except Exception:
+                    pass
+            _via = _row["via"] if "via" in _row.keys() else ""
+            if _via == "pixel_auto":
+                sse_source = "pixel_auto"
+                cost = 1.5
+            email = _row["email"] if "email" in _row.keys() else email
+
     # Regular users can only cancel their own jobs
     is_admin = user.get("role") == "admin"
     if not is_admin and user.get("id") != user_id:

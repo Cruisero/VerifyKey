@@ -9156,7 +9156,7 @@ async def pixel_get_job(job_id: str):
         # Fallback: if no in-memory context (e.g. server restarted), recover from DB
         if not ctx.get("user_id") and upstream_status in ("success", "failed", "cancelled"):
             try:
-                conn = get_db()
+                conn = database.get_connection()
                 row = conn.execute(
                     "SELECT cdk, email FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
                     (job_id,)

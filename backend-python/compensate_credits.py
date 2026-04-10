@@ -37,15 +37,33 @@ def main():
     users_conn.row_factory = sqlite3.Row
 
     # Step 1: Get all users
-    users = users_conn.execute("SELECT id, email, credits, created_at FROM users").fetchall()
-    print(f"Total users: {len(users)}")
+    all_users = users_conn.execute("SELECT id, email, credits, created_at FROM users").fetchall()
+    print(f"Total users in DB: {len(all_users)}")
 
     # Step 2: Get CDK redemptions (total credits earned per user)
+    # Get ALL CDK redemptions for balance calculation
     cdk_rows = conn.execute(
         "SELECT redeemed_by, SUM(quota) as total FROM cdkeys WHERE redeemed_by IS NOT NULL AND status = 'used' GROUP BY redeemed_by"
     ).fetchall()
     cdk_earned = {r["redeemed_by"]: r["total"] for r in cdk_rows}
-    print(f"Users with CDK redemptions: {len(cdk_earned)}")
+
+    # Filter: only users who redeemed CDK after cutoff OR registered after cutoff
+    cdk_after_cutoff = conn.execute(
+        "SELECT DISTINCT redeemed_by FROM cdkeys WHERE redeemed_by IS NOT NULL AND last_used_at >= ?",
+        (CUTOFF_UTC,)
+    ).fetchall()
+    active_user_ids = {r["redeemed_by"] for r in cdk_after_cutoff}
+
+    # Also include users registered after cutoff
+    for u in all_users:
+        created = u["created_at"] or ""
+        if created >= CUTOFF_UTC:
+            active_user_ids.add(u["id"])
+
+    # Filter to only active users
+    users = [u for u in all_users if u["id"] in active_user_ids]
+    print(f"Users active after {CUTOFF_UTC} (Beijing 12:00): {len(users)}")
+    print(f"Users with CDK redemptions (all time): {len(cdk_earned)}")
 
     # Step 3: Get invitation rewards per user (inviter gets 0.2 per invitee)
     try:

@@ -186,9 +186,17 @@ def main():
     
     print(f"\nTotal credits to compensate: {total_compensate}")
     
-    # Ask for confirmation before applying
     if not compensate_list:
         print("No compensation needed!")
+        conn.close()
+        users_conn.close()
+        return
+    
+    # Check if --apply flag is provided
+    import sys
+    if "--apply" not in sys.argv:
+        print(f"\n⚠️  DRY RUN — 以上为预览，未执行任何修改")
+        print(f"   确认无误后，运行: python3 /app/compensate_credits.py --apply")
         conn.close()
         users_conn.close()
         return

@@ -6017,7 +6017,7 @@ async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
 
     # Query verification_history for today's records from pixel/kpixel/vpixel/ypixel/gpt sources
     cursor = conn.execute(
-        "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
+        "SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded "
         "FROM verification_history "
         "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
         "ORDER BY rowid DESC LIMIT 500",
@@ -6047,6 +6047,8 @@ async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
             "error": "",
             "channel": "",
             "userId": r["cdk"] or "",
+            "cost": r["cost"] if "cost" in r.keys() else 0,
+            "isRefunded": r["is_refunded"] if "is_refunded" in r.keys() else 0,
             "timestamp": r["timestamp"],
             "updatedAt": r["timestamp"],
         })

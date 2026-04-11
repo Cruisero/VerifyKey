@@ -138,12 +138,12 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
     conn = database.get_connection()
     if _display_reset_at and not ignore_reset:
         cursor = conn.execute(
-            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE timestamp > ? {USER_ERROR_FILTER} ORDER BY rowid DESC LIMIT ?",
+            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded FROM verification_history WHERE timestamp > ? {USER_ERROR_FILTER} ORDER BY rowid DESC LIMIT ?",
             (_display_reset_at, limit)
         )
     else:
         cursor = conn.execute(
-            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history WHERE 1=1 {USER_ERROR_FILTER} ORDER BY rowid DESC LIMIT ?",
+            f"SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded FROM verification_history WHERE 1=1 {USER_ERROR_FILTER} ORDER BY rowid DESC LIMIT ?",
             (limit,)
         )
     rows = cursor.fetchall()
@@ -157,6 +157,8 @@ def get_recent_history(limit: int = 200, ignore_reset: bool = False) -> List[Dic
             "cdk": r["cdk"],
             "via": r["via"] if "via" in r.keys() else "",
             "submitEmail": r["email"] if "email" in r.keys() else "",
+            "cost": r["cost"] if "cost" in r.keys() else 0,
+            "isRefunded": r["is_refunded"] if "is_refunded" in r.keys() else 0,
             "timestamp": r["timestamp"]
         }
         for r in reversed(rows)
@@ -205,7 +207,7 @@ def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: boo
 
     # Paginated query (newest first)
     cursor = conn.execute(
-        f"SELECT id, status, verification_id, message, cdk, timestamp, via, email FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
+        f"SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
         params_base + [page_size, offset]
     )
 
@@ -218,6 +220,8 @@ def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: boo
             "cdk": r["cdk"],
             "via": r["via"] if "via" in r.keys() else "",
             "submitEmail": r["email"] if "email" in r.keys() else "",
+            "cost": r["cost"] if "cost" in r.keys() else 0,
+            "isRefunded": r["is_refunded"] if "is_refunded" in r.keys() else 0,
             "timestamp": r["timestamp"]
         }
         for r in cursor.fetchall()

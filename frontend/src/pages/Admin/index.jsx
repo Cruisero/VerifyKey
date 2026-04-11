@@ -1034,6 +1034,32 @@ function LiveTaskMonitor() {
                                             {t.email}
                                         </span>
                                         {sourceBadge(t.source)}
+                                        {t.cost > 0 && (() => {
+                                            let cBg, cColor, cBorder, cText;
+                                            const isProc = t.status === 'processing' || t.status === 'submitted';
+                                            if (isProc) {
+                                                cBg = 'rgba(245, 158, 11, 0.1)'; cColor = '#d97706'; cBorder = '1px solid rgba(245, 158, 11, 0.2)';
+                                                cText = `预扣 ${t.cost} 积分`;
+                                            } else if (t.status === 'success') {
+                                                cBg = 'rgba(22, 163, 74, 0.1)'; cColor = '#16a34a'; cBorder = '1px solid rgba(22, 163, 74, 0.2)';
+                                                cText = `实扣 ${t.cost} 积分`;
+                                            } else {
+                                                // For live stream, if it failed it's virtually guaranteed refunded by the state machine
+                                                const definitelyRefunded = t.isRefunded === 1 || t.status === 'failed';
+                                                if (definitelyRefunded) {
+                                                    cBg = 'rgba(16, 185, 129, 0.1)'; cColor = '#059669'; cBorder = '1px solid rgba(16, 185, 129, 0.2)';
+                                                    cText = `已退 ${t.cost} 积分`;
+                                                } else {
+                                                    cBg = 'rgba(244, 63, 94, 0.1)'; cColor = '#e11d48'; cBorder = '1px solid rgba(244, 63, 94, 0.2)';
+                                                    cText = `未退 ${t.cost} 积分`;
+                                                }
+                                            }
+                                            return (
+                                                <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: cBg, color: cColor, border: cBorder, fontWeight: 500, display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '6px' }}>
+                                                    💰 {cText}
+                                                </span>
+                                            );
+                                        })()}
                                         {isActive && (
                                             <span style={{
                                                 fontSize: '11px', padding: '1px 8px', borderRadius: '10px',
@@ -6230,6 +6256,29 @@ export default function Admin() {
                                                                 fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
                                                                 background: bg, color: '#fff', fontWeight: 500,
                                                             }}>{label}</span>
+                                                        );
+                                                    })()}
+                                                    {r.cost > 0 && (() => {
+                                                        let cBg, cColor, cBorder, cText;
+                                                        if (r.status === 'processing') {
+                                                            cBg = 'rgba(245, 158, 11, 0.1)'; cColor = '#d97706'; cBorder = '1px solid rgba(245, 158, 11, 0.2)';
+                                                            cText = `预扣 ${r.cost} 积分`;
+                                                        } else if (r.status === 'pass') {
+                                                            cBg = 'rgba(22, 163, 74, 0.1)'; cColor = '#16a34a'; cBorder = '1px solid rgba(22, 163, 74, 0.2)';
+                                                            cText = `实扣 ${r.cost} 积分`;
+                                                        } else {
+                                                            if (r.isRefunded === 1) {
+                                                                cBg = 'rgba(16, 185, 129, 0.1)'; cColor = '#059669'; cBorder = '1px solid rgba(16, 185, 129, 0.2)';
+                                                                cText = `已退 ${r.cost} 积分`;
+                                                            } else {
+                                                                cBg = 'rgba(244, 63, 94, 0.1)'; cColor = '#e11d48'; cBorder = '1px solid rgba(244, 63, 94, 0.2)';
+                                                                cText = `未退 ${r.cost} 积分`;
+                                                            }
+                                                        }
+                                                        return (
+                                                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: cBg, color: cColor, border: cBorder, fontWeight: 500, display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                💰 {cText}
+                                                            </span>
                                                         );
                                                     })()}
                                                 </div>

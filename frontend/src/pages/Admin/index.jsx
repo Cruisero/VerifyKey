@@ -4713,6 +4713,12 @@ export default function Admin() {
     const [testing, setTesting] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    // Audit Logs State
+    const [auditLogs, setAuditLogs] = useState([]);
+    const [auditLogPage, setAuditLogPage] = useState(1);
+    const [auditLogTotalPages, setAuditLogTotalPages] = useState(1);
+    const [auditLogTotal, setAuditLogTotal] = useState(0);
+
     // Verification history state
     const [historyData, setHistoryData] = useState([]);
     const [historyStats, setHistoryStats] = useState({ pass: 0, failed: 0, processing: 0, cancel: 0, total: 0 });
@@ -4940,6 +4946,21 @@ export default function Admin() {
         const logInterval = setInterval(() => fetchVerifyHistory(), 10000);
         return () => { clearInterval(statsInterval); clearInterval(logInterval); };
     }, []);
+
+    // Fetch audit logs
+    const fetchAuditLogs = async (page = auditLogPage) => {
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const res = await fetch(`${API_BASE}/api/admin/credit-transactions?page=${page}&pageSize=50`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                setAuditLogs(data.transactions || []);
+                setAuditLogTotal(data.total || 0);
+                setAuditLogTotalPages(data.totalPages || 1);
+            }
+        } catch (e) { console.error('Failed to fetch audit logs:', e); }
+    };
 
     // Fetch verification history with pagination
     const fetchVerifyHistory = useCallback(async (page) => {
@@ -5980,6 +6001,13 @@ export default function Admin() {
         setTestingDocument(false);
     };
 
+    // Auto-fetch audit logs when tab is selected
+    useEffect(() => {
+        if (activeTab === 'audit') {
+            fetchAuditLogs(1);
+        }
+    }, [activeTab]);
+
     // 模拟数据
     const stats = {
         totalUsers: 1247,
@@ -6000,6 +6028,7 @@ export default function Admin() {
         { id: 'gpt-team', label: 'GPT Team', icon: '🧩' },
         { id: 'cdk', label: t('tabCdk'), icon: '🔑' },
         { id: 'users', label: t('tabUsers'), icon: '👥' },
+        { id: 'audit', label: '资金对账单', icon: '💸' },
         { id: 'ai-generator', label: t('tabAiGen'), icon: '🤖' },
         { id: 'verify-status', label: t('tabVerifyStatus'), icon: '📋' },
         { id: 'telegram-bot', label: t('tabTgBot'), icon: '🤖' },
@@ -6678,6 +6707,63 @@ export default function Admin() {
                 )}
 
                 {/* AI Generator Tab */}
+                {/* Audit Logs Tab */}
+                {activeTab === 'audit' && (
+                    <div className="tab-content">
+                        <div className="card" style={{ padding: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h3>💸 资金对账单 <span style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>({auditLogTotal} 条记录)</span></h3>
+                                <button className="btn btn-sm btn-secondary" onClick={() => fetchAuditLogs(auditLogPage)}>🔄 刷新</button>
+                            </div>
+                            <div className="users-table">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>流水 ID</th>
+                                            <th>用户 ID</th>
+                                            <th>变动额度</th>
+                                            <th>变动后余额</th>
+                                            <th>操作类型</th>
+                                            <th>关联单号</th>
+                                            <th>发生时间</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {auditLogs.map((log) => (
+                                            <tr key={log.id}>
+                                                <td style={{ fontFamily: "'SF Mono', monospace", fontSize: '12px' }}>{log.id}</td>
+                                                <td><span className="badge badge-info">{log.user_id}</span></td>
+                                                <td style={{ fontWeight: 600, color: log.amount > 0 ? '#16a34a' : '#dc2626' }}>
+                                                    {log.amount > 0 ? `+${log.amount}` : log.amount}
+                                                </td>
+                                                <td style={{ fontWeight: 600 }}>{log.balance_after}</td>
+                                                <td><span className="badge">{log.reason}</span></td>
+                                                <td style={{ fontFamily: "'SF Mono', monospace", fontSize: '11px' }}>{log.ref_id || '-'}</td>
+                                                <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                                    {log.timestamp ? new Date(log.timestamp).toLocaleString('zh-CN', { hour12: false }) : '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {auditLogs.length === 0 && (
+                                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>暂无财务流水记录</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            {/* Pagination Controls */}
+                            {auditLogTotalPages > 1 && (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '20px', padding: '12px 0', borderTop: '1px solid var(--border-color, rgba(128,128,128,0.15))' }}>
+                                    <button className="btn btn-sm btn-secondary" disabled={auditLogPage <= 1} onClick={() => {setAuditLogPage(1); fetchAuditLogs(1);}}>«</button>
+                                    <button className="btn btn-sm btn-secondary" disabled={auditLogPage <= 1} onClick={() => {const np = Math.max(1, auditLogPage - 1); setAuditLogPage(np); fetchAuditLogs(np);}}>‹</button>
+                                    <span style={{ fontSize: '14px', margin: '0 8px' }}>第 {auditLogPage}/{auditLogTotalPages} 页</span>
+                                    <button className="btn btn-sm btn-secondary" disabled={auditLogPage >= auditLogTotalPages} onClick={() => {const np = Math.min(auditLogTotalPages, auditLogPage + 1); setAuditLogPage(np); fetchAuditLogs(np);}}>›</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'ai-generator' && (
                     <div className="tab-content">
                         <div className="settings-section card">

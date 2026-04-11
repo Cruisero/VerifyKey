@@ -6069,6 +6069,41 @@ async def get_admin_verification_history(
     return result
 
 
+@app.get("/api/admin/credit-transactions")
+async def get_admin_credit_transactions(
+    authorization: Optional[str] = Header(None),
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(100, ge=1, le=500),
+):
+    """Get paginated credit transactions (audit logs) (admin only)"""
+    _verify_admin_token(authorization)
+    
+    conn = database.get_connection()
+    offset = (page - 1) * pageSize
+    
+    # Get total count
+    cursor = conn.execute("SELECT COUNT(*) FROM credit_transactions")
+    total = cursor.fetchone()[0]
+    
+    # Get page data
+    cursor = conn.execute(
+        "SELECT id, user_id, amount, balance_after, reason, ref_id, timestamp "
+        "FROM credit_transactions ORDER BY id DESC LIMIT ? OFFSET ?",
+        (pageSize, offset)
+    )
+    rows = cursor.fetchall()
+    
+    transactions = [dict(row) for row in rows]
+    
+    return {
+        "transactions": transactions,
+        "total": total,
+        "page": page,
+        "pageSize": pageSize,
+        "totalPages": (total + pageSize - 1) // pageSize
+    }
+
+
 class AddVerificationRecord(BaseModel):
     status: str  # pass, failed, processing, cancel
     verificationId: Optional[str] = ""

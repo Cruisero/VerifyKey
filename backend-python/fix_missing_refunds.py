@@ -43,6 +43,7 @@ def run_fix():
         record_id = row["id"]
         message = row["message"]
         is_refunded = row["is_refunded"]
+        via = row["via"]
         
         try:
             user_id = int(cdk.replace("user:", ""))

@@ -8835,6 +8835,12 @@ async def _pixel_job_sweep():
                             conn2 = database.get_connection()
                             conn2.execute("UPDATE verification_history SET status='pass', message=? WHERE verification_id=? AND status='processing'", (msg, vid))
                             conn2.commit()
+                            # Also attempt credit deduction in fallback path
+                            try:
+                                auth.deduct_credits(user_id, sweep_cost)
+                                logging.info(f"[PixelSweep] Fallback deducted {sweep_cost} from user {user_id} for {vid}")
+                            except Exception:
+                                pass
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
@@ -9120,8 +9126,17 @@ def _finalize_user_success(verification_id: str, user_id: int, cost: float, mess
             "forcedDeduction": deduction.get("forced", False),
         }
 
+    # Always attempt to deduct credits on success.
+    # Normal flow: already pre-deducted at submission, deduct_credits will fail (insufficient) → harmless.
+    # Recovery flow: credits were refunded during timeout, so this re-deducts them correctly.
+    deducted = False
+    if cost > 0 and user_id:
+        deduction = _deduct_user_credits_for_reconciliation(user_id, cost, verification_id, via=via)
+        deducted = deduction.get("deducted", False)
+        if deducted:
+            message = f"{message} （已扣费）"
     _upsert_user_verification_result(verification_id, user_id, "pass", message, via=via, email=email)
-    return {"finalized": True, "deducted": False, "already_done": False}
+    return {"finalized": True, "deducted": deducted, "already_done": False}
 
 
 def _finalize_user_failure(verification_id: str, user_id: int, message: str, via: str = "", refund_cost: float = 0, email: str = ""):

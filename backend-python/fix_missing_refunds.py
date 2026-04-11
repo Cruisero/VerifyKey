@@ -17,12 +17,14 @@ def run_fix():
     conn = database.get_connection()
     cursor = conn.cursor()
     
-    # 我们先不做限制，查出所有 failed/cancel 的看看情况
+    # 针对 cost=0 幽灵账单的终极追踪：
+    # 哪怕 is_refunded=1，只要当时记录的 cost是0，它就没有真正退过费！
     cursor.execute("""
         SELECT id, verification_id, cdk, cost, via, message, timestamp, IFNULL(is_refunded, 0) as is_refunded
         FROM verification_history
         WHERE status IN ('failed', 'cancel')
           AND cdk LIKE 'user:%'
+          AND (IFNULL(is_refunded, 0) = 0 OR cost = 0)
     """)
     
     rows = cursor.fetchall()
@@ -52,37 +54,39 @@ def run_fix():
             
         if not cost or cost <= 0:
             # 尝试根据 via 推断 cost
-            cost = 1.5 if "auto" in str(via).lower() else 1.0
-            print(f"    [推断] 发现 cost 为 0，根据 via={via} 推断扣分成本为 {cost}")
+            real_cost = 1.5 if "auto" in str(via).lower() else 1.0
+            print(f"    [推断] 发现 cost 为 0，根据 via={via} 推断实际需退回成本为 {real_cost}")
+        else:
+            real_cost = cost
             
-        # 如果已经退过了，跳过
-        if is_refunded == 1:
+        # 如果不是cost=0（即存在明码标价），且已经被标记退款，那就是正常流程结束过的，跳过！
+        if is_refunded == 1 and cost > 0:
             continue
             
         print(f"-----------------------------------------------------------------")
         print(f"🧾 发现漏退订单 VID: {vid}")
-        print(f"👤 用户 ID: {user_id} | 💰 退回成本: {cost}")
+        print(f"👤 用户 ID: {user_id} | 💰 退回成本: {real_cost} (原记账: {cost})")
         print(f"📝 失败原因: {message}")
         
         try:
             # 1. 退补积分给用户 (并在资产流水中记录理由)
             auth.update_credits(
                 user_id, 
-                cost, 
+                real_cost, 
                 reason="sys_compensate", 
                 ref_id=vid
             )
             
-            # 2. 将订单状态标记为已被退款，防止未来重复刷新
+            # 2. 将订单状态标记为已被退款，且把错误的0修正为实际金额，防止重复退款
             conn.execute(
-                "UPDATE verification_history SET is_refunded = 1 WHERE id = ?", 
-                (record_id,)
+                "UPDATE verification_history SET is_refunded = 1, cost = ? WHERE id = ?", 
+                (real_cost, record_id)
             )
             conn.commit()
             
-            print(f"✅ 成功退回 {cost} 积分给用户 {user_id}！")
+            print(f"✅ 成功退回 {real_cost} 积分给用户 {user_id}！")
             refunded_count += 1
-            total_cost += cost
+            total_cost += real_cost
             
         except Exception as e:
             print(f"❌ 补发失败 (User {user_id}, VID {vid}): {e}")

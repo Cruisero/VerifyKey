@@ -425,7 +425,7 @@ def transition_task_status(
         # Credits were pre-deducted at submission. Just update status.
         cursor = conn.execute(
             "UPDATE verification_history SET status='pass', message=?, timestamp=? "
-            "WHERE verification_id=? AND status='processing'",
+            "WHERE verification_id=? AND status IN ('processing', 'queued', 'pending', 'running')",
             (message, now, verification_id)
         )
         if cursor.rowcount > 0:
@@ -471,7 +471,7 @@ def transition_task_status(
         # Credits were pre-deducted. Refund them.
         cursor = conn.execute(
             "UPDATE verification_history SET status=?, is_refunded=1, message=?, timestamp=? "
-            "WHERE verification_id=? AND status='processing' AND is_refunded=0",
+            "WHERE verification_id=? AND status IN ('processing', 'queued', 'pending', 'running') AND is_refunded=0",
             (new_status, message, now, verification_id)
         )
         if cursor.rowcount > 0:

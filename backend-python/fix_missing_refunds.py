@@ -45,27 +45,43 @@ def run_fix():
         cdk = row["cdk"]
         record_id = row["id"]
         message = row["message"]
-        is_refunded = row["is_refunded"]
-        via = row["via"]
-        
         try:
             user_id = int(cdk.replace("user:", ""))
         except ValueError:
             continue
             
+        is_refunded = row["is_refunded"]
+        via = row["via"]
+            
+        # 如果是不经过上游的直接失败单（提交失败），当时就已经通过其它路径秒退过了，直接跳过
+        if str(vid).startswith("fail-"):
+            continue
+            
+        # 【最高级别真实判定】直接去金库流水里查这笔单子有没有真的退过钱！
+        # 如果当初真的退了钱（或是我们用脚本发了sys_compensate），在流水表里肯定有一笔或者多笔总计 >0 的入账。
+        # 如果我们用 undo_compensate 扣除回去了，它们的总计就会抵消为 0。
+        tx_row = conn.execute("""
+            SELECT SUM(amount) as actual_refunded_total 
+            FROM credit_transactions 
+            WHERE ref_id = ? 
+              AND (reason LIKE '%refund%' OR reason LIKE '%compensate%')
+        """, (vid,)).fetchone()
+        
+        actual_refunded_total = tx_row["actual_refunded_total"] if tx_row and tx_row["actual_refunded_total"] else 0.0
+        
+        if actual_refunded_total > 0:
+            # print(f"    [防刷跳过] VID {vid} 经流水查证，总计已成功退还了 {actual_refunded_total} 积分，不产生重复退款。")
+            continue
+            
         if not cost or cost <= 0:
             # 尝试根据 via 推断 cost
             real_cost = 1.5 if "auto" in str(via).lower() else 1.0
-            print(f"    [推断] 发现 cost 为 0，根据 via={via} 推断实际需退回成本为 {real_cost}")
+            print(f"    [推断] 发现账本记为 0，且流水没退钱：根据 {via} 必须补回 {real_cost}")
         else:
             real_cost = cost
             
-        # 如果不是cost=0（即存在明码标价），且已经被标记退款，那就是正常流程结束过的，跳过！
-        if is_refunded == 1 and cost > 0:
-            continue
-            
         print(f"-----------------------------------------------------------------")
-        print(f"🧾 发现漏退订单 VID: {vid}")
+        print(f"🧾 发现流水干净的漏退订单 VID: {vid}")
         print(f"👤 用户 ID: {user_id} | 💰 退回成本: {real_cost} (原记账: {cost})")
         print(f"📝 失败原因: {message}")
         

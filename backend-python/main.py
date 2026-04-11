@@ -8789,9 +8789,8 @@ async def _pixel_job_sweep():
                 if not vid:
                     continue
 
-                # Skip if frontend is actively polling (context exists)
-                if _pixel_job_context.get(vid):
-                    continue
+                # Note: do NOT skip jobs with in-memory context.
+                # The sweep must always verify upstream status as the safety net.
 
                 cdk_val = row["cdk"] or ""
                 email = row["email"] or ""
@@ -8882,7 +8881,7 @@ async def _pixel_job_sweep():
         except Exception as e:
             logging.warning(f"[PixelSweep] Sweep error: {e}")
 
-        await asyncio.sleep(300)  # Every 5 minutes
+        await asyncio.sleep(60)  # Every 60 seconds
 
 
 @app.on_event("startup")

@@ -25,6 +25,7 @@ def run_fix():
         WHERE status IN ('failed', 'cancel')
           AND cdk LIKE 'user:%'
           AND (IFNULL(is_refunded, 0) = 0 OR cost = 0)
+          AND timestamp >= date('now', '-1 day')
     """)
     
     rows = cursor.fetchall()

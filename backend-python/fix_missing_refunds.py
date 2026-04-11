@@ -49,10 +49,13 @@ def run_fix():
         except ValueError:
             continue
             
-        # 如果已经退过了或者cost本来就是0，跳过
-        if is_refunded == 1 or not cost or cost <= 0:
-            if "avawan" in message or "avawan" in str(vid):
-                print(f"    [跳过] VID {vid} (User {user_id}) -> is_refunded={is_refunded}, cost={cost}")
+        if not cost or cost <= 0:
+            # 尝试根据 via 推断 cost
+            cost = 1.5 if "auto" in str(via).lower() else 1.0
+            print(f"    [推断] 发现 cost 为 0，根据 via={via} 推断扣分成本为 {cost}")
+            
+        # 如果已经退过了，跳过
+        if is_refunded == 1:
             continue
             
         print(f"-----------------------------------------------------------------")

@@ -10,8 +10,8 @@ import jwt
 import time
 import string
 import random
-from datetime import datetime, timedelta
 from typing import Optional
+from datetime import datetime, timedelta
 
 # JWT Configuration
 JWT_SECRET = os.getenv("JWT_SECRET", "verifykey-jwt-secret-change-in-production")
@@ -276,8 +276,15 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
     return None
 
 
-def update_credits(user_id: int, amount: int) -> Optional[dict]:
-    """Update user credits. Prevents negative balances when deducting."""
+def update_credits(user_id: int, amount: int, reason: str = "", ref_id: str = "") -> Optional[dict]:
+    """Update user credits. Prevents negative balances when deducting.
+    
+    Args:
+        user_id: User ID
+        amount: Positive to add, negative to deduct
+        reason: Audit reason (e.g. 'pixel_refund', 'cdk_redeem', 'admin_adjust')
+        ref_id: Reference ID (e.g. verification_id)
+    """
     conn = get_db()
     cursor = conn.cursor()
     if amount < 0:
@@ -298,11 +305,21 @@ def update_credits(user_id: int, amount: int) -> Optional[dict]:
         conn.commit()
     conn.close()
     
-    return get_user_by_id(user_id)
+    user = get_user_by_id(user_id)
+    if user:
+        _log_credit_transaction(user_id, amount, user["credits"], reason or "adjust", ref_id)
+    return user
 
 
-def deduct_credits(user_id: int, amount: float) -> Optional[dict]:
-    """Deduct credits from user. Returns updated user if sufficient, None if not."""
+def deduct_credits(user_id: int, amount: float, reason: str = "", ref_id: str = "") -> Optional[dict]:
+    """Deduct credits from user. Returns updated user if sufficient, None if not.
+    
+    Args:
+        user_id: User ID
+        amount: Amount to deduct (positive number)
+        reason: Audit reason (e.g. 'pixel_deduct', 'gpt_deduct')
+        ref_id: Reference ID (e.g. verification_id)
+    """
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT credits FROM users WHERE id = ?", (user_id,))
@@ -318,7 +335,10 @@ def deduct_credits(user_id: int, amount: float) -> Optional[dict]:
     conn.close()
     if cursor.rowcount == 0:
         return None
-    return get_user_by_id(user_id)
+    user = get_user_by_id(user_id)
+    if user:
+        _log_credit_transaction(user_id, -amount, user["credits"], reason or "deduct", ref_id)
+    return user
 
 
 def trigger_invite_reward(user_id: int) -> Optional[dict]:
@@ -461,8 +481,12 @@ def toggle_user_status(user_id: int, status: str) -> bool:
     return affected > 0
 
 
-def update_user_credits_admin(user_id: int, credits: float) -> bool:
+def update_user_credits_admin(user_id: int, credits: float, reason: str = "admin_set") -> bool:
     """Set user credits to exact amount (admin)"""
+    # Get old balance for audit
+    old_user = get_user_by_id(user_id)
+    old_credits = old_user["credits"] if old_user else 0
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -472,5 +496,27 @@ def update_user_credits_admin(user_id: int, credits: float) -> bool:
     conn.commit()
     affected = cursor.rowcount
     conn.close()
+    
+    if affected > 0:
+        delta = credits - old_credits
+        _log_credit_transaction(user_id, delta, credits, reason)
     return affected > 0
+
+
+def _log_credit_transaction(user_id: int, amount: float, balance_after: float, reason: str, ref_id: str = ""):
+    """Write an immutable audit record to credit_transactions in the main onepass.db.
+    
+    This function never raises — audit failures are logged but do not break the caller.
+    """
+    try:
+        import database
+        conn = database.get_connection()
+        conn.execute(
+            "INSERT INTO credit_transactions (user_id, amount, balance_after, reason, ref_id, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, round(amount, 2), round(balance_after, 2), reason, ref_id, datetime.utcnow().isoformat() + "Z")
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[Audit] Failed to log credit transaction for user {user_id}: {e}")
 

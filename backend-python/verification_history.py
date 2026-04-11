@@ -34,7 +34,7 @@ def _load_reset_timestamp():
         pass
 
 
-def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "", via: str = "", email: str = "") -> Dict:
+def log_verification(status: str, verification_id: str = "", message: str = "", cdk: str = "", via: str = "", email: str = "", cost: float = 0) -> Dict:
     """
     Log a verification result.
     
@@ -45,6 +45,7 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
         cdk: Optional CDK code used for this verification
         via: Optional route source tag (e.g. 'getgem', 'dualbot', 'singlebot_1')
         email: Optional email submitted by the user
+        cost: The exact credit cost locked at submission time (default 0)
     
     Returns:
         The logged record (or existing record if duplicate)
@@ -79,12 +80,13 @@ def log_verification(status: str, verification_id: str = "", message: str = "", 
         "cdk": cdk,
         "via": via,
         "email": email,
+        "cost": cost,
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
     conn.execute(
-        "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (record["id"], record["status"], record["verificationId"], record["message"], record["cdk"], record["timestamp"], record["via"], record["email"])
+        "INSERT INTO verification_history (id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (record["id"], record["status"], record["verificationId"], record["message"], record["cdk"], record["timestamp"], record["via"], record["email"], cost, 0)
     )
     conn.commit()
 
@@ -372,4 +374,128 @@ def get_successful_history_by_email(email: str, user_id: int) -> Dict:
             "timestamp": row["timestamp"]
         }
     return {}
+
+
+# ========== Atomic State Machine ==========
+
+def _extract_user_id(cdk: str) -> int:
+    """Extract user ID from cdk tag like 'user:123'."""
+    if cdk and cdk.startswith("user:"):
+        try:
+            return int(cdk.replace("user:", ""))
+        except ValueError:
+            pass
+    return 0
+
+
+def transition_task_status(
+    verification_id: str,
+    new_status: str,
+    message: str = "",
+    user_id: int = 0,
+    via: str = "",
+    email: str = "",
+) -> dict:
+    """
+    Atomic state machine for task status transitions.
+    
+    Uses SQL WHERE conditions as mutual exclusion locks:
+    - Only ONE concurrent caller can successfully UPDATE a given row.
+    - Handles credit deduction/refund automatically based on the stored `cost`.
+    
+    Args:
+        verification_id: The job/verification ID
+        new_status: Target status ('pass', 'failed', 'cancel')
+        message: Status message to set
+        user_id: User ID (optional, will be extracted from cdk if not provided)
+        via: Source tag
+        email: User email
+    
+    Returns:
+        dict with keys: success, prev_status, deducted, refunded, reason
+    """
+    import auth
+    import logging
+
+    conn = database.get_connection()
+    now = datetime.utcnow().isoformat() + "Z"
+
+    if new_status == "pass":
+        # === Transition: processing → pass ===
+        # Credits were pre-deducted at submission. Just update status.
+        cursor = conn.execute(
+            "UPDATE verification_history SET status='pass', message=?, timestamp=? "
+            "WHERE verification_id=? AND status='processing'",
+            (message, now, verification_id)
+        )
+        if cursor.rowcount > 0:
+            conn.commit()
+            logging.info(f"[StateMachine] processing→pass for {verification_id}")
+            return {"success": True, "prev_status": "processing", "deducted": False, "refunded": False}
+
+        # === Transition: failed → pass (reconciliation) ===
+        # Task was previously refunded. Need to re-deduct.
+        cursor = conn.execute(
+            "UPDATE verification_history SET status='pass', is_refunded=0, message=?, timestamp=? "
+            "WHERE verification_id=? AND status='failed' AND is_refunded=1",
+            (message, now, verification_id)
+        )
+        if cursor.rowcount > 0:
+            conn.commit()
+            # Read cost and user from the updated row
+            row = conn.execute(
+                "SELECT cost, cdk FROM verification_history WHERE verification_id=? ORDER BY rowid DESC LIMIT 1",
+                (verification_id,)
+            ).fetchone()
+            cost = row["cost"] if row and "cost" in row.keys() else 0
+            uid = _extract_user_id(row["cdk"]) if row else user_id
+            deducted = False
+            if cost > 0 and uid:
+                result = auth.deduct_credits(uid, cost, reason="pixel_reconcile", ref_id=verification_id)
+                deducted = bool(result)
+                if not deducted:
+                    logging.warning(f"[StateMachine] Reconcile deduct failed for user {uid}, cost={cost}, vid={verification_id} (insufficient credits)")
+            logging.info(f"[StateMachine] failed→pass for {verification_id}, deducted={deducted}")
+            return {"success": True, "prev_status": "failed", "deducted": deducted, "refunded": False}
+
+        # Already pass → idempotent
+        existing = conn.execute(
+            "SELECT status FROM verification_history WHERE verification_id=? ORDER BY rowid DESC LIMIT 1",
+            (verification_id,)
+        ).fetchone()
+        return {"success": False, "prev_status": existing["status"] if existing else "unknown",
+                "deducted": False, "refunded": False, "reason": "already_terminal"}
+
+    elif new_status in ("failed", "cancel"):
+        # === Transition: processing → failed/cancel ===
+        # Credits were pre-deducted. Refund them.
+        cursor = conn.execute(
+            "UPDATE verification_history SET status=?, is_refunded=1, message=?, timestamp=? "
+            "WHERE verification_id=? AND status='processing' AND is_refunded=0",
+            (new_status, message, now, verification_id)
+        )
+        if cursor.rowcount > 0:
+            conn.commit()
+            row = conn.execute(
+                "SELECT cost, cdk FROM verification_history WHERE verification_id=? ORDER BY rowid DESC LIMIT 1",
+                (verification_id,)
+            ).fetchone()
+            cost = row["cost"] if row and "cost" in row.keys() else 0
+            uid = _extract_user_id(row["cdk"]) if row else user_id
+            refunded = False
+            if cost > 0 and uid:
+                auth.update_credits(uid, cost, reason="pixel_refund", ref_id=verification_id)
+                refunded = True
+            logging.info(f"[StateMachine] processing→{new_status} for {verification_id}, refunded={refunded}, cost={cost}")
+            return {"success": True, "prev_status": "processing", "deducted": False, "refunded": refunded}
+
+        # Already failed/cancel → idempotent (don't double-refund)
+        existing = conn.execute(
+            "SELECT status, is_refunded FROM verification_history WHERE verification_id=? ORDER BY rowid DESC LIMIT 1",
+            (verification_id,)
+        ).fetchone()
+        return {"success": False, "prev_status": existing["status"] if existing else "unknown",
+                "deducted": False, "refunded": False, "reason": "already_terminal"}
+
+    return {"success": False, "reason": f"unsupported_status: {new_status}", "deducted": False, "refunded": False}
 

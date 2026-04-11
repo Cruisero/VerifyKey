@@ -8811,9 +8811,9 @@ async def _pixel_job_sweep():
                         )
                     sse_source = "pixel_auto" if "auto" in (row["via"] or "") else "pixel"
                     if resp.status_code in (404, 502, 503):
-                        # Upstream lost this job — mark failed and refund
-                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
-                        _finalize_user_failure(vid, user_id, "失败: 上游任务已丢失", via=sse_source, refund_cost=sweep_cost, email=email)
+                        # Upstream lost this job — mark failed via state machine (auto-refunds)
+                        import verification_history as vh
+                        vh.transition_task_status(vid, "failed", message="失败: 上游任务已丢失", user_id=user_id, via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
@@ -8826,21 +8826,9 @@ async def _pixel_job_sweep():
 
                     if upstream_status == "success":
                         url = data.get("url", "")
-                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
                         msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
-                        try:
-                            _finalize_user_success(vid, user_id, sweep_cost, msg, via=sse_source, email=email)
-                        except Exception as fin_err:
-                            logging.warning(f"[PixelSweep] _finalize_user_success failed for {vid}, direct DB fallback: {fin_err}")
-                            conn2 = database.get_connection()
-                            conn2.execute("UPDATE verification_history SET status='pass', message=? WHERE verification_id=? AND status='processing'", (msg, vid))
-                            conn2.commit()
-                            # Also attempt credit deduction in fallback path
-                            try:
-                                auth.deduct_credits(user_id, sweep_cost)
-                                logging.info(f"[PixelSweep] Fallback deducted {sweep_cost} from user {user_id} for {vid}")
-                            except Exception:
-                                pass
+                        import verification_history as vh
+                        vh.transition_task_status(vid, "pass", message=msg, user_id=user_id, via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
@@ -8857,18 +8845,8 @@ async def _pixel_job_sweep():
                         err = data.get("error", "UNKNOWN_ERROR")
                         rm = data.get("result_msg", "")
                         disp = rm if rm else err
-                        sweep_cost = 1.5 if "auto" in (sse_source or "") else 1.0
-                        try:
-                            _finalize_user_failure(vid, user_id, f"失败: {disp}", via=sse_source, refund_cost=sweep_cost, email=email)
-                        except Exception as fin_err:
-                            logging.warning(f"[PixelSweep] _finalize_user_failure failed for {vid}, direct DB fallback: {fin_err}")
-                            conn2 = database.get_connection()
-                            conn2.execute("UPDATE verification_history SET status='failed', message=? WHERE verification_id=? AND status='processing'", (f"失败: {disp}", vid))
-                            conn2.commit()
-                            try:
-                                auth.update_credits(user_id, sweep_cost)
-                            except Exception:
-                                pass
+                        import verification_history as vh
+                        vh.transition_task_status(vid, "failed", message=f"失败: {disp}", user_id=user_id, via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
@@ -9059,10 +9037,10 @@ def _upsert_user_verification_result(verification_id: str, user_id: int, status:
     return {"updated": True, "status": status}
 
 
-def _deduct_user_credits_or_raise(user_id: int, cost: float, detail: str):
+def _deduct_user_credits_or_raise(user_id: int, cost: float, detail: str, reason: str = "pixel_deduct", ref_id: str = ""):
     if not user_id or cost <= 0:
         return {"deducted": False}
-    result = auth.deduct_credits(user_id, cost)
+    result = auth.deduct_credits(user_id, cost, reason=reason, ref_id=ref_id)
     if not result:
         raise HTTPException(status_code=400, detail=detail)
     logging.info(f"[credits] Reserved {cost} credits from user {user_id}")
@@ -9074,7 +9052,7 @@ def _refund_user_credits(user_id: int, cost: float, verification_id: str, via: s
     if not user_id or cost <= 0:
         return {"refunded": False}
     try:
-        auth.update_credits(user_id, cost)
+        auth.update_credits(user_id, cost, reason=f"{via or 'task'}_refund", ref_id=verification_id)
         logging.info(f"[{via or 'task'}] Refunded {cost} credits to user {user_id} for {verification_id}")
         return {"refunded": True}
     except Exception as e:
@@ -9099,63 +9077,37 @@ def _deduct_user_credits_for_reconciliation(user_id: int, cost: float, verificat
 
 
 def _finalize_user_success(verification_id: str, user_id: int, cost: float, message: str, via: str = "", email: str = ""):
-    existing = _get_user_verification_row(verification_id, user_id)
-    if existing and existing["status"] == "pass":
-        return {
-            "finalized": True,
-            "deducted": False,
-            "already_done": True,
-            "status": "pass",
-        }
-
-    if existing and existing["status"] == "failed":
-        deduction = _deduct_user_credits_for_reconciliation(user_id, cost, verification_id, via=via)
-        note = "（晚到成功，已补扣）"
-        if deduction.get("forced"):
-            note = "（晚到成功，已强制补扣）"
-        elif not deduction.get("deducted"):
-            note = "（晚到成功，补扣失败）"
-        final_message = f"{message} {note}".strip()
-        _upsert_user_verification_result(verification_id, user_id, "pass", final_message, via=via, email=email)
-        return {
-            "finalized": True,
-            "deducted": deduction.get("deducted", False),
-            "already_done": False,
-            "status": "pass",
-            "reconciled": True,
-            "forcedDeduction": deduction.get("forced", False),
-        }
-
-    # Always attempt to deduct credits on success.
-    # Normal flow: already pre-deducted at submission, deduct_credits will fail (insufficient) → harmless.
-    # Recovery flow: credits were refunded during timeout, so this re-deducts them correctly.
-    deducted = False
-    if cost > 0 and user_id:
-        deduction = _deduct_user_credits_for_reconciliation(user_id, cost, verification_id, via=via)
-        deducted = deduction.get("deducted", False)
-        if deducted:
-            message = f"{message} （已扣费）"
-    _upsert_user_verification_result(verification_id, user_id, "pass", message, via=via, email=email)
-    return {"finalized": True, "deducted": deducted, "already_done": False}
+    """Finalize a task as successful. Delegates to the atomic state machine.
+    
+    Kept as a compatibility wrapper for existing callers (polling endpoints, etc).
+    The state machine handles all credit logic via the stored `cost` field.
+    """
+    import verification_history as vh
+    result = vh.transition_task_status(verification_id, "pass", message=message, user_id=user_id, via=via, email=email)
+    return {
+        "finalized": result.get("success", False) or result.get("reason") == "already_terminal",
+        "deducted": result.get("deducted", False),
+        "already_done": result.get("reason") == "already_terminal",
+        "status": "pass",
+        "reconciled": result.get("prev_status") == "failed",
+    }
 
 
 def _finalize_user_failure(verification_id: str, user_id: int, message: str, via: str = "", refund_cost: float = 0, email: str = ""):
-    existing = _get_user_verification_row(verification_id, user_id)
-    if existing and _is_terminal_history_status(existing["status"]):
-        # Even if already recorded, still attempt refund if cost > 0
-        # Previous bug: skipping refund here caused credits to be lost
-        if refund_cost and existing["status"] == "failed":
-            refund_result = _refund_user_credits(user_id, refund_cost, verification_id, via=via)
-            logging.info(f"[{via or 'task'}] Late refund attempt for already-finalized {verification_id}: refunded={refund_result.get('refunded')}")
-        return {
-            "finalized": existing["status"] == "failed",
-            "status": existing["status"],
-            "already_done": True,
-        }
-    refund_result = _refund_user_credits(user_id, refund_cost, verification_id, via=via) if refund_cost else {"refunded": False}
-    result = _upsert_user_verification_result(verification_id, user_id, "failed", message, via=via, email=email)
-    result["refunded"] = refund_result.get("refunded", False)
-    return result
+    """Finalize a task as failed. Delegates to the atomic state machine.
+    
+    Kept as a compatibility wrapper for existing callers.
+    The state machine handles refund logic via the stored `cost` field.
+    `refund_cost` param is now ignored — cost comes from DB.
+    """
+    import verification_history as vh
+    result = vh.transition_task_status(verification_id, "failed", message=message, user_id=user_id, via=via, email=email)
+    return {
+        "finalized": result.get("success", False) or result.get("reason") == "already_terminal",
+        "refunded": result.get("refunded", False),
+        "already_done": result.get("reason") == "already_terminal",
+        "status": "failed",
+    }
 
 def _is_timeout_error(exc: Exception) -> bool:
     return isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException))
@@ -9267,7 +9219,7 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     # Refund pre-deducted credits
     if user_id:
         try:
-            auth.update_credits(user_id, GPT_RECHARGE_COST)
+            auth.update_credits(user_id, GPT_RECHARGE_COST, reason="gpt_restart_refund", ref_id=task_id)
             logging.info(f"[GPT] Restart recovery: refunded {GPT_RECHARGE_COST} credits to user {user_id} for {task_id}")
         except Exception as e:
             logging.warning(f"[GPT] Restart recovery: refund failed for user {user_id}: {e}")
@@ -9390,6 +9342,13 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 "任务已提交，等待设备处理...",
                 via=sse_source_tag, email=request.email
             )
+            # Lock the cost into the DB row for the credit ledger
+            conn = database.get_connection()
+            conn.execute(
+                "UPDATE verification_history SET cost = ? WHERE verification_id = ?",
+                (cost, job_id)
+            )
+            conn.commit()
 
             # Broadcast initial submitted event for admin SSE
             event_meta = _build_verify_event_meta(sse_source_tag, request.email, user_id, "pixel_api")
@@ -13051,15 +13010,15 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         raise HTTPException(status_code=400, detail=f"无效通道: {channel}")
 
     # 先扣积分：检查余额并预扣
+    import time as _gpt_time
+    gpt_vid = f"gpt_{int(_gpt_time.time())}_{email[:8] if email else 'unknown'}"
     credits = user.get("credits", 0)
     if credits < GPT_RECHARGE_COST:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_RECHARGE_COST} 积分，剩余 {credits}）")
-    deduct_result = auth.deduct_credits(user_id, GPT_RECHARGE_COST)
+    deduct_result = auth.deduct_credits(user_id, GPT_RECHARGE_COST, reason="gpt_deduct", ref_id=gpt_vid)
     if not deduct_result:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {GPT_RECHARGE_COST} 积分）")
 
-    import time as _gpt_time
-    gpt_vid = f"gpt_{int(_gpt_time.time())}_{email[:8] if email else 'unknown'}"
     cdk_label = f"user:{user_id}" if user_id else ""
     _register_async_task("gpt", gpt_vid, {
         "user_id": user_id,
@@ -13359,7 +13318,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     except HTTPException:
         # 充值失败，退还预扣积分
         try:
-            auth.update_credits(user_id, GPT_RECHARGE_COST)
+            auth.update_credits(user_id, GPT_RECHARGE_COST, reason="gpt_refund", ref_id=gpt_vid)
             logging.info(f"[GPT] Refunded {GPT_RECHARGE_COST} credits to user {user_id} for {gpt_vid}")
         except Exception as refund_err:
             logging.error(f"[GPT] CRITICAL: refund failed for user {user_id}, cost={GPT_RECHARGE_COST}, vid={gpt_vid}: {refund_err}")
@@ -13371,7 +13330,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
         # 退还预扣积分
         try:
-            auth.update_credits(user_id, GPT_RECHARGE_COST)
+            auth.update_credits(user_id, GPT_RECHARGE_COST, reason="gpt_refund", ref_id=gpt_vid)
             logging.info(f"[GPT] Refunded {GPT_RECHARGE_COST} credits to user {user_id} for {gpt_vid}")
         except Exception as refund_err:
             logging.error(f"[GPT] CRITICAL: refund failed for user {user_id}, cost={GPT_RECHARGE_COST}, vid={gpt_vid}: {refund_err}")

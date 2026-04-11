@@ -187,6 +187,19 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_ir_inviter ON invitation_rewards(inviter_id);
             CREATE INDEX IF NOT EXISTS idx_ir_invitee ON invitation_rewards(invitee_id);
+
+            CREATE TABLE IF NOT EXISTS credit_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                balance_after REAL NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                ref_id TEXT DEFAULT '',
+                timestamp TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_ct_user ON credit_transactions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_ct_ref ON credit_transactions(ref_id);
+            CREATE INDEX IF NOT EXISTS idx_ct_time ON credit_transactions(timestamp);
         """)
 
         # Migrate existing JSON data
@@ -202,6 +215,8 @@ def init_db():
         _add_quota_columns_to_ypixel_cards(conn)
         _add_email_column_to_verification_history(conn)
         _add_has_consumed_column_to_users(conn)
+        _add_credit_fields_to_verification_history(conn)
+        _migrate_credit_fields(conn)
 
         conn.commit()
         _initialized = True
@@ -403,6 +418,60 @@ def _add_has_consumed_column_to_users(conn: sqlite3.Connection):
         auth_conn.close()
     except Exception as e:
         print(f"[DB] Error adding has_consumed column: {e}")
+
+
+def _add_credit_fields_to_verification_history(conn: sqlite3.Connection):
+    """Add cost and is_refunded columns to verification_history for the credit ledger system."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(verification_history)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "cost" not in columns:
+            conn.execute("ALTER TABLE verification_history ADD COLUMN cost REAL DEFAULT 0")
+            print("[DB] Added 'cost' column to verification_history table")
+        if "is_refunded" not in columns:
+            conn.execute("ALTER TABLE verification_history ADD COLUMN is_refunded INTEGER DEFAULT 0")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vh_refund ON verification_history(is_refunded)")
+            print("[DB] Added 'is_refunded' column to verification_history table")
+    except Exception as e:
+        print(f"[DB] Error adding credit fields: {e}")
+
+
+def _migrate_credit_fields(conn: sqlite3.Connection):
+    """One-time historical data migration for the credit ledger.
+    
+    Sets is_refunded based on current status:
+    - failed/cancel → is_refunded=1 (credits already returned)
+    - pass → is_refunded=0 (credits kept)
+    - processing → is_refunded=0 (credits pre-deducted)
+    
+    Idempotent: uses a kv_store flag to run only once.
+    """
+    try:
+        cursor = conn.execute("SELECT value FROM kv_store WHERE key = 'credit_fields_migrated'")
+        if cursor.fetchone():
+            return  # Already migrated
+
+        # Mark failed/cancel tasks as already refunded
+        conn.execute("""
+            UPDATE verification_history SET is_refunded = 1
+            WHERE status IN ('failed', 'cancel') AND COALESCE(is_refunded, 0) = 0
+        """)
+        # Mark pass tasks as not refunded (credits kept)
+        conn.execute("""
+            UPDATE verification_history SET is_refunded = 0
+            WHERE status = 'pass'
+        """)
+        # Mark processing tasks as not refunded (credits pre-deducted)
+        conn.execute("""
+            UPDATE verification_history SET is_refunded = 0
+            WHERE status = 'processing'
+        """)
+
+        conn.execute("INSERT OR REPLACE INTO kv_store (key, value) VALUES ('credit_fields_migrated', '1')")
+        conn.commit()
+        print("[DB] Credit fields migration completed (is_refunded set for all historical records)")
+    except Exception as e:
+        print(f"[DB] Error migrating credit fields: {e}")
 
 
 # ========== Backup Functions ==========

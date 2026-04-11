@@ -6074,6 +6074,7 @@ async def get_admin_credit_transactions(
     authorization: Optional[str] = Header(None),
     page: int = Query(1, ge=1),
     pageSize: int = Query(100, ge=1, le=500),
+    search: str = Query("", description="Search keyword"),
 ):
     """Get paginated credit transactions (audit logs) (admin only)"""
     _verify_admin_token(authorization)
@@ -6081,15 +6082,23 @@ async def get_admin_credit_transactions(
     conn = database.get_connection()
     offset = (page - 1) * pageSize
     
+    base_query = "FROM credit_transactions"
+    params = []
+    if search:
+        search = search.strip()
+        base_query += " WHERE CAST(user_id AS TEXT) LIKE ? OR ref_id LIKE ?"
+        params.extend([f"%{search}%", f"%{search}%"])
+    
     # Get total count
-    cursor = conn.execute("SELECT COUNT(*) FROM credit_transactions")
+    cursor = conn.execute(f"SELECT COUNT(*) {base_query}", params)
     total = cursor.fetchone()[0]
     
     # Get page data
+    query_params = params + [pageSize, offset]
     cursor = conn.execute(
-        "SELECT id, user_id, amount, balance_after, reason, ref_id, timestamp "
-        "FROM credit_transactions ORDER BY id DESC LIMIT ? OFFSET ?",
-        (pageSize, offset)
+        f"SELECT id, user_id, amount, balance_after, reason, ref_id, timestamp "
+        f"{base_query} ORDER BY id DESC LIMIT ? OFFSET ?",
+        query_params
     )
     rows = cursor.fetchall()
     

@@ -4718,6 +4718,9 @@ export default function Admin() {
     const [auditLogPage, setAuditLogPage] = useState(1);
     const [auditLogTotalPages, setAuditLogTotalPages] = useState(1);
     const [auditLogTotal, setAuditLogTotal] = useState(0);
+    const [auditLogSearch, setAuditLogSearch] = useState('');
+    const auditLogSearchRef = useRef('');
+    const auditLogSearchTimer = useRef(null);
 
     // Verification history state
     const [historyData, setHistoryData] = useState([]);
@@ -4952,7 +4955,8 @@ export default function Admin() {
         try {
             const token = user?.token || localStorage.getItem('verifykey-token');
             const headers = { 'Authorization': `Bearer ${token}` };
-            const res = await fetch(`${API_BASE}/api/admin/credit-transactions?page=${page}&pageSize=50`, { headers });
+            const searchParam = auditLogSearchRef.current ? `&search=${encodeURIComponent(auditLogSearchRef.current)}` : '';
+            const res = await fetch(`${API_BASE}/api/admin/credit-transactions?page=${page}&pageSize=50${searchParam}`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 setAuditLogs(data.transactions || []);
@@ -6711,9 +6715,28 @@ export default function Admin() {
                 {activeTab === 'audit' && (
                     <div className="tab-content">
                         <div className="card" style={{ padding: '24px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                                 <h3>💸 资金对账单 <span style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>({auditLogTotal} 条记录)</span></h3>
-                                <button className="btn btn-sm btn-secondary" onClick={() => fetchAuditLogs(auditLogPage)}>🔄 刷新</button>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                    <input
+                                        type="text"
+                                        className="input input-sm"
+                                        placeholder="搜索 User ID 或 单号..."
+                                        value={auditLogSearch}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setAuditLogSearch(val);
+                                            auditLogSearchRef.current = val;
+                                            if (auditLogSearchTimer.current) clearTimeout(auditLogSearchTimer.current);
+                                            auditLogSearchTimer.current = setTimeout(() => {
+                                                setAuditLogPage(1);
+                                                fetchAuditLogs(1);
+                                            }, 500);
+                                        }}
+                                        style={{ width: '220px' }}
+                                    />
+                                    <button className="btn btn-sm btn-secondary" onClick={() => fetchAuditLogs(1)}>🔄 刷新</button>
+                                </div>
                             </div>
                             <div className="users-table">
                                 <table className="data-table">

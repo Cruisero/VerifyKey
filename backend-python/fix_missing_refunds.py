@@ -17,25 +17,21 @@ def run_fix():
     conn = database.get_connection()
     cursor = conn.cursor()
     
-    # 查找所有被标记为 failed 或 cancel，但是 is_refunded=0 且 cost > 0 的记录
-    # 按照要求：增加时间限制，仅限于最近24小时内(也就是“今天”发生的新Bug订单)
+    # 我们先不做限制，查出所有 failed/cancel 的看看情况
     cursor.execute("""
-        SELECT id, verification_id, cdk, cost, via, message, timestamp
+        SELECT id, verification_id, cdk, cost, via, message, timestamp, IFNULL(is_refunded, 0) as is_refunded
         FROM verification_history
-        WHERE status IN ('failed', 'cancel') 
-          AND IFNULL(is_refunded, 0) = 0
-          AND cost > 0
+        WHERE status IN ('failed', 'cancel')
           AND cdk LIKE 'user:%'
-          AND timestamp >= date('now', '-1 day')
     """)
     
     rows = cursor.fetchall()
     
     if not rows:
-        print("✅ 没有找需要补发退款的订单！")
+        print("✅ 数据库里没有任何失败记录！")
         return
         
-    print(f"👀 一共找到 {len(rows)} 笔漏退的积分，准备开始退还...")
+    print(f"👀 一共找到 {len(rows)} 笔属于用户的失败记录。开始筛查漏退订单...")
     
     refunded_count = 0
     total_cost = 0.0
@@ -46,11 +42,17 @@ def run_fix():
         cdk = row["cdk"]
         record_id = row["id"]
         message = row["message"]
+        is_refunded = row["is_refunded"]
         
         try:
             user_id = int(cdk.replace("user:", ""))
         except ValueError:
-            print(f"⚠️ 跳过解析失败的用户标识: {cdk}")
+            continue
+            
+        # 如果已经退过了或者cost本来就是0，跳过
+        if is_refunded == 1 or not cost or cost <= 0:
+            if "avawan" in message or "avawan" in str(vid):
+                print(f"    [跳过] VID {vid} (User {user_id}) -> is_refunded={is_refunded}, cost={cost}")
             continue
             
         print(f"-----------------------------------------------------------------")

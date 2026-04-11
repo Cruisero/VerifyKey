@@ -8854,13 +8854,16 @@ async def _pixel_job_sweep():
                             headers={"X-API-Key": api_key},
                         )
                     sse_source = "pixel_auto" if "auto" in (row["via"] or "") else "pixel"
-                    if resp.status_code in (404, 502, 503):
-                        # Upstream lost this job — mark failed via state machine (auto-refunds)
+                    if resp.status_code == 404:
+                        # Upstream lost this job (404 Not Found) — mark failed via state machine (auto-refunds)
                         import verification_history as vh
                         vh.transition_task_status(vid, "failed", message="失败: 上游任务已丢失", user_id=user_id, via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
                         _pixel_job_context.pop(vid, None)
                         finalized_count += 1
+                        continue
+                    if resp.status_code in (502, 503, 504):
+                        # Transient errors: upstream API gateway is down/restarting. Skip and retry next sweep.
                         continue
                     if resp.status_code != 200:
                         continue

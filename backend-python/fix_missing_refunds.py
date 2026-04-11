@@ -18,6 +18,7 @@ def run_fix():
     cursor = conn.cursor()
     
     # 查找所有被标记为 failed 或 cancel，但是 is_refunded=0 且 cost > 0 的记录
+    # 按照要求：增加时间限制，仅限于最近24小时内(也就是“今天”发生的新Bug订单)
     cursor.execute("""
         SELECT id, verification_id, cdk, cost, via, message, timestamp
         FROM verification_history
@@ -25,6 +26,7 @@ def run_fix():
           AND IFNULL(is_refunded, 0) = 0
           AND cost > 0
           AND cdk LIKE 'user:%'
+          AND timestamp >= date('now', '-1 day')
     """)
     
     rows = cursor.fetchall()

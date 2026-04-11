@@ -477,14 +477,29 @@ def transition_task_status(
         if cursor.rowcount > 0:
             conn.commit()
             row = conn.execute(
-                "SELECT cost, cdk FROM verification_history WHERE verification_id=? ORDER BY rowid DESC LIMIT 1",
+                "SELECT cost, cdk, via FROM verification_history WHERE verification_id=? ORDER BY rowid DESC LIMIT 1",
                 (verification_id,)
             ).fetchone()
             cost = row["cost"] if row and "cost" in row.keys() else 0
+            via = row["via"] if row and "via" in row.keys() else ""
             uid = _extract_user_id(row["cdk"]) if row else user_id
+            
+            # 如果因为幽灵对账单导致 cost 丢失为 0，我们可以智能推断它本该有的金额
+            if (not cost or cost <= 0) and via:
+                if "auto" in str(via).lower():
+                    cost = 1.5
+                elif "pixel" in str(via).lower():
+                    cost = 1.0
+                    
             refunded = False
             if cost > 0 and uid:
+                import auth
                 auth.update_credits(uid, cost, reason="pixel_refund", ref_id=verification_id)
+                
+                # 顺便把这笔恢复正确的金额写回数据库，方便以后查账
+                conn.execute("UPDATE verification_history SET cost = ? WHERE verification_id = ?", (cost, verification_id))
+                conn.commit()
+                
                 refunded = True
             logging.info(f"[StateMachine] processing→{new_status} for {verification_id}, refunded={refunded}, cost={cost}")
             return {"success": True, "prev_status": "processing", "deducted": False, "refunded": refunded}

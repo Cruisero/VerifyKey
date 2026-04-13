@@ -2069,7 +2069,7 @@ class ForgotPasswordRequest(BaseModel):
     email: str
 
 @app.post("/api/auth/forgot-password")
-async def forgot_password_endpoint(request: ForgotPasswordRequest):
+async def forgot_password_endpoint(request: ForgotPasswordRequest, req: Request):
     """Send password reset email"""
     import email_service
 
@@ -2078,12 +2078,27 @@ async def forgot_password_endpoint(request: ForgotPasswordRequest):
         # Don't reveal whether email exists — always return success
         return {"success": True, "message": "如果该邮箱已注册，重置链接将发送到您的邮箱"}
 
-    # Build reset link using Referer or default
+    # Build reset link: config siteUrl > request Origin/Referer/Host > fallback
     import config_manager
     config = config_manager.get_config()
     site_url = config.get("siteUrl", "").rstrip("/")
     if not site_url:
-        site_url = "http://localhost:5173"
+        # Auto-detect from request headers
+        origin = req.headers.get("origin", "").rstrip("/")
+        referer = req.headers.get("referer", "")
+        host = req.headers.get("host", "")
+        if origin:
+            site_url = origin
+        elif referer:
+            # Extract scheme + host from referer (e.g. https://example.com/some/path -> https://example.com)
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            site_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+        if not site_url and host:
+            scheme = "https" if req.url.scheme == "https" or req.headers.get("x-forwarded-proto") == "https" else "http"
+            site_url = f"{scheme}://{host}"
+        if not site_url:
+            site_url = "http://localhost:5173"
     reset_link = f"{site_url}/reset-password?token={token}"
 
     sent = email_service.send_reset_email(request.email, reset_link)

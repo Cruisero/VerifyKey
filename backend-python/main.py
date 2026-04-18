@@ -9620,7 +9620,7 @@ async def pixel_get_job(job_id: str):
             stage_label = data.get("stage_label", "")
             if upstream_status == "queued":
                 if queue_pos >= 0:
-                    msg = f"⏳ 排队中 (前方 {queue_pos} 个任务)"
+                    msg = f"⏳ 排队中 (第 {queue_pos + 1} 位)"
                 else:
                     msg = "⏳ 排队中..."
             else:
@@ -10039,7 +10039,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
                                     stg = d.get("stage", 0)
                                     ts = d.get("total_stages", 6)
                                     if st == "queued" and qp >= 0:
-                                        msg = f"⏳ 排队中 (前方 {qp} 个任务)"
+                                        msg = f"⏳ 排队中 (第 {qp + 1} 位)"
                                     elif st == "running":
                                         pct = min(round((stg / ts) * 100), 99) if ts > 0 else 0
                                         msg = f"🔄 {pct}%"

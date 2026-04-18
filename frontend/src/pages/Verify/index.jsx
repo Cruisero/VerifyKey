@@ -1592,6 +1592,8 @@ export default function Verify() {
                                                     displayMsg = displayMsg.replace(/^订阅(成功|失败)[:：]?\s*/i, '').trim();
                                                     // Remove trailing colon
                                                     displayMsg = displayMsg.replace(/[:：]\s*$/, '').trim();
+                                                    // Strip internal repair markers (admin-only info)
+                                                    displayMsg = displayMsg.replace(/[（(]已修正扣费[）)]/g, '').trim();
                                                     
                                                     // Translate error codes
                                                     displayMsg = translateErrorCodes(displayMsg);

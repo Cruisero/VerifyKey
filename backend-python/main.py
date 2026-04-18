@@ -8619,6 +8619,7 @@ import threading
 import time as _time_mod
 
 _alert_cooldowns = {}  # key -> last_sent_timestamp
+_upixel_offline_since = None  # timestamp when UPixel was first detected offline
 
 def _run_alert_check():
     """Single pass: check all services and send alert email if issues found."""
@@ -8635,14 +8636,19 @@ def _run_alert_check():
     alerts = []
 
     # --- UPixel ---
+    global _upixel_offline_since
     upixel_cfg = config.get("pixelApi", {})
     if upixel_cfg.get("enabled") and upixel_cfg.get("apiKey") and not manual.get("upixel"):
+        upixel_offline = False
+        upixel_offline_reason = ""
         try:
             import httpx as _hx
             resp = _hx.get(f"{upixel_cfg.get('baseUrl', '')}/api/health", timeout=5)
             if resp.status_code != 200:
-                alerts.append({"service": "UPixel", "status": "离线", "reason": "API 无响应"})
+                upixel_offline = True
+                upixel_offline_reason = "API 无响应"
             else:
+                _upixel_offline_since = None  # recovered
                 b_resp = _hx.get(
                     f"{upixel_cfg.get('baseUrl', '')}/api/balance",
                     headers={"Authorization": f"Bearer {upixel_cfg.get('apiKey', '')}"},
@@ -8658,7 +8664,17 @@ def _run_alert_check():
                 else:
                     pass  # ignore balance query failures
         except Exception as e:
-            alerts.append({"service": "UPixel", "status": "离线", "reason": f"连接失败"})
+            upixel_offline = True
+            upixel_offline_reason = "连接失败"
+
+        if upixel_offline:
+            now_ts = _time_mod.time()
+            if _upixel_offline_since is None:
+                _upixel_offline_since = now_ts  # first detection, start the clock
+            elif now_ts - _upixel_offline_since >= 300:  # offline for 5+ minutes
+                alerts.append({"service": "UPixel", "status": "离线", "reason": upixel_offline_reason})
+        else:
+            _upixel_offline_since = None  # online, reset
 
     # --- KPixel ---
     kpixel_cfg = config.get("kpixelApi", {})

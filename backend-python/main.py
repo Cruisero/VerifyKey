@@ -8656,7 +8656,7 @@ def _run_alert_check():
                     elif bal <= 10:
                         alerts.append({"service": "UPixel", "status": "余额不足", "reason": f"当前余额: {bal}"})
                 else:
-                    alerts.append({"service": "UPixel", "status": "异常", "reason": "无法查询余额"})
+                    pass  # ignore balance query failures
         except Exception as e:
             alerts.append({"service": "UPixel", "status": "离线", "reason": f"连接失败"})
 
@@ -9032,7 +9032,7 @@ async def _repair_timeout_failed_tasks():
                     broadcast_verify_event({
                         "type": "progress", "vid": vid, "step": "result",
                         "status": "approved", "success": True,
-                        "message": "✅ 获取成功（已修正）",
+                        "message": "✅ 订阅成功",
                         "url": url, "recovered": True,
                         **event_meta,
                     })
@@ -9763,6 +9763,7 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
     pixel_cfg = _get_pixel_config()
     upstream_cancelled = False
     upstream_error = ""
+    upstream_network_error = False
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
@@ -9772,6 +9773,8 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
         if resp.status_code == 200:
             data = resp.json()
             upstream_cancelled = data.get("success", False)
+            if not upstream_cancelled:
+                upstream_error = data.get("message", "上游拒绝取消")
         else:
             try:
                 err_data = resp.json()
@@ -9780,11 +9783,12 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
                 upstream_error = f"HTTP {resp.status_code}"
     except Exception as e:
         upstream_error = str(e)
+        upstream_network_error = True
 
-    if not upstream_cancelled and upstream_error:
-        # If upstream says task is not cancellable (e.g. already running), return error
-        if "running" in upstream_error.lower() or "invalid_status" in upstream_error.lower():
-            raise HTTPException(status_code=409, detail=f"任务无法取消: {upstream_error}")
+    # If upstream explicitly rejected the cancel (not a network error), block it.
+    # This prevents refunding credits for a job that is still running on the upstream.
+    if not upstream_cancelled and not upstream_network_error:
+        raise HTTPException(status_code=409, detail="任务正在执行中，无法取消。如需强制取消请联系管理员。")
 
     # Cancel local polling task if any
     task = _pixel_polling_tasks.pop(job_id, None)
@@ -9792,9 +9796,9 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
         task.cancel()
 
     # Finalize as failed + refund
-    cancel_msg = "用户取消" if not is_admin else "管理员取消"
+    cancel_label = "管理员取消" if is_admin else "用户取消"
     event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api") if user_id else {}
-    _finalize_user_failure(job_id, user_id or user.get("id", 0), f"已取消: {cancel_msg}", via=sse_source, refund_cost=cost, email=email)
+    _finalize_user_failure(job_id, user_id or user.get("id", 0), f"已取消: {cancel_label}", via=sse_source, refund_cost=cost, email=email)
     _complete_async_task("pixel", job_id)
     _pixel_job_context.pop(job_id, None)
 
@@ -9804,7 +9808,7 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
         "step": "result",
         "status": "cancelled",
         "success": False,
-        "message": f"🚫 {cancel_msg}，积分已退还",
+        "message": "🚫 取消成功，积分已退还",
         "forceTerminalUpdate": True,
         **event_meta,
     })

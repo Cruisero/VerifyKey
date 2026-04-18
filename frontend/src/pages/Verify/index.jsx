@@ -562,10 +562,10 @@ export default function Verify() {
                     clearInterval(pollingRefs.current[resultId]);
                     delete pollingRefs.current[resultId];
                 }
-                // Update result status
+                // Update result status and mark as terminal so SSE won't overwrite it
                 setResults(prev => prev.map(r =>
                     (r.id === resultId || r.jobId === jobId)
-                        ? { ...r, status: 'failed', message: `🚫 ${t('cancelSuccess')}` }
+                        ? { ...r, status: 'failed', message: `🚫 ${t('cancelSuccess')}`, _cancelled: true }
                         : r
                 ));
                 refreshUser();
@@ -756,6 +756,8 @@ export default function Verify() {
 
             if (index >= 0) {
                 const next = [...prev];
+                // If user already cancelled this job locally, don't let SSE overwrite it
+                if (next[index]._cancelled) return prev;
                 // Filter out falsy values from incoming so we don't overwrite
                 // existing non-empty fields (e.g. url, tier) with empty strings
                 const filtered = {};
@@ -763,6 +765,10 @@ export default function Verify() {
                     if (v !== '' && v !== undefined && v !== null) {
                         filtered[k] = v;
                     }
+                }
+                // Preserve last known queue position — don't let -1 overwrite a valid position
+                if ((filtered.queuePosition === undefined || filtered.queuePosition < 0) && next[index].queuePosition >= 0) {
+                    filtered.queuePosition = next[index].queuePosition;
                 }
                 next[index] = {
                     ...next[index],
@@ -1086,7 +1092,7 @@ export default function Verify() {
         'PROXY_ERROR': '代理错误',
         'DEVICE_ERROR': '设备错误',
         'QUEUE_TIMEOUT': '排队超时',
-        'MANUAL_CANCEL': '任务被人工取消',
+        'MANUAL_CANCEL': '已取消',
         'INVALID_ACCOUNT': '账号信息有误',
         'POLL_TIMEOUT': '轮询超时',
         'SERVER_ERROR': '服务器错误',
@@ -1585,7 +1591,7 @@ export default function Verify() {
                                                     // Strip channel prefixes like "KPixel 成功:", "VPixel 失败:", etc.
                                                     displayMsg = displayMsg.replace(/^[A-Za-z]*Pixel\s*(成功|失败)?[:：]?\s*/i, '').trim();
                                                     displayMsg = displayMsg.replace(/^Google One URL:?\s*/i, '').trim();
-                                                    displayMsg = displayMsg.replace(/^获取成功[:：]?\s*/i, '').trim();
+                                                    displayMsg = displayMsg.replace(/^获取成功(\s*[（(][^）)]*[）)])?[:：]?\s*/i, '').trim();
                                                     // Strip "失败:" / "成功:" prefix
                                                     displayMsg = displayMsg.replace(/^(失败|成功)[:：]\s*/i, '').trim();
                                                     // Strip "订阅成功:" / "订阅失败:" prefix
@@ -1593,7 +1599,7 @@ export default function Verify() {
                                                     // Remove trailing colon
                                                     displayMsg = displayMsg.replace(/[:：]\s*$/, '').trim();
                                                     // Strip internal repair markers (admin-only info)
-                                                    displayMsg = displayMsg.replace(/[（(]已修正扣费[）)]/g, '').trim();
+                                                    displayMsg = displayMsg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
                                                     
                                                     // Translate error codes
                                                     displayMsg = translateErrorCodes(displayMsg);
@@ -1713,7 +1719,12 @@ export default function Verify() {
                                                             })() : result.status === 'processing' ? (
                                                                 <div className="result-message-row">
                                                                     <span className="result-message">
-                                                                        {(result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '')}
+                                                                        {(() => {
+                                                                            const raw = (result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
+                                                                            const isQueueMsg = raw.includes('排队') || raw.includes('queue') || raw.includes('Queuing') || raw.includes('提交') || raw.includes('Submitting') || raw.includes('Submitted');
+                                                                            if (isQueueMsg && result.queuePosition >= 0) return `排队中 (第 ${result.queuePosition + 1} 位)`;
+                                                                            return raw;
+                                                                        })()}
                                                                     </span>
                                                                     {result.jobId && (result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted')) && (
                                                                         <button
@@ -1749,11 +1760,18 @@ export default function Verify() {
                                                                     </button>
                                                                 </div>
                                                             )}
-                                                            {result.status !== 'processing' && (
-                                                                <span className="result-message">
-                                                                    {translateErrorCodes((result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed'))).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '').replace(/^(失败|成功)[:：]\s*/i, '').trim())}
-                                                                </span>
-                                                            )}
+                                                            {result.status !== 'processing' && (() => {
+                                                                let msg = (result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed')));
+                                                                msg = msg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
+                                                                msg = msg.replace(/^获取成功(\s*[（(][^）)]*[）)])?[:：]?\s*/i, '').trim();
+                                                                msg = msg.replace(/^(失败|成功)[:：]\s*/i, '').trim();
+                                                                msg = msg.replace(/^订阅(成功|失败)[:：]?\s*/i, '').trim();
+                                                                msg = msg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
+                                                                msg = translateErrorCodes(msg);
+                                                                const isGeneric = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(msg);
+                                                                if (result.status === 'success' && isGeneric) msg = t('verifySuccess');
+                                                                return msg ? <span className="result-message">{msg}</span> : null;
+                                                            })()}
                                                         </div>
                                                         <div className="result-meta">
                                                             {result.elapsed > 0 && (

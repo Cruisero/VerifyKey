@@ -305,8 +305,8 @@
 .results-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
-    max-height: 400px;
+    gap: 6px;
+    max-height: 480px;
     overflow-y: auto;
 }
 
@@ -314,11 +314,12 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: 12px var(--spacing-md);
     background: var(--bg-tertiary);
     border-radius: var(--radius-md);
     font-size: var(--text-sm);
     animation: slideUp 0.2s ease;
+    min-height: 52px;
 }
 
 .result-item.success {
@@ -560,8 +561,9 @@
 
 .result-id {
     font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -570,6 +572,16 @@
 .result-message {
     font-size: var(--text-xs);
     color: var(--text-tertiary);
+}
+
+.result-item.success .result-message {
+    color: #10b981;
+    font-weight: 500;
+}
+
+.result-item.failed .result-message {
+    color: #ef4444;
+    opacity: 0.9;
 }
 
 .result-time {
@@ -827,11 +839,12 @@
     }
 
     .result-item {
-        padding: var(--spacing-xs) var(--spacing-sm);
+        padding: 10px var(--spacing-sm);
+        min-height: 44px;
     }
 
     .result-id {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     /* Live Status Section */

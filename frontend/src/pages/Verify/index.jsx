@@ -135,7 +135,12 @@ export default function Verify() {
                 let changed = false;
                 for (const r of results) {
                     if (r.status !== 'processing' || !r.totalStages || r.totalStages <= 0) {
-                        if (next[r.id] !== undefined) { delete next[r.id]; changed = true; }
+                        if (next[r.id] !== undefined) {
+                            // Save last display pct so animation can resume from here if conditions recover
+                            const snap = stageSnapshotRef.current[r.id];
+                            if (snap) stageSnapshotRef.current[r.id] = { ...snap, savedDisplayPct: next[r.id] };
+                            delete next[r.id]; changed = true;
+                        }
                         continue;
                     }
                     const snap = stageSnapshotRef.current[r.id];
@@ -150,7 +155,7 @@ export default function Verify() {
                         stageSnapshotRef.current[r.id] = {
                             stage: r.stage,
                             ts: Date.now(),
-                            fromPct: next[r.id] ?? 0,
+                            fromPct: next[r.id] ?? snap.savedDisplayPct ?? 0,
                         };
                     }
                     const currentSnap = stageSnapshotRef.current[r.id];
@@ -174,7 +179,7 @@ export default function Verify() {
                     } else {
                         // Creep within current stage
                         const creepBase = Math.max(targetPct, currentSnap.fromPct);
-                        const creepGap = nextStagePct - creepBase;
+                        const creepGap = Math.max(nextStagePct - creepBase, 0);
                         const creep = creepGap * eased * 0.9;
                         const displayPct = Math.min(Math.round(creepBase + creep), 99);
                         if (next[r.id] !== displayPct) { next[r.id] = displayPct; changed = true; }
@@ -726,8 +731,8 @@ export default function Verify() {
             status: mappedStatus,
             timestamp: new Date().toISOString(),
             message: msg,
-            stage: event.stage || 0,
-            totalStages: event.totalStages || 0,
+            stage: event.stage != null ? event.stage : undefined,
+            totalStages: event.totalStages > 0 ? event.totalStages : undefined,
             stageLabel: event.stageLabel || '',
             url: event.url || '',
             jobId: verificationId,

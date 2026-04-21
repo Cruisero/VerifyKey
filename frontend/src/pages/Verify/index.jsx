@@ -157,14 +157,14 @@ export default function Verify() {
                     const targetPct = (r.stage / r.totalStages) * 100;
                     const nextStagePct = Math.min(((r.stage + 1) / r.totalStages) * 100, 99);
                     const elapsed = (Date.now() - currentSnap.ts) / 1000;
-                    const avgStageTime = 55; // ~55s per stage
+                    const avgStageTime = 40; // ~40s per stage (~4min total for 6 stages)
                     const progress = Math.min(elapsed / avgStageTime, 1);
                     // Ease-out: fast start, slow finish
                     const eased = 1 - Math.pow(1 - progress, 2);
 
                     // Phase 1: smoothly transition from fromPct to targetPct (catch-up)
                     // Phase 2: then creep from targetPct toward nextStagePct
-                    const catchUpDuration = 50; // seconds to catch up to new basePct
+                    const catchUpDuration = 15; // seconds to catch up to new basePct
                     if (elapsed < catchUpDuration && currentSnap.fromPct < targetPct) {
                         const catchUpProgress = Math.min(elapsed / catchUpDuration, 1);
                         // Using linear progression instead of fast ease-out to avoid rapid jumps at the start
@@ -175,7 +175,7 @@ export default function Verify() {
                         // Creep within current stage
                         const creepBase = Math.max(targetPct, currentSnap.fromPct);
                         const creepGap = nextStagePct - creepBase;
-                        const creep = creepGap * eased * 0.85;
+                        const creep = creepGap * eased * 0.9;
                         const displayPct = Math.min(Math.round(creepBase + creep), 99);
                         if (next[r.id] !== displayPct) { next[r.id] = displayPct; changed = true; }
                     }

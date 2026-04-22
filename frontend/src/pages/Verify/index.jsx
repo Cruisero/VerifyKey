@@ -1402,11 +1402,14 @@ export default function Verify() {
                                         </button>
                                         <button
                                             className={`tier-tab tier-tab-pro ${verifyTier === 'pro' ? 'active' : ''}`}
-                                            onClick={() => !serviceStatus?.kpixel || serviceStatus.kpixel.available ? setVerifyTier('pro') : null}
-                                            style={serviceStatus?.kpixel?.available === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                            onClick={() => {
+                                                const proAvail = serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
+                                                if (proAvail) setVerifyTier('pro');
+                                            }}
+                                            style={(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                         >
                                             {t('tierProTab')} <span className="tier-cost">1.5 {t('credits')}</span>
-                                            {serviceStatus?.kpixel?.available === false && (
+                                            {(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) && (
                                                 <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
                                             )}
                                         </button>

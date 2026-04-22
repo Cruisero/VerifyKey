@@ -3087,7 +3087,7 @@ function PixelApiTab() {
     const [ypixelAddingCards, setYpixelAddingCards] = useState(false);
     const [ypixelAddResult, setYpixelAddResult] = useState(null);
 
-    const [serviceMaint, setServiceMaint] = useState({ upixel: false, kpixel: false, vpixel: false });
+    const [serviceMaint, setServiceMaint] = useState({ upixel_normal: false, upixel_advanced: false });
     const [pixelJobs, setPixelJobs] = useState([]);
     const [history, setHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -3557,20 +3557,18 @@ function PixelApiTab() {
 
                     {/* Manual service maintenance toggles */}
                     <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 服务维护开关</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 UPixel 验证维护开关</div>
                         {[
-                            { key: 'upixel', label: '📦 普通验证 (UPixel)', desc: '关闭后用户无法使用 UPixel 普通验证' },
-                            { key: 'ypixel', label: '🌐 普通验证 (YPixel)', desc: '关闭后用户无法使用 YPixel 普通验证' },
-                            { key: 'kpixel', label: '⚡ 高级验证 (KPixel)', desc: '关闭后用户无法通过 KPixel 高级验证' },
-                            { key: 'vpixel', label: '🔮 高级验证 (VPixel)', desc: '关闭后用户无法通过 VPixel 高级验证' },
+                            { key: 'upixel_normal', label: '📦 普通验证（半自动）', desc: '开启后用户无法提交 UPixel 普通验证（1 积分）' },
+                            { key: 'upixel_advanced', label: '⚡ 高级验证（全自动）', desc: '开启后用户无法提交 UPixel 高级验证（1.5 积分）' },
                         ].map(s => (
                             <div key={s.key} style={{
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                padding: '10px 0', borderBottom: '1px solid var(--border-primary)',
+                                padding: '12px 0', borderBottom: '1px solid var(--border-primary)',
                             }}>
                                 <div>
                                     <div style={{ fontSize: '13px', fontWeight: 600 }}>{s.label}</div>
-                                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{s.desc}</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>
                                 </div>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                                     <span style={{

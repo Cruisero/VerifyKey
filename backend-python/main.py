@@ -8383,9 +8383,7 @@ async def get_service_status():
     upixel_ok = False
     upixel_reason = ""
     pixel_cfg = config.get("pixelApi", {})
-    if manual.get("upixel"):
-        upixel_reason = "管理员手动维护中"
-    elif not pixel_cfg.get("enabled"):
+    if not pixel_cfg.get("enabled"):
         upixel_reason = "未启用"
     elif not pixel_cfg.get("apiKey"):
         upixel_reason = "未配置 API Key"
@@ -8418,6 +8416,12 @@ async def get_service_status():
                     upixel_reason = "API 离线"
         except Exception:
             upixel_reason = "无法连接 API"
+
+    # Apply per-mode maintenance overrides
+    upixel_normal_available = upixel_ok and not manual.get("upixel_normal")
+    upixel_advanced_available = upixel_ok and not manual.get("upixel_advanced")
+    upixel_normal_reason = "管理员手动维护中" if manual.get("upixel_normal") else upixel_reason
+    upixel_advanced_reason = "管理员手动维护中" if manual.get("upixel_advanced") else upixel_reason
 
     # --- KPixel auto-detect ---
     kpixel_ok = False
@@ -8474,15 +8478,11 @@ async def get_service_status():
             except Exception:
                 vpixel_reason = "无法连接 API"
 
-    # Combined pro-tier availability: available if EITHER KPixel or VPixel or UPixel is up
-    pro_available = kpixel_ok or vpixel_ok or upixel_ok
+    # Combined pro-tier availability: available if EITHER KPixel or VPixel is up, or UPixel advanced is available
+    pro_available = kpixel_ok or vpixel_ok or upixel_advanced_available
     pro_reason = ""
     if not pro_available:
-        # Show the first meaningful reason
-        if kpixel_reason and vpixel_reason:
-            pro_reason = f"KPixel: {kpixel_reason}; VPixel: {vpixel_reason}"
-        else:
-            pro_reason = kpixel_reason or vpixel_reason
+        pro_reason = upixel_advanced_reason or kpixel_reason or vpixel_reason
 
     # --- YPixel auto-detect ---
     ypixel_ok = False
@@ -8504,8 +8504,8 @@ async def get_service_status():
         except Exception:
             ypixel_reason = "数据库查询失败"
 
-    # Combined standard-tier: available if EITHER UPixel or YPixel is up
-    standard_available = upixel_ok or ypixel_ok
+    # Combined standard-tier: available if UPixel normal or YPixel is up
+    standard_available = upixel_normal_available or ypixel_ok
 
     # --- GPT per-channel auto-detect ---
     gpt_channels_status = {}
@@ -8560,14 +8560,22 @@ async def get_service_status():
             gpt_team_reason = "数据库查询失败"
 
     return {
-        "upixel": {"available": upixel_ok, "reason": upixel_reason,
-                   "ypixelUp": ypixel_ok, "standardAvailable": standard_available},
+        "upixel": {
+            "available": upixel_ok, "reason": upixel_reason,
+            "normalAvailable": upixel_normal_available,
+            "advancedAvailable": upixel_advanced_available,
+            "normalReason": upixel_normal_reason,
+            "advancedReason": upixel_advanced_reason,
+            "ypixelUp": ypixel_ok, "standardAvailable": standard_available,
+        },
         "ypixel": {"available": ypixel_ok, "reason": ypixel_reason},
         "kpixel": {"available": pro_available, "reason": pro_reason,
                    "kpixelUp": kpixel_ok, "vpixelUp": vpixel_ok},
         "gpt": {"available": gpt_ok, "reason": gpt_reason, "channels": gpt_channels_status},
         "gpt_team": {"available": gpt_team_ok, "reason": gpt_team_reason},
         "manual": {
+            "upixel_normal": manual.get("upixel_normal", False),
+            "upixel_advanced": manual.get("upixel_advanced", False),
             "upixel": manual.get("upixel", False),
             "kpixel": manual.get("kpixel", False),
             "vpixel": manual.get("vpixel", False),
@@ -8599,7 +8607,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_team"):
+    for key in ("upixel_normal", "upixel_advanced", "upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_team"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -9330,6 +9338,14 @@ class PixelJobRequest(BaseModel):
 @app.post("/api/pixel/jobs")
 async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str] = Header(None)):
     """Submit a Pixel API job — validates user credits, proxies to iqless.icu, starts background poller."""
+    # Check per-mode maintenance flags
+    import config_manager as _cfg_mgr_pixel
+    _pixel_maint = _cfg_mgr_pixel.get_config().get("serviceMaintenance", {})
+    if request.mode == "auto" and _pixel_maint.get("upixel_advanced"):
+        raise HTTPException(status_code=503, detail="UPixel 高级验证正在维护中，请稍后再试")
+    if request.mode != "auto" and _pixel_maint.get("upixel_normal"):
+        raise HTTPException(status_code=503, detail="UPixel 普通验证正在维护中，请稍后再试")
+
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["enabled"] or not pixel_cfg["apiKey"]:
         _broadcast_submit_failure(

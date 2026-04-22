@@ -1325,7 +1325,17 @@ export default function Verify() {
                                         </li>
                                         <li>
                                             <span className="check-icon warn">🌐</span>
-                                            <span><strong>{t('guideBindCard')}</strong>{t('guideBindCardDesc')}</span>
+                                            <span><strong>{t('guideBindCard')}</strong>{t('guideBindCardDesc')}
+                                                <a href="https://www.notion.so/34a964dd569580a6a6cccc5a7d6d5284?source=copy_link"
+                                                    target="_blank" rel="noopener noreferrer"
+                                                    style={{
+                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                        fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                        marginLeft: '6px', verticalAlign: 'middle',
+                                                    }}
+                                                >绑卡教程 ▸</a>
+                                            </span>
                                         </li>
                                     </ul>
                                     <div className="guide-tier-info">

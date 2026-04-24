@@ -309,6 +309,13 @@ DEFAULT_CONFIG = {
         "estimatedEnd": None
     },
 
+    # Announcement banner
+    "announcement": {
+        "enabled": False,
+        "content": "",
+        "type": "info"
+    },
+
     # Per-service manual maintenance overrides
     "serviceMaintenance": {
         "upixel": False,

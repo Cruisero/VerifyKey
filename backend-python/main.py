@@ -8370,6 +8370,46 @@ async def toggle_maintenance(request: Request, authorization: Optional[str] = He
         raise HTTPException(status_code=500, detail="保存失败")
 
 
+# ========== Announcement ==========
+
+@app.get("/api/announcement")
+async def get_announcement():
+    """Get announcement (public, no auth needed)"""
+    import config_manager
+    config = config_manager.get_config()
+    a = config.get("announcement", {"enabled": False, "content": "", "type": "info"})
+    return {
+        "enabled": a.get("enabled", False),
+        "content": a.get("content", ""),
+        "type": a.get("type", "info")
+    }
+
+
+@app.post("/api/announcement")
+async def save_announcement(request: Request, authorization: Optional[str] = Header(None)):
+    """Save announcement (admin only)"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未登录")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="无权限")
+
+    data = await request.json()
+    import config_manager
+    result = config_manager.update_config({
+        "announcement": {
+            "enabled": bool(data.get("enabled", False)),
+            "content": data.get("content", ""),
+            "type": data.get("type", "info")
+        }
+    })
+    if result:
+        return {"success": True, "announcement": result.get("announcement", {})}
+    else:
+        raise HTTPException(status_code=500, detail="保存失败")
+
+
 # ========== Per-Service Maintenance Status ==========
 
 @app.get("/api/service-status")

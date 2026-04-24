@@ -1342,6 +1342,14 @@ export default function Verify() {
                                         <div className="tier-item">
                                             <span className="tier-badge normal">{t('tierNormal')}</span>
                                             <span dangerouslySetInnerHTML={{ __html: t('tierNormalDesc') }} />
+                                            <a href="/ghelper.html" target="_blank" rel="noopener noreferrer"
+                                                style={{
+                                                    background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                    border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                    fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                    marginLeft: '6px', verticalAlign: 'middle', whiteSpace: 'nowrap',
+                                                }}
+                                            >自行绑卡点击订阅工具 ▸</a>
                                         </div>
                                         <div className="tier-item">
                                             <span className="tier-badge pro">{t('tierPro')}</span>

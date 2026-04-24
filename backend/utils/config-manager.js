@@ -48,6 +48,13 @@ const DEFAULT_CONFIG = {
         estimatedEnd: null
     },
 
+    // Announcement banner
+    announcement: {
+        enabled: false,
+        content: '',
+        type: 'info' // 'info' | 'warning' | 'success'
+    },
+
     // Last updated
     updatedAt: null
 };

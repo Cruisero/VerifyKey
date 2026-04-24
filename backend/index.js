@@ -571,6 +571,31 @@ app.post('/api/maintenance', async (req, res) => {
     }
 });
 
+// Get announcement (public)
+app.get('/api/announcement', (req, res) => {
+    const { getConfig } = require('./utils/config-manager');
+    const config = getConfig();
+    const a = config.announcement || { enabled: false, content: '', type: 'info' };
+    res.json({ enabled: a.enabled, content: a.content || '', type: a.type || 'info' });
+});
+
+// Save announcement (admin only)
+app.post('/api/announcement', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: '未登录' });
+    const token = authHeader.split(' ')[1];
+    const user = await auth.verifyToken(token);
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: '无权限' });
+
+    const { enabled, content, type } = req.body;
+    const { updateConfig } = require('./utils/config-manager');
+    const result = updateConfig({
+        announcement: { enabled: !!enabled, content: content || '', type: type || 'info' }
+    });
+    if (result) res.json({ success: true, announcement: result.announcement });
+    else res.status(500).json({ error: '保存失败' });
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });

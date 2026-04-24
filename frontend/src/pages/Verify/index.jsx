@@ -1169,9 +1169,9 @@ export default function Verify() {
                         </p>
                     </div>
                     <div className="quick-actions">
-                        <div className="status-indicator">
-                            {getStatusBadge()}
-                        </div>
+                        <a href="/ghelper.html" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
+                            订阅工具
+                        </a>
                         <Link to="/api-docs" className="api-entry-pill">
                             <span className="api-entry-dot"></span>
                             API

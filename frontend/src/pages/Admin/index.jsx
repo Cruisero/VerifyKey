@@ -4886,6 +4886,13 @@ export default function Admin() {
     const [maintenanceSaving, setMaintenanceSaving] = useState(false);
     const [maintenanceSaved, setMaintenanceSaved] = useState(false);
 
+    // Announcement state
+    const [annEnabled, setAnnEnabled] = useState(false);
+    const [annContent, setAnnContent] = useState('');
+    const [annType, setAnnType] = useState('info');
+    const [annSaving, setAnnSaving] = useState(false);
+    const [annSaved, setAnnSaved] = useState(false);
+
     // Tips inline state
     const [tipsContent, setTipsContent] = useState('在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。\n如果验证链接中 verificationId= 后面是空的，建议直接换号。\n一次消耗一个配额，成功后自动扣除。');
     const [tipsSaving, setTipsSaving] = useState(false);
@@ -5238,6 +5245,18 @@ export default function Admin() {
                 } catch (e) {
                     console.warn('Failed to fetch maintenance status:', e);
                 }
+                // Fetch announcement
+                try {
+                    const res = await fetch(`${API_BASE}/api/announcement`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setAnnEnabled(data.enabled);
+                        setAnnContent(data.content || '');
+                        setAnnType(data.type || 'info');
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch announcement:', e);
+                }
                 // Fetch tips inline config
                 try {
                     const res = await fetch(`${API_BASE}/api/config`);
@@ -5296,6 +5315,22 @@ export default function Admin() {
         } finally {
             setMaintenanceSaving(false);
         }
+    };
+
+    const handleSaveAnnouncement = async () => {
+        setAnnSaving(true);
+        setAnnSaved(false);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/announcement`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ enabled: annEnabled, content: annContent, type: annType })
+            });
+            if (res.ok) { setAnnSaved(true); setTimeout(() => setAnnSaved(false), 2000); }
+            else { const err = await res.json(); alert(err.error || '保存失败'); }
+        } catch (e) { alert('保存失败: ' + e.message); }
+        finally { setAnnSaving(false); }
     };
 
     const handleSaveTips = async () => {
@@ -10705,6 +10740,117 @@ export default function Admin() {
                                         ) : (
                                             '保存设置'
                                         )}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Announcement Banner Card */}
+                            <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                                {/* Header */}
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: annEnabled
+                                        ? 'linear-gradient(135deg,#eff6ff,#dbeafe)'
+                                        : 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+                                    borderBottom: `1px solid ${annEnabled ? '#bfdbfe' : '#e2e8f0'}`,
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    transition: 'all 0.3s ease'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{
+                                            width: '10px', height: '10px', borderRadius: '50%',
+                                            background: annEnabled ? '#3b82f6' : '#cbd5e1',
+                                            boxShadow: annEnabled ? '0 0 8px rgba(59,130,246,0.5)' : 'none',
+                                            flexShrink: 0
+                                        }} />
+                                        <span style={{ fontSize: '14px', fontWeight: 600, color: annEnabled ? '#1d4ed8' : '#64748b' }}>
+                                            {annEnabled ? '公告已开启' : '公告未开启'}
+                                        </span>
+                                    </div>
+                                    <div onClick={() => setAnnEnabled(!annEnabled)} style={{
+                                        width: '52px', height: '28px', borderRadius: '14px', cursor: 'pointer',
+                                        background: annEnabled ? 'linear-gradient(135deg,#3b82f6,#2563eb)' : '#d1d5db',
+                                        position: 'relative', transition: 'all 0.3s ease', flexShrink: 0,
+                                        boxShadow: annEnabled ? '0 0 12px rgba(59,130,246,0.3)' : 'inset 0 1px 3px rgba(0,0,0,0.1)'
+                                    }}>
+                                        <div style={{
+                                            width: '22px', height: '22px', borderRadius: '50%', background: '#fff',
+                                            position: 'absolute', top: '3px',
+                                            left: annEnabled ? '27px' : '3px',
+                                            transition: 'left 0.25s cubic-bezier(0.4,0,0.2,1)',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                                        }} />
+                                    </div>
+                                </div>
+
+                                {/* Body */}
+                                <div style={{ padding: '20px 20px 0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                        <span style={{ fontSize: '20px' }}>📢</span>
+                                        <h3 style={{ margin: 0, fontSize: '16px' }}>网站公告设置</h3>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                        {/* Type selector */}
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary,#64748b)', marginBottom: '8px' }}>
+                                                🎨 公告类型
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                {[
+                                                    { value: 'info', label: '📢 通知', color: '#3b82f6', bg: '#eff6ff' },
+                                                    { value: 'warning', label: '⚠️ 警告', color: '#d97706', bg: '#fffbeb' },
+                                                    { value: 'success', label: '✅ 成功', color: '#16a34a', bg: '#f0fdf4' }
+                                                ].map(opt => (
+                                                    <button key={opt.value} onClick={() => setAnnType(opt.value)} style={{
+                                                        padding: '6px 14px', borderRadius: '8px', border: '1.5px solid',
+                                                        borderColor: annType === opt.value ? opt.color : '#e2e8f0',
+                                                        background: annType === opt.value ? opt.bg : 'transparent',
+                                                        color: annType === opt.value ? opt.color : '#94a3b8',
+                                                        fontWeight: 600, fontSize: '13px', cursor: 'pointer',
+                                                        transition: 'all 0.15s'
+                                                    }}>{opt.label}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {/* Content */}
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary,#64748b)', marginBottom: '6px' }}>
+                                                📝 公告内容
+                                            </label>
+                                            <textarea
+                                                className="input textarea"
+                                                placeholder="输入向用户显示的公告内容..."
+                                                rows={3}
+                                                value={annContent}
+                                                onChange={(e) => setAnnContent(e.target.value)}
+                                                style={{ resize: 'vertical', minHeight: '72px', fontSize: '14px', lineHeight: '1.5', width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Action Bar */}
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                    padding: '16px 20px', marginTop: '20px',
+                                    borderTop: '1px solid var(--border-color,#e2e8f0)',
+                                    background: 'var(--bg-secondary,#f8fafc)'
+                                }}>
+                                    {annSaved && (
+                                        <span style={{ color: '#10b981', fontSize: '13px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span>✓</span> 已保存
+                                        </span>
+                                    )}
+                                    <button onClick={handleSaveAnnouncement} disabled={annSaving} style={{
+                                        padding: '8px 24px', borderRadius: '8px', border: 'none',
+                                        cursor: annSaving ? 'not-allowed' : 'pointer',
+                                        fontSize: '14px', fontWeight: 600, color: '#fff',
+                                        background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
+                                        boxShadow: '0 2px 8px rgba(59,130,246,0.3)',
+                                        opacity: annSaving ? 0.7 : 1,
+                                        display: 'flex', alignItems: 'center', gap: '6px'
+                                    }}>
+                                        {annSaving ? <><span className="loading-spinner small" /> 保存中...</> : '保存公告'}
                                     </button>
                                 </div>
                             </div>

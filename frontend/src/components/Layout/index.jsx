@@ -14,6 +14,8 @@ export default function Layout({ children }) {
     const { lang, toggleLang, t } = useLang();
     const { user, logout, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
+    const [announcement, setAnnouncement] = useState(null);
+    const [annDismissed, setAnnDismissed] = useState(false);
     const [showDropdown, setShowDropdown] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [showCreditsPopover, setShowCreditsPopover] = useState(false);
@@ -25,6 +27,13 @@ export default function Layout({ children }) {
     const dropdownRef = useRef(null);
     const inviteRef = useRef(null);
     const creditsRef = useRef(null);
+
+    useEffect(() => {
+        fetch(`${API_BASE}/api/announcement`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data?.enabled && data.content) setAnnouncement(data); })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -317,6 +326,24 @@ export default function Layout({ children }) {
                 </div>
             </header>
 
+            {announcement && !annDismissed && (
+                <div style={{
+                    background: announcement.type === 'warning' ? 'linear-gradient(90deg,#fffbeb,#fef9c3)' :
+                                announcement.type === 'success' ? 'linear-gradient(90deg,#f0fdf4,#dcfce7)' :
+                                'linear-gradient(90deg,#eff6ff,#dbeafe)',
+                    borderBottom: `1px solid ${announcement.type === 'warning' ? '#fde68a' : announcement.type === 'success' ? '#bbf7d0' : '#bfdbfe'}`,
+                    padding: '8px 20px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                    fontSize: '13px', color: '#1e293b', position: 'relative'
+                }}>
+                    <span>{announcement.type === 'warning' ? '⚠️' : announcement.type === 'success' ? '✅' : '📢'}</span>
+                    <span>{announcement.content}</span>
+                    <button onClick={() => setAnnDismissed(true)} style={{
+                        position: 'absolute', right: '14px', background: 'none', border: 'none',
+                        cursor: 'pointer', fontSize: '15px', color: '#94a3b8', lineHeight: 1, padding: '2px 4px'
+                    }}>✕</button>
+                </div>
+            )}
             <main className="main-content">
                 {children}
             </main>

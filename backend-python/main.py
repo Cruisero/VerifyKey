@@ -12197,8 +12197,8 @@ GPT_AIC_RECHARGE_BASE = "https://aichong.plus/api"
 GPT_AIC_ORIGIN = "https://aichong.plus"
 GPT_NITRO_RECHARGE_BASE = "https://receipt-api.nitro.xin"
 GPT_NITRO_ORIGIN = "https://receipt.nitro.xin"
-GPT_RECHARGE_COST = 1.5  # CDK points per successful recharge
-GPT_TEAM_INVITE_COST = 0.3
+GPT_RECHARGE_COST = 3.0  # CDK points per successful recharge
+GPT_TEAM_INVITE_COST = 0.6
 GPT_KEY_CHANNELS = ("sbs", "red", "vip", "aic", "nitro")
 GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg", "api")
 

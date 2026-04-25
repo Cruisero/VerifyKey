@@ -9027,17 +9027,7 @@ async def _repair_timeout_failed_tasks():
             "ORDER BY rowid DESC LIMIT 500"
         ).fetchall()
 
-        # Case 2: Already repaired to pass but credits not deducted (no marker)
-        # These were fixed by previous deployment without the deduct code
-        pass_rows = conn.execute(
-            "SELECT verification_id, cdk, email, via FROM verification_history "
-            "WHERE status = 'pass' AND via IN ('pixel', 'pixel_auto') "
-            "AND message LIKE '%订阅成功%' AND message NOT LIKE '%已修正扣费%' "
-            "AND timestamp > '2026-04-10T18:00:00' "
-            "ORDER BY rowid DESC LIMIT 500"
-        ).fetchall()
-
-        all_rows = list(failed_rows) + list(pass_rows)
+        all_rows = list(failed_rows)
         if not all_rows:
             print("[PixelRepair] No tasks to repair")
             return

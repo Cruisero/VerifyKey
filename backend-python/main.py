@@ -8555,6 +8555,17 @@ async def get_service_status():
             gpt_channels_status[ch] = {"available": False, "reason": "管理员手动维护中"}
         else:
             try:
+                if ch == "api":
+                    import config_manager as _cfg_mgr
+                    _plus_cfg = _cfg_mgr.get_config().get("gptPlusApi", {})
+                    if not _plus_cfg.get("enabled"):
+                        gpt_channels_status[ch] = {"available": False, "reason": "API 通道未启用"}
+                        continue
+                    if not _plus_cfg.get("baseUrl") or not _plus_cfg.get("apiKey"):
+                        gpt_channels_status[ch] = {"available": False, "reason": "API 通道未配置"}
+                        continue
+                    gpt_channels_status[ch] = {"available": True, "reason": ""}
+                    continue
                 if ch == "tg":
                     if not _get_gpt_tg_config().get("enabled"):
                         gpt_channels_status[ch] = {"available": False, "reason": "TG Bot 通道未启用"}

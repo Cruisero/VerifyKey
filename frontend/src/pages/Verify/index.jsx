@@ -192,7 +192,7 @@ export default function Verify() {
     }, [results]);
 
     const { t, lang } = useLang();
-    const gptCurrentCost = gptMode === 'team' ? 0.3 : 1.5;
+    const gptCurrentCost = gptMode === 'team' ? 0.6 : 3;
     const gptCurrentTargetEmail = gptMode === 'team' ? gptInviteEmail : gptEmail;
 
     // Build localized error descriptions
@@ -1235,14 +1235,14 @@ export default function Verify() {
                                             <span className="credits-dot gpt"></span>
                                             {t('gptMonthly')}
                                         </div>
-                                        <span className="credits-price-val">-1.5 {t('credits')}</span>
+                                        <span className="credits-price-val">-3 {t('credits')}</span>
                                     </div>
                                     <div className="credits-price-item">
                                         <div className="credits-price-service">
                                             <span className="credits-dot gpt"></span>
                                             {t('gptTeamInviteRule')}
                                         </div>
-                                        <span className="credits-price-val">-0.3 {t('credits')}</span>
+                                        <span className="credits-price-val">-0.6 {t('credits')}</span>
                                     </div>
                                     <div className="credits-price-item invite">
                                         <div className="credits-price-service">

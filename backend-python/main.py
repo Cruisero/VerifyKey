@@ -12702,9 +12702,15 @@ async def _gpt_plus_api_recharge(access_token: str, gpt_vid: str = "", event_met
         return {"success": False, "message": "充值服务暂时不可用，请稍后再试"}
     if resp.status_code != 202:
         try:
-            detail = resp.json().get("detail", f"提交失败 HTTP {resp.status_code}")
+            detail = resp.json().get("detail", "") or resp.json().get("error", "")
         except Exception:
+            detail = ""
+        if not detail:
             detail = f"提交失败 HTTP {resp.status_code}"
+        elif "invalid" in detail.lower() and "token" in detail.lower():
+            detail = "提交失败：Session Token 无效或已过期，请重新获取"
+        elif "unauthorized" in detail.lower():
+            detail = "提交失败：API Key 无效，请联系管理员"
         return {"success": False, "message": detail}
 
     job_data = resp.json()
@@ -12746,7 +12752,24 @@ async def _gpt_plus_api_recharge(access_token: str, gpt_vid: str = "", event_met
         if status == "done":
             return {"success": True, "message": "充值成功"}
         elif status == "failed":
-            error = poll_data.get("error") or "充值失败，费用已自动退回"
+            _raw_error = (poll_data.get("error") or "").strip()
+            _error_map = {
+                "processing failed, subscription not activated, please try again later": "充值失败：订阅未能激活，请稍后重试（积分已退回）",
+                "subscription not activated": "充值失败：订阅未能激活，请稍后重试（积分已退回）",
+                "invalid token": "充值失败：Session Token 无效或已过期，请重新获取",
+                "invalid access token": "充值失败：Session Token 无效或已过期，请重新获取",
+                "token expired": "充值失败：Session Token 已过期，请重新登录 ChatGPT 获取",
+                "account already subscribed": "充值失败：该账号已有活跃订阅，无需再次充值",
+                "already subscribed": "充值失败：该账号已有活跃订阅，无需再次充值",
+                "insufficient balance": "充值失败：充值服务余额不足，请联系管理员",
+                "service unavailable": "充值失败：充值服务暂时不可用，请稍后重试",
+            }
+            _error_cn = None
+            for _key, _val in _error_map.items():
+                if _key in _raw_error.lower():
+                    _error_cn = _val
+                    break
+            error = _error_cn or (_raw_error if _raw_error else "充值失败，请稍后重试（积分已退回）")
             return {"success": False, "message": error}
 
         # pending / processing: broadcast updated ETA and loop

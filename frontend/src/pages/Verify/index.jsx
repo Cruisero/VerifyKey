@@ -1045,10 +1045,11 @@ export default function Verify() {
         }
     }, [getToken]);
 
-    // Auto-fetch GPT history when user logs in or tab switches
+    // Reset GPT history view when switching tabs
     useEffect(() => {
-        if (user) fetchUserHistory('gpt');
-    }, [user, gptMode, fetchUserHistory]);
+        setShowGptHistory(false);
+        setGptHistoryData([]);
+    }, [gptMode]);
 
     const clearHistory = () => {
         setHistoryData([]);
@@ -1057,6 +1058,7 @@ export default function Verify() {
 
     const clearGptHistory = () => {
         setGptHistoryData([]);
+        setShowGptHistory(false);
     };
 
     const getStatusBadge = () => {
@@ -2080,122 +2082,131 @@ export default function Verify() {
                             </div>
 
                             {/* GPT Results Panel */}
-                            {(() => {
-                                const filteredGptHistory = gptHistoryData.filter(h =>
-                                    gptMode === 'plus'
-                                        ? (h.subtype === 'plus' || (!h.subtype && h.via !== 'gpt_team'))
-                                        : (h.subtype === 'team' || h.via === 'gpt_team')
-                                );
-                                return (
-                                <div className="panel results-panel card">
-                                    <div className="panel-header">
-                                        <div className="panel-title">
-                                            <span className="panel-icon">📜</span>
-                                            <span>{gptMode === 'team' ? t('gptTeamPanelHistoryTitle') : t('gptPanelHistoryTitle')}</span>
-                                            <span className="result-count">({filteredGptHistory.length + (gptRecharging || gptSuccess ? 1 : 0)})</span>
-                                        </div>
-                                        <div className="panel-actions">
-                                            <button
-                                                className="btn btn-sm btn-secondary"
-                                                onClick={() => fetchUserHistory('gpt')}
-                                            >
-                                                {t('refreshBtn')}
-                                            </button>
-                                            <button className="btn btn-sm btn-secondary" onClick={clearGptHistory} disabled={filteredGptHistory.length === 0}>
+                            <div className="panel results-panel card">
+                                <div className="panel-header">
+                                    <div className="panel-title">
+                                        <span className="panel-icon">{showGptHistory ? '📜' : '📋'}</span>
+                                        <span>{showGptHistory ? (gptMode === 'team' ? t('gptTeamPanelHistoryTitle') : t('gptPanelHistoryTitle')) : (gptMode === 'team' ? t('gptTeamPanelTitle') : t('gptPanelTitle'))}</span>
+                                        <span className="result-count">
+                                            ({showGptHistory
+                                                ? gptHistoryData.filter(h => gptMode === 'plus' ? (h.subtype === 'plus' || (!h.subtype && h.via !== 'gpt_team')) : (h.subtype === 'team' || h.via === 'gpt_team')).length
+                                                : (gptRecharging || gptSuccess || gptResultMsg ? 1 : 0)})
+                                        </span>
+                                    </div>
+                                    <div className="panel-actions">
+                                        <button
+                                            className={`btn btn-sm ${showGptHistory ? 'btn-primary' : 'btn-secondary'}`}
+                                            onClick={() => {
+                                                const next = !showGptHistory;
+                                                setShowGptHistory(next);
+                                                if (next) fetchUserHistory('gpt');
+                                            }}
+                                        >
+                                            {showGptHistory ? t('backBtn') : t('historyBtn')}
+                                        </button>
+                                        {showGptHistory ? (
+                                            <button className="btn btn-sm btn-secondary" onClick={clearGptHistory}
+                                                disabled={gptHistoryData.filter(h => gptMode === 'plus' ? (h.subtype === 'plus' || (!h.subtype && h.via !== 'gpt_team')) : (h.subtype === 'team' || h.via === 'gpt_team')).length === 0}>
                                                 {t('clearBtn')}
                                             </button>
-                                        </div>
+                                        ) : (
+                                            <button className="btn btn-sm btn-secondary" onClick={() => {
+                                                setGptSession(''); setGptEmail(''); setGptInviteEmail('');
+                                                setGptSuccess(false); setGptResultMsg(''); setGptError(''); setGptCardKey('');
+                                            }}>
+                                                {t('clearBtn')}
+                                            </button>
+                                        )}
                                     </div>
-                                    <div className="panel-body">
-                                        <div className="results-list">
-                                            {/* Live card: in-progress or just succeeded */}
-                                            {gptRecharging && (
-                                                <div className="result-item processing" style={{ background: 'var(--bg-tertiary)', borderRadius: '8px', marginBottom: '8px' }}>
-                                                    <div className="result-status">
-                                                        <span className="loading-spinner small"></span>
-                                                    </div>
-                                                    <div className="result-info">
-                                                        <div className="result-main-row">
-                                                            <span className="result-id">{gptCurrentTargetEmail || 'ChatGPT'}</span>
-                                                        </div>
-                                                        <span className="result-message">
-                                                            {gptMode === 'team' ? t('gptTeamInvitingMsg') : (gptWaitMsg || t('gptRechargingMsg'))}
-                                                        </span>
-                                                        {gptWaitMsg && gptMode === 'plus' && (
-                                                            <span className="result-message" style={{ fontSize: '11px', opacity: 0.7 }}>充值完成后积分自动扣除，请耐心等待</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {gptSuccess && !gptRecharging && (
-                                                <div className="result-item history success" style={{ marginBottom: '8px' }}>
-                                                    <div className="result-status">
-                                                        <span className="status-icon success">✓</span>
-                                                    </div>
-                                                    <div className="result-info">
-                                                        <div className="result-main-row">
-                                                            <span className="result-id">{gptCurrentTargetEmail || 'ChatGPT'}</span>
-                                                        </div>
-                                                        <span className="result-message">{gptMode === 'team' ? t('gptTeamSuccessTitle') : t('gptSuccessTitle')}</span>
-                                                    </div>
-                                                    <div className="result-meta">
-                                                        <button
-                                                            className="btn btn-sm btn-secondary"
-                                                            onClick={() => {
-                                                                setGptSession('');
-                                                                setGptEmail('');
-                                                                setGptInviteEmail('');
-                                                                setGptSuccess(false);
-                                                                setGptResultMsg('');
-                                                                setGptError('');
-                                                                setGptCardKey('');
-                                                            }}
-                                                        >
-                                                            {t('gptContinue')}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {/* History records filtered by tab */}
-                                            {filteredGptHistory.length === 0 && !gptRecharging && !gptSuccess ? (
+                                </div>
+                                <div className="panel-body">
+                                    {showGptHistory ? (
+                                        /* History View — filtered by tab */
+                                        (() => {
+                                            const filtered = gptHistoryData.filter(h =>
+                                                gptMode === 'plus'
+                                                    ? (h.subtype === 'plus' || (!h.subtype && h.via !== 'gpt_team'))
+                                                    : (h.subtype === 'team' || h.via === 'gpt_team')
+                                            );
+                                            return filtered.length === 0 ? (
                                                 <div className="empty-results">
                                                     <div className="empty-icon">📜</div>
                                                     <p>{t('gptNoHistory')}</p>
-                                                    <p className="empty-hint">{gptMode === 'team' ? t('gptTeamResultNote') : t('gptResultNote')}</p>
+                                                    <p className="empty-hint">{t('gptNoHistoryHint')}</p>
                                                 </div>
                                             ) : (
-                                                filteredGptHistory.map((item) => {
-                                                    const displayStatus = item.status === 'pass' || item.status === 'success' ? 'success' : 'failed';
-                                                    let displayMsg = (item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
-                                                    displayMsg = translateErrorCodes(displayMsg);
-                                                    const isGenericSuccess = /^(充值成功|Plus\s*充值成功|ChatGPT\s*(Plus\s*)?充值成功|Team\s*邀请成功|邀请成功|Recharge successful|Success)$/i.test(displayMsg);
-                                                    const showMsg = displayMsg && !(displayStatus === 'success' && isGenericSuccess);
-                                                    return (
-                                                        <div key={item.id} className={`result-item history ${displayStatus}`}>
-                                                            <div className="result-status">
-                                                                {displayStatus === 'success'
-                                                                    ? <span className="status-icon success">✓</span>
-                                                                    : <span className="status-icon failed">✕</span>}
-                                                            </div>
-                                                            <div className="result-info">
-                                                                <div className="result-main-row">
-                                                                    <span className="result-id">{item.email || 'ChatGPT'}</span>
+                                                <div className="results-list">
+                                                    {filtered.map((item) => {
+                                                        const displayStatus = item.status === 'pass' || item.status === 'success' ? 'success' : 'failed';
+                                                        let displayMsg = (item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
+                                                        displayMsg = translateErrorCodes(displayMsg);
+                                                        const isGenericSuccess = /^(充值成功|Plus\s*充值成功|ChatGPT\s*(Plus\s*)?充值成功|Team\s*邀请成功|邀请成功|Recharge successful|Success)$/i.test(displayMsg);
+                                                        const showMsg = displayMsg && !(displayStatus === 'success' && isGenericSuccess);
+                                                        return (
+                                                            <div key={item.id} className={`result-item history ${displayStatus}`}>
+                                                                <div className="result-status">
+                                                                    {displayStatus === 'success'
+                                                                        ? <span className="status-icon success">✓</span>
+                                                                        : <span className="status-icon failed">✕</span>}
                                                                 </div>
-                                                                {showMsg && <span className="result-message">{displayMsg}</span>}
-                                                                {!showMsg && displayStatus !== 'success' && <span className="result-message">{t('rechargeFailed')}</span>}
+                                                                <div className="result-info">
+                                                                    <div className="result-main-row">
+                                                                        <span className="result-id">{item.email || 'ChatGPT'}</span>
+                                                                    </div>
+                                                                    {showMsg && <span className="result-message">{displayMsg}</span>}
+                                                                    {!showMsg && displayStatus !== 'success' && <span className="result-message">{t('rechargeFailed')}</span>}
+                                                                </div>
+                                                                <div className="result-meta">
+                                                                    <span className="result-time">{formatTime(item.timestamp)}</span>
+                                                                </div>
                                                             </div>
-                                                            <div className="result-meta">
-                                                                <span className="result-time">{formatTime(item.timestamp)}</span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()
+                                    ) : (
+                                        /* Current Result View */
+                                        <>
+                                            {!gptSuccess && !gptRecharging && !gptResultMsg && (
+                                                <div className="empty-results">
+                                                    <div className="empty-icon">📭</div>
+                                                    <p>{gptMode === 'team' ? t('gptTeamResultHint') : t('gptResultHint')}</p>
+                                                    <p className="empty-hint">{gptMode === 'team' ? t('gptTeamResultNote') : t('gptResultNote')}</p>
+                                                </div>
                                             )}
-                                        </div>
-                                    </div>
+                                            {gptRecharging && (
+                                                <div style={{ textAlign: 'center', padding: '32px' }}>
+                                                    <span className="loading-spinner"></span>
+                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>
+                                                        {gptMode === 'team' ? t('gptTeamInvitingMsg') : (gptWaitMsg || t('gptRechargingMsg'))}
+                                                    </p>
+                                                    {gptWaitMsg && gptMode === 'plus' && (
+                                                        <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-tertiary)' }}>充值完成后积分自动扣除，请耐心等待</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {gptSuccess && (
+                                                <div style={{ textAlign: 'center', padding: '24px' }}>
+                                                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
+                                                    <h3 style={{ color: '#059669', marginBottom: '8px' }}>{gptMode === 'team' ? t('gptTeamSuccessTitle') : t('gptSuccessTitle')}</h3>
+                                                    <p style={{ color: 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: (gptMode === 'team' ? t('gptTeamSuccessDesc') : t('gptSuccessDesc')).replace('{email}', gptCurrentTargetEmail) }} />
+                                                    <button
+                                                        className="btn btn-primary"
+                                                        style={{ marginTop: '16px' }}
+                                                        onClick={() => {
+                                                            setGptSession(''); setGptEmail(''); setGptInviteEmail('');
+                                                            setGptSuccess(false); setGptResultMsg(''); setGptError(''); setGptCardKey('');
+                                                        }}
+                                                    >
+                                                        {t('gptContinue')}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
-                                );
-                            })()}
+                            </div>
                         </>
                     )}
                     {/* Credits Action Buttons (shared across tabs) */}

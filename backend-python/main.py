@@ -8522,13 +8522,7 @@ async def get_service_status():
             except Exception:
                 vpixel_reason = "无法连接 API"
 
-    # Combined pro-tier availability: available if EITHER KPixel or VPixel is up, or UPixel advanced is available
-    pro_available = kpixel_ok or vpixel_ok or upixel_advanced_available
-    pro_reason = ""
-    if not pro_available:
-        pro_reason = upixel_advanced_reason or kpixel_reason or vpixel_reason
-
-    # --- YPixel auto-detect ---
+    # --- YPixel auto-detect (for admin diagnostics only) ---
     ypixel_ok = False
     ypixel_reason = ""
     ypixel_cfg = config.get("ypixelApi", {})
@@ -8548,10 +8542,15 @@ async def get_service_status():
         except Exception:
             ypixel_reason = "数据库查询失败"
 
-    # Combined standard-tier: available if UPixel normal or YPixel is up
-    standard_available = upixel_normal_available or ypixel_ok
+    # --- Gemini 普通验证: purely manual toggle ---
+    standard_available = not manual.get("gemini_normal", False)
+    standard_reason = "管理员手动维护中" if manual.get("gemini_normal") else ""
 
-    # --- GPT per-channel auto-detect ---
+    # --- Gemini 高级验证: purely manual toggle ---
+    pro_available = not manual.get("gemini_advanced", False)
+    pro_reason = "管理员手动维护中" if manual.get("gemini_advanced") else ""
+
+    # --- GPT Plus: purely manual toggle (per-channel status kept for admin info) ---
     gpt_channels_status = {}
     for ch in GPT_CHANNELS:
         maint_key = f"gpt_{ch}"
@@ -8590,37 +8589,20 @@ async def get_service_status():
                     gpt_channels_status[ch] = {"available": False, "reason": "无可用卡密"}
             except Exception:
                 gpt_channels_status[ch] = {"available": False, "reason": "数据库查询失败"}
-    gpt_ok = any(c["available"] for c in gpt_channels_status.values())
-    gpt_reason = "" if gpt_ok else "所有充值通道不可用"
+    gpt_ok = not manual.get("gpt_plus", False)
+    gpt_reason = "管理员手动维护中" if manual.get("gpt_plus") else ""
 
-    # --- GPT Team auto-detect ---
-    gpt_team_ok = False
-    gpt_team_reason = ""
-    if manual.get("gpt_team"):
-        gpt_team_reason = "管理员手动维护中"
-    else:
-        try:
-            conn = database.get_connection()
-            active_with_seats = conn.execute(
-                """
-                SELECT COUNT(*) FROM gpt_team_accounts
-                WHERE status = 'active' AND current_members < max_members
-                """
-            ).fetchone()[0]
-            if active_with_seats > 0:
-                gpt_team_ok = True
-            else:
-                gpt_team_reason = "暂无可用 Team 名额"
-        except Exception:
-            gpt_team_reason = "数据库查询失败"
+    # --- GPT Team: purely manual toggle ---
+    gpt_team_ok = not manual.get("gpt_team", False)
+    gpt_team_reason = "管理员手动维护中" if manual.get("gpt_team") else ""
 
     return {
         "upixel": {
             "available": upixel_ok, "reason": upixel_reason,
-            "normalAvailable": upixel_normal_available,
-            "advancedAvailable": upixel_advanced_available,
-            "normalReason": upixel_normal_reason,
-            "advancedReason": upixel_advanced_reason,
+            "normalAvailable": standard_available,
+            "advancedAvailable": pro_available,
+            "normalReason": standard_reason,
+            "advancedReason": pro_reason,
             "ypixelUp": ypixel_ok, "standardAvailable": standard_available,
         },
         "ypixel": {"available": ypixel_ok, "reason": ypixel_reason},
@@ -8629,8 +8611,10 @@ async def get_service_status():
         "gpt": {"available": gpt_ok, "reason": gpt_reason, "channels": gpt_channels_status},
         "gpt_team": {"available": gpt_team_ok, "reason": gpt_team_reason},
         "manual": {
-            "upixel_normal": manual.get("upixel_normal", False),
-            "upixel_advanced": manual.get("upixel_advanced", False),
+            "gemini_normal": manual.get("gemini_normal", False),
+            "gemini_advanced": manual.get("gemini_advanced", False),
+            "gpt_plus": manual.get("gpt_plus", False),
+            "gpt_team": manual.get("gpt_team", False),
             "upixel": manual.get("upixel", False),
             "kpixel": manual.get("kpixel", False),
             "vpixel": manual.get("vpixel", False),
@@ -8642,7 +8626,6 @@ async def get_service_status():
             "gpt_nitro": manual.get("gpt_nitro", False),
             "gpt_tg": manual.get("gpt_tg", False),
             "gpt_api": manual.get("gpt_api", False),
-            "gpt_team": manual.get("gpt_team", False),
         }
     }
 
@@ -8663,7 +8646,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel_normal", "upixel_advanced", "upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api", "gpt_team"):
+    for key in ("gemini_normal", "gemini_advanced", "gpt_plus", "gpt_team", "upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api"):
         if key in data:
             sm[key] = bool(data[key])
 

@@ -12653,7 +12653,19 @@ async def _nitro_api_submit(card_key: str, token_content: str) -> dict:
         return resp.json()
 
 
-async def _gpt_plus_api_recharge(access_token: str) -> dict:
+def _fmt_eta(seconds) -> str:
+    """Format estimated wait seconds into a human-readable string."""
+    if seconds is None:
+        return ""
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds} 秒"
+    minutes = seconds // 60
+    secs = seconds % 60
+    return f"{minutes} 分 {secs} 秒" if secs else f"{minutes} 分钟"
+
+
+async def _gpt_plus_api_recharge(access_token: str, gpt_vid: str = "", event_meta: dict = None) -> dict:
     """Submit GPT Plus 1-month recharge via external job API (long-poll until done/failed)."""
     import config_manager as _cfg_mgr
     import httpx
@@ -12662,15 +12674,34 @@ async def _gpt_plus_api_recharge(access_token: str) -> dict:
     base_url = (api_cfg.get("baseUrl") or "").rstrip("/")
     api_key = (api_cfg.get("apiKey") or "").strip()
 
+    def _broadcast_progress(msg: str):
+        if gpt_vid and event_meta:
+            broadcast_verify_event({
+                "type": "progress", "vid": gpt_vid, "step": "processing",
+                "source": "gpt", "message": msg, **(event_meta or {}),
+            })
+
     if not base_url or not api_key:
         return {"success": False, "message": "GPT Plus API 未配置，请联系管理员"}
+
+    # Extract raw access_token from session JSON if needed
+    import json as _json
+    raw_token = access_token
+    try:
+        session_data = _json.loads(access_token)
+        raw_token = (session_data.get("accessToken") or session_data.get("access_token") or access_token).strip()
+    except (ValueError, TypeError, AttributeError):
+        pass  # already a raw token string
+
+    logging.info(f"[GPT Plus API] Submitting job, token_len={len(raw_token)}, token_prefix={raw_token[:20] if raw_token else 'EMPTY'}")
 
     headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
 
     # Step 1: Submit job
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(f"{base_url}/submit", json={"access_token": access_token, "workflow": "plus"}, headers=headers)
+            resp = await client.post(f"{base_url}/submit", json={"access_token": raw_token, "workflow": "plus"}, headers=headers)
+        logging.info(f"[GPT Plus API] Submit response: {resp.status_code} {resp.text[:200]}")
     except Exception as e:
         return {"success": False, "message": f"提交失败: {e}"}
 
@@ -12690,7 +12721,13 @@ async def _gpt_plus_api_recharge(access_token: str) -> dict:
     if not job_id:
         return {"success": False, "message": "提交失败：响应缺少 job_id"}
 
-    logging.info(f"[GPT Plus API] Job submitted: {job_id}, estimated wait: {job_data.get('estimated_wait_seconds')}s")
+    eta_s = job_data.get("estimated_wait_seconds")
+    queue_pos = job_data.get("queue_position")
+    logging.info(f"[GPT Plus API] Job submitted: {job_id}, queue={queue_pos}, eta={eta_s}s")
+    if queue_pos is not None and eta_s is not None:
+        _broadcast_progress(f"⏳ 已提交，排队第 {queue_pos + 1} 位，预计等待 {_fmt_eta(eta_s)}")
+    else:
+        _broadcast_progress("⏳ 已提交，等待处理中...")
 
     # Step 2: Long-poll until done or failed (max 40 polls × 30s = 20 minutes)
     for poll_num in range(40):
@@ -12711,14 +12748,23 @@ async def _gpt_plus_api_recharge(access_token: str) -> dict:
 
         poll_data = poll_resp.json()
         status = poll_data.get("status")
-        logging.info(f"[GPT Plus API] Poll {poll_num+1} for {job_id}: status={status}")
+        eta_s = poll_data.get("estimated_wait_seconds")
+        queue_pos = poll_data.get("queue_position")
+        logging.info(f"[GPT Plus API] Poll {poll_num+1} for {job_id}: status={status}, eta={eta_s}s")
 
         if status == "done":
             return {"success": True, "message": "充值成功"}
         elif status == "failed":
             error = poll_data.get("error") or "充值失败，费用已自动退回"
             return {"success": False, "message": error}
-        # pending / processing: loop
+
+        # pending / processing: broadcast updated ETA and loop
+        if status == "processing":
+            _broadcast_progress("🔄 正在处理中...")
+        elif queue_pos is not None and eta_s is not None:
+            _broadcast_progress(f"⏳ 排队第 {queue_pos + 1} 位，预计还需 {_fmt_eta(eta_s)}")
+        else:
+            _broadcast_progress("⏳ 等待处理中...")
 
     return {"success": False, "message": "充值超时（超过20分钟），请联系管理员"}
 
@@ -13558,7 +13604,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                     raise HTTPException(status_code=400, detail=msg)
         elif channel == "api":
             # GPT Plus API channel: external job-based service
-            data = await _gpt_plus_api_recharge(account)
+            data = await _gpt_plus_api_recharge(account, gpt_vid=gpt_vid, event_meta=event_meta)
             if not data.get("success"):
                 msg = data.get("message", "充值失败，请稍后重试")
                 _log_gpt_final("failed", msg)

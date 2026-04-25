@@ -68,6 +68,8 @@ export default function Verify() {
     const [gptSuccess, setGptSuccess] = useState(false);
     const [gptResultMsg, setGptResultMsg] = useState('');
     const [gptChannel, setGptChannel] = useState('sbs');
+    const [gptWaitMsg, setGptWaitMsg] = useState('');
+    const gptRechargingRef = useRef(false);
 
     // Submission mode: 'single' | 'batch'
     const [submitMode, setSubmitMode] = useState('single');
@@ -855,6 +857,11 @@ export default function Verify() {
         sse.onmessage = (evt) => {
             try {
                 const payload = JSON.parse(evt.data);
+                // GPT Plus API wait message tracking
+                if (gptRechargingRef.current && payload.source === 'gpt' && payload.step === 'processing' && payload.message) {
+                    setGptWaitMsg(payload.message);
+                    return;
+                }
                 const mapped = mapUserSseEventToResult(payload);
                 if (mapped) {
                     upsertLiveResult(mapped);
@@ -1966,6 +1973,8 @@ export default function Verify() {
                                                 }
                                                 onClick={async () => {
                                                     setGptRecharging(true);
+                                                    gptRechargingRef.current = true;
+                                                    setGptWaitMsg('');
                                                     setGptError('');
                                                     setGptResultMsg('');
                                                     const token = getToken();
@@ -2010,6 +2019,8 @@ export default function Verify() {
                                                             if (!exRes.ok || !exData.success) {
                                                                 setGptError(sanitizeError(exData.detail) || t('gptCardExchangeFailed'));
                                                                 setGptRecharging(false);
+                                                                gptRechargingRef.current = false;
+                                                                setGptWaitMsg('');
                                                                 return;
                                                             }
                                                             setGptCardKey(exData.card_key);
@@ -2041,6 +2052,8 @@ export default function Verify() {
                                                         setGptError(sanitizeError(e.message));
                                                     } finally {
                                                         setGptRecharging(false);
+                                                        gptRechargingRef.current = false;
+                                                        setGptWaitMsg('');
                                                     }
                                                 }}
                                             >
@@ -2136,7 +2149,12 @@ export default function Verify() {
                                             {gptRecharging && (
                                                 <div style={{ textAlign: 'center', padding: '32px' }}>
                                                     <span className="loading-spinner"></span>
-                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>{gptMode === 'team' ? t('gptTeamInvitingMsg') : t('gptRechargingMsg')}</p>
+                                                    <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>
+                                                        {gptMode === 'team' ? t('gptTeamInvitingMsg') : (gptWaitMsg || t('gptRechargingMsg'))}
+                                                    </p>
+                                                    {gptWaitMsg && gptMode === 'plus' && (
+                                                        <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-tertiary)' }}>充值完成后积分自动扣除，请耐心等待</p>
+                                                    )}
                                                 </div>
                                             )}
                                             {gptSuccess && (

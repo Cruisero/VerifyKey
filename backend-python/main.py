@@ -2276,11 +2276,12 @@ async def get_admin_user_history_endpoint(user_id: int, authorization: str = Hea
         {
             "id": f"gpt_{row['id']}",
             "type": "gpt",
+            "subtype": "plus",
             "status": "pass" if row["status"] == "used" else "failed",
             "verificationId": f"gpt_{row['card_key'][:8]}",
             "email": row["used_email"] or "",
             "submitInfo": row["used_email"] or "",
-            "message": f"ChatGPT 充值{'成功' if row['status'] == 'used' else '失败'} ({(row['channel'] or 'sbs').upper()})",
+            "message": f"ChatGPT Plus 充值{'成功' if row['status'] == 'used' else '失败'} ({(row['channel'] or 'sbs').upper()})",
             "via": "gpt",
             "cdk": cdk_tag,
             "cardKey": row["card_key"],
@@ -5758,8 +5759,8 @@ async def generate_cdk_endpoint(request: CDKGenerateRequest, authorization: Opti
     
     if request.count < 1 or request.count > 100:
         raise HTTPException(status_code=400, detail="Count must be 1-100")
-    if request.quota not in [1, 1.5, 5, 10, 20, 50, 100]:
-        raise HTTPException(status_code=400, detail="Quota must be 1, 1.5, 5, 10, 20, 50, or 100")
+    if request.quota not in [1, 1.5, 3, 5, 10, 20, 50, 100]:
+        raise HTTPException(status_code=400, detail="Quota must be 1, 1.5, 3, 5, 10, 20, 50, or 100")
     
     codes = cdk_manager.generate_cdks(request.count, request.quota, request.note)
     return {"success": True, "codes": codes, "count": len(codes), "quota": request.quota}
@@ -5967,9 +5968,11 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
         {
             "id": f"gpt_{row['card_key'][:8]}",
             "type": "gpt",
+            "subtype": "plus",
             "status": "pass" if row["status"] == "used" else "failed",
             "email": row["used_email"] or "",
-            "message": f"ChatGPT 充值{'成功' if row['status'] == 'used' else '失败'}",
+            "channel": row["channel"] or "sbs",
+            "message": f"ChatGPT Plus 充值{'成功' if row['status'] == 'used' else '失败'}",
             "timestamp": row["used_at"] or "",
         }
         for row in gpt_rows
@@ -5989,6 +5992,7 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
         {
             "id": row["id"],
             "type": "gpt",
+            "subtype": "team",
             "status": row["status"],
             "email": row["email"] if "email" in row.keys() else "",
             "message": row["message"] or "Team 邀请",
@@ -13689,15 +13693,26 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
 
     # Success — credits already pre-deducted, no further deduction needed
 
-    # Mark card key as used
+    # Mark card key as used / record API channel recharge
+    conn = database.get_connection()
+    now = datetime.now().isoformat()
     if card_key:
-        conn = database.get_connection()
-        now = datetime.now().isoformat()
         conn.execute(
             "UPDATE gpt_keys SET status='used', used_email=?, used_at=? WHERE card_key=?",
             (email, now, card_key)
         )
         conn.commit()
+    elif channel == "api":
+        # Insert synthetic record so API recharges appear in history
+        synthetic_key = f"api_{gpt_vid}"
+        try:
+            conn.execute(
+                "INSERT INTO gpt_keys (card_key, status, used_by_cdk, used_email, created_at, used_at, channel) VALUES (?, 'used', ?, ?, ?, ?, 'api')",
+                (synthetic_key, cdk_label, email, now, now)
+            )
+            conn.commit()
+        except Exception as _hist_err:
+            logging.warning(f"[GPT] Failed to write API recharge history: {_hist_err}")
     _complete_async_task("gpt", gpt_vid)
     _log_gpt_final("pass", f"充值成功 ({channel.upper()})")
 

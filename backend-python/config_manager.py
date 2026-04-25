@@ -316,6 +316,13 @@ DEFAULT_CONFIG = {
         "type": "info"
     },
 
+    # GPT Plus API (external job-based recharge service)
+    "gptPlusApi": {
+        "enabled": False,
+        "baseUrl": "",
+        "apiKey": ""
+    },
+
     # Per-service manual maintenance overrides
     "serviceMaintenance": {
         "upixel": False,

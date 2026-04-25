@@ -8626,6 +8626,7 @@ async def get_service_status():
             "gpt_aic": manual.get("gpt_aic", False),
             "gpt_nitro": manual.get("gpt_nitro", False),
             "gpt_tg": manual.get("gpt_tg", False),
+            "gpt_api": manual.get("gpt_api", False),
             "gpt_team": manual.get("gpt_team", False),
         }
     }
@@ -8647,7 +8648,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("upixel_normal", "upixel_advanced", "upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_team"):
+    for key in ("upixel_normal", "upixel_advanced", "upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api", "gpt_team"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -12199,7 +12200,7 @@ GPT_NITRO_ORIGIN = "https://receipt.nitro.xin"
 GPT_RECHARGE_COST = 1.5  # CDK points per successful recharge
 GPT_TEAM_INVITE_COST = 0.3
 GPT_KEY_CHANNELS = ("sbs", "red", "vip", "aic", "nitro")
-GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg")
+GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg", "api")
 
 import uuid as _uuid
 import asyncio as _asyncio
@@ -12641,6 +12642,125 @@ async def _nitro_api_submit(card_key: str, token_content: str) -> dict:
         return resp.json()
 
 
+async def _gpt_plus_api_recharge(access_token: str) -> dict:
+    """Submit GPT Plus 1-month recharge via external job API (long-poll until done/failed)."""
+    import config_manager as _cfg_mgr
+    import httpx
+    cfg = _cfg_mgr.get_config()
+    api_cfg = cfg.get("gptPlusApi", {})
+    base_url = (api_cfg.get("baseUrl") or "").rstrip("/")
+    api_key = (api_cfg.get("apiKey") or "").strip()
+
+    if not base_url or not api_key:
+        return {"success": False, "message": "GPT Plus API 未配置，请联系管理员"}
+
+    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+
+    # Step 1: Submit job
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(f"{base_url}/submit", json={"access_token": access_token, "workflow": "plus"}, headers=headers)
+    except Exception as e:
+        return {"success": False, "message": f"提交失败: {e}"}
+
+    if resp.status_code == 402:
+        return {"success": False, "message": "API 余额不足，请联系管理员充值"}
+    if resp.status_code == 503:
+        return {"success": False, "message": "充值服务暂时不可用，请稍后再试"}
+    if resp.status_code != 202:
+        try:
+            detail = resp.json().get("detail", f"提交失败 HTTP {resp.status_code}")
+        except Exception:
+            detail = f"提交失败 HTTP {resp.status_code}"
+        return {"success": False, "message": detail}
+
+    job_data = resp.json()
+    job_id = job_data.get("job_id")
+    if not job_id:
+        return {"success": False, "message": "提交失败：响应缺少 job_id"}
+
+    logging.info(f"[GPT Plus API] Job submitted: {job_id}, estimated wait: {job_data.get('estimated_wait_seconds')}s")
+
+    # Step 2: Long-poll until done or failed (max 40 polls × 30s = 20 minutes)
+    for poll_num in range(40):
+        try:
+            async with httpx.AsyncClient(timeout=45) as client:
+                poll_resp = await client.get(f"{base_url}/job/{job_id}?wait=30", headers=headers)
+        except Exception as e:
+            logging.warning(f"[GPT Plus API] Poll {poll_num+1} error for {job_id}: {e}")
+            await _asyncio.sleep(5)
+            continue
+
+        if poll_resp.status_code == 404:
+            return {"success": False, "message": "任务已过期，请重试"}
+        if poll_resp.status_code != 200:
+            logging.warning(f"[GPT Plus API] Poll {poll_num+1} HTTP {poll_resp.status_code} for {job_id}")
+            await _asyncio.sleep(5)
+            continue
+
+        poll_data = poll_resp.json()
+        status = poll_data.get("status")
+        logging.info(f"[GPT Plus API] Poll {poll_num+1} for {job_id}: status={status}")
+
+        if status == "done":
+            return {"success": True, "message": "充值成功"}
+        elif status == "failed":
+            error = poll_data.get("error") or "充值失败，费用已自动退回"
+            return {"success": False, "message": error}
+        # pending / processing: loop
+
+    return {"success": False, "message": "充值超时（超过20分钟），请联系管理员"}
+
+
+# --- Admin: GPT Plus API config & balance ---
+@app.get("/api/admin/gpt-plus-api/config")
+async def admin_gpt_plus_api_get_config(authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    import config_manager as _cfg_mgr
+    cfg = _cfg_mgr.get_config()
+    api_cfg = cfg.get("gptPlusApi", {})
+    return {
+        "enabled": api_cfg.get("enabled", False),
+        "baseUrl": api_cfg.get("baseUrl", ""),
+        "apiKey": api_cfg.get("apiKey", ""),
+    }
+
+
+@app.post("/api/admin/gpt-plus-api/config")
+async def admin_gpt_plus_api_save_config(request: Request, authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    import config_manager as _cfg_mgr
+    body = await request.json()
+    cfg = _cfg_mgr.get_config()
+    current = dict(cfg.get("gptPlusApi", {}))
+    if "enabled" in body:
+        current["enabled"] = bool(body["enabled"])
+    if "baseUrl" in body:
+        current["baseUrl"] = str(body["baseUrl"]).strip()
+    if "apiKey" in body:
+        current["apiKey"] = str(body["apiKey"]).strip()
+    _cfg_mgr.update_config({"gptPlusApi": current})
+    return {"success": True}
+
+
+@app.get("/api/admin/gpt-plus-api/balance")
+async def admin_gpt_plus_api_balance(authorization: Optional[str] = Header(None)):
+    _verify_admin_token(authorization)
+    import config_manager as _cfg_mgr
+    import httpx
+    cfg = _cfg_mgr.get_config()
+    api_cfg = cfg.get("gptPlusApi", {})
+    base_url = (api_cfg.get("baseUrl") or "").rstrip("/")
+    api_key = (api_cfg.get("apiKey") or "").strip()
+    if not base_url or not api_key:
+        raise HTTPException(status_code=400, detail="API 未配置")
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{base_url}/balance", headers={"X-API-Key": api_key})
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=f"查询失败: {resp.text[:200]}")
+    return resp.json()
+
+
 # --- Admin: Add card keys in bulk (with external API validation) ---
 @app.post("/api/gpt-keys/add")
 async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(None)):
@@ -12873,8 +12993,21 @@ async def gpt_exchange(request: Request, authorization: Optional[str] = Header(N
         else:
             row = None
 
-        # If key channels unavailable, fallback to TG bot channel (no card key required).
+        # If key channels unavailable, fallback to no-key channels (API → TG).
         if not row:
+            _plus_api_cfg = _cfg.get("gptPlusApi", {})
+            _plus_api_ok = bool(_plus_api_cfg.get("enabled")) and \
+                           bool(_plus_api_cfg.get("baseUrl")) and \
+                           bool(_plus_api_cfg.get("apiKey")) and \
+                           not bool(_maint.get("gpt_api"))
+            if _plus_api_ok:
+                return {
+                    "success": True,
+                    "card_key": "",
+                    "masked": "PLUS API",
+                    "key_id": 0,
+                    "channel": "api",
+                }
             if not bool(_maint.get("gpt_tg")) and _has_available_gptbot_account(_cfg):
                 return {
                     "success": True,
@@ -13134,7 +13267,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
 
     if not account:
         raise HTTPException(status_code=400, detail="参数不完整")
-    if channel != "tg" and not card_key:
+    if channel not in ("tg", "api") and not card_key:
         raise HTTPException(status_code=400, detail="参数不完整")
     if channel not in GPT_CHANNELS:
         raise HTTPException(status_code=400, detail=f"无效通道: {channel}")
@@ -13412,6 +13545,25 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
                         channel=channel,
                     )
                     raise HTTPException(status_code=400, detail=msg)
+        elif channel == "api":
+            # GPT Plus API channel: external job-based service
+            data = await _gpt_plus_api_recharge(account)
+            if not data.get("success"):
+                msg = data.get("message", "充值失败，请稍后重试")
+                _log_gpt_final("failed", msg)
+                _complete_async_task("gpt", gpt_vid)
+                _broadcast_submit_failure(
+                    "gpt",
+                    msg,
+                    email=email or "GPT充值",
+                    user_id=user_id,
+                    method="gpt_api",
+                    http_status=400,
+                    refunded=False,
+                    card_key=card_key,
+                    channel=channel,
+                )
+                raise HTTPException(status_code=400, detail=msg)
         else:
             # SBS channel: POST /api/vip/r
             async with httpx.AsyncClient(timeout=60) as client:

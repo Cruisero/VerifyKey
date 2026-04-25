@@ -1160,7 +1160,12 @@ function GptKeysTab({ config, setConfig }) {
     const [adding, setAdding] = useState(false);
     const [addResult, setAddResult] = useState(null);
     const [addChannel, setAddChannel] = useState('sbs');
-    const [gptMaint, setGptMaint] = useState({ gpt_sbs: false, gpt_red: false, gpt_vip: false, gpt_tg: false });
+    const [gptMaint, setGptMaint] = useState({ gpt_sbs: false, gpt_red: false, gpt_vip: false, gpt_tg: false, gpt_api: false });
+    const [plusApiCfg, setPlusApiCfg] = useState({ enabled: false, baseUrl: '', apiKey: '' });
+    const [plusApiSaving, setPlusApiSaving] = useState(false);
+    const [plusApiSaved, setPlusApiSaved] = useState(false);
+    const [plusApiBalance, setPlusApiBalance] = useState(null);
+    const [plusApiBalanceLoading, setPlusApiBalanceLoading] = useState(false);
     const [tgAccounts, setTgAccounts] = useState([]);
     const [tgPoolSavingId, setTgPoolSavingId] = useState(null);
     const [newProcessingKw, setNewProcessingKw] = useState('');
@@ -1222,6 +1227,7 @@ function GptKeysTab({ config, setConfig }) {
                     gpt_aic: data.manual.gpt_aic || false,
                     gpt_nitro: data.manual.gpt_nitro || false,
                     gpt_tg: data.manual.gpt_tg || false,
+                    gpt_api: data.manual.gpt_api || false,
                 });
             }
         } catch {}
@@ -1460,7 +1466,43 @@ function GptKeysTab({ config, setConfig }) {
         }
     };
 
-    useEffect(() => { fetchStats(); fetchKeys(); fetchGptMaint(); fetchTgAccounts(); }, []);
+    const fetchPlusApiCfg = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/gpt-plus-api/config`, { headers: authHeaders });
+            if (res.ok) setPlusApiCfg(await res.json());
+        } catch {}
+    };
+
+    const handleSavePlusApiCfg = async () => {
+        setPlusApiSaving(true);
+        setPlusApiSaved(false);
+        try {
+            await fetch(`${API_BASE}/api/admin/gpt-plus-api/config`, {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify(plusApiCfg),
+            });
+            setPlusApiSaved(true);
+            setTimeout(() => setPlusApiSaved(false), 3000);
+        } catch {} finally { setPlusApiSaving(false); }
+    };
+
+    const handleCheckPlusApiBalance = async () => {
+        setPlusApiBalanceLoading(true);
+        setPlusApiBalance(null);
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/gpt-plus-api/balance`, { headers: authHeaders });
+            if (res.ok) {
+                const data = await res.json();
+                setPlusApiBalance(data.balances || {});
+            } else {
+                const err = await res.json().catch(() => ({}));
+                setPlusApiBalance({ error: err.detail || `HTTP ${res.status}` });
+            }
+        } catch (e) { setPlusApiBalance({ error: e.message }); }
+        finally { setPlusApiBalanceLoading(false); }
+    };
+
+    useEffect(() => { fetchStats(); fetchKeys(); fetchGptMaint(); fetchTgAccounts(); fetchPlusApiCfg(); }, []);
 
     const handleAdd = async () => {
         if (!newKeys.trim()) return;
@@ -2164,6 +2206,86 @@ function GptKeysTab({ config, setConfig }) {
                 </div>
             </div>
 
+            {/* GPT Plus API config */}
+            <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{
+                    padding: '16px 20px', borderBottom: '1px solid var(--border-primary)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px'
+                }}>
+                    <div>
+                        <span style={{ fontWeight: 700 }}>🔷 GPT Plus API 通道</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginLeft: '8px' }}>外部充值服务（1个月 Plus）</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {plusApiSaved && <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ 已保存</span>}
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleSavePlusApiCfg}
+                            disabled={plusApiSaving}
+                            style={{ fontSize: '12px', padding: '5px 12px' }}
+                        >
+                            {plusApiSaving ? '保存中...' : '保存配置'}
+                        </button>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0f766e', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={plusApiCfg.enabled || false}
+                                onChange={e => setPlusApiCfg(p => ({ ...p, enabled: e.target.checked }))}
+                                style={{ width: '16px', height: '16px' }}
+                            />
+                            启用
+                        </label>
+                    </div>
+                </div>
+                <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API Base URL</label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={plusApiCfg.baseUrl || ''}
+                                onChange={e => setPlusApiCfg(p => ({ ...p, baseUrl: e.target.value }))}
+                                placeholder="https://your-api-domain.com"
+                                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '13px' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>API Key</label>
+                            <input
+                                type="password"
+                                className="input"
+                                value={plusApiCfg.apiKey || ''}
+                                onChange={e => setPlusApiCfg(p => ({ ...p, apiKey: e.target.value }))}
+                                placeholder="X-API-Key..."
+                                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '13px' }}
+                            />
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={handleCheckPlusApiBalance}
+                            disabled={plusApiBalanceLoading}
+                            style={{ fontSize: '12px', padding: '5px 14px' }}
+                        >
+                            {plusApiBalanceLoading ? '查询中...' : '查询余额'}
+                        </button>
+                        {plusApiBalance && !plusApiBalance.error && (
+                            <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                                Plus 余额：<span style={{ color: '#6366f1' }}>{plusApiBalance.plus ?? '-'}</span>
+                            </span>
+                        )}
+                        {plusApiBalance?.error && (
+                            <span style={{ fontSize: '12px', color: '#dc2626' }}>❌ {plusApiBalance.error}</span>
+                        )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                        启用后，用户充值时可选择 API 通道，使用 workflow=plus（1个月）。失败时费用由外部 API 自动退回。
+                    </div>
+                </div>
+            </div>
+
             {/* Per-channel maintenance toggles */}
             <div className="card" style={{ padding: 'var(--spacing-md)' }}>
                 <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>🔧 GPT 通道维护开关</div>
@@ -2174,6 +2296,7 @@ function GptKeysTab({ config, setConfig }) {
                     { key: 'gpt_aic', label: '🟠 AIC 通道', desc: 'aichong.plus' },
                     { key: 'gpt_nitro', label: '🟢 Nitro 通道', desc: 'receipt.nitro.xin' },
                     { key: 'gpt_tg', label: '🟢 TG 通道', desc: 'Telegram Userbot 目标 Bot' },
+                    { key: 'gpt_api', label: '🔷 API 通道', desc: 'GPT Plus 1个月外部充值 API' },
                 ].map(s => (
                     <div key={s.key} style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',

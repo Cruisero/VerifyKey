@@ -5958,24 +5958,28 @@ async def get_user_verification_history(authorization: Optional[str] = Header(No
             "timestamp": r["timestamp"],
         })
 
-    # 2) GPT recharge history (from gpt_keys table)
+    # 2) GPT Plus recharge history (from verification_history, covers all channels)
     conn = database.get_connection()
-    gpt_rows = conn.execute(
-        "SELECT card_key, status, used_email, used_at, channel FROM gpt_keys WHERE used_by_cdk = ? ORDER BY id DESC LIMIT 50",
+    gpt_plus_rows = conn.execute(
+        """
+        SELECT id, status, verification_id, message, timestamp, email
+        FROM verification_history
+        WHERE cdk = ? AND via IN ('gpt_plus', 'gpt')
+        ORDER BY rowid DESC LIMIT 50
+        """,
         (cdk_tag,)
     ).fetchall()
     gpt_items = [
         {
-            "id": f"gpt_{row['card_key'][:8]}",
+            "id": f"gptplus_{row['id']}",
             "type": "gpt",
             "subtype": "plus",
-            "status": "pass" if row["status"] == "used" else "failed",
-            "email": row["used_email"] or "",
-            "channel": row["channel"] or "sbs",
-            "message": f"ChatGPT Plus 充值{'成功' if row['status'] == 'used' else '失败'}",
-            "timestamp": row["used_at"] or "",
+            "status": row["status"],
+            "email": row["email"] if "email" in row.keys() else "",
+            "message": row["message"] or "ChatGPT Plus 充值",
+            "timestamp": row["timestamp"] or "",
         }
-        for row in gpt_rows
+        for row in gpt_plus_rows
     ]
 
     gpt_team_rows = conn.execute(
@@ -9341,7 +9345,7 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
         except Exception as e:
             logging.warning(f"[GPT] Restart recovery: refund failed for user {user_id}: {e}")
     # Persist failure to DB
-    _persist_verification_history_strict("failed", task_id, "充值任务因服务重启中断", cdk=f"user:{user_id}" if user_id else "", via="gpt")
+    _persist_verification_history_strict("failed", task_id, "充值任务因服务重启中断", cdk=f"user:{user_id}" if user_id else "", via="gpt_plus")
     broadcast_verify_event({
         "type": "progress",
         "step": "result", "status": "failed", "success": False,
@@ -13183,7 +13187,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
 
     team = await _pick_team_for_user_invite()
     if not team:
-        _persist_verification_history_strict("failed", invite_vid, "暂无可用 Team 名额", cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("failed", invite_vid, "暂无可用 Team 名额", cdk=cdk_label, via="gpt_team", email=email)
         _broadcast_submit_failure(
             "gpt",
             "暂无可用 Team 名额",
@@ -13238,7 +13242,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
 
         await _gpt_team_sync(team["id"])
         message = f"Team 邀请已发送（{team_row['email']} / {team_row['team_name'] or '未命名 Team'}）"
-        _persist_verification_history_strict("pass", invite_vid, message, cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("pass", invite_vid, message, cdk=cdk_label, via="gpt_team", email=email)
         broadcast_verify_event({
             "type": "progress",
             "vid": invite_vid,
@@ -13261,7 +13265,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
     except HTTPException as e:
         with contextlib.suppress(Exception):
             auth.update_credits(user_id, GPT_TEAM_INVITE_COST)
-        _persist_verification_history_strict("failed", invite_vid, str(e.detail), cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("failed", invite_vid, str(e.detail), cdk=cdk_label, via="gpt_team", email=email)
         _broadcast_submit_failure(
             "gpt",
             str(e.detail),
@@ -13276,7 +13280,7 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
     except Exception as e:
         with contextlib.suppress(Exception):
             auth.update_credits(user_id, GPT_TEAM_INVITE_COST)
-        _persist_verification_history_strict("failed", invite_vid, str(e), cdk=cdk_label, via="gpt_team")
+        _persist_verification_history_strict("failed", invite_vid, str(e), cdk=cdk_label, via="gpt_team", email=email)
         _broadcast_submit_failure(
             "gpt",
             str(e),
@@ -13345,7 +13349,7 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     })
 
     def _log_gpt_final(status: str, message: str):
-        result = _persist_verification_history_strict(status, gpt_vid, message, cdk=cdk_label, via="gpt")
+        result = _persist_verification_history_strict(status, gpt_vid, message, cdk=cdk_label, via="gpt_plus", email=email or "")
         if not result.get("success"):
             logger.warning(f"[GPT Recharge] Failed to persist {status} record for {gpt_vid}: {result.get('error', 'unknown error')}")
 

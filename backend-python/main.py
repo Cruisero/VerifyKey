@@ -9497,9 +9497,34 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             }
         else:
             refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
-            # 409 Conflict = email already has an active job — just inform, don't record as failure
+            # 409 Conflict: distinguish already_queued vs already_processed
             if resp.status_code == 409:
-                raise HTTPException(status_code=409, detail="该邮箱已在队列中，请等待当前任务完成")
+                try:
+                    err409 = resp.json()
+                    code409 = err409.get("code", "")
+                    if code409 == "already_processed":
+                        # Pixel already has a success record — return URL to user
+                        url409 = err409.get("url", "")
+                        result_msg409 = err409.get("result_msg", "")
+                        created_at409 = err409.get("created_at", "")
+                        raise HTTPException(status_code=409, detail={
+                            "code": "already_processed",
+                            "message": "该邮箱已处理成功",
+                            "url": url409,
+                            "result_msg": result_msg409,
+                            "created_at": created_at409,
+                        })
+                    else:
+                        job_id409 = err409.get("job_id", "")
+                        raise HTTPException(status_code=409, detail={
+                            "code": "already_queued",
+                            "message": "该邮箱已在队列中，请等待当前任务完成",
+                            "job_id": job_id409,
+                        })
+                except HTTPException:
+                    raise
+                except Exception:
+                    raise HTTPException(status_code=409, detail={"code": "already_queued", "message": "该邮箱已在队列中，请等待当前任务完成"})
             # Other errors: parse upstream response
             try:
                 err = resp.json()
@@ -9878,6 +9903,77 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
         **event_meta,
     })
     return {"success": True, "cancelled": True, "job_id": job_id, "refunded": True}
+
+
+@app.get("/api/pixel/accounts/query")
+async def pixel_accounts_query(
+    email: Optional[str] = None,
+    emails: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    """Proxy: batch query account results from Pixel API (/api/accounts/query)."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg.get("apiKey"):
+        raise HTTPException(status_code=503, detail="Pixel API 未配置")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    user = auth.verify_token(authorization.replace("Bearer ", ""))
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+
+    params = {}
+    if email:
+        params["email"] = email
+    if emails:
+        params["emails"] = emails
+    if not params:
+        raise HTTPException(status_code=400, detail="需要提供 email 或 emails 参数")
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/accounts/query",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+                params=params,
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"无法连接 Pixel API: {str(e)}")
+
+
+@app.get("/api/pixel/stats")
+async def pixel_stats(authorization: Optional[str] = Header(None)):
+    """Proxy: Pixel API statistics (/api/stats)."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg.get("apiKey"):
+        raise HTTPException(status_code=503, detail="Pixel API 未配置")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
+    user = auth.verify_token(authorization.replace("Bearer ", ""))
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/stats",
+                headers={"X-API-Key": pixel_cfg["apiKey"]},
+            )
+        if resp.status_code == 200:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"无法连接 Pixel API: {str(e)}")
 
 
 @app.get("/api/pixel/health")

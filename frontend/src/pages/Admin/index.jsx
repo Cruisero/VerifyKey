@@ -10703,9 +10703,10 @@ export default function Admin() {
                                                     const val = e.target.checked;
                                                     setServiceMaint(prev => ({ ...prev, [s.key]: val }));
                                                     try {
+                                                        const _token = user?.token || localStorage.getItem('verifykey-token');
                                                         await fetch(`${API_BASE}/api/service-status`, {
                                                             method: 'POST',
-                                                            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
                                                             body: JSON.stringify({ [s.key]: val }),
                                                         });
                                                     } catch (err) {

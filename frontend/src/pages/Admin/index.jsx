@@ -4929,6 +4929,9 @@ export default function Admin() {
     const [alertSaving, setAlertSaving] = useState(false);
     const [alertTesting, setAlertTesting] = useState(false);
 
+    // Service maintenance toggles (used in settings tab)
+    const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gpt_plus: false, gpt_team: false });
+
     // User management state
     const [users, setUsers] = useState([]);
     const [userSearch, setUserSearch] = useState('');

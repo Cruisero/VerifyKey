@@ -8,37 +8,6 @@ import './Verify.css';
 // API base URL
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3002' : '';
 
-// Error code → i18n key mapping
-const ERROR_KEY_MAP = {
-    INTERNAL_ERROR: 'errInternalError',
-    DEVICE_UNAVAILABLE: 'errDeviceUnavailable',
-    DEVICE_PREP_FAILED: 'errDevicePrepFailed',
-    DEVICE_ERROR: 'errDeviceError',
-    PROXY_ERROR: 'errProxyError',
-    PASSKEY_BLOCKED: 'errPasskeyBlocked',
-    CAPTCHA: 'errCaptcha',
-    ACCOUNT_DISABLED: 'errAccountDisabled',
-    INVALID_EMAIL: 'errInvalidEmail',
-    WRONG_PASSWORD: 'errWrongPassword',
-    TOTP_ERROR: 'errTotpError',
-    NO_AUTHENTICATOR: 'errNoAuthenticator',
-    SIGNIN_PAGE_FAILED: 'errSigninPageFailed',
-    TWOFACTOR_PAGE_ERROR: 'errTwofactorPageError',
-    GOOGLE_LOGIN_ERROR: 'errGoogleLoginError',
-    GOOGLE_ONE_UNAVAILABLE: 'errGoogleOneUnavailable',
-    OFFER_UNAVAILABLE: 'errOfferUnavailable',
-    ALREADY_SUBSCRIBED: 'errAlreadySubscribed',
-    CARD_FAILED: 'errCardFailed',
-    LOGIN_FAILED: 'errLoginFailed',
-    NETWORK_ERROR: 'errNetworkError',
-    URL_CAPTURE_FAILED: 'errUrlCaptureFailed',
-    SIGNIN_FAILED: 'errSigninFailed',
-    ACCOUNT_NOT_DETECTED: 'errAccountNotDetected',
-    BROWSER_LOGIN_FAILED: 'errBrowserLoginFailed',
-    MANUAL_CANCEL: 'errManualCancel',
-    INVALID_ACCOUNT: 'errInvalidAccount',
-    UNKNOWN_ERROR: 'errUnknownError',
-};
 
 export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
@@ -99,9 +68,6 @@ export default function Verify() {
     const [confettiOrigin, setConfettiOrigin] = useState(null);
     const seenSuccessIdsRef = useRef(new Set());
     const resultItemRefs = useRef({});
-
-    // Track INTERNAL_ERROR counts per email for differentiated messaging
-    const internalErrorCountRef = useRef({});
 
     // Tips inline state (loaded from config)
     const [tipsContent, setTipsContent] = useState(null);
@@ -197,23 +163,9 @@ export default function Verify() {
     const gptCurrentCost = gptMode === 'team' ? 0.6 : 3;
     const gptCurrentTargetEmail = gptMode === 'team' ? gptInviteEmail : gptEmail;
 
-    // Build localized error descriptions
-    const ERROR_DESCRIPTIONS = Object.fromEntries(
-        Object.entries(ERROR_KEY_MAP).map(([code, key]) => [code, t(key)])
-    );
-
-    // Get differentiated INTERNAL_ERROR message based on occurrence count for a given email
-    const getInternalErrorMsg = (email) => {
-        const key = (email || '').toLowerCase();
-        const count = (internalErrorCountRef.current[key] || 0) + 1;
-        internalErrorCountRef.current[key] = count;
-        return count <= 1 ? t('errInternalErrorFirst') : t('errInternalErrorSecond');
-    };
-
-    // Sanitize error messages to hide supplier info from users
+    // Sanitize error messages to hide supplier info from users (used for GPT errors)
     const sanitizeError = (msg) => {
         if (!msg || typeof msg !== 'string') return t('errGenericFailed');
-        if (ERROR_DESCRIPTIONS[msg]) return ERROR_DESCRIPTIONS[msg];
         const blocked = /pixel|iqless|kckc|1688ai|vpixel|kpixel|upixel|api\s*key|cdkey|X-API/i;
         if (blocked.test(msg)) return t('errServiceUnavailable');
         if (/积分|余额|登录|过期|参数|不足|未启用|未配置|密码|验证|账号|邮箱|credits|balance|login|expired|password|verify|account|email/i.test(msg)) return msg;
@@ -429,7 +381,7 @@ export default function Verify() {
                 const err = await resp.json().catch(() => ({ detail: resp.statusText }));
                 const rawMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
                 setResults(prev => prev.map(r =>
-                    r.id === resultId ? { ...r, status: 'failed', message: `❌ ${sanitizeError(rawMsg)}` } : r
+                    r.id === resultId ? { ...r, status: 'failed', message: `❌ ${rawMsg}` } : r
                 ));
                 return;
             }
@@ -510,17 +462,11 @@ export default function Verify() {
                 } else if (status === 'Failed') {
                     clearInterval(intervalId);
                     delete pollingRefs.current[resultId];
-                    // Use differentiated message for INTERNAL_ERROR
-                    const currentResult = results.find(r => r.id === resultId);
-                    const isInternalError = message === 'INTERNAL_ERROR' || /INTERNAL_ERROR/i.test(message);
-                    const failMsg = isInternalError
-                        ? getInternalErrorMsg(currentResult?.email)
-                        : (sanitizeError(message) || t('verifyFailed'));
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
                             ...r,
                             status: 'failed',
-                            message: `❌ ${failMsg}`,
+                            message: `❌ ${message || t('verifyFailed')}`,
                         } : r
                     ));
                 } else {
@@ -629,15 +575,7 @@ export default function Verify() {
                     delete pollingRefs.current[resultId];
                     const error = data.error || 'UNKNOWN_ERROR';
                     const resultMsg = data.result_msg || '';
-                    // Use differentiated message for INTERNAL_ERROR
-                    const currentResult = results.find(r => r.id === resultId);
-                    // For MANUAL_CANCEL / INVALID_ACCOUNT, prefer the operator's result_msg
-                    const useResultMsg = (error === 'MANUAL_CANCEL' || error === 'INVALID_ACCOUNT') && resultMsg;
-                    const errorDesc = useResultMsg
-                        ? resultMsg
-                        : error === 'INTERNAL_ERROR'
-                            ? getInternalErrorMsg(currentResult?.email)
-                            : (ERROR_DESCRIPTIONS[error] || sanitizeError(error));
+                    const errorDesc = resultMsg || error;
                     setResults(prev => prev.map(r =>
                         r.id === resultId ? {
                             ...r,
@@ -710,20 +648,7 @@ export default function Verify() {
             ? (event.success ? 'success' : 'failed')
             : 'processing';
 
-        // Sanitize message: strip error codes and show only descriptions for users
         let msg = event.message || (mappedStatus === 'processing' ? t('processingMsg') : '');
-        if (mappedStatus === 'failed' && msg) {
-            // Strip leading emoji/symbols then check if it's a raw error code
-            const stripped = msg.replace(/^[❌✅⏳🔄⚠️\s]+/, '').trim();
-            if (stripped === 'INTERNAL_ERROR') {
-                // Use differentiated message for INTERNAL_ERROR via SSE
-                msg = `❌ ${getInternalErrorMsg(event.submitEmail || event.link || '')}`;
-            } else if (ERROR_DESCRIPTIONS[stripped]) {
-                msg = `❌ ${ERROR_DESCRIPTIONS[stripped]}`;
-            } else {
-                msg = `❌ ${sanitizeError(stripped)}`;
-            }
-        }
 
         return {
             id: verificationId,
@@ -1082,44 +1007,6 @@ export default function Verify() {
         return `${Math.floor(minutes / 60)}${t('hoursAgo')}`;
     };
 
-    // Error code translation map
-    const errorCodeMap = {
-        'TOTP_ERROR': '2FA密钥错误',
-        'WRONG_PASSWORD': '密码错误',
-        'INTERNAL_ERROR': '内部错误',
-        'TIMEOUT': '超时',
-        'TIMEOUT_ERROR': '请求超时',
-        'NETWORK_ERROR': '网络错误',
-        'LOGIN_FAILED': '登录失败',
-        'LOGIN_ERROR': '登录失败',
-        'ACCOUNT_LOCKED': '账号被锁定',
-        'ACCOUNT_SUSPENDED': '账号已停用',
-        'ACCOUNT_NOT_FOUND': '账号不存在',
-        'INVALID_CREDENTIALS': '凭证无效',
-        'CAPTCHA_REQUIRED': '需要验证码',
-        'CAPTCHA_FAILED': '验证码失败',
-        'RATE_LIMITED': '请求过于频繁',
-        'RATE_LIMIT': '请求过于频繁',
-        'SESSION_EXPIRED': '会话已过期',
-        'UNKNOWN_ERROR': '未知错误',
-        'PAYMENT_FAILED': '支付失败',
-        'SUBSCRIPTION_ERROR': '订阅错误',
-        'ALREADY_SUBSCRIBED': '已订阅',
-        'VERIFICATION_FAILED': '验证失败',
-        'BROWSER_ERROR': '浏览器错误',
-        'PROXY_ERROR': '代理错误',
-        'DEVICE_ERROR': '设备错误',
-        'QUEUE_TIMEOUT': '排队超时',
-        'MANUAL_CANCEL': '已取消',
-        'INVALID_ACCOUNT': '账号信息有误',
-        'POLL_TIMEOUT': '轮询超时',
-        'SERVER_ERROR': '服务器错误',
-    };
-    const translateErrorCodes = (msg) => {
-        if (!msg) return msg;
-        if (errorCodeMap[msg]) return errorCodeMap[msg];
-        return msg.replace(/\b([A-Z][A-Z_]{2,})\b/g, (match) => errorCodeMap[match] || match);
-    };
 
     const maskEmail = (email) => {
         if (!email) return '';
@@ -1628,10 +1515,7 @@ export default function Verify() {
                                                     displayMsg = displayMsg.replace(/[:：]\s*$/, '').trim();
                                                     // Strip internal repair markers (admin-only info)
                                                     displayMsg = displayMsg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
-                                                    
-                                                    // Translate error codes
-                                                    displayMsg = translateErrorCodes(displayMsg);
-                                                    
+
                                                     // Determine what to show as the primary line
                                                     const maskedEmail = maskEmail(item.email);
                                                     // For success: prefer email, fallback to '验证成功'
@@ -1795,7 +1679,6 @@ export default function Verify() {
                                                                 msg = msg.replace(/^(失败|成功)[:：]\s*/i, '').trim();
                                                                 msg = msg.replace(/^订阅(成功|失败)[:：]?\s*/i, '').trim();
                                                                 msg = msg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
-                                                                msg = translateErrorCodes(msg);
                                                                 const isGeneric = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(msg);
                                                                 if (result.status === 'success' && isGeneric) msg = t('verifySuccess');
                                                                 return msg ? <span className="result-message">{msg}</span> : null;
@@ -2139,7 +2022,6 @@ export default function Verify() {
                                                     {filtered.map((item) => {
                                                         const displayStatus = item.status === 'pass' || item.status === 'success' ? 'success' : 'failed';
                                                         let displayMsg = (item.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️\s]+/, '').trim();
-                                                        displayMsg = translateErrorCodes(displayMsg);
                                                         const isGenericSuccess = /^(充值成功|Plus\s*充值成功|ChatGPT\s*(Plus\s*)?充值成功|Team\s*邀请成功|邀请成功|Recharge successful|Success)$/i.test(displayMsg);
                                                         const showMsg = displayMsg && !(displayStatus === 'success' && isGenericSuccess);
                                                         return (

@@ -12822,8 +12822,9 @@ async def _gpt_plus_api_recharge(access_token: str, gpt_vid: str = "", event_met
     else:
         _broadcast_progress("⏳ 已提交，等待处理中...")
 
-    # Step 2: Long-poll until done or failed (max 40 polls × 30s = 20 minutes)
-    for poll_num in range(40):
+    # Step 2: Long-poll until done or failed
+    poll_num = 0
+    while True:
         try:
             async with httpx.AsyncClient(timeout=45) as client:
                 poll_resp = await client.get(f"{base_url}/job/{job_id}?wait=30", headers=headers)
@@ -12875,8 +12876,7 @@ async def _gpt_plus_api_recharge(access_token: str, gpt_vid: str = "", event_met
             _broadcast_progress(f"⏳ 排队第 {queue_pos + 1} 位，预计还需 {_fmt_eta(eta_s)}")
         else:
             _broadcast_progress("⏳ 等待处理中...")
-
-    return {"success": False, "message": "充值超时（超过20分钟），请联系管理员"}
+        poll_num += 1
 
 
 # --- Admin: GPT Plus API config & balance ---

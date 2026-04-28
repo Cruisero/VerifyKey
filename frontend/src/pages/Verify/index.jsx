@@ -1946,10 +1946,12 @@ export default function Verify() {
                                                                 fetchUserHistory('gpt');
                                                             } else {
                                                                 setGptError(sanitizeError(reData.detail) || t('gptRechargeFailed'));
+                                                                await refreshUser();
                                                             }
                                                         }
                                                     } catch (e) {
                                                         setGptError(sanitizeError(e.message));
+                                                        await refreshUser();
                                                     } finally {
                                                         setGptRecharging(false);
                                                         gptRechargingRef.current = false;

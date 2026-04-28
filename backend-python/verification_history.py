@@ -253,22 +253,24 @@ def reset_display() -> str:
     return _display_reset_at
 
 
-def get_history_stats(respect_reset: bool = True) -> Dict:
+def get_history_stats(respect_reset: bool = True, exclude_gpt: bool = False) -> Dict:
     """Get statistics from verification history.
-    
+
     Args:
         respect_reset: If True, only count records after the display reset point.
+        exclude_gpt: If True, exclude GPT recharge records (via LIKE 'gpt%').
     """
     _load_reset_timestamp()
     conn = database.get_connection()
+    gpt_filter = " AND (via IS NULL OR via NOT LIKE 'gpt%') " if exclude_gpt else ""
     if respect_reset and _display_reset_at:
         cursor = conn.execute(
-            f"SELECT status, COUNT(*) as cnt FROM verification_history WHERE timestamp > ? {USER_ERROR_FILTER} GROUP BY status",
+            f"SELECT status, COUNT(*) as cnt FROM verification_history WHERE timestamp > ? {USER_ERROR_FILTER}{gpt_filter} GROUP BY status",
             (_display_reset_at,)
         )
     else:
         cursor = conn.execute(
-            f"SELECT status, COUNT(*) as cnt FROM verification_history WHERE 1=1 {USER_ERROR_FILTER} GROUP BY status"
+            f"SELECT status, COUNT(*) as cnt FROM verification_history WHERE 1=1 {USER_ERROR_FILTER}{gpt_filter} GROUP BY status"
         )
     counts = {row["status"]: row["cnt"] for row in cursor.fetchall()}
 

@@ -5899,10 +5899,14 @@ async def get_verification_history_endpoint():
     Stats are computed from ALL records (not limited by the grid window).
     """
     history = verification_history.get_recent_history(200)
-    # Only include final results for the status grid
-    final_only = [h for h in history if h["status"] in ("pass", "failed")]
-    # Compute stats from ALL records, not just the windowed 200
-    all_stats = verification_history.get_history_stats()
+    # Only include final pixel-verification results (exclude GPT recharge records)
+    final_only = [
+        h for h in history
+        if h["status"] in ("pass", "failed")
+        and not (h.get("via") or "").startswith("gpt")
+    ]
+    # Compute stats from ALL non-GPT records, not just the windowed 200
+    all_stats = verification_history.get_history_stats(exclude_gpt=True)
     stats = {
         "total": all_stats.get("pass", 0) + all_stats.get("failed", 0),
         "pass": all_stats.get("pass", 0),
@@ -13772,17 +13776,22 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
         except Exception as refund_err:
             logging.error(f"[GPT] CRITICAL: refund failed for user {user_id}, cost={GPT_RECHARGE_COST}, vid={gpt_vid}: {refund_err}")
         raise
-    except Exception as e:
+    except BaseException as e:
+        # Catches asyncio.CancelledError (client disconnect) as well as regular exceptions
         if card_key:
             _release_gpt_key(card_key)
         _complete_async_task("gpt", gpt_vid)
-        failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
-        # 退还预扣积分
+        # 退还预扣积分（无论是断线还是其他异常）
         try:
             auth.update_credits(user_id, GPT_RECHARGE_COST, reason="gpt_refund", ref_id=gpt_vid)
-            logging.info(f"[GPT] Refunded {GPT_RECHARGE_COST} credits to user {user_id} for {gpt_vid}")
+            logging.info(f"[GPT] Refunded {GPT_RECHARGE_COST} credits to user {user_id} for {gpt_vid} (BaseException: {type(e).__name__})")
         except Exception as refund_err:
             logging.error(f"[GPT] CRITICAL: refund failed for user {user_id}, cost={GPT_RECHARGE_COST}, vid={gpt_vid}: {refund_err}")
+        import asyncio as _asyncio_check
+        if isinstance(e, _asyncio_check.CancelledError):
+            _log_gpt_final("failed", "充值任务因客户端断开而中断（积分已退回）")
+            raise
+        failure_msg = f"{'充值超时' if _is_timeout_error(e) else f'充值请求失败: {str(e)}'}"
         _log_gpt_final("failed", failure_msg)
         _broadcast_submit_failure(
             "gpt",

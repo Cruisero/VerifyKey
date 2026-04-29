@@ -72,6 +72,9 @@ export default function Verify() {
     // Tips inline state (loaded from config)
     const [tipsContent, setTipsContent] = useState(null);
 
+    // Feature flags (loaded from config)
+    const [showSubscriptionTool, setShowSubscriptionTool] = useState(false);
+
     // CDK redeem state
     const [cdkCode, setCdkCode] = useState('');
     const [showCdkInput, setShowCdkInput] = useState(false);
@@ -203,6 +206,9 @@ export default function Verify() {
                     const data = await res.json();
                     if (data.tipsInline?.content) {
                         setTipsContent(data.tipsInline.content);
+                    }
+                    if (data.features?.showSubscriptionTool !== undefined) {
+                        setShowSubscriptionTool(!!data.features.showSubscriptionTool);
                     }
                 }
             } catch (e) {
@@ -1069,8 +1075,12 @@ export default function Verify() {
                         </p>
                     </div>
                     <div className="quick-actions">
-                        <a href="/ghelper.html" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
+                        {/* 订阅工具按钮已隐藏，可在后台设置中重新启用 */}
+                        {/* <a href="/ghelper.html" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
                             订阅工具
+                        </a> */}
+                        <a href="https://www.notion.so/Pixel-351964dd56958040bf54c48ce60f9e86?source=copy_link" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
+                            教程和常见错误
                         </a>
                         <Link to="/api-docs" className="api-entry-pill">
                             <span className="api-entry-dot"></span>
@@ -1169,6 +1179,13 @@ export default function Verify() {
                                 </div>
                                 <div className="guide-card-body">
                                     <p className="guide-desc" dangerouslySetInnerHTML={{ __html: t('geminiServiceDesc') }} />
+                                    <p style={{
+                                        background: 'rgba(239,68,68,0.08)', color: '#dc2626',
+                                        border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px',
+                                        padding: '8px 12px', fontSize: '12px', fontWeight: 500, marginBottom: '12px',
+                                    }}>
+                                        ⚠️ 常见错误都是未开启2FA和未删除付款资料
+                                    </p>
                                     <ul className="guide-checklist">
                                         <li>
                                             <span className="check-icon required">🔐</span>
@@ -1242,14 +1259,16 @@ export default function Verify() {
                                         <div className="tier-item">
                                             <span className="tier-badge normal">{t('tierNormal')}</span>
                                             <span dangerouslySetInnerHTML={{ __html: t('tierNormalDesc') }} />
-                                            <a href="/ghelper.html" target="_blank" rel="noopener noreferrer"
-                                                style={{
-                                                    background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                                                    border: 'none', borderRadius: '6px', padding: '1px 8px',
-                                                    fontSize: '11px', fontWeight: 600, textDecoration: 'none',
-                                                    marginLeft: '6px', verticalAlign: 'middle', whiteSpace: 'nowrap',
-                                                }}
-                                            >自行绑卡点击订阅工具 ▸</a>
+                                            {showSubscriptionTool && (
+                                                <a href="/ghelper.html" target="_blank" rel="noopener noreferrer"
+                                                    style={{
+                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                        fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                        marginLeft: '6px', verticalAlign: 'middle', whiteSpace: 'nowrap',
+                                                    }}
+                                                >自行绑卡点击订阅工具 ▸</a>
+                                            )}
                                         </div>
                                         <div className="tier-item">
                                             <span className="tier-badge pro">{t('tierPro')}</span>

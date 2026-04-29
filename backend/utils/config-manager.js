@@ -55,6 +55,11 @@ const DEFAULT_CONFIG = {
         type: 'info' // 'info' | 'warning' | 'success'
     },
 
+    // Feature flags
+    features: {
+        showSubscriptionTool: false
+    },
+
     // Last updated
     updatedAt: null
 };

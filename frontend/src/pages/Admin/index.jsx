@@ -10721,6 +10721,50 @@ export default function Admin() {
                                 ))}
                             </div>
 
+                            {/* Feature Flags */}
+                            <div className="settings-section card">
+                                <h3>🔀 功能开关</h3>
+                                <p className="settings-desc">控制前台功能模块的显示与隐藏。</p>
+                                <div style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '12px 0',
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '13px', fontWeight: 600 }}>🛒 订阅工具按钮</div>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                            开启后普通档位显示"自行绑卡点击订阅工具"按钮
+                                        </div>
+                                    </div>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                        <span style={{
+                                            fontSize: '11px', fontWeight: 600,
+                                            color: config?.features?.showSubscriptionTool ? '#16a34a' : '#64748b',
+                                        }}>
+                                            {config?.features?.showSubscriptionTool ? '显示中' : '已隐藏'}
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!config?.features?.showSubscriptionTool}
+                                            onChange={async (e) => {
+                                                const val = e.target.checked;
+                                                setConfig(prev => ({ ...prev, features: { ...(prev?.features || {}), showSubscriptionTool: val } }));
+                                                try {
+                                                    await fetch(`${API_BASE}/api/config`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ features: { showSubscriptionTool: val } }),
+                                                    });
+                                                } catch (err) {
+                                                    console.warn('Feature flag update failed:', err);
+                                                    setConfig(prev => ({ ...prev, features: { ...(prev?.features || {}), showSubscriptionTool: !val } }));
+                                                }
+                                            }}
+                                            style={{ width: '36px', height: '20px', accentColor: '#16a34a' }}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+
                             {/* Maintenance Mode Card */}
                             <div className="settings-section card" style={{
                                 border: maintenanceEnabled ? '2px solid #ef4444' : '2px solid transparent',

@@ -1185,6 +1185,15 @@ export default function Verify() {
                                         padding: '8px 12px', fontSize: '12px', fontWeight: 500, marginBottom: '12px',
                                     }}>
                                         ⚠️ 常见错误都是未开启2FA和未删除付款资料
+                                        <a href="https://www.notion.so/Pixel-351964dd56958040bf54c48ce60f9e86?source=copy_link"
+                                            target="_blank" rel="noopener noreferrer"
+                                            style={{
+                                                background: 'rgba(239,68,68,0.15)', color: '#dc2626',
+                                                border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px',
+                                                padding: '1px 8px', fontSize: '11px', fontWeight: 600,
+                                                textDecoration: 'none', marginLeft: '8px', verticalAlign: 'middle',
+                                            }}
+                                        >教程和常见错误 ▸</a>
                                     </p>
                                     <ul className="guide-checklist">
                                         <li>

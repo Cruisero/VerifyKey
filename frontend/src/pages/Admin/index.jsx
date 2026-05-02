@@ -838,7 +838,7 @@ function LiveTaskMonitor() {
                 if (data.type === 'progress' && data.source) {
                     const vid = data.vid || '';
                     const source = data.source || '';
-                    if (!['pixel', 'kpixel', 'ypixel', 'vpixel', 'gpt'].includes(source)) return;
+                    if (!['pixel', 'pixel_auto', 'kpixel', 'ypixel', 'vpixel', 'gpt'].includes(source)) return;
 
                     setTasks(prev => {
                         const key = vid || `${source}_${data.link}_${Date.now()}`;
@@ -866,6 +866,7 @@ function LiveTaskMonitor() {
                             elapsed: data.elapsed || 0,
                             url: data.url || '',
                             error: data.error || '',
+                            resultMsg: data.result_msg || '',
                             channel: data.channel || '',
                             userId: data.userId || '',
                             timestamp: existingIdx >= 0 ? prev[existingIdx].timestamp : new Date().toISOString(),
@@ -914,7 +915,13 @@ function LiveTaskMonitor() {
         let msg = (t.message || '').replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
         if (!msg) {
             if (t.status === 'success') msg = '验证成功';
-            else if (t.status === 'failed') msg = ERROR_DESCRIPTIONS[t.error] || t.error || '验证失败';
+            else if (t.status === 'failed') {
+                if (t.source === 'pixel' || t.source === 'pixel_auto') {
+                    msg = t.resultMsg || t.error || '验证失败';
+                } else {
+                    msg = ERROR_DESCRIPTIONS[t.error] || t.error || '验证失败';
+                }
+            }
             else if (t.status === 'submitted') msg = '已提交，排队中...';
             else msg = '处理中...';
         }

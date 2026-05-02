@@ -8977,9 +8977,7 @@ async def _pixel_job_sweep():
                             **event_meta,
                         })
                     elif upstream_status in ("failed", "cancelled"):
-                        err = data.get("error", "UNKNOWN_ERROR")
-                        rm = data.get("result_msg", "")
-                        disp = rm if rm else err
+                        disp = _get_pixel_failure_message(data)
                         import verification_history as vh
                         vh.transition_task_status(vid, "failed", message=f"失败: {disp}", user_id=user_id, via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
@@ -9285,13 +9283,15 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
                     **event_meta,
                 })
         elif status == "failed":
-            error = data.get("error", "UNKNOWN_ERROR")
-            _finalize_user_failure(task_id, user_id, f"失败: {error}", via=sse_source, refund_cost=cost, email=email)
+            failure_message = _get_pixel_failure_message(data)
+            _finalize_user_failure(task_id, user_id, f"失败: {failure_message}", via=sse_source, refund_cost=cost, email=email)
             _complete_async_task("pixel", task_id)
             broadcast_verify_event({
                 "type": "progress", "vid": task_id, "step": "result",
                 "status": "failed", "success": False,
-                "message": f"❌ {error}（重启恢复）",
+                "message": f"❌ {failure_message}（重启恢复）",
+                "error": data.get("error", "UNKNOWN_ERROR"),
+                "result_msg": data.get("result_msg", ""),
                 "recovered": True,
                 **event_meta,
             })
@@ -9361,6 +9361,17 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
     _complete_async_task("gpt", task_id)
 
 
+
+
+def _get_pixel_failure_message(data: dict) -> str:
+    """Prefer Pixel API's result text verbatim, then fall back to the raw error code."""
+    result_msg = (data or {}).get("result_msg", "")
+    if isinstance(result_msg, str) and result_msg.strip():
+        return result_msg.strip()
+    error = (data or {}).get("error", "UNKNOWN_ERROR")
+    if isinstance(error, str) and error.strip():
+        return error.strip()
+    return "UNKNOWN_ERROR"
 
 
 class PixelJobRequest(BaseModel):
@@ -9666,7 +9677,7 @@ async def pixel_get_job(job_id: str):
         elif upstream_status == "failed" and user_id:
             error = data.get("error", "UNKNOWN_ERROR")
             result_msg = data.get("result_msg", "")
-            display_msg = result_msg if (error in ("MANUAL_CANCEL", "INVALID_ACCOUNT") and result_msg) else error
+            display_msg = _get_pixel_failure_message(data)
             result = _finalize_user_failure(job_id, user_id, f"失败: {display_msg}", via=sse_source, refund_cost=cost, email=email)
             _complete_async_task("pixel", job_id)
             task = _pixel_polling_tasks.pop(job_id, None)
@@ -9746,7 +9757,7 @@ async def pixel_get_job(job_id: str):
                         (f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", job_id),
                     )
                 else:
-                    err = data.get("error", "UNKNOWN_ERROR")
+                    err = _get_pixel_failure_message(data)
                     conn.execute(
                         "UPDATE verification_history SET status = 'failed', message = ? WHERE verification_id = ? AND status = 'processing'",
                         (f"失败: {err}", job_id),
@@ -9804,8 +9815,8 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
         })
         return {"success": True, "status": "success", "confirmed": True, "finalized": result}
     if status == "failed":
-        error = data.get("error", "UNKNOWN_ERROR")
-        _finalize_user_failure(job_id, user.get("id"), f"失败: {error}", via="pixel", refund_cost=cost, email=ctx.get("email", ""))
+        failure_message = _get_pixel_failure_message(data)
+        _finalize_user_failure(job_id, user.get("id"), f"失败: {failure_message}", via="pixel", refund_cost=cost, email=ctx.get("email", ""))
         _complete_async_task("pixel", job_id)
         return {"success": True, "status": "failed", "confirmed": True}
     return {"success": True, "status": status or "pending", "confirmed": False}
@@ -10129,15 +10140,14 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                 elif upstream_status == "failed":
                     error = data.get("error", "UNKNOWN_ERROR")
-                    result_msg = data.get("result_msg", "")
-                    display_error = result_msg if result_msg else error
+                    display_error = _get_pixel_failure_message(data)
                     # Update DB record with real error (replace misleading timeout message)
                     conn.execute(
                         "UPDATE verification_history SET message = ? WHERE verification_id = ? AND status = 'failed'",
                         (f"失败: {display_error}", vid)
                     )
                     conn.commit()
-                    results.append({"vid": vid, "email": email, "action": "confirmed_failed", "error": error, "updated": True})
+                    results.append({"vid": vid, "email": email, "action": "confirmed_failed", "error": error, "result_msg": data.get("result_msg", ""), "updated": True})
 
                 elif upstream_status in ("queued", "running"):
                     # Still active — spawn background poller to track to completion
@@ -10195,12 +10205,10 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
                                         _pixel_job_context.pop(job_id, None)
                                         return
                                     elif st in ("failed", "cancelled"):
-                                        err = d.get("error", "UNKNOWN_ERROR")
-                                        rm = d.get("result_msg", "")
-                                        disp = rm if rm else err
+                                        disp = _get_pixel_failure_message(d)
                                         _finalize_user_failure(job_id, uid, f"失败: {disp}", via=sse_src, refund_cost=cost, email=em)
                                         _complete_async_task("pixel", job_id)
-                                        broadcast_verify_event({"type": "progress", "vid": job_id, "step": "result", "status": "failed", "success": False, "message": f"❌ {disp}", **evt_meta})
+                                        broadcast_verify_event({"type": "progress", "vid": job_id, "step": "result", "status": "failed", "success": False, "message": f"❌ {disp}", "error": d.get("error", "UNKNOWN_ERROR"), "result_msg": d.get("result_msg", ""), **evt_meta})
                                         _pixel_job_context.pop(job_id, None)
                                         return
                                     # Still queued/running — broadcast progress

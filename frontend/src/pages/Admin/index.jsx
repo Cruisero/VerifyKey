@@ -10770,6 +10770,45 @@ export default function Admin() {
                                         />
                                     </label>
                                 </div>
+                                <div style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '12px 0',
+                                    borderTop: '1px solid var(--border-primary)',
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '13px', fontWeight: 600 }}>🤖 ChatGPT 充值入口</div>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                            关闭后前台不显示 ChatGPT 充值 tab，同时 Gemini 顶部 tab 也会一起隐藏，仅保留教程折叠栏
+                                        </div>
+                                    </div>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                        <span style={{
+                                            fontSize: '11px', fontWeight: 600,
+                                            color: config?.features?.showGptRechargeTab !== false ? '#16a34a' : '#64748b',
+                                        }}>
+                                            {config?.features?.showGptRechargeTab !== false ? '显示中' : '已隐藏'}
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={config?.features?.showGptRechargeTab !== false}
+                                            onChange={async (e) => {
+                                                const val = e.target.checked;
+                                                setConfig(prev => ({ ...prev, features: { ...(prev?.features || {}), showGptRechargeTab: val } }));
+                                                try {
+                                                    await fetch(`${API_BASE}/api/config`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ features: { showGptRechargeTab: val } }),
+                                                    });
+                                                } catch (err) {
+                                                    console.warn('Feature flag update failed:', err);
+                                                    setConfig(prev => ({ ...prev, features: { ...(prev?.features || {}), showGptRechargeTab: !val } }));
+                                                }
+                                            }}
+                                            style={{ width: '36px', height: '20px', accentColor: '#16a34a' }}
+                                        />
+                                    </label>
+                                </div>
                             </div>
 
                             {/* Maintenance Mode Card */}

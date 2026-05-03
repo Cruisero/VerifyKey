@@ -15,7 +15,7 @@ const translations = {
         contact: '联系我们',
 
         // Verify - header
-        welcomeTitle: '自助AI服务平台',
+        welcomeTitle: 'Gemini Pro一年Pixel优惠订阅',
         welcomeDesc: '根据提示提交 Google 账号信息，获取服务',
         programOnline: '程序在线',
         programOffline: '程序离线',

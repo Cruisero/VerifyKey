@@ -74,6 +74,7 @@ export default function Verify() {
 
     // Feature flags (loaded from config)
     const [showSubscriptionTool, setShowSubscriptionTool] = useState(false);
+    const [showGptRechargeTab, setShowGptRechargeTab] = useState(true);
 
     // CDK redeem state
     const [cdkCode, setCdkCode] = useState('');
@@ -210,6 +211,9 @@ export default function Verify() {
                     if (data.features?.showSubscriptionTool !== undefined) {
                         setShowSubscriptionTool(!!data.features.showSubscriptionTool);
                     }
+                    if (data.features?.showGptRechargeTab !== undefined) {
+                        setShowGptRechargeTab(!!data.features.showGptRechargeTab);
+                    }
                 }
             } catch (e) {
                 console.warn('Failed to fetch config:', e);
@@ -217,6 +221,12 @@ export default function Verify() {
         };
         fetchConfig();
     }, []);
+
+    useEffect(() => {
+        if (!showGptRechargeTab && serviceTab === 'gpt') {
+            setServiceTab('pixel');
+        }
+    }, [showGptRechargeTab, serviceTab]);
 
     // Fetch service maintenance status
     useEffect(() => {
@@ -1090,25 +1100,25 @@ export default function Verify() {
                 </div>
 
                 {/* Top-level Service Tabs */}
-                <div className="service-tabs">
-                    <button
-                        className={`service-tab ${serviceTab === 'pixel' ? 'active' : ''}`}
-                        onClick={() => setServiceTab('pixel')}
-                    >
-
-                        <span>{t('geminiVerify')}</span>
-                    </button>
-                    <button
-                        className={`service-tab service-tab-gpt ${serviceTab === 'gpt' ? 'active' : ''}`}
-                        onClick={() => setServiceTab('gpt')}
-                    >
-
-                        <span>{t('gptRecharge')}</span>
-                        {serviceStatus?.gpt?.available === false && (
-                            <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 600, marginLeft: '6px' }}>{t('maintenance')}</span>
-                        )}
-                    </button>
-                </div>
+                {showGptRechargeTab && (
+                    <div className="service-tabs">
+                        <button
+                            className={`service-tab ${serviceTab === 'pixel' ? 'active' : ''}`}
+                            onClick={() => setServiceTab('pixel')}
+                        >
+                            <span>{t('geminiVerify')}</span>
+                        </button>
+                        <button
+                            className={`service-tab service-tab-gpt ${serviceTab === 'gpt' ? 'active' : ''}`}
+                            onClick={() => setServiceTab('gpt')}
+                        >
+                            <span>{t('gptRecharge')}</span>
+                            {serviceStatus?.gpt?.available === false && (
+                                <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 600, marginLeft: '6px' }}>{t('maintenance')}</span>
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {/* Guide / Tutorial Toggle */}
                 <div className="guide-toggle-bar" onClick={() => setShowGuide(!showGuide)}>
@@ -1143,20 +1153,24 @@ export default function Verify() {
                                         </div>
                                         <span className="credits-price-val">-1.5 {t('credits')}</span>
                                     </div>
-                                    <div className="credits-price-item">
-                                        <div className="credits-price-service">
-                                            <span className="credits-dot gpt"></span>
-                                            {t('gptMonthly')}
-                                        </div>
-                                        <span className="credits-price-val">-3 {t('credits')}</span>
-                                    </div>
-                                    <div className="credits-price-item">
-                                        <div className="credits-price-service">
-                                            <span className="credits-dot gpt"></span>
-                                            {t('gptTeamInviteRule')}
-                                        </div>
-                                        <span className="credits-price-val">-0.6 {t('credits')}</span>
-                                    </div>
+                                    {showGptRechargeTab && (
+                                        <>
+                                            <div className="credits-price-item">
+                                                <div className="credits-price-service">
+                                                    <span className="credits-dot gpt"></span>
+                                                    {t('gptMonthly')}
+                                                </div>
+                                                <span className="credits-price-val">-3 {t('credits')}</span>
+                                            </div>
+                                            <div className="credits-price-item">
+                                                <div className="credits-price-service">
+                                                    <span className="credits-dot gpt"></span>
+                                                    {t('gptTeamInviteRule')}
+                                                </div>
+                                                <span className="credits-price-val">-0.6 {t('credits')}</span>
+                                            </div>
+                                        </>
+                                    )}
                                     <div className="credits-price-item invite">
                                         <div className="credits-price-service">
                                             <span className="credits-dot invite"></span>

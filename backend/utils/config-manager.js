@@ -57,7 +57,8 @@ const DEFAULT_CONFIG = {
 
     // Feature flags
     features: {
-        showSubscriptionTool: false
+        showSubscriptionTool: false,
+        showGptRechargeTab: true
     },
 
     // Last updated

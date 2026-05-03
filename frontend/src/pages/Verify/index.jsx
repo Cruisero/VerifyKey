@@ -74,7 +74,7 @@ export default function Verify() {
 
     // Feature flags (loaded from config)
     const [showSubscriptionTool, setShowSubscriptionTool] = useState(false);
-    const [showGptRechargeTab, setShowGptRechargeTab] = useState(true);
+    const [showGptRechargeTab, setShowGptRechargeTab] = useState(false);
 
     // CDK redeem state
     const [cdkCode, setCdkCode] = useState('');

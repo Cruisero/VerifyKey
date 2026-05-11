@@ -8,6 +8,17 @@ import './Verify.css';
 // API base URL
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3002' : '';
 
+const normalizeGmailEmail = (email) => {
+    const trimmed = (email || '').trim();
+    const atIndex = trimmed.lastIndexOf('@');
+    if (atIndex <= 0) return trimmed;
+
+    const localPart = trimmed.slice(0, atIndex);
+    const domain = trimmed.slice(atIndex + 1).toLowerCase();
+    if (domain !== 'gmail.com') return trimmed;
+
+    return `${localPart.replace(/\./g, '')}@${domain}`;
+};
 
 export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
@@ -297,9 +308,9 @@ export default function Verify() {
                 const normalized = line.replace(/\s*-\s*/g, '-');
                 const parts = normalized.split(/-+/).map(p => p.trim()).filter(Boolean);
                 if (parts.length === 4) {
-                    return { email: parts[0], password: parts[1], backupEmail: parts[2], totp_secret: parts[3] };
+                    return { email: normalizeGmailEmail(parts[0]), password: parts[1], backupEmail: parts[2], totp_secret: parts[3] };
                 } else if (parts.length === 3) {
-                    return { email: parts[0], password: parts[1], totp_secret: parts[2] };
+                    return { email: normalizeGmailEmail(parts[0]), password: parts[1], totp_secret: parts[2] };
                 }
                 return null;
             })
@@ -878,7 +889,7 @@ export default function Verify() {
                 setTotpError(t('alertTotpNotSecret'));
                 return;
             }
-            accounts = [{ email: singleEmail.trim(), password: singlePassword.trim(), totp_secret: trimmedTotp }];
+            accounts = [{ email: normalizeGmailEmail(singleEmail), password: singlePassword.trim(), totp_secret: trimmedTotp }];
         } else {
             accounts = parseBatchInput(batchInput);
             if (accounts.length === 0) {

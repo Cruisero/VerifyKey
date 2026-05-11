@@ -43,6 +43,17 @@ import database
 
 logger = logging.getLogger(__name__)
 
+def normalize_gmail_email(email: str) -> str:
+    email = (email or "").strip()
+    if "@" not in email:
+        return email
+
+    local_part, domain = email.rsplit("@", 1)
+    if domain.lower() != "gmail.com":
+        return email
+
+    return f"{local_part.replace('.', '')}@gmail.com"
+
 # Load environment variables
 load_dotenv()
 
@@ -9386,6 +9397,7 @@ class PixelJobRequest(BaseModel):
 @app.post("/api/pixel/jobs")
 async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str] = Header(None)):
     """Submit a Pixel API job — validates user credits, proxies to iqless.icu, starts background poller."""
+    request.email = normalize_gmail_email(request.email)
     # Check per-mode maintenance flags
     import config_manager as _cfg_mgr_pixel
     _pixel_maint = _cfg_mgr_pixel.get_config().get("serviceMaintenance", {})
@@ -10540,6 +10552,7 @@ class KPixelJobRequest(BaseModel):
 @app.post("/api/kpixel/jobs")
 async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[str] = Header(None)):
     """Submit a Pro-tier job — round-robins between KPixel and VPixel when both enabled."""
+    request.email = normalize_gmail_email(request.email)
     global _pro_tier_counter
 
     kpixel_cfg = _get_kpixel_config()
@@ -11435,6 +11448,7 @@ class VPixelJobRequest(BaseModel):
 @app.post("/api/vpixel/jobs")
 async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[str] = Header(None)):
     """Submit a VPixel job — validates user credits, posts to 1688ai.vip, starts background poller."""
+    request.email = normalize_gmail_email(request.email)
     vpixel_cfg = _get_vpixel_config()
     if not vpixel_cfg["enabled"]:
         _broadcast_submit_failure(
@@ -12027,6 +12041,7 @@ class YPixelJobRequest(BaseModel):
 @app.post("/api/ypixel/jobs")
 async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[str] = Header(None)):
     """Submit a YPixel job — picks a card from pool, posts to pixel.yh-mo.xyz."""
+    request.email = normalize_gmail_email(request.email)
     ypixel_cfg = _get_ypixel_config()
     if not ypixel_cfg["enabled"]:
         _broadcast_submit_failure(

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../stores/ThemeContext';
 import { useLang } from '../../stores/LanguageContext';
 import { useAuth } from '../../stores/AuthContext';
@@ -14,6 +14,7 @@ export default function Layout({ children }) {
     const { lang, toggleLang, t } = useLang();
     const { user, logout, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [announcement, setAnnouncement] = useState(null);
     const [annDismissed, setAnnDismissed] = useState(false);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -74,6 +75,10 @@ export default function Layout({ children }) {
     const inviteLink = user?.invite_code
         ? `${window.location.origin}/?ref=${user.invite_code}`
         : '';
+    const currentInviteRef = new URLSearchParams(location.search).get('ref') || sessionStorage.getItem('invite_ref');
+    const loginPath = currentInviteRef
+        ? `/login?ref=${encodeURIComponent(currentInviteRef)}`
+        : '/login';
 
     const handleCopyInvite = () => {
         navigator.clipboard.writeText(inviteLink).then(() => {
@@ -255,7 +260,7 @@ export default function Layout({ children }) {
                                         </>
                                     ) : (
                                         <div className="invite-login-hint">
-                                            <Link to="/login" onClick={() => setShowInviteModal(false)}>登录</Link> 后即可获取邀请链接
+                                            <Link to={loginPath} onClick={() => setShowInviteModal(false)}>登录</Link> 后即可获取邀请链接
                                         </div>
                                     )}
                                 </div>
@@ -317,7 +322,7 @@ export default function Layout({ children }) {
                                 )}
                             </div>
                         ) : (
-                            <Link to="/login" className="header-login-btn">
+                            <Link to={loginPath} className="header-login-btn">
                                 <span>👤</span>
                                 <span>登录</span>
                             </Link>

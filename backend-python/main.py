@@ -5790,10 +5790,10 @@ async def generate_cdk_endpoint(request: CDKGenerateRequest, authorization: Opti
     """Generate CDK codes (admin only)"""
     _verify_admin_token(authorization, "manage_cdk")
     
-    if request.count < 1 or request.count > 100:
-        raise HTTPException(status_code=400, detail="Count must be 1-100")
-    if request.quota not in [1, 1.5, 3, 5, 10, 20, 50, 100]:
-        raise HTTPException(status_code=400, detail="Quota must be 1, 1.5, 3, 5, 10, 20, 50, or 100")
+    if request.count < 1 or request.count > 1000:
+        raise HTTPException(status_code=400, detail="Count must be 1-1000")
+    if request.quota <= 0 or request.quota > 100:
+        raise HTTPException(status_code=400, detail="Quota must be greater than 0 and no more than 100")
     
     codes = cdk_manager.generate_cdks(request.count, request.quota, request.note)
     return {"success": True, "codes": codes, "count": len(codes), "quota": request.quota}

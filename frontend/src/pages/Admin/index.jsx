@@ -4493,11 +4493,22 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
     useEffect(() => { fetchCDKs(); }, []);
 
     const handleGenerate = async () => {
+        const quota = Number(cdkGenQuota);
+        const count = Number(cdkGenCount);
+        if (!Number.isFinite(quota) || quota <= 0 || quota > 100) {
+            alert('积分值必须大于 0，且最大为 100');
+            return;
+        }
+        if (!Number.isInteger(count) || count < 1 || count > 1000) {
+            alert('生成数量必须是 1 到 1000 之间的整数');
+            return;
+        }
+
         setCdkGenerating(true);
         try {
             const res = await fetch(`${API_BASE}/api/cdk/generate`, {
                 method: 'POST', headers: authHeaders,
-                body: JSON.stringify({ count: cdkGenCount, quota: cdkGenQuota, note: cdkGenNote })
+                body: JSON.stringify({ count, quota, note: cdkGenNote })
             });
             if (res.ok) {
                 const data = await res.json();
@@ -4596,8 +4607,6 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
         return true;
     });
 
-    const quotaOptions = [1, 1.5, 3, 5, 10, 20, 50, 100];
-
     return (
         <div className="tab-content">
             {/* CDK Stats */}
@@ -4638,13 +4647,20 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                 <div style={{ display: 'flex', gap: 'var(--spacing-md)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div>
                         <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>积分</label>
-                        <select className="input" value={cdkGenQuota} onChange={e => setCdkGenQuota(Number(e.target.value))} style={{ width: '120px' }}>
-                            {quotaOptions.map(q => <option key={q} value={q}>{q} 积分</option>)}
-                        </select>
+                        <input
+                            className="input"
+                            type="number"
+                            min={0.01}
+                            max={100}
+                            step={0.01}
+                            value={cdkGenQuota}
+                            onChange={e => setCdkGenQuota(e.target.value)}
+                            style={{ width: '120px' }}
+                        />
                     </div>
                     <div>
                         <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>数量</label>
-                        <input className="input" type="number" min={1} max={100} value={cdkGenCount} onChange={e => setCdkGenCount(Number(e.target.value))} style={{ width: '80px' }} />
+                        <input className="input" type="number" min={1} max={1000} step={1} value={cdkGenCount} onChange={e => setCdkGenCount(e.target.value)} style={{ width: '90px' }} />
                     </div>
                     <div style={{ flex: 1, minWidth: '150px' }}>
                         <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>备注（可选）</label>

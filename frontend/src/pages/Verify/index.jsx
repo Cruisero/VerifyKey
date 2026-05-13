@@ -24,9 +24,9 @@ export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
 
-    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (KPixel 1.5pt)
+    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (KPixel 2pt)
     const [verifyTier, setVerifyTier] = useState('standard');
-    const tierCost = verifyTier === 'pro' ? 1.5 : 1;
+    const tierCost = verifyTier === 'pro' ? 2 : 1;
 
     // Top-level service tab: 'pixel' | 'gpt'
     const [serviceTab, setServiceTab] = useState('pixel');
@@ -1162,7 +1162,7 @@ export default function Verify() {
                                             <span className="credits-dot pro"></span>
                                             {t('geminiPro')}
                                         </div>
-                                        <span className="credits-price-val">-1.5 {t('credits')}</span>
+                                        <span className="credits-price-val">-2 {t('credits')}</span>
                                     </div>
                                     {showGptRechargeTab && (
                                         <>
@@ -1379,7 +1379,7 @@ export default function Verify() {
                                             }}
                                             style={(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                         >
-                                            {t('tierProTab')} <span className="tier-cost">1.5 {t('credits')}</span>
+                                            {t('tierProTab')} <span className="tier-cost">2 {t('credits')}</span>
                                             {(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) && (
                                                 <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
                                             )}

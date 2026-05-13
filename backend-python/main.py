@@ -558,8 +558,9 @@ def broadcast_verify_event(event: dict):
             if event.get("success") and "creditCost" not in event:
                 _source = event.get("source", "")
                 _COST_BY_SOURCE = {
-                    "pixel": 1.0, "pixel_auto": 1.5,
-                    "kpixel": 1.5, "vpixel": 1.5, "ypixel": 1.0,
+                    "pixel": 1.0, "pixel_auto": 2.0,
+                    "kpixel": 2.0, "vpixel": 2.0, "ypixel": 1.0,
+                    "pro_submit": 2.0,
                     "gpt": 1.5,
                 }
                 if _source in _COST_BY_SOURCE:
@@ -6362,11 +6363,13 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                 if vid.startswith("yp_") or via == "ypixel":
                     cost = 1.0
                 elif vid.startswith("vp_") or via == "vpixel":
-                    cost = 1.5
+                    cost = 2.0
                 elif vid.startswith("kp_") or via == "kpixel":
-                    cost = 1.5
+                    cost = 2.0
                 elif via == "pixel_auto":
-                    cost = 1.5
+                    cost = 2.0
+                elif via == "pro_submit":
+                    cost = 2.0
                 elif via == "gpt" or vid.startswith("gpt_"):
                     cost = 1.5
                 elif via == "gpt_team":
@@ -6572,11 +6575,13 @@ async def override_verification_by_vid(request: VidOverrideRequest):
                 if vid_str.startswith("yp_") or via == "ypixel":
                     cost = 1.0
                 elif vid_str.startswith("vp_") or via == "vpixel":
-                    cost = 1.5
+                    cost = 2.0
                 elif vid_str.startswith("kp_") or via == "kpixel":
-                    cost = 1.5
+                    cost = 2.0
                 elif via == "pixel_auto":
-                    cost = 1.5
+                    cost = 2.0
+                elif via == "pro_submit":
+                    cost = 2.0
                 elif via == "gpt" or vid_str.startswith("gpt_"):
                     cost = 1.5
                 elif via == "gpt_team":
@@ -9070,7 +9075,7 @@ async def _repair_timeout_failed_tasks():
                 continue
 
             sse_source = "pixel_auto" if "auto" in current_via else "pixel"
-            sweep_cost = 1.5 if "auto" in sse_source else 1.0
+            sweep_cost = 2.0 if "auto" in sse_source else 1.0
 
             try:
                 async with httpx.AsyncClient(timeout=15) as client:
@@ -9432,7 +9437,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
-    cost = 1.5 if request.mode == "auto" else 1.0
+    cost = 2.0 if request.mode == "auto" else 1.0
     sse_source = "pixel_auto" if request.mode == "auto" else "pixel"
     import verification_history
     import uuid
@@ -9651,9 +9656,9 @@ async def pixel_get_job(job_id: str):
                         except ValueError:
                             pass
                     if uid_from_db:
-                        # Determine cost by via/mode: pixel_auto=1.5, pixel=1.0
+                        # Determine cost by via/mode: pixel_auto=2.0, pixel=1.0
                         row_via = row["via"] if "via" in row.keys() else ""
-                        recover_cost = 1.5 if "auto" in (row_via or "") else 1.0
+                        recover_cost = 2.0 if "auto" in (row_via or "") else 1.0
                         ctx = {"user_id": uid_from_db, "email": db_email, "cost": recover_cost, "mode": "auto" if "auto" in (row_via or "") else "semi-auto"}
                         _pixel_job_context[job_id] = ctx
             except Exception:
@@ -9872,7 +9877,7 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
             _via = _row["via"] if "via" in _row.keys() else ""
             if _via == "pixel_auto":
                 sse_source = "pixel_auto"
-                cost = 1.5
+                cost = 2.0
             email = _row["email"] if "email" in _row.keys() else email
 
     # Regular users can only cancel their own jobs
@@ -10178,7 +10183,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                     if user_id:
                         # Restore context
-                        recover_cost = 1.5 if "auto" in (row.get("via") or "") else 1.0
+                        recover_cost = 2.0 if "auto" in (row.get("via") or "") else 1.0
                         _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": recover_cost, "mode": "auto" if "auto" in (row.get("via") or "") else "semi-auto"}
                         conn.execute(
                             "UPDATE verification_history SET status = 'processing', message = '⏳ 已恢复，正在查询上游...' WHERE verification_id = ? AND status = 'failed'",
@@ -10416,7 +10421,7 @@ def _get_kpixel_config():
         "enabled": kp.get("enabled", False),
         "cdkey": kp.get("cdkey", ""),
         "baseUrl": kp.get("baseUrl", "https://2key.kckc1818.com/openapi.php"),
-        "creditCost": kp.get("creditCost", 1.5),
+        "creditCost": kp.get("creditCost", 2.0),
     }
 
 
@@ -10428,7 +10433,7 @@ async def _kpixel_poll_job(task_id: int, email: str, user_id: int, kpixel_cfg: d
     import time
     base_url = kpixel_cfg["baseUrl"]
     cdkey = kpixel_cfg["cdkey"]
-    credit_cost = kpixel_cfg.get("creditCost", 1.5)
+    credit_cost = kpixel_cfg.get("creditCost", 2.0)
     start_time = time.time()
     event_meta = _build_verify_event_meta("kpixel", email, user_id, "kpixel_api")
 
@@ -10616,7 +10621,7 @@ async def kpixel_submit_job(request: KPixelJobRequest, authorization: Optional[s
         )
         raise HTTPException(status_code=503, detail="服务端错误，请稍后重试")
 
-    credit_cost = kpixel_cfg.get("creditCost", 1.5) if kpixel_available else vpixel_cfg.get("creditCost", 1.5)
+    credit_cost = kpixel_cfg.get("creditCost", 2.0) if kpixel_available else vpixel_cfg.get("creditCost", 2.0)
 
     # Auth via JWT token
     if not authorization or not authorization.startswith("Bearer "):
@@ -10875,7 +10880,7 @@ async def kpixel_confirm_job(task_id: int, authorization: Optional[str] = Header
     status = info.get("status", "")
     message = info.get("message", "")
     ctx = _kpixel_job_context.get(str(task_id)) or {}
-    cost = ctx.get("cost", kpixel_cfg.get("creditCost", 1.5))
+    cost = ctx.get("cost", kpixel_cfg.get("creditCost", 2.0))
     event_meta = _build_verify_event_meta("kpixel", ctx.get("email", ""), user.get("id"), "kpixel_api")
     if status == "Success":
         result = _finalize_user_success(str(task_id), user.get("id"), cost, f"KPixel 成功: {message}", via="kpixel", email=ctx.get("email", ""))
@@ -10986,7 +10991,7 @@ def _get_vpixel_config():
         "enabled": vp.get("enabled", False),
         "card": vp.get("card", ""),
         "baseUrl": vp.get("baseUrl", "http://1688ai.vip"),
-        "creditCost": vp.get("creditCost", 1.5),
+        "creditCost": vp.get("creditCost", 2.0),
     }
 
 
@@ -11160,7 +11165,7 @@ async def _vpixel_poll_job(card: str, account_line: str, email: str, user_id: in
     import time
     import logging
     base_url = vpixel_cfg["baseUrl"]
-    credit_cost = vpixel_cfg.get("creditCost", 1.5)
+    credit_cost = vpixel_cfg.get("creditCost", 2.0)
     start_time = time.time()
     event_meta = _build_verify_event_meta("vpixel", email, user_id, "vpixel_card_pool", card)
 
@@ -11464,7 +11469,7 @@ async def vpixel_submit_job(request: VPixelJobRequest, authorization: Optional[s
         )
         raise HTTPException(status_code=503, detail="VPixel API 未启用")
 
-    credit_cost = vpixel_cfg.get("creditCost", 1.5)
+    credit_cost = vpixel_cfg.get("creditCost", 2.0)
 
     # Auth via JWT token
     if not authorization or not authorization.startswith("Bearer "):

@@ -85,20 +85,20 @@ def main():
     # Step 4: Get ALL verification costs per user from verification_history
     # Include ALL service types that deduct credits, not just pixel
     # Cost mapping:
-    #   pixel_auto → 1.5, pixel → 1.0
-    #   vpixel → 1.0, kpixel → 1.0, ypixel → 1.0
+    #   pixel_auto → 2.0, pixel → 1.0
+    #   vpixel → 2.0, kpixel → 2.0, ypixel → 1.0
     #   gpt → varies (usually 1.0)
-    #   pro_submit → 1.0
+    #   pro_submit → 2.0
     #   Others → 1.0 (default)
     
     COST_MAP = {
-        "pixel_auto": 1.5,
+        "pixel_auto": 2.0,
         "pixel": 1.0,
-        "vpixel": 1.0,
-        "kpixel": 1.0,
+        "vpixel": 2.0,
+        "kpixel": 2.0,
         "ypixel": 1.0,
         "gpt": 1.5,
-        "pro_submit": 1.0,
+        "pro_submit": 2.0,
     }
     
     # Count ALL pass records (credits legitimately spent)

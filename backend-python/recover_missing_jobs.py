@@ -96,7 +96,7 @@ def main():
         uid = job["user_id"]
         email = job["email"]
         mode = job["mode"]
-        cost = 1.5 if mode == "auto" else 1.0
+        cost = 2.0 if mode == "auto" else 1.0
         via = "pixel_auto" if mode == "auto" else "pixel"
         cdk_tag = f"user:{uid}" if uid else ""
         

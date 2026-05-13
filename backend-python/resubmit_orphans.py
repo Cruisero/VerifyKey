@@ -153,7 +153,7 @@ def main():
                             except:
                                 pass
                         if user_id:
-                            cost = 1.5 if "auto" in via else 1.0
+                            cost = 2.0 if "auto" in via else 1.0
                             auth.update_credits(user_id, cost)
                             print(f"  CONFIRMED FAILED + REFUNDED: {vid} | {email} | {error}")
                         else:
@@ -180,7 +180,7 @@ def main():
                         except:
                             pass
                     if user_id:
-                        cost = 1.5 if "auto" in via else 1.0
+                        cost = 2.0 if "auto" in via else 1.0
                         auth.update_credits(user_id, cost)
                         print(f"  LOST + REFUNDED: {vid} | {email} | cost={cost}")
                     else:

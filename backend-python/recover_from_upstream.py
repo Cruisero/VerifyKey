@@ -215,7 +215,7 @@ def main():
             target_email = p.get("email", "")
             user_id = int(p.get("user_id", 0) or 0)
             mode = p.get("mode", "semi-auto")
-            cost = 1.5 if mode == "auto" else 1.0
+            cost = 2.0 if mode == "auto" else 1.0
             via = "pixel_auto" if mode == "auto" else "pixel"
             cdk_tag = f"user:{user_id}" if user_id else ""
 

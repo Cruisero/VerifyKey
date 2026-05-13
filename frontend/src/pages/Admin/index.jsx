@@ -3213,13 +3213,13 @@ function PixelApiTab() {
     const [newBaseUrl, setNewBaseUrl] = useState('');
 
     // KPixel (Pro) config state
-    const [kpixelConfig, setKpixelConfig] = useState({ enabled: false, cdkey: '', hasKey: false, baseUrl: '', creditCost: 1.5 });
+    const [kpixelConfig, setKpixelConfig] = useState({ enabled: false, cdkey: '', hasKey: false, baseUrl: '', creditCost: 2 });
     const [newKPixelCdkey, setNewKPixelCdkey] = useState('');
     const [kpixelSaving, setKpixelSaving] = useState(false);
     const [kpixelBalance, setKpixelBalance] = useState(null);
 
     // VPixel config state
-    const [vpixelConfig, setVpixelConfig] = useState({ enabled: false, card: '', hasCard: false, baseUrl: 'http://1688ai.vip', creditCost: 1.5 });
+    const [vpixelConfig, setVpixelConfig] = useState({ enabled: false, card: '', hasCard: false, baseUrl: 'http://1688ai.vip', creditCost: 2 });
     const [newVPixelCard, setNewVPixelCard] = useState('');
     const [vpixelSaving, setVpixelSaving] = useState(false);
     const [vpixelQueue, setVpixelQueue] = useState(null);
@@ -10930,7 +10930,7 @@ export default function Admin() {
                                 </p>
                                 {[
                                     { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '开启后用户无法提交 Gemini 普通验证（1 积分）' },
-                                    { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '开启后用户无法提交 Gemini 高级验证（1.5 积分）' },
+                                    { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '开启后用户无法提交 Gemini 高级验证（2 积分）' },
                                     { key: 'gpt_plus', label: '🤖 ChatGPT Plus 充值', desc: '开启后用户无法提交 GPT Plus 月度充值（3 积分）' },
                                     { key: 'gpt_team', label: '👥 ChatGPT Team 邀请', desc: '开启后用户无法使用 GPT Team 邀请功能（0.6 积分）' },
                                 ].map(s => (

@@ -142,7 +142,7 @@ const ENDPOINTS = [
                     { name: 'email', type: 'string', required: true, desc: 'Google 账号邮箱' },
                     { name: 'password', type: 'string', required: true, desc: '账号密码' },
                     { name: 'totp_secret', type: 'string', required: true, desc: '2FA TOTP 密钥（Base32 编码）' },
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 1~1.5 积分）' },
+                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 1~2 积分）' },
                     { name: 'priority', type: 'string', required: false, desc: '优先级：normal / high（Pro）' },
                 ],
                 response: `{
@@ -314,7 +314,7 @@ data: {"verificationId": "1234abcd", "currentStep": "pass", "message": "验证�
 
 const CREDITS_TABLE = [
     { service: 'Gemini 普通认证', cost: '-1 积分' },
-    { service: 'Gemini 高级认证', cost: '-1.5 积分' },
+    { service: 'Gemini 高级认证', cost: '-2 积分' },
     { service: 'ChatGPT Plus 月度充值', cost: '-1.5 积分' },
     { service: '邀请好友（首次兑换后）', cost: '+0.2 积分' },
 ];

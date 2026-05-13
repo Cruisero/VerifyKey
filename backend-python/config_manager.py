@@ -357,7 +357,7 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "cdkey": "",  # K-XXXX... format
         "baseUrl": "https://2key.kckc1818.com/openapi.php",
-        "creditCost": 1.5
+        "creditCost": 2.0
     },
     
     # VPixel API (Google One via 1688ai.vip) — 与 KPixel 共享 "高级验证" 通道
@@ -365,7 +365,7 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "card": "",           # 卡密 code
         "baseUrl": "http://1688ai.vip",
-        "creditCost": 1.5
+        "creditCost": 2.0
     },
     
     # Last updated
@@ -391,10 +391,22 @@ def load_config() -> dict:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
             # Merge with defaults to ensure all fields exist
-            return _deep_merge(DEFAULT_CONFIG, config)
+            merged = _deep_merge(DEFAULT_CONFIG, config)
+            _migrate_pro_credit_cost(merged)
+            return merged
     except Exception as e:
         print(f"[Config] Error loading config: {e}")
-    return DEFAULT_CONFIG.copy()
+    config = DEFAULT_CONFIG.copy()
+    _migrate_pro_credit_cost(config)
+    return config
+
+
+def _migrate_pro_credit_cost(config: dict) -> None:
+    """Bump stored old pro-tier default pricing to the current advanced verification price."""
+    for key in ("kpixelApi", "vpixelApi"):
+        api_config = config.get(key)
+        if isinstance(api_config, dict) and api_config.get("creditCost") == 1.5:
+            api_config["creditCost"] = 2.0
 
 
 def save_config(config: dict) -> bool:

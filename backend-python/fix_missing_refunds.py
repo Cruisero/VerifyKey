@@ -75,7 +75,8 @@ def run_fix():
             
         if not cost or cost <= 0:
             # 尝试根据 via 推断 cost
-            real_cost = 1.5 if "auto" in str(via).lower() else 1.0
+            via_text = str(via).lower()
+            real_cost = 2.0 if any(key in via_text for key in ("auto", "kpixel", "vpixel", "pro_submit")) else 1.0
             print(f"    [推断] 发现账本记为 0，且流水没退钱：根据 {via} 必须补回 {real_cost}")
         else:
             real_cost = cost

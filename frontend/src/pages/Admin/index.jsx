@@ -4968,6 +4968,7 @@ export default function Admin() {
     const [userSearch, setUserSearch] = useState('');
     const [userPage, setUserPage] = useState(1);
     const [usersLoading, setUsersLoading] = useState(false);
+    const [usersError, setUsersError] = useState('');
     const [roleConfig, setRoleConfig] = useState({ permissions: [], presets: [] });
     const [roleConfigLoading, setRoleConfigLoading] = useState(false);
     const [roleConfigSaving, setRoleConfigSaving] = useState(false);
@@ -5493,16 +5494,22 @@ export default function Admin() {
     // ========= User Management =========
     const fetchUsers = async () => {
         setUsersLoading(true);
+        setUsersError('');
         try {
             const token = user?.token || localStorage.getItem('verifykey-token');
             const res = await fetch(`${API_BASE}/api/admin/users`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            const data = await res.json().catch(() => ({}));
             if (res.ok) {
-                const data = await res.json();
                 setUsers(data.users || []);
+            } else {
+                setUsers([]);
+                setUsersError(data.detail || `加载用户失败 (${res.status})`);
             }
         } catch (e) {
+            setUsers([]);
+            setUsersError('加载用户失败: ' + e.message);
             console.error('Failed to fetch users:', e);
         } finally {
             setUsersLoading(false);
@@ -6782,6 +6789,11 @@ export default function Admin() {
                             </div>
                         </div>
                         <div className="users-table card">
+                            {usersError && (
+                                <div style={{ margin: '12px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(239,68,68,0.08)', color: '#dc2626', fontSize: '13px', fontWeight: 600 }}>
+                                    {usersError}
+                                </div>
+                            )}
                             <table className="data-table">
                                 <thead>
                                     <tr>

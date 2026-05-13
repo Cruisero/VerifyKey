@@ -2139,7 +2139,7 @@ async def test_email_endpoint(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="No authorization header")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_config"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     import email_service
@@ -2156,7 +2156,7 @@ async def list_users_endpoint(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail="No authorization header")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "view_users"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     users = auth.list_all_users()
@@ -6462,7 +6462,7 @@ async def override_verification_message(request: VidMessageOverrideRequest, auth
         raise HTTPException(status_code=401, detail="No authorization header")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manual_override"):
         raise HTTPException(status_code=403, detail="Admin access required")
         
     conn = database.get_connection()
@@ -8660,7 +8660,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
         raise HTTPException(status_code=401, detail="未登录")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_maintenance"):
         raise HTTPException(status_code=403, detail="无权限")
 
     data = await request.json()
@@ -9951,7 +9951,7 @@ async def pixel_accounts_query(
     user = auth.verify_token(authorization.replace("Bearer ", ""))
     if not user:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
-    if user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_config"):
         raise HTTPException(status_code=403, detail="仅管理员可访问")
 
     params = {}
@@ -9989,7 +9989,7 @@ async def pixel_stats(authorization: Optional[str] = Header(None)):
     user = auth.verify_token(authorization.replace("Bearer ", ""))
     if not user:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
-    if user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_config"):
         raise HTTPException(status_code=403, detail="仅管理员可访问")
 
     try:
@@ -10067,7 +10067,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
         raise HTTPException(status_code=401, detail="请先登录")
     token = authorization.replace("Bearer ", "")
     admin = auth.verify_token(token)
-    if not admin or admin.get("role") != "admin":
+    if not auth.user_has_permission(admin, "manual_override"):
         raise HTTPException(status_code=403, detail="仅管理员可操作")
 
     import database
@@ -12966,7 +12966,7 @@ async def gpt_keys_add(request: Request, authorization: Optional[str] = Header(N
         raise HTTPException(status_code=401, detail="未授权")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_config"):
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     body = await request.json()
@@ -13070,7 +13070,7 @@ async def gpt_keys_list(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="未授权")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_config"):
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     conn = database.get_connection()
@@ -13089,7 +13089,7 @@ async def gpt_keys_stats(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="未授权")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_config"):
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     conn = database.get_connection()
@@ -13126,7 +13126,7 @@ async def gpt_keys_delete(key_id: int, authorization: Optional[str] = Header(Non
         raise HTTPException(status_code=401, detail="未授权")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_config"):
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     conn = database.get_connection()

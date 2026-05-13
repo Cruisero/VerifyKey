@@ -13,6 +13,7 @@ export default function Layout({ children }) {
     const { theme, toggleTheme } = useTheme();
     const { lang, toggleLang, t } = useLang();
     const { user, logout, getToken, refreshUser } = useAuth();
+    const hasAdminAccess = user?.role === 'admin' || (user?.admin_permissions || []).length > 0;
     const navigate = useNavigate();
     const location = useLocation();
     const [announcement, setAnnouncement] = useState(null);
@@ -300,7 +301,7 @@ export default function Layout({ children }) {
                                             <span className="dropdown-email">{user.email}</span>
                                         </div>
                                         <div className="dropdown-divider"></div>
-                                        {user.role === 'admin' && (
+                                        {hasAdminAccess && (
                                             <Link
                                                 to="/admin"
                                                 className="dropdown-item"

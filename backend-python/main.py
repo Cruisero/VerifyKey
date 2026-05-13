@@ -1867,15 +1867,7 @@ async def test_document_generation(request: TestDocumentRequest):
 @app.post("/api/config")
 async def update_config_endpoint(request: Request, authorization: Optional[str] = Header(None)):
     """Update configuration (admin only)"""
-    # Verify admin
-    if authorization:
-        token = authorization.replace("Bearer ", "")
-        user = auth.verify_token(token)
-        if not user or user.get("role") != "admin":
-            raise HTTPException(status_code=403, detail="Admin access required")
-    
-    # Simple auth check (in production should be more robust)
-    # verify_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     
     try:
         data = await request.json()
@@ -2069,7 +2061,7 @@ async def update_user_credits(authorization: Optional[str] = Header(None)):
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
     
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "view_users"):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # For now, just return current user
@@ -2178,7 +2170,7 @@ async def toggle_user_endpoint(user_id: int, request: Request, authorization: st
         raise HTTPException(status_code=401, detail="No authorization header")
     token = authorization.replace("Bearer ", "")
     admin = auth.verify_token(token)
-    if not admin or admin.get("role") != "admin":
+    if not auth.user_has_permission(admin, "view_users"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     data = await request.json()
@@ -2199,7 +2191,7 @@ async def update_user_credits_endpoint(user_id: int, request: Request, authoriza
         raise HTTPException(status_code=401, detail="No authorization header")
     token = authorization.replace("Bearer ", "")
     admin = auth.verify_token(token)
-    if not admin or admin.get("role") != "admin":
+    if not auth.user_has_permission(admin, "manage_credits"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     data = await request.json()
@@ -2220,12 +2212,14 @@ async def update_user_admin_endpoint(user_id: int, request: Request, authorizati
         raise HTTPException(status_code=401, detail="No authorization header")
     token = authorization.replace("Bearer ", "")
     admin = auth.verify_token(token)
-    if not admin or admin.get("role") != "admin":
+    if not auth.user_has_permission(admin, "view_users"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     data = await request.json()
     credits = data.get("credits")
     password = (data.get("password") or "").strip()
+    role = data.get("role")
+    permissions = data.get("admin_permissions", data.get("permissions"))
 
     if credits is None or not isinstance(credits, (int, float)):
         raise HTTPException(status_code=400, detail="Invalid credits value")
@@ -2234,15 +2228,45 @@ async def update_user_admin_endpoint(user_id: int, request: Request, authorizati
     if password and len(password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
 
-    success = auth.update_user_credits_admin(user_id, float(credits))
-    if not success:
+    if float(credits) != float(data.get("currentCredits", credits)) and not auth.user_has_permission(admin, "manage_credits"):
+        raise HTTPException(status_code=403, detail="No credit permission")
+    if (role is not None or permissions is not None) and not auth.user_has_permission(admin, "super_admin"):
+        raise HTTPException(status_code=403, detail="No role permission")
+
+    old_user = auth.get_user_by_id(user_id)
+    result = auth.update_user_admin_fields(
+        user_id,
+        credits=float(credits),
+        role=role,
+        permissions=permissions,
+        password=password or None,
+    )
+    if not result.get("success"):
         raise HTTPException(status_code=404, detail="User not found")
+    if old_user and float(old_user.get("credits") or 0) != float(credits):
+        auth._log_credit_transaction(user_id, float(credits) - float(old_user.get("credits") or 0), float(credits), "admin_set")
 
-    password_updated = False
-    if password:
-        password_updated = auth.reset_password(user_id, password)
+    return {"success": True, "credits": float(credits), "passwordUpdated": bool(password)}
 
-    return {"success": True, "credits": float(credits), "passwordUpdated": password_updated}
+
+@app.get("/api/admin/roles")
+async def get_admin_roles_endpoint(authorization: str = Header(None)):
+    admin = auth.verify_token(authorization.replace("Bearer ", "")) if authorization else None
+    if not auth.user_has_permission(admin, "super_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return auth.get_admin_role_config()
+
+
+@app.post("/api/admin/roles")
+async def save_admin_roles_endpoint(request: Request, authorization: str = Header(None)):
+    admin = auth.verify_token(authorization.replace("Bearer ", "")) if authorization else None
+    if not auth.user_has_permission(admin, "super_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    data = await request.json()
+    try:
+        return auth.save_admin_role_presets(data.get("presets") or [])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/admin/users/{user_id}/history")
@@ -2252,7 +2276,7 @@ async def get_admin_user_history_endpoint(user_id: int, authorization: str = Hea
         raise HTTPException(status_code=401, detail="No authorization header")
     token = authorization.replace("Bearer ", "")
     admin = auth.verify_token(token)
-    if not admin or admin.get("role") != "admin":
+    if not auth.user_has_permission(admin, "view_users"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     target_user = auth.get_user_by_id(user_id)
@@ -3164,7 +3188,7 @@ async def admin_gpt_team_dashboard(
     search: str = Query(""),
     status: str = Query(""),
 ):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_orders")
     conn = database.get_connection()
     search = (search or "").strip()
     status = (status or "").strip().lower()
@@ -3224,7 +3248,7 @@ async def admin_gpt_team_dashboard(
 
 @app.post("/api/admin/gpt-team/teams")
 async def admin_gpt_team_create(team: GptTeamCreateRequest, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     payload = _normalize_team_payload(team.dict())
     if not payload["email"]:
         raise HTTPException(status_code=400, detail="email 不能为空")
@@ -3267,7 +3291,7 @@ async def admin_gpt_team_create(team: GptTeamCreateRequest, authorization: Optio
 
 @app.get("/api/admin/gpt-team/teams/{team_id}")
 async def admin_gpt_team_get(team_id: int, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
     if not row:
@@ -3277,7 +3301,7 @@ async def admin_gpt_team_get(team_id: int, authorization: Optional[str] = Header
 
 @app.put("/api/admin/gpt-team/teams/{team_id}")
 async def admin_gpt_team_update(team_id: int, body: GptTeamUpdateRequest, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     update_raw = {k: v for k, v in body.dict().items() if v is not None}
     if not update_raw:
         return {"success": True}
@@ -3326,7 +3350,7 @@ async def admin_gpt_team_update(team_id: int, body: GptTeamUpdateRequest, author
 
 @app.delete("/api/admin/gpt-team/teams/{team_id}")
 async def admin_gpt_team_delete(team_id: int, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     conn.execute("DELETE FROM gpt_team_accounts WHERE id = ?", (team_id,))
     conn.commit()
@@ -3335,7 +3359,7 @@ async def admin_gpt_team_delete(team_id: int, authorization: Optional[str] = Hea
 
 @app.post("/api/admin/gpt-team/teams/{team_id}/refresh")
 async def admin_gpt_team_refresh(team_id: int, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     result = await _gpt_team_sync(team_id, force_refresh=True)
     if not result.get("success"):
         return JSONResponse(status_code=400, content=result)
@@ -3344,7 +3368,7 @@ async def admin_gpt_team_refresh(team_id: int, authorization: Optional[str] = He
 
 @app.get("/api/admin/gpt-team/teams/{team_id}/members/list")
 async def admin_gpt_team_members(team_id: int, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     result = await _gpt_team_members_payload(team_id)
     if not result.get("success"):
         return JSONResponse(status_code=400, content=result)
@@ -3353,7 +3377,7 @@ async def admin_gpt_team_members(team_id: int, authorization: Optional[str] = He
 
 @app.post("/api/admin/gpt-team/teams/{team_id}/members/add")
 async def admin_gpt_team_add_member(team_id: int, body: GptTeamMemberRequest, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     email = (body.email or "").strip()
     if not email:
         raise HTTPException(status_code=400, detail="email 不能为空")
@@ -3388,7 +3412,7 @@ async def admin_gpt_team_add_member(team_id: int, body: GptTeamMemberRequest, au
 
 @app.post("/api/admin/gpt-team/teams/{team_id}/members/{user_id}/delete")
 async def admin_gpt_team_delete_member(team_id: int, user_id: str, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     team_row = conn.execute("SELECT * FROM gpt_team_accounts WHERE id = ? LIMIT 1", (team_id,)).fetchone()
     if not team_row:
@@ -3413,7 +3437,7 @@ async def admin_gpt_team_delete_member(team_id: int, user_id: str, authorization
 
 @app.post("/api/admin/gpt-team/teams/{team_id}/invites/revoke")
 async def admin_gpt_team_revoke_invite(team_id: int, body: GptTeamMemberRequest, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     email = (body.email or "").strip()
     if not email:
         raise HTTPException(status_code=400, detail="email 不能为空")
@@ -3442,7 +3466,7 @@ async def admin_gpt_team_revoke_invite(team_id: int, body: GptTeamMemberRequest,
 
 @app.post("/api/admin/gpt-team/import")
 async def admin_gpt_team_import(body: GptTeamImportRequest, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     if body.import_type == "single":
         result = _import_gpt_team_single(
             access_token=body.access_token,
@@ -3545,7 +3569,7 @@ async def admin_gpt_team_records(
     start_date: str = Query(""),
     end_date: str = Query(""),
 ):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_orders")
     conn = database.get_connection()
     where = ["1=1"]
     params: List = []
@@ -3631,7 +3655,7 @@ async def admin_gpt_team_records(
 
 @app.post("/api/admin/gpt-team/records")
 async def admin_gpt_team_add_record(body: GptTeamRecordCreateRequest, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     if not (body.email or "").strip():
         raise HTTPException(status_code=400, detail="email 不能为空")
     redeemed_at = (body.redeemedAt or "").strip() or (datetime.utcnow().isoformat() + "Z")
@@ -3656,7 +3680,7 @@ async def admin_gpt_team_add_record(body: GptTeamRecordCreateRequest, authorizat
 
 @app.delete("/api/admin/gpt-team/records/{record_id}")
 async def admin_gpt_team_delete_record(record_id: int, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     conn.execute("DELETE FROM gpt_team_usage_records WHERE id = ?", (record_id,))
     conn.commit()
@@ -5322,20 +5346,24 @@ async def verify_via_singlebot(request: SingleBotVerifyRequest):
 
 # ========== Telegram Bot Admin API ==========
 
-def _verify_admin_token(authorization: Optional[str]):
+def _verify_admin_token(authorization: Optional[str], permission: Optional[str] = None):
     """Verify admin token from Authorization header."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization required")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if permission is None:
+        allowed = bool(user and user.get("role") == "admin")
+    else:
+        allowed = auth.user_has_permission(user, permission)
+    if not allowed:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 @app.get("/api/admin/bot-config")
 async def get_bot_config(authorization: Optional[str] = Header(None)):
     """Get Telegram bot configuration."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import crypto_service
     config = crypto_service.load_bot_config()
     return config
@@ -5343,7 +5371,7 @@ async def get_bot_config(authorization: Optional[str] = Header(None)):
 @app.post("/api/admin/bot-config")
 async def update_bot_config(request: Request, authorization: Optional[str] = Header(None)):
     """Update Telegram bot configuration."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import crypto_service
     body = await request.json()
     config = crypto_service.load_bot_config()
@@ -5354,7 +5382,7 @@ async def update_bot_config(request: Request, authorization: Optional[str] = Hea
 @app.get("/api/admin/bot-stats")
 async def get_bot_stats(authorization: Optional[str] = Header(None)):
     """Get Telegram bot aggregate statistics."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_logs")
     import bot_data
     stats = bot_data.get_stats()
     
@@ -5417,7 +5445,7 @@ async def get_bot_stats(authorization: Optional[str] = Header(None)):
 @app.post("/api/admin/reset-overview-stats")
 async def reset_overview_stats(authorization: Optional[str] = Header(None)):
     """Reset all overview statistics (verification history + bot stats)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_logs")
     import verification_history
     deleted = verification_history.clear_history()
     # Also clear bot_stats sliding window
@@ -5428,7 +5456,7 @@ async def reset_overview_stats(authorization: Optional[str] = Header(None)):
 @app.get("/api/admin/bot-orders")
 async def get_bot_orders(authorization: Optional[str] = Header(None)):
     """Get all bot crypto payment orders."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_orders")
     import bot_data
     orders = bot_data.get_all_orders()
     orders.sort(key=lambda o: o.get("created_at", ""), reverse=True)
@@ -5441,7 +5469,7 @@ async def get_bot_verify_log(
     pageSize: int = Query(100, ge=1, le=500),
 ):
     """Get paginated bot verification log entries."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_logs")
     import bot_verify_log
     return bot_verify_log.get_paginated(page=page, page_size=pageSize)
 
@@ -5453,7 +5481,7 @@ async def admin_verify_stream(request: Request, authorization: Optional[str] = Q
     if authorization:
         token = authorization.replace("Bearer ", "")
         user = auth.verify_token(token)
-        if not user or user.get("role") != "admin":
+        if not auth.user_has_permission(user, "view_logs"):
             raise HTTPException(status_code=403, detail="Admin access required")
 
     import json as _json_sse
@@ -5537,7 +5565,7 @@ async def user_verify_stream(request: Request, authorization: Optional[str] = Qu
 @app.get("/api/admin/bot-users")
 async def get_bot_users(authorization: Optional[str] = Header(None)):
     """Get all Telegram bot users."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_users")
     import bot_data
     users = bot_data.get_all_users()
     users.sort(key=lambda u: u.get("created_at", ""), reverse=True)
@@ -5547,7 +5575,7 @@ async def get_bot_users(authorization: Optional[str] = Header(None)):
 @app.post("/api/admin/bot-confirm-order")
 async def confirm_bot_order(request: Request, authorization: Optional[str] = Header(None)):
     """Manually confirm a crypto payment order (e.g. Binance Pay)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_orders")
     import bot_data
     body = await request.json()
     order_id = body.get("order_id")
@@ -5759,14 +5787,7 @@ async def redeem_cdk_endpoint(request: CDKValidateRequest, authorization: Option
 @app.post("/api/cdk/generate")
 async def generate_cdk_endpoint(request: CDKGenerateRequest, authorization: Optional[str] = Header(None)):
     """Generate CDK codes (admin only)"""
-    # Verify admin
-    if not authorization or not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail="Admin authentication required")
-    
-    token = authorization.split(' ')[1]
-    user_data = auth.verify_token(token)
-    if not user_data or user_data.get('role') != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
+    _verify_admin_token(authorization, "manage_cdk")
     
     if request.count < 1 or request.count > 100:
         raise HTTPException(status_code=400, detail="Count must be 1-100")
@@ -5780,13 +5801,7 @@ async def generate_cdk_endpoint(request: CDKGenerateRequest, authorization: Opti
 @app.get("/api/cdk/list")
 async def list_cdks_endpoint(authorization: Optional[str] = Header(None)):
     """List all CDKs (admin only)"""
-    if not authorization or not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail="Admin authentication required")
-    
-    token = authorization.split(' ')[1]
-    user_data = auth.verify_token(token)
-    if not user_data or user_data.get('role') != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
+    _verify_admin_token(authorization, "view_orders")
     
     cdks = cdk_manager.get_all_cdks()
     stats = cdk_manager.get_cdk_stats()
@@ -5796,13 +5811,7 @@ async def list_cdks_endpoint(authorization: Optional[str] = Header(None)):
 @app.post("/api/cdk/delete")
 async def delete_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional[str] = Header(None)):
     """Delete a CDK (admin only)"""
-    if not authorization or not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail="Admin authentication required")
-    
-    token = authorization.split(' ')[1]
-    user_data = auth.verify_token(token)
-    if not user_data or user_data.get('role') != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
+    _verify_admin_token(authorization, "manage_cdk")
     
     success = cdk_manager.delete_cdk(request.code)
     if not success:
@@ -5817,13 +5826,7 @@ class CDKBatchDeleteRequest(BaseModel):
 @app.post("/api/cdk/batch-delete")
 async def batch_delete_cdk_endpoint(request: CDKBatchDeleteRequest, authorization: Optional[str] = Header(None)):
     """Batch delete CDKs (admin only)"""
-    if not authorization or not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail="Admin authentication required")
-    
-    token = authorization.split(' ')[1]
-    user_data = auth.verify_token(token)
-    if not user_data or user_data.get('role') != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
+    _verify_admin_token(authorization, "manage_cdk")
     
     if not request.codes:
         raise HTTPException(status_code=400, detail="No codes provided")
@@ -5835,13 +5838,7 @@ async def batch_delete_cdk_endpoint(request: CDKBatchDeleteRequest, authorizatio
 @app.post("/api/cdk/consume")
 async def consume_cdk_endpoint(request: CDKDeleteRequest, authorization: Optional[str] = Header(None)):
     """Manually consume 1 quota from a CDK (admin only)"""
-    if not authorization or not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail="Admin authentication required")
-    
-    token = authorization.split(' ')[1]
-    user_data = auth.verify_token(token)
-    if not user_data or user_data.get('role') != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
+    _verify_admin_token(authorization, "manage_cdk")
     
     result = cdk_manager.use_cdk(request.code, 1)
     if not result["success"]:
@@ -5858,7 +5855,7 @@ async def cdk_stats_endpoint():
 @app.get("/api/cdk/history/{code}")
 async def cdk_history_endpoint(code: str, authorization: Optional[str] = Header(None)):
     """Get verification history for a specific CDK code"""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_logs")
     records = verification_history.get_history_by_cdk(code)
     return {"code": code, "records": records, "total": len(records)}
 
@@ -5868,14 +5865,14 @@ async def cdk_history_endpoint(code: str, authorization: Optional[str] = Header(
 @app.get("/api/backup/list")
 async def backup_list_endpoint(authorization: Optional[str] = Header(None)):
     """Get list of available database backups"""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     return {"backups": database.get_backup_list()}
 
 
 @app.post("/api/backup/create")
 async def backup_create_endpoint(authorization: Optional[str] = Header(None)):
     """Create a new database backup"""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     try:
         path = database.create_backup()
         return {"success": True, "path": path, "backups": database.get_backup_list()}
@@ -5886,7 +5883,7 @@ async def backup_create_endpoint(authorization: Optional[str] = Header(None)):
 @app.get("/api/backup/download")
 async def backup_download_endpoint(authorization: Optional[str] = Header(None)):
     """Download the latest database backup"""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_logs")
     
     # Create a fresh backup for download
     try:
@@ -6046,7 +6043,7 @@ async def get_user_active_verifications(authorization: Optional[str] = Header(No
 @app.get("/api/admin/today-tasks")
 async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
     """Get today's verification history formatted for LiveTaskMonitor component."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_logs")
 
     conn = database.get_connection()
     # Get today's date range (UTC)
@@ -6102,7 +6099,7 @@ async def get_admin_verification_history(
     search: str = Query("", description="Search keyword"),
 ):
     """Get paginated verification history with all fields (admin only)"""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_orders")
     result = verification_history.get_paginated_history(page=page, page_size=pageSize, ignore_reset=True, search=search)
     stats = verification_history.get_history_stats(respect_reset=False)
     result["stats"] = stats
@@ -6117,7 +6114,7 @@ async def get_admin_credit_transactions(
     search: str = Query("", description="Search keyword"),
 ):
     """Get paginated credit transactions (audit logs) (admin only)"""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "view_orders")
     
     conn = database.get_connection()
     offset = (page - 1) * pageSize
@@ -7753,8 +7750,9 @@ async def verify_mixed_mode(request: MixedVerifyRequest):
 # ========== Node Health Monitor API ==========
 
 @app.get("/api/admin/node-health")
-async def get_node_health():
+async def get_node_health(authorization: Optional[str] = Header(None)):
     """Admin: Get all node statuses and monitor config."""
+    _verify_admin_token(authorization, "manage_nodes")
     from node_health_monitor import capacity_tracker as _cap_api
     return {
         "nodes": node_health_monitor.get_all_statuses(),
@@ -7765,8 +7763,9 @@ async def get_node_health():
 
 
 @app.post("/api/admin/node-health/config")
-async def update_node_health_config(request: dict):
+async def update_node_health_config(request: dict, authorization: Optional[str] = Header(None)):
     """Admin: Update monitor thresholds, mode, and locked allocation."""
+    _verify_admin_token(authorization, "manage_nodes")
     node_health_monitor.update_config(
         thresholds=request.get("thresholds"),
         mode=request.get("mode"),
@@ -7776,8 +7775,9 @@ async def update_node_health_config(request: dict):
 
 
 @app.post("/api/admin/node-health/refresh")
-async def force_refresh_node_health():
+async def force_refresh_node_health(authorization: Optional[str] = Header(None)):
     """Admin: Force immediate re-poll of all external APIs."""
+    _verify_admin_token(authorization, "manage_nodes")
     statuses = await node_health_monitor.force_refresh()
     return {
         "nodes": statuses,
@@ -7786,8 +7786,9 @@ async def force_refresh_node_health():
 
 
 @app.post("/api/admin/node-health/toggle")
-async def toggle_node_enabled(request: dict):
+async def toggle_node_enabled(request: dict, authorization: Optional[str] = Header(None)):
     """Admin: Enable/disable a specific node."""
+    _verify_admin_token(authorization, "manage_nodes")
     node_id = request.get("nodeId")
     enabled = request.get("enabled", True)
     if not node_id:
@@ -7798,8 +7799,9 @@ async def toggle_node_enabled(request: dict):
 
 
 @app.post("/api/admin/node-health/weight")
-async def set_node_weight(request: dict):
+async def set_node_weight(request: dict, authorization: Optional[str] = Header(None)):
     """Admin: Set cost weight for a specific node."""
+    _verify_admin_token(authorization, "manage_nodes")
     node_id = request.get("nodeId")
     weight = request.get("weight", 1.0)
     if not node_id:
@@ -7810,8 +7812,9 @@ async def set_node_weight(request: dict):
 
 
 @app.post("/api/admin/node-health/clear-cooldown")
-async def clear_node_cooldown(request: dict):
+async def clear_node_cooldown(request: dict, authorization: Optional[str] = Header(None)):
     """Admin: Manually clear cooldown for a specific node."""
+    _verify_admin_token(authorization, "manage_nodes")
     node_id = request.get("nodeId")
     if not node_id:
         raise HTTPException(status_code=400, detail="nodeId required")
@@ -7823,8 +7826,9 @@ async def clear_node_cooldown(request: dict):
 
 
 @app.post("/api/admin/node-health/auto-maintenance")
-async def toggle_auto_maintenance(request: dict):
+async def toggle_auto_maintenance(request: dict, authorization: Optional[str] = Header(None)):
     """Admin: Enable/disable auto maintenance mode."""
+    _verify_admin_token(authorization, "manage_nodes")
     enabled = request.get("enabled", False)
     node_health_monitor.set_auto_maintenance(bool(enabled))
     return {"ok": True, "autoMaintenance": enabled}
@@ -8368,7 +8372,7 @@ async def toggle_maintenance(request: Request, authorization: Optional[str] = He
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
     
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_maintenance"):
         raise HTTPException(status_code=403, detail="无权限")
     
     data = await request.json()
@@ -8415,7 +8419,7 @@ async def save_announcement(request: Request, authorization: Optional[str] = Hea
         raise HTTPException(status_code=401, detail="未登录")
     token = authorization.replace("Bearer ", "")
     user = auth.verify_token(token)
-    if not user or user.get("role") != "admin":
+    if not auth.user_has_permission(user, "manage_maintenance"):
         raise HTTPException(status_code=403, detail="无权限")
 
     data = await request.json()
@@ -8840,14 +8844,14 @@ def start_alert_monitor():
 
 @app.get("/api/alerts/config")
 async def alerts_get_config(authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_maintenance")
     import email_service
     return email_service.get_alert_config()
 
 
 @app.post("/api/alerts/config")
 async def alerts_update_config(request: Request, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_maintenance")
     body = await request.json()
     import config_manager
     updates = {}
@@ -8865,7 +8869,7 @@ async def alerts_update_config(request: Request, authorization: Optional[str] = 
 
 @app.post("/api/alerts/test")
 async def alerts_send_test(authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_maintenance")
     import email_service
     alert_cfg = email_service.get_alert_config()
     to = alert_cfg.get("email", "")
@@ -10285,7 +10289,7 @@ async def pixel_history(limit: int = 50, offset: int = 0):
 @app.get("/api/pixel/config")
 async def pixel_get_config(authorization: Optional[str] = Header(None)):
     """Get Pixel API configuration (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     pixel_cfg = _get_pixel_config()
     # Mask API key
     api_key = pixel_cfg.get("apiKey", "")
@@ -10304,7 +10308,7 @@ async def pixel_get_config(authorization: Optional[str] = Header(None)):
 @app.post("/api/pixel/config")
 async def pixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
     """Update Pixel API configuration (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import config_manager
     body = await request.json()
 
@@ -10933,7 +10937,7 @@ async def kpixel_balance():
 @app.get("/api/kpixel/config")
 async def kpixel_get_config(authorization: Optional[str] = Header(None)):
     """Get KPixel API configuration (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     kpixel_cfg = _get_kpixel_config()
     masked_key = ""
     if kpixel_cfg["cdkey"]:
@@ -10951,7 +10955,7 @@ async def kpixel_get_config(authorization: Optional[str] = Header(None)):
 @app.post("/api/kpixel/config")
 async def kpixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
     """Update KPixel API configuration (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import config_manager
     body = await request.json()
 
@@ -11626,7 +11630,7 @@ async def vpixel_queue():
 @app.get("/api/vpixel/config")
 async def vpixel_get_config(authorization: Optional[str] = Header(None)):
     """Get VPixel API configuration (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     vpixel_cfg = _get_vpixel_config()
     masked_card = ""
     if vpixel_cfg["card"]:
@@ -11644,7 +11648,7 @@ async def vpixel_get_config(authorization: Optional[str] = Header(None)):
 @app.post("/api/vpixel/config")
 async def vpixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
     """Update VPixel API configuration (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import config_manager
     body = await request.json()
 
@@ -11669,7 +11673,7 @@ async def vpixel_update_config(request: Request, authorization: Optional[str] = 
 @app.post("/api/vpixel/cards")
 async def vpixel_cards_add(request: Request, authorization: Optional[str] = Header(None)):
     """Batch-add VPixel cards (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     body = await request.json()
     keys_raw = body.get("keys", "")
     keys = [k.strip() for k in keys_raw.strip().split("\n") if k.strip()]
@@ -11730,7 +11734,7 @@ async def vpixel_cards_add(request: Request, authorization: Optional[str] = Head
 @app.get("/api/vpixel/cards")
 async def vpixel_cards_list(authorization: Optional[str] = Header(None)):
     """List all VPixel cards (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     rows = conn.execute("SELECT * FROM vpixel_cards ORDER BY id DESC").fetchall()
     return {"keys": [dict(r) for r in rows]}
@@ -11739,7 +11743,7 @@ async def vpixel_cards_list(authorization: Optional[str] = Header(None)):
 @app.get("/api/vpixel/cards/stats")
 async def vpixel_cards_stats(authorization: Optional[str] = Header(None)):
     """Get VPixel card stats (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     total = conn.execute("SELECT COUNT(*) FROM vpixel_cards").fetchone()[0]
     available = conn.execute("SELECT COUNT(*) FROM vpixel_cards WHERE status='available' AND COALESCE(remaining, 1) > 0").fetchone()[0]
@@ -11750,7 +11754,7 @@ async def vpixel_cards_stats(authorization: Optional[str] = Header(None)):
 @app.delete("/api/vpixel/cards/{card_id}")
 async def vpixel_cards_delete(card_id: int, authorization: Optional[str] = Header(None)):
     """Delete a VPixel card (admin only)."""
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     conn.execute("DELETE FROM vpixel_cards WHERE id=?", (card_id,))
     conn.commit()
@@ -12175,7 +12179,7 @@ async def ypixel_submit_job(request: YPixelJobRequest, authorization: Optional[s
 
 @app.get("/api/ypixel/config")
 async def ypixel_get_config(authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     cfg = _get_ypixel_config()
     return {
         "enabled": cfg["enabled"],
@@ -12186,7 +12190,7 @@ async def ypixel_get_config(authorization: Optional[str] = Header(None)):
 
 @app.post("/api/ypixel/config")
 async def ypixel_update_config(request: Request, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import config_manager
     body = await request.json()
     updates = {}
@@ -12206,7 +12210,7 @@ async def ypixel_update_config(request: Request, authorization: Optional[str] = 
 
 @app.post("/api/ypixel/cards")
 async def ypixel_cards_add(request: Request, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     body = await request.json()
     keys_raw = body.get("keys", "")
     keys = [k.strip() for k in keys_raw.strip().split("\n") if k.strip()]
@@ -12281,7 +12285,7 @@ async def ypixel_cards_add(request: Request, authorization: Optional[str] = Head
 
 @app.get("/api/ypixel/cards")
 async def ypixel_cards_list(authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     rows = conn.execute("SELECT * FROM ypixel_cards ORDER BY id DESC").fetchall()
     return {"keys": [dict(r) for r in rows]}
@@ -12289,7 +12293,7 @@ async def ypixel_cards_list(authorization: Optional[str] = Header(None)):
 
 @app.get("/api/ypixel/cards/stats")
 async def ypixel_cards_stats(authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     total = conn.execute("SELECT COUNT(*) FROM ypixel_cards").fetchone()[0]
     available = conn.execute("SELECT COUNT(*) FROM ypixel_cards WHERE status='available' AND remaining > 0").fetchone()[0]
@@ -12299,7 +12303,7 @@ async def ypixel_cards_stats(authorization: Optional[str] = Header(None)):
 
 @app.delete("/api/ypixel/cards/{card_id}")
 async def ypixel_cards_delete(card_id: int, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     conn = database.get_connection()
     conn.execute("DELETE FROM ypixel_cards WHERE id=?", (card_id,))
     conn.commit()
@@ -12909,7 +12913,7 @@ async def _gpt_plus_api_recharge(access_token: str, gpt_vid: str = "", event_met
 # --- Admin: GPT Plus API config & balance ---
 @app.get("/api/admin/gpt-plus-api/config")
 async def admin_gpt_plus_api_get_config(authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import config_manager as _cfg_mgr
     cfg = _cfg_mgr.get_config()
     api_cfg = cfg.get("gptPlusApi", {})
@@ -12922,7 +12926,7 @@ async def admin_gpt_plus_api_get_config(authorization: Optional[str] = Header(No
 
 @app.post("/api/admin/gpt-plus-api/config")
 async def admin_gpt_plus_api_save_config(request: Request, authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import config_manager as _cfg_mgr
     body = await request.json()
     cfg = _cfg_mgr.get_config()
@@ -12939,7 +12943,7 @@ async def admin_gpt_plus_api_save_config(request: Request, authorization: Option
 
 @app.get("/api/admin/gpt-plus-api/balance")
 async def admin_gpt_plus_api_balance(authorization: Optional[str] = Header(None)):
-    _verify_admin_token(authorization)
+    _verify_admin_token(authorization, "manage_config")
     import config_manager as _cfg_mgr
     import httpx
     cfg = _cfg_mgr.get_config()

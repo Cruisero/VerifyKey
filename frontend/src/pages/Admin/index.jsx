@@ -7,6 +7,27 @@ import '../Verify/Verify.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+const ROLE_LABELS = {
+    user: '用户',
+    admin: '管理员',
+    support_admin: '客服/售后子管理员',
+    ops_admin: '运营/代理子管理员',
+    tech_admin: '技术运维子管理员',
+};
+
+const ADMIN_PERMISSION_LABELS = {
+    view_users: '查看用户',
+    manage_credits: '调整积分',
+    view_orders: '查看订单',
+    manage_cdk: '管理 CDK',
+    view_logs: '查看验证记录',
+    manual_override: '手动处理结果',
+    manage_config: '系统配置',
+    manage_nodes: '节点/通道管理',
+    manage_maintenance: '维护和公告',
+    super_admin: '管理员管理',
+};
+
 // Telegram Bot Management Component
 function TelegramBotTab() {
     const { user } = useAuth();
@@ -4806,6 +4827,9 @@ export default function Admin() {
     const { user, loading } = useAuth();
     const { t } = useLang();
     const navigate = useNavigate();
+    const userPermissions = user?.admin_permissions || [];
+    const isFullAdmin = user?.role === 'admin';
+    const can = useCallback((permission) => isFullAdmin || userPermissions.includes(permission), [isFullAdmin, userPermissions]);
     const [activeTab, setActiveTab] = useState('overview');
     const [siteStats, setSiteStats] = useState({});
     const [verifyLog, setVerifyLog] = useState([]);
@@ -4944,6 +4968,9 @@ export default function Admin() {
     const [userSearch, setUserSearch] = useState('');
     const [userPage, setUserPage] = useState(1);
     const [usersLoading, setUsersLoading] = useState(false);
+    const [roleConfig, setRoleConfig] = useState({ permissions: [], presets: [] });
+    const [roleConfigLoading, setRoleConfigLoading] = useState(false);
+    const [roleConfigSaving, setRoleConfigSaving] = useState(false);
 
     useEffect(() => {
         setUserPage(1);
@@ -4960,6 +4987,8 @@ export default function Admin() {
     const displayUsers = filteredUsers.slice((userPage - 1) * 100, userPage * 100);
     const [editingUser, setEditingUser] = useState(null);
     const [editCredits, setEditCredits] = useState('');
+    const [editRole, setEditRole] = useState('user');
+    const [editPermissions, setEditPermissions] = useState([]);
     const [historyUser, setHistoryUser] = useState(null);
     const [userHistory, setUserHistory] = useState([]);
     const [userHistoryLoading, setUserHistoryLoading] = useState(false);
@@ -5039,6 +5068,8 @@ export default function Admin() {
     useEffect(() => {
         if (!loading && !user) {
             navigate('/');
+        } else if (!loading && user && user.role !== 'admin' && !(user.admin_permissions || []).length) {
+            navigate('/');
         }
     }, [user, loading, navigate]);
 
@@ -5047,6 +5078,7 @@ export default function Admin() {
         fetchConfig();
         fetchTgAccounts();
         fetchUsers();
+        fetchRoleConfig();
         // Fetch site-wide stats for Overview tab
         const fetchSiteStats = async () => {
             try {
@@ -5477,6 +5509,47 @@ export default function Admin() {
         }
     };
 
+    const fetchRoleConfig = async () => {
+        if (!can('super_admin')) return;
+        setRoleConfigLoading(true);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/roles`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setRoleConfig(await res.json());
+            }
+        } catch (e) {
+            console.error('Failed to fetch role config:', e);
+        } finally {
+            setRoleConfigLoading(false);
+        }
+    };
+
+    const handleSaveRoleConfig = async () => {
+        setRoleConfigSaving(true);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/roles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ presets: roleConfig.presets })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                setRoleConfig(data);
+                alert('子管理员配置已保存');
+            } else {
+                alert(data.detail || '保存失败');
+            }
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        } finally {
+            setRoleConfigSaving(false);
+        }
+    };
+
     const handleToggleUser = async (userId, currentStatus) => {
         const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
         const action = newStatus === 'suspended' ? '禁用' : '启用';
@@ -5510,7 +5583,12 @@ export default function Admin() {
             const res = await fetch(`${API_BASE}/api/admin/users/${editingUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ credits })
+                body: JSON.stringify({
+                    credits,
+                    currentCredits: editingUser.credits ?? 0,
+                    role: can('super_admin') ? editRole : undefined,
+                    admin_permissions: can('super_admin') ? editPermissions : undefined,
+                })
             });
             if (res.ok) {
                 setEditingUser(null);
@@ -6182,19 +6260,26 @@ export default function Admin() {
     // users is state, fetched from API - see fetchUsers()
 
     const tabs = [
-        { id: 'overview', label: t('tabOverview'), icon: '📊' },
-        { id: 'live-monitor', label: '实时监控', icon: '📺' },
-        { id: 'pixel-api', label: 'Pixel API', icon: '📡' },
-        { id: 'gpt-recharge', label: 'GPT 充值', icon: '🤖' },
-        { id: 'gpt-team', label: 'GPT Team', icon: '🧩' },
-        { id: 'cdk', label: t('tabCdk'), icon: '🔑' },
-        { id: 'users', label: t('tabUsers'), icon: '👥' },
-        { id: 'audit', label: '资金对账单', icon: '💸' },
-        { id: 'ai-generator', label: t('tabAiGen'), icon: '🤖' },
-        { id: 'verify-status', label: t('tabVerifyStatus'), icon: '📋' },
-        { id: 'telegram-bot', label: t('tabTgBot'), icon: '🤖' },
-        { id: 'settings', label: t('tabSettings'), icon: '⚙️' },
-    ];
+        { id: 'overview', label: t('tabOverview'), icon: '📊', permission: 'view_logs' },
+        { id: 'live-monitor', label: '实时监控', icon: '📺', permission: 'view_logs' },
+        { id: 'pixel-api', label: 'Pixel API', icon: '📡', permission: 'manage_config' },
+        { id: 'gpt-recharge', label: 'GPT 充值', icon: '🤖', permission: 'manage_config' },
+        { id: 'gpt-team', label: 'GPT Team', icon: '🧩', permission: 'manage_config' },
+        { id: 'cdk', label: t('tabCdk'), icon: '🔑', permission: 'view_orders' },
+        { id: 'users', label: t('tabUsers'), icon: '👥', permission: 'view_users' },
+        { id: 'admin-roles', label: '子管理员', icon: '🛡️', permission: 'super_admin' },
+        { id: 'audit', label: '资金对账单', icon: '💸', permission: 'view_orders' },
+        { id: 'ai-generator', label: t('tabAiGen'), icon: '🤖', permission: 'manage_config' },
+        { id: 'verify-status', label: t('tabVerifyStatus'), icon: '📋', permission: 'view_logs' },
+        { id: 'telegram-bot', label: t('tabTgBot'), icon: '🤖', permission: 'manage_config' },
+        { id: 'settings', label: t('tabSettings'), icon: '⚙️', permission: 'manage_maintenance' },
+    ].filter(tab => can(tab.permission));
+
+    useEffect(() => {
+        if (tabs.length > 0 && !tabs.some(tab => tab.id === activeTab)) {
+            setActiveTab(tabs[0].id);
+        }
+    }, [tabs, activeTab]);
 
     if (loading || !user) return null;
 
@@ -6725,8 +6810,8 @@ export default function Admin() {
                                             <td style={{ fontWeight: 600 }}>{u.username || '-'}</td>
                                             <td>{u.email}</td>
                                             <td>
-                                                <span className={`badge ${u.role === 'admin' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: '11px' }}>
-                                                    {u.role === 'admin' ? '管理员' : '用户'}
+                                                <span className={`badge ${u.role === 'admin' ? 'badge-warning' : u.role === 'user' ? 'badge-info' : 'badge-success'}`} style={{ fontSize: '11px' }}>
+                                                    {ROLE_LABELS[u.role] || u.role || '用户'}
                                                 </span>
                                             </td>
                                             <td style={{ fontWeight: 600, color: u.credits > 0 ? '#16a34a' : '#94a3b8' }}>{u.credits ?? 0}</td>
@@ -6756,7 +6841,12 @@ export default function Admin() {
                                                 <div className="action-btns" style={{ display: 'flex', gap: '6px' }}>
                                                     <button className="btn btn-sm btn-secondary"
                                                         style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '6px' }}
-                                                        onClick={() => { setEditingUser(u); setEditCredits(String(u.credits ?? 0)); }}>
+                                                        onClick={() => {
+                                                            setEditingUser(u);
+                                                            setEditCredits(String(u.credits ?? 0));
+                                                            setEditRole(u.role || 'user');
+                                                            setEditPermissions(u.admin_permissions || []);
+                                                        }}>
                                                         编辑
                                                     </button>
                                                     <button className="btn btn-sm btn-secondary"
@@ -6800,9 +6890,51 @@ export default function Admin() {
                                             className="input" type="number" min="0" step="0.1"
                                             value={editCredits}
                                             onChange={e => setEditCredits(e.target.value)}
+                                            disabled={!can('manage_credits')}
                                             style={{ width: '100%', boxSizing: 'border-box' }}
                                         />
                                     </div>
+                                    {can('super_admin') && (
+                                        <>
+                                            <div style={{ marginBottom: '16px' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>角色</label>
+                                                <select
+                                                    className="input"
+                                                    value={editRole}
+                                                    onChange={e => {
+                                                        const nextRole = e.target.value;
+                                                        setEditRole(nextRole);
+                                                        const preset = roleConfig.presets.find(p => p.id === nextRole);
+                                                        setEditPermissions(nextRole === 'admin' ? Object.keys(ADMIN_PERMISSION_LABELS) : (preset?.permissions || []));
+                                                    }}
+                                                    style={{ width: '100%', boxSizing: 'border-box' }}
+                                                >
+                                                    <option value="user">用户</option>
+                                                    <option value="admin">管理员（全权限）</option>
+                                                    {roleConfig.presets.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.label}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {editRole !== 'user' && editRole !== 'admin' && (
+                                                <div style={{ marginBottom: '16px' }}>
+                                                    <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', display: 'block' }}>权限</label>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', maxHeight: '180px', overflow: 'auto', padding: '10px', border: '1px solid var(--border-primary)', borderRadius: '10px' }}>
+                                                        {roleConfig.permissions.map(p => (
+                                                            <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={editPermissions.includes(p.id)}
+                                                                    onChange={e => setEditPermissions(prev => e.target.checked ? [...new Set([...prev, p.id])] : prev.filter(x => x !== p.id))}
+                                                                />
+                                                                {p.label}
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                                         <button className="btn" onClick={() => { setEditingUser(null); }}
                                             style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
@@ -6815,10 +6947,66 @@ export default function Admin() {
                                     </div>
                                 </div>
                             </div>
-                        )}
+                )}
 
-                        {/* User History Modal */}
-                        {historyUser && (
+                {/* Admin Roles Tab */}
+                {activeTab === 'admin-roles' && can('super_admin') && (
+                    <div className="tab-content">
+                        <div className="card" style={{ padding: '20px', marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', marginBottom: '14px' }}>
+                                <div>
+                                    <h3 style={{ margin: '0 0 6px', fontSize: '18px' }}>子管理员配置</h3>
+                                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '13px' }}>配置运营/代理、技术运维等子管理员默认权限。保存后，用户管理处选择对应 role 即可套用，也可以单独微调。</p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn btn-sm btn-secondary" onClick={fetchRoleConfig} disabled={roleConfigLoading}>{roleConfigLoading ? '加载中...' : '刷新'}</button>
+                                    <button className="btn btn-sm btn-primary" onClick={handleSaveRoleConfig} disabled={roleConfigSaving}>{roleConfigSaving ? '保存中...' : '保存配置'}</button>
+                                </div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+                                {roleConfig.presets.map((preset, idx) => (
+                                    <div key={preset.id} style={{ border: '1px solid var(--border-primary)', borderRadius: '12px', padding: '14px', background: 'var(--bg-secondary)' }}>
+                                        <input
+                                            className="input"
+                                            value={preset.label}
+                                            onChange={e => setRoleConfig(prev => ({ ...prev, presets: prev.presets.map((p, i) => i === idx ? { ...p, label: e.target.value } : p) }))}
+                                            style={{ width: '100%', boxSizing: 'border-box', marginBottom: '8px', fontWeight: 700 }}
+                                        />
+                                        <code style={{ display: 'inline-block', fontSize: '12px', marginBottom: '8px', color: '#7c5cfc' }}>{preset.id}</code>
+                                        <textarea
+                                            className="input"
+                                            value={preset.description || ''}
+                                            onChange={e => setRoleConfig(prev => ({ ...prev, presets: prev.presets.map((p, i) => i === idx ? { ...p, description: e.target.value } : p) }))}
+                                            style={{ width: '100%', boxSizing: 'border-box', minHeight: '64px', marginBottom: '10px', fontSize: '12px' }}
+                                        />
+                                        <div style={{ display: 'grid', gap: '7px' }}>
+                                            {roleConfig.permissions.map(permission => (
+                                                <label key={permission.id} title={permission.description} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={(preset.permissions || []).includes(permission.id)}
+                                                        onChange={e => setRoleConfig(prev => ({
+                                                            ...prev,
+                                                            presets: prev.presets.map((p, i) => {
+                                                                if (i !== idx) return p;
+                                                                const current = p.permissions || [];
+                                                                return { ...p, permissions: e.target.checked ? [...new Set([...current, permission.id])] : current.filter(x => x !== permission.id) };
+                                                            })
+                                                        }))}
+                                                    />
+                                                    <span>{permission.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* User History Modal */}
+                {historyUser && (
                             <div onClick={() => setHistoryUser(null)} style={{
                                 position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
@@ -6887,6 +7075,52 @@ export default function Admin() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Admin Roles Tab */}
+                {activeTab === 'admin-roles' && can('super_admin') && (
+                    <div className="tab-content">
+                        <div className="card" style={{ padding: '20px', marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', marginBottom: '14px' }}>
+                                <div>
+                                    <h3 style={{ margin: '0 0 6px', fontSize: '18px' }}>子管理员配置</h3>
+                                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '13px' }}>配置运营/代理、技术运维等子管理员默认权限。保存后，用户管理处选择对应 role 即可套用，也可以单独微调。</p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn btn-sm btn-secondary" onClick={fetchRoleConfig} disabled={roleConfigLoading}>{roleConfigLoading ? '加载中...' : '刷新'}</button>
+                                    <button className="btn btn-sm btn-primary" onClick={handleSaveRoleConfig} disabled={roleConfigSaving}>{roleConfigSaving ? '保存中...' : '保存配置'}</button>
+                                </div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+                                {roleConfig.presets.map((preset, idx) => (
+                                    <div key={preset.id} style={{ border: '1px solid var(--border-primary)', borderRadius: '12px', padding: '14px', background: 'var(--bg-secondary)' }}>
+                                        <input className="input" value={preset.label} onChange={e => setRoleConfig(prev => ({ ...prev, presets: prev.presets.map((p, i) => i === idx ? { ...p, label: e.target.value } : p) }))} style={{ width: '100%', boxSizing: 'border-box', marginBottom: '8px', fontWeight: 700 }} />
+                                        <code style={{ display: 'inline-block', fontSize: '12px', marginBottom: '8px', color: '#7c5cfc' }}>{preset.id}</code>
+                                        <textarea className="input" value={preset.description || ''} onChange={e => setRoleConfig(prev => ({ ...prev, presets: prev.presets.map((p, i) => i === idx ? { ...p, description: e.target.value } : p) }))} style={{ width: '100%', boxSizing: 'border-box', minHeight: '64px', marginBottom: '10px', fontSize: '12px' }} />
+                                        <div style={{ display: 'grid', gap: '7px' }}>
+                                            {roleConfig.permissions.map(permission => (
+                                                <label key={permission.id} title={permission.description} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={(preset.permissions || []).includes(permission.id)}
+                                                        onChange={e => setRoleConfig(prev => ({
+                                                            ...prev,
+                                                            presets: prev.presets.map((p, i) => {
+                                                                if (i !== idx) return p;
+                                                                const current = p.permissions || [];
+                                                                return { ...p, permissions: e.target.checked ? [...new Set([...current, permission.id])] : current.filter(x => x !== permission.id) };
+                                                            })
+                                                        }))}
+                                                    />
+                                                    <span>{permission.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 )}
 

@@ -10,12 +10,49 @@ import jwt
 import time
 import string
 import random
+import json
 from typing import Optional
 from datetime import datetime, timedelta
 
 # JWT Configuration
 JWT_SECRET = os.getenv("JWT_SECRET", "verifykey-jwt-secret-change-in-production")
 JWT_EXPIRES_HOURS = 168  # 7 days
+
+ADMIN_PERMISSION_DEFINITIONS = [
+    {"id": "view_users", "label": "查看用户", "description": "查看用户列表、邀请数和用户历史"},
+    {"id": "manage_credits", "label": "调整积分", "description": "修改用户积分和处理补偿"},
+    {"id": "view_orders", "label": "查看订单", "description": "查看订单、CDK 兑换和财务流水"},
+    {"id": "manage_cdk", "label": "管理 CDK", "description": "生成、删除和消耗 CDK"},
+    {"id": "view_logs", "label": "查看验证记录", "description": "查看验证日志、实时监控和审计记录"},
+    {"id": "manual_override", "label": "手动处理结果", "description": "手动标记验证成功/失败、编辑失败提示"},
+    {"id": "manage_config", "label": "系统配置", "description": "修改 Bot、Pixel、GPT、邮件等系统配置"},
+    {"id": "manage_nodes", "label": "节点/通道管理", "description": "调整节点健康、权重、通道开关"},
+    {"id": "manage_maintenance", "label": "维护和公告", "description": "开启维护模式、发布公告"},
+    {"id": "super_admin", "label": "管理员管理", "description": "设置用户角色、权限和子管理员模板"},
+]
+
+ALL_ADMIN_PERMISSIONS = [p["id"] for p in ADMIN_PERMISSION_DEFINITIONS]
+
+DEFAULT_ADMIN_ROLE_PRESETS = [
+    {
+        "id": "support_admin",
+        "label": "客服/售后子管理员",
+        "description": "处理用户问题、查看记录、手动处理失败单；默认不允许改配置或批量发码。",
+        "permissions": ["view_users", "view_orders", "view_logs", "manual_override", "manage_credits"],
+    },
+    {
+        "id": "ops_admin",
+        "label": "运营/代理子管理员",
+        "description": "查看用户与订单、管理少量 CDK、跟踪邀请和运营数据。",
+        "permissions": ["view_users", "view_orders", "view_logs", "manage_cdk"],
+    },
+    {
+        "id": "tech_admin",
+        "label": "技术运维子管理员",
+        "description": "管理节点、通道、系统配置、维护模式和公告。",
+        "permissions": ["view_logs", "manage_config", "manage_nodes", "manage_maintenance"],
+    },
+]
 
 # Database path - use /app/data in Docker, local data/ directory otherwise
 if os.path.exists("/app/data"):
@@ -57,11 +94,22 @@ def init_database():
     """)
     
     # Ensure invite columns exist for older DBs
-    for col, typedef in [("invite_code", "TEXT"), ("invited_by", "INTEGER"), ("status", "TEXT DEFAULT 'active'")]:
+    for col, typedef in [("invite_code", "TEXT"), ("invited_by", "INTEGER"), ("status", "TEXT DEFAULT 'active'"), ("admin_permissions", "TEXT")]:
         try:
             cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
         except:
             pass
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admin_role_presets (
+            id TEXT PRIMARY KEY,
+            label TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            permissions TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    ensure_admin_role_presets(conn)
     
     conn.commit()
     
@@ -70,6 +118,144 @@ def init_database():
     
     conn.close()
     print("[Auth] Database initialized")
+
+
+def _normalize_permissions(permissions) -> list:
+    if permissions is None:
+        return []
+    if isinstance(permissions, str):
+        try:
+            permissions = json.loads(permissions)
+        except Exception:
+            permissions = [p.strip() for p in permissions.split(",") if p.strip()]
+    if not isinstance(permissions, list):
+        return []
+    allowed = set(ALL_ADMIN_PERMISSIONS)
+    normalized = []
+    for p in permissions:
+        if p in allowed and p not in normalized:
+            normalized.append(p)
+    return normalized
+
+
+def ensure_admin_role_presets(conn=None):
+    close_conn = False
+    if conn is None:
+        conn = get_db()
+        close_conn = True
+    cursor = conn.cursor()
+    for preset in DEFAULT_ADMIN_ROLE_PRESETS:
+        cursor.execute("SELECT id FROM admin_role_presets WHERE id = ?", (preset["id"],))
+        if not cursor.fetchone():
+            cursor.execute("""
+                INSERT INTO admin_role_presets (id, label, description, permissions)
+                VALUES (?, ?, ?, ?)
+            """, (
+                preset["id"],
+                preset["label"],
+                preset["description"],
+                json.dumps(preset["permissions"], ensure_ascii=False),
+            ))
+    conn.commit()
+    if close_conn:
+        conn.close()
+
+
+def get_admin_role_config() -> dict:
+    conn = get_db()
+    ensure_admin_role_presets(conn)
+    cursor = conn.cursor()
+    rows = cursor.execute("""
+        SELECT id, label, description, permissions, updated_at
+        FROM admin_role_presets ORDER BY id ASC
+    """).fetchall()
+    conn.close()
+    presets = []
+    for row in rows:
+        item = dict(row)
+        item["permissions"] = _normalize_permissions(item.get("permissions"))
+        presets.append(item)
+    return {"permissions": ADMIN_PERMISSION_DEFINITIONS, "presets": presets}
+
+
+def save_admin_role_presets(presets: list) -> dict:
+    if not isinstance(presets, list):
+        raise ValueError("Invalid presets")
+    conn = get_db()
+    cursor = conn.cursor()
+    existing_ids = set()
+    for raw in presets:
+        role_id = (raw.get("id") or "").strip()
+        label = (raw.get("label") or "").strip()
+        if not role_id or not label:
+            raise ValueError("Role id and label are required")
+        if role_id in ("admin", "user"):
+            raise ValueError("Reserved role id")
+        existing_ids.add(role_id)
+        cursor.execute("""
+            INSERT INTO admin_role_presets (id, label, description, permissions, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                label = excluded.label,
+                description = excluded.description,
+                permissions = excluded.permissions,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            role_id,
+            label,
+            raw.get("description") or "",
+            json.dumps(_normalize_permissions(raw.get("permissions")), ensure_ascii=False),
+        ))
+    if existing_ids:
+        placeholders = ",".join("?" for _ in existing_ids)
+        cursor.execute(f"DELETE FROM admin_role_presets WHERE id NOT IN ({placeholders})", tuple(existing_ids))
+    conn.commit()
+    conn.close()
+    return get_admin_role_config()
+
+
+def role_permissions(role: str) -> list:
+    if role == "admin":
+        return ALL_ADMIN_PERMISSIONS[:]
+    if not role or role == "user":
+        return []
+    conn = get_db()
+    cursor = conn.cursor()
+    row = cursor.execute("SELECT permissions FROM admin_role_presets WHERE id = ?", (role,)).fetchone()
+    conn.close()
+    return _normalize_permissions(row["permissions"] if row else [])
+
+
+def hydrate_admin_permissions(user: dict) -> dict:
+    if not user:
+        return user
+    role = user.get("role") or "user"
+    if role == "admin":
+        user["admin_permissions"] = ALL_ADMIN_PERMISSIONS[:]
+        user["is_admin"] = True
+        return user
+    explicit = _normalize_permissions(user.get("admin_permissions"))
+    role_based = role_permissions(role)
+    merged = []
+    for p in role_based + explicit:
+        if p not in merged:
+            merged.append(p)
+    user["admin_permissions"] = merged
+    user["is_admin"] = bool(merged)
+    return user
+
+
+def user_has_permission(user: dict, permission: str = None) -> bool:
+    if not user:
+        return False
+    if user.get("role") == "admin":
+        return True
+    permissions = _normalize_permissions(user.get("admin_permissions"))
+    if not permissions and user.get("role") not in (None, "user"):
+        permissions = role_permissions(user.get("role"))
+    if permission is None:
+        return bool(permissions)
+    return permission in permissions
 
 
 def ensure_admin_user(conn=None):
@@ -214,6 +400,7 @@ def login(email: str, password: str) -> dict:
     
     # Remove password from response
     del user["password"]
+    user = hydrate_admin_permissions(user)
     
     token = generate_token(user)
     
@@ -239,7 +426,7 @@ def verify_token(token: str) -> Optional[dict]:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, email, username, role, credits, status, invite_code, created_at 
+            SELECT id, email, username, role, credits, status, invite_code, admin_permissions, created_at 
             FROM users WHERE id = ?
         """, (decoded["userId"],))
         user_row = cursor.fetchone()
@@ -252,7 +439,7 @@ def verify_token(token: str) -> Optional[dict]:
                 conn.commit()
                 u_dict["invite_code"] = code
             conn.close()
-            return u_dict
+            return hydrate_admin_permissions(u_dict)
             
         conn.close()
         return None
@@ -265,14 +452,14 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, email, username, role, credits, invite_code, created_at 
+        SELECT id, email, username, role, credits, invite_code, admin_permissions, created_at 
         FROM users WHERE id = ?
     """, (user_id,))
     user_row = cursor.fetchone()
     conn.close()
     
     if user_row:
-        return dict(user_row)
+        return hydrate_admin_permissions(dict(user_row))
     return None
 
 
@@ -446,13 +633,14 @@ def list_all_users() -> list:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, email, username, role, credits, invite_code, invited_by, status, created_at, updated_at
+        SELECT id, email, username, role, credits, invite_code, invited_by, status, admin_permissions, created_at, updated_at
         FROM users ORDER BY id ASC
     """)
     rows = cursor.fetchall()
     users = []
     for r in rows:
         u = dict(r)
+        u = hydrate_admin_permissions(u)
         # Count how many users this person invited
         cursor.execute("SELECT COUNT(*) FROM users WHERE invited_by = ?", (u["id"],))
         u["invite_count"] = cursor.fetchone()[0]
@@ -503,6 +691,44 @@ def update_user_credits_admin(user_id: int, credits: float, reason: str = "admin
     return affected > 0
 
 
+def update_user_admin_fields(user_id: int, credits=None, role=None, permissions=None, password: str = None) -> dict:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, role FROM users WHERE id = ?", (user_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return {"success": False, "error": "User not found"}
+
+    updates = []
+    params = []
+    if credits is not None:
+        updates.append("credits = ?")
+        params.append(float(credits))
+    if role is not None:
+        role = (role or "user").strip()
+        if role not in ("user", "admin"):
+            cursor.execute("SELECT id FROM admin_role_presets WHERE id = ?", (role,))
+            if not cursor.fetchone():
+                conn.close()
+                return {"success": False, "error": "Invalid role"}
+        updates.append("role = ?")
+        params.append(role)
+    if permissions is not None:
+        updates.append("admin_permissions = ?")
+        params.append(json.dumps(_normalize_permissions(permissions), ensure_ascii=False))
+    if password:
+        updates.append("password = ?")
+        params.append(bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode())
+
+    if updates:
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(user_id)
+        cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
 def _log_credit_transaction(user_id: int, amount: float, balance_after: float, reason: str, ref_id: str = ""):
     """Write an immutable audit record to credit_transactions in the main onepass.db.
     
@@ -519,4 +745,3 @@ def _log_credit_transaction(user_id: int, amount: float, balance_after: float, r
         conn.commit()
     except Exception as e:
         print(f"[Audit] Failed to log credit transaction for user {user_id}: {e}")
-

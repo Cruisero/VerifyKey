@@ -20,7 +20,7 @@ const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://
 /* ── Route tree (needs useAuth, so must be inside AuthProvider) ── */
 function AppRoutes({ maintenance }) {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || (user?.admin_permissions || []).length > 0;
 
   // Admins bypass maintenance — they see all normal routes
   const showMaintenance = maintenance.enabled && !isAdmin;

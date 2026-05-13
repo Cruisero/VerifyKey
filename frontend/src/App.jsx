@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './stores/ThemeContext';
 import { LanguageProvider } from './stores/LanguageContext';
 import { AuthProvider, useAuth } from './stores/AuthContext';
@@ -19,8 +19,14 @@ const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://
 
 /* ── Route tree (needs useAuth, so must be inside AuthProvider) ── */
 function AppRoutes({ maintenance }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const location = useLocation();
   const isAdmin = user?.role === 'admin';
+  const inviteRef = new URLSearchParams(location.search).get('ref');
+
+  if (!loading && !user && location.pathname === '/' && inviteRef) {
+    return <Navigate to={`/login?ref=${encodeURIComponent(inviteRef)}`} replace />;
+  }
 
   // Admins bypass maintenance — they see all normal routes
   const showMaintenance = maintenance.enabled && !isAdmin;
@@ -144,4 +150,3 @@ function App() {
 }
 
 export default App;
-

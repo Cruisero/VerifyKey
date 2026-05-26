@@ -6,7 +6,7 @@ import ConfettiBurst from './ConfettiBurst';
 import './Verify.css';
 
 // API base URL
-const API_BASE = import.meta.env.DEV ? 'http://localhost:3002' : '';
+const API_BASE = import.meta.env.DEV ? 'http://localhost:3003' : '';
 
 const normalizeGmailEmail = (email) => {
     const trimmed = (email || '').trim();

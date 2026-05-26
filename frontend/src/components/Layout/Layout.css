@@ -794,3 +794,228 @@
         text-align: center;
     }
 }
+
+/* WeChat/QQ Customer Support Floating Button */
+.customer-support-float-container {
+    position: fixed;
+    right: 24px;
+    bottom: 96px;
+    z-index: var(--z-modal);
+}
+
+.customer-support-float-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #7c5cfc 0%, #6366f1 100%);
+    color: white;
+    box-shadow: 0 4px 16px rgba(124, 92, 252, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+/* Pulsing outer glow animation */
+.customer-support-float-btn::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid #7c5cfc;
+    opacity: 0;
+    animation: csFloatBtnPulse 2.4s infinite cubic-bezier(0.25, 0, 0, 1);
+    pointer-events: none;
+}
+
+@keyframes csFloatBtnPulse {
+    0% {
+        transform: scale(0.95);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1.25);
+        opacity: 0;
+    }
+}
+
+.customer-support-float-btn:hover {
+    transform: translateY(-4px) scale(1.06);
+    box-shadow: 0 8px 24px rgba(124, 92, 252, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+.customer-support-float-btn:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+.cs-float-svg {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+    transition: transform 0.3s ease;
+}
+
+.customer-support-float-btn:hover .cs-float-svg {
+    transform: rotate(15deg) scale(1.05);
+}
+
+.cs-float-text {
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 3px;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Customer Support Popover Card */
+.cs-popover-card {
+    position: absolute;
+    bottom: 76px;
+    right: 0;
+    width: 270px;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    animation: csPopoverFade 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: bottom right;
+    border: 1px solid var(--border-primary);
+}
+
+@keyframes csPopoverFade {
+    from {
+        opacity: 0;
+        transform: scale(0.85) translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.cs-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(124, 92, 252, 0.08) 0%, rgba(99, 102, 241, 0.03) 100%);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.cs-popover-header h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.2px;
+}
+
+.cs-popover-close {
+    background: transparent;
+    border: none;
+    font-size: 14px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    transition: all var(--transition-fast);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cs-popover-close:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.cs-popover-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.cs-qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 10px;
+    background: #ffffff;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.cs-qr-code {
+    width: 160px;
+    height: 160px;
+    object-fit: contain;
+    border-radius: 6px;
+}
+
+.cs-qr-hint {
+    font-size: 11px;
+    color: #64748b;
+    margin: 8px 0 0 0;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.cs-wechat-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-primary);
+    font-size: 13px;
+    gap: 8px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.cs-wechat-label {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.cs-wechat-value {
+    flex: 1;
+    font-weight: 700;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+}
+
+.cs-copy-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    background: linear-gradient(135deg, #7c5cfc 0%, #6366f1 100%);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    box-shadow: 0 2px 4px rgba(124, 92, 252, 0.2);
+}
+
+.cs-copy-btn:hover {
+    opacity: 0.95;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(124, 92, 252, 0.3);
+}
+
+.cs-copy-btn:active {
+    transform: translateY(0) scale(0.95);
+}

@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
         const data = await res.json();
 
         if (!res.ok) {
-            throw new Error(data.error || '登录失败');
+            throw new Error(data.detail || data.error || '登录失败');
         }
 
         setUser(data.user);
@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
         const data = await res.json();
 
         if (!res.ok) {
-            throw new Error(data.error || '注册失败');
+            throw new Error(data.detail || data.error || '注册失败');
         }
 
         setUser(data.user);

@@ -344,6 +344,13 @@ DEFAULT_CONFIG = {
         "showGptRechargeTab": True
     },
     
+    # Customer Service settings
+    "customerService": {
+        "wechatId": "",
+        "qrCodeUrl": "",
+        "channelName": "微信号"
+    },
+    
     # Pixel API (Google One via iqless.icu) — "UPixel" 普通验证
     "pixelApi": {
         "enabled": False,

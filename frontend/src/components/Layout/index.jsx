@@ -26,6 +26,13 @@ export default function Layout({ children }) {
     const [headerCdkCode, setHeaderCdkCode] = useState('');
     const [headerCdkStatus, setHeaderCdkStatus] = useState('');
     const [headerCdkMsg, setHeaderCdkMsg] = useState('');
+    
+    // WeChat customer service
+    const [config, setConfig] = useState(null);
+    const [showCsPopover, setShowCsPopover] = useState(false);
+    const [wechatCopied, setWechatCopied] = useState(false);
+    const csRef = useRef(null);
+
     const dropdownRef = useRef(null);
     const inviteRef = useRef(null);
     const creditsRef = useRef(null);
@@ -34,6 +41,11 @@ export default function Layout({ children }) {
         fetch(`${API_BASE}/api/announcement`)
             .then(r => r.ok ? r.json() : null)
             .then(data => { if (data?.enabled && data.content) setAnnouncement(data); })
+            .catch(() => {});
+
+        fetch(`${API_BASE}/api/config`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data) setConfig(data); })
             .catch(() => {});
     }, []);
 
@@ -47,6 +59,9 @@ export default function Layout({ children }) {
             }
             if (creditsRef.current && !creditsRef.current.contains(event.target)) {
                 setShowCreditsPopover(false);
+            }
+            if (csRef.current && !csRef.current.contains(event.target)) {
+                setShowCsPopover(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -85,6 +100,15 @@ export default function Layout({ children }) {
         navigator.clipboard.writeText(inviteLink).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
+    const handleCopyWechat = () => {
+        const wechatId = config?.customerService?.wechatId;
+        if (!wechatId) return;
+        navigator.clipboard.writeText(wechatId).then(() => {
+            setWechatCopied(true);
+            setTimeout(() => setWechatCopied(false), 2000);
         });
     };
 
@@ -365,6 +389,50 @@ export default function Layout({ children }) {
                     </div>
                 </div>
             </footer>
+            {/* WeChat Customer Support Float Button */}
+            {config?.customerService?.wechatId && (
+                <div className="customer-support-float-container" ref={csRef}>
+                    <button
+                        className="customer-support-float-btn"
+                        onClick={() => setShowCsPopover(!showCsPopover)}
+                        title="联系客服"
+                    >
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="cs-float-svg">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span className="cs-float-text">客服</span>
+                    </button>
+
+                    {showCsPopover && (
+                        <div className="cs-popover-card glass">
+                            <div className="cs-popover-header">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#7c5cfc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    <h4>联系客服</h4>
+                                </div>
+                                <button className="cs-popover-close" onClick={() => setShowCsPopover(false)}>✕</button>
+                            </div>
+                            <div className="cs-popover-body">
+                                {config.customerService.qrCodeUrl && (
+                                    <div className="cs-qr-container">
+                                        <img src={config.customerService.qrCodeUrl} alt="Customer Support QR Code" className="cs-qr-code" />
+                                        <p className="cs-qr-hint">扫码联系客服</p>
+                                    </div>
+                                )}
+                                <div className="cs-wechat-row">
+                                    <span className="cs-wechat-label">{config.customerService.channelName || '客服账号'}:</span>
+                                    <span className="cs-wechat-value">{config.customerService.wechatId}</span>
+                                    <button className="cs-copy-btn" onClick={handleCopyWechat}>
+                                        {wechatCopied ? '✓' : '复制'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

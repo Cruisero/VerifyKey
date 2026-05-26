@@ -61,6 +61,13 @@ const DEFAULT_CONFIG = {
         showGptRechargeTab: true
     },
 
+    // Customer Service settings
+    customerService: {
+        wechatId: '',
+        qrCodeUrl: '',
+        channelName: '微信号'
+    },
+
     // Last updated
     updatedAt: null
 };

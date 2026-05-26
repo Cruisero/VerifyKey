@@ -4976,6 +4976,13 @@ export default function Admin() {
     const [alertSaving, setAlertSaving] = useState(false);
     const [alertTesting, setAlertTesting] = useState(false);
 
+    // Customer service settings
+    const [wechatId, setWechatId] = useState('');
+    const [qrCodeUrl, setQrCodeUrl] = useState('');
+    const [channelName, setChannelName] = useState('微信号');
+    const [csSaving, setCsSaving] = useState(false);
+    const [csSaved, setCsSaved] = useState(false);
+
     // Service maintenance toggles (used in settings tab)
     const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gpt_plus: false, gpt_team: false });
 
@@ -5507,6 +5514,39 @@ export default function Admin() {
         }
     };
 
+    const handleSaveCustomerService = async () => {
+        setCsSaving(true);
+        setCsSaved(false);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    customerService: {
+                        wechatId: wechatId.trim(),
+                        qrCodeUrl: qrCodeUrl,
+                        channelName: channelName.trim()
+                    }
+                })
+            });
+            if (res.ok) {
+                setCsSaved(true);
+                setTimeout(() => setCsSaved(false), 2000);
+            } else {
+                const err = await res.json();
+                alert(err.error || '保存失败');
+            }
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        } finally {
+            setCsSaving(false);
+        }
+    };
+
     // ========= User Management =========
     const fetchUsers = async () => {
         setUsersLoading(true);
@@ -5987,6 +6027,12 @@ export default function Admin() {
                 }
                 if (data.siteUrl) {
                     setSiteUrl(data.siteUrl);
+                }
+                // Load customer service settings
+                if (data.customerService) {
+                    setWechatId(data.customerService.wechatId || '');
+                    setQrCodeUrl(data.customerService.qrCodeUrl || '');
+                    setChannelName(data.customerService.channelName || '微信号');
                 }
                 // Load alert config
                 try {
@@ -11409,6 +11455,122 @@ export default function Admin() {
                                         {tipsSaving ? (
                                             <><span className="loading-spinner small" /> 保存中...</>
                                         ) : '保存提示文案'}
+                                    </button>
+                                </div>
+                            </div>
+                            {/* Customer Service Support Config Card */}
+                            <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                                    borderBottom: '1px solid #bbf7d0',
+                                    display: 'flex', alignItems: 'center', gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '20px' }}>💬</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: '#166534' }}>客服联系配置</h3>
+                                    <span style={{ fontSize: '12px', color: '#22c55e', marginLeft: 'auto' }}>配置用户前台的客服联系悬浮球</span>
+                                </div>
+
+                                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>客服渠道类型</label>
+                                            <input
+                                                className="input"
+                                                value={channelName}
+                                                onChange={e => setChannelName(e.target.value)}
+                                                placeholder="例: 微信号、QQ、联系电话"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 2 }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>客服联系账号</label>
+                                            <input
+                                                className="input"
+                                                value={wechatId}
+                                                onChange={e => setWechatId(e.target.value)}
+                                                placeholder="例: support_account, 123456"
+                                                style={{ width: '100%', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>客服联系二维码</label>
+                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                                            {qrCodeUrl && (
+                                                <div style={{ position: 'relative', width: '120px', height: '120px', border: '1px solid var(--border-primary)', borderRadius: '8px', padding: '4px', background: '#fff', flexShrink: 0 }}>
+                                                    <img src={qrCodeUrl} alt="Customer Support QR Code" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                                    <button 
+                                                        onClick={() => setQrCodeUrl('')}
+                                                        style={{
+                                                            position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%',
+                                                            background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', padding: 0
+                                                        }}
+                                                        title="删除二维码"
+                                                    >✕</button>
+                                                </div>
+                                            )}
+                                            <div style={{
+                                                flex: 1, height: '120px', border: '2px dashed var(--border-primary)', borderRadius: '8px',
+                                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                                cursor: 'pointer', background: 'var(--bg-secondary)', position: 'relative'
+                                            }}>
+                                                <span style={{ fontSize: '24px', marginBottom: '4px' }}>📤</span>
+                                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>点击或拖拽上传二维码图片</span>
+                                                <input 
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const reader = new FileReader();
+                                                            reader.onload = (event) => {
+                                                                if (event.target?.result) {
+                                                                    setQrCodeUrl(event.target.result);
+                                                                }
+                                                            };
+                                                            reader.readAsDataURL(file);
+                                                        }
+                                                    }}
+                                                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                    padding: '16px 20px',
+                                    borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)'
+                                }}>
+                                    {csSaved && (
+                                        <span style={{
+                                            color: '#10b981', fontSize: '13px', fontWeight: 500,
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                            animation: 'fadeIn 0.3s ease'
+                                        }}>
+                                            <span>✓</span> 已保存
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={handleSaveCustomerService}
+                                        disabled={csSaving}
+                                        style={{
+                                            padding: '8px 24px', borderRadius: '8px', border: 'none',
+                                            cursor: csSaving ? 'not-allowed' : 'pointer',
+                                            fontSize: '14px', fontWeight: 600, color: '#fff',
+                                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                                            boxShadow: '0 2px 8px rgba(16,185,129,0.3)',
+                                            transition: 'all 0.2s ease',
+                                            opacity: csSaving ? 0.7 : 1,
+                                            display: 'flex', alignItems: 'center', gap: '6px'
+                                        }}
+                                    >
+                                        {csSaving ? (
+                                            <><span className="loading-spinner small" /> 保存中...</>
+                                        ) : '保存客服配置'}
                                     </button>
                                 </div>
                             </div>

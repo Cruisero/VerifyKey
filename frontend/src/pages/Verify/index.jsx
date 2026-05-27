@@ -302,11 +302,9 @@ export default function Verify() {
     const parseBatchInput = (text) => {
         return text.split('\n')
             .map(line => line.trim())
-            .filter(line => line && /-/.test(line))
+            .filter(line => line && /--/.test(line))
             .map(line => {
-                // Normalize: collapse spaces around dashes (e.g. "- - -" → "---")
-                const normalized = line.replace(/\s*-\s*/g, '-');
-                const parts = normalized.split(/-+/).map(p => p.trim()).filter(Boolean);
+                const parts = line.split(/\s*--+\s*/).map(p => p.trim()).filter(Boolean);
                 if (parts.length === 4) {
                     return { email: normalizeGmailEmail(parts[0]), password: parts[1], backupEmail: parts[2], totp_secret: parts[3] };
                 } else if (parts.length === 3) {

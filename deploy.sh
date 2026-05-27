@@ -71,7 +71,7 @@ deploy_auto() {
         done && \
         if [ -n \"\$SERVICES\" ]; then \
           echo \"🎯 本次将更新服务: \$SERVICES\" && \
-          docker compose build \$SERVICES && \
+          BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose build \$SERVICES && \
           docker compose up -d \$SERVICES; \
         else \
           echo '🎯 没有检测到需要重建的 Docker 服务，跳过构建'; \
@@ -87,7 +87,7 @@ deploy_services() {
     ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_PATH} && \
         git stash && \
         git pull origin main && \
-        docker compose build ${target_services} && \
+        BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose build ${target_services} && \
         docker compose up -d ${target_services}"
 }
 

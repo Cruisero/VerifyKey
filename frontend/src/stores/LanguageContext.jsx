@@ -163,6 +163,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         verifySuccess: '验证成功',
         verifyFailed: '验证失败',
         resubmitBtn: '重新提交',
+        resubmitAllFailedBtn: '重试所有失败',
 
         // Backend messageKey translations
         msgLinkFailed: '该链接已失败，请刷新页面获取新链接',
@@ -534,6 +535,7 @@ Failed verification does not consume quota.`,
         verifySuccess: 'Verification passed',
         verifyFailed: 'Verification failed',
         resubmitBtn: 'Re-submit',
+        resubmitAllFailedBtn: 'Resubmit All Failed',
 
         // Backend messageKey translations
         msgLinkFailed: 'Link already failed, please refresh for a new link',

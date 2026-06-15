@@ -541,21 +541,4 @@ class TelegramAccountManager:
 
     @staticmethod
     def _mask_phone(phone: str) -> str:
-        if not phone or len(phone) < 5:
-            return phone or ""
-        return phone[:3] + "****" + phone[-2:]
-
-    # ------ Helpers ------
-
-    def _find_account(self, account_id: str) -> Optional[dict]:
-        config = config_manager.get_config()
-        for acc in config.get("telegramAccounts", []):
-            if acc.get("id") == account_id:
-                return acc
-        return None
-
-    @staticmethod
-    def _mask_phone(phone: str) -> str:
-        if not phone or len(phone) < 5:
-            return phone or ""
-        return phone[:3] + "****" + phone[-2:]
+        return phone or ""

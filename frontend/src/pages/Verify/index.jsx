@@ -300,19 +300,110 @@ export default function Verify() {
 
     // Parse batch input into account entries
     const parseBatchInput = (text) => {
-        return text.split('\n')
-            .map(line => line.trim())
-            .filter(line => line && /--/.test(line))
-            .map(line => {
-                const parts = line.split(/\s*--+\s*/).map(p => p.trim()).filter(Boolean);
-                if (parts.length === 4) {
-                    return { email: normalizeGmailEmail(parts[0]), password: parts[1], backupEmail: parts[2], totp_secret: parts[3] };
-                } else if (parts.length === 3) {
-                    return { email: normalizeGmailEmail(parts[0]), password: parts[1], totp_secret: parts[2] };
+        if (!text) return [];
+
+        // 1. Match all emails as anchors and record their positions
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+        const matches = [];
+        let match;
+        while ((match = emailRegex.exec(text)) !== null) {
+            matches.push({
+                email: match[0],
+                index: match.index,
+                length: match[0].length
+            });
+        }
+
+        if (matches.length === 0) {
+            return [];
+        }
+
+        // 2. Filter out backup emails: if the text block between this email and the next one
+        // does not contain a password (meaning it has 0 tokens or only 1 token that looks like a 2FA secret),
+        // it's likely a backup email for the previous account rather than a new account.
+        for (let i = matches.length - 1; i >= 1; i--) {
+            const m = matches[i];
+            const nextM = matches[i + 1];
+            const blockStart = m.index + m.length;
+            const blockEnd = nextM ? nextM.index : text.length;
+            const block = text.substring(blockStart, blockEnd).trim();
+            const tokens = block.split(/[\s\-|｜,，\t]+/).filter(t => t.length > 0);
+            if (tokens.length === 0 || (tokens.length === 1 && /^[a-zA-Z2-70189]{16,64}$/i.test(tokens[0]))) {
+                matches.splice(i, 1);
+            }
+        }
+
+        const accounts = [];
+
+        // 3. Split data block for each email and extract fields
+        for (let i = 0; i < matches.length; i++) {
+            const currentMatch = matches[i];
+            const nextMatch = matches[i + 1];
+            
+            const start = currentMatch.index + currentMatch.length;
+            const end = nextMatch ? nextMatch.index : text.length;
+            
+            let blockText = text.substring(start, end).trim();
+            const email = normalizeGmailEmail(currentMatch.email);
+            
+            let password = "";
+            let totp_secret = "";
+            let backupEmail = "";
+
+            // A. Extract space-separated 2FA codes first (e.g. "abcd efgh ijkl mnop ...")
+            const spaceTotpRegex = /\b([a-zA-Z2-70189]{4}\s+){3,15}[a-zA-Z2-70189]{4}\b/gi;
+            const spaceTotpMatch = blockText.match(spaceTotpRegex);
+            if (spaceTotpMatch) {
+                totp_secret = spaceTotpMatch[0].replace(/\s+/g, '').toUpperCase();
+                blockText = blockText.replace(spaceTotpMatch[0], '');
+            }
+
+            // B. Split remaining text block by line breaks and general delimiters
+            let lines = blockText.split(/\n+/);
+            let parts = [];
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) return;
+                
+                if (/----+|---+|--+|[|｜]+|[,，\t]+/.test(trimmedLine)) {
+                    const subParts = trimmedLine.split(/----+|---+|--+|[|｜]+|[,，\t]+/);
+                    parts.push(...subParts.map(p => p.trim()));
+                } else if (/\s{2,}/.test(trimmedLine)) {
+                    const subParts = trimmedLine.split(/\s{2,}/);
+                    parts.push(...subParts.map(p => p.trim()));
+                } else {
+                    parts.push(trimmedLine);
                 }
-                return null;
-            })
-            .filter(Boolean);
+            });
+            parts = parts.filter(p => p);
+
+            // C. Classify each part
+            for (let part of parts) {
+                // If it's a 2FA secret (16-64 chars base32, no @)
+                if (!totp_secret && /^[a-zA-Z2-70189]{16,64}$/i.test(part)) {
+                    totp_secret = part.toUpperCase();
+                    continue;
+                }
+                // If it's an email (and different from current account email)
+                if (part.includes('@') && /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(part)) {
+                    backupEmail = normalizeGmailEmail(part);
+                    continue;
+                }
+                // If password is not set yet, we assign it to password
+                if (!password) {
+                    password = part;
+                }
+            }
+
+            if (email && password) {
+                const acc = { email, password };
+                if (backupEmail) acc.backupEmail = backupEmail;
+                if (totp_secret) acc.totp_secret = totp_secret;
+                accounts.push(acc);
+            }
+        }
+
+        return accounts;
     };
 
     const getNextStandardSource = () => {

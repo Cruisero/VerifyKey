@@ -1712,6 +1712,18 @@ export default function Verify() {
                                                         <div className="result-info">
                                                             <div className="result-main-row">
                                                                 <span className="result-id">{maskEmail(result.email)}</span>
+                                                                {result.status === 'failed' && result.accountData && (
+                                                                    <button
+                                                                        className="btn-resubmit"
+                                                                        onClick={() => handleResubmit(result)}
+                                                                    >
+                                                                        <svg className="icon-resubmit" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <polyline points="23 4 23 10 17 10"></polyline>
+                                                                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                                                        </svg>
+                                                                        <span>{t('resubmitBtn')}</span>
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                             {result.status === 'processing' && result.totalStages > 0 && !result.message?.includes('排队') && !result.message?.includes('queue') && !result.message?.includes('提交') && !result.message?.includes('Submitting') && !result.message?.includes('Submitted') ? (() => {
                                                                 const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
@@ -1779,18 +1791,6 @@ export default function Verify() {
                                                                 return (
                                                                     <div className="result-message-row">
                                                                         {msg ? <span className="result-message">{msg}</span> : null}
-                                                                        {result.status === 'failed' && result.accountData && (
-                                                                            <button
-                                                                                className="btn-resubmit"
-                                                                                onClick={() => handleResubmit(result)}
-                                                                            >
-                                                                                <svg className="icon-resubmit" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                                                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                                                                                </svg>
-                                                                                <span>{t('resubmitBtn')}</span>
-                                                                            </button>
-                                                                        )}
                                                                     </div>
                                                                 );
                                                             })()}

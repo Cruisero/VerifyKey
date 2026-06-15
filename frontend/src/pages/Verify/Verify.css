@@ -2376,29 +2376,41 @@
 .btn-resubmit {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
+    gap: 4px;
+    padding: 3px 10px;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-error);
-    background: transparent;
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 20px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
     white-space: nowrap;
-    margin-left: 4px;
+    margin-left: 8px;
+    box-shadow: 0 1px 2px rgba(239, 68, 68, 0.05);
 }
 
 .btn-resubmit:hover {
     color: white;
     background: var(--color-error);
     border-color: var(--color-error);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25);
     transform: translateY(-1px);
 }
 
 .btn-resubmit:active {
     transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(239, 68, 68, 0.15);
+}
+
+.icon-resubmit {
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-resubmit:hover .icon-resubmit {
+    transform: rotate(180deg);
 }
 
 /* ===== Pixel API Mobile Responsive ===== */

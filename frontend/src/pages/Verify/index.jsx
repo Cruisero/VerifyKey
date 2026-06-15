@@ -975,51 +975,6 @@ export default function Verify() {
         await submitOneJob(result.accountData, result.id, plan);
     };
 
-    const handleResubmitAllFailed = async () => {
-        if (!user) {
-            alert(t('alertLoginFirst'));
-            return;
-        }
-        if (user.status === 'suspended') {
-            alert(t('alertAccountSuspended'));
-            return;
-        }
-        const failedItems = results.filter(r => r.status === 'failed' && r.accountData);
-        if (failedItems.length === 0) return;
-
-        const totalCost = failedItems.length * tierCost;
-        if ((user.credits || 0) < totalCost) {
-            alert(t('alertInsufficientCredits').replace('{cost}', totalCost).replace('{current}', user.credits || 0));
-            return;
-        }
-
-        for (let i = 0; i < failedItems.length; i++) {
-            const result = failedItems[i];
-            const plan = buildJobPlan(result.accountData);
-
-            setResults(prev => prev.map(r =>
-                r.id === result.id ? {
-                    ...r,
-                    status: 'processing',
-                    timestamp: new Date().toISOString(),
-                    message: t('submitted'),
-                    stage: 0,
-                    totalStages: plan.totalStages,
-                    stageLabel: '',
-                    url: '',
-                    jobId: '',
-                    verificationId: '',
-                    source: plan.source,
-                } : r
-            ));
-
-            await submitOneJob(result.accountData, result.id, plan);
-            if (i < failedItems.length - 1) {
-                await new Promise(r => setTimeout(r, 500));
-            }
-        }
-    };
-
     const handleClear = () => {
         // Stop all polling
         Object.values(pollingRefs.current).forEach(id => clearInterval(id));
@@ -1595,15 +1550,6 @@ export default function Verify() {
                                         <span className="result-count">({showHistory ? historyData.length : results.length})</span>
                                     </div>
                                     <div className="panel-actions">
-                                        {!showHistory && results.some(r => r.status === 'failed' && r.accountData) && (
-                                            <button
-                                                className="btn btn-sm btn-primary"
-                                                onClick={handleResubmitAllFailed}
-                                                style={{ marginRight: '8px', backgroundColor: '#ef4444', borderColor: '#ef4444' }}
-                                            >
-                                                🔄 {t('resubmitAllFailedBtn')}
-                                            </button>
-                                        )}
                                         <button
                                             className={`btn btn-sm ${showHistory ? 'btn-primary' : 'btn-secondary'}`}
                                             onClick={() => {
@@ -1838,7 +1784,11 @@ export default function Verify() {
                                                                                 className="btn-resubmit"
                                                                                 onClick={() => handleResubmit(result)}
                                                                             >
-                                                                                🔄 {t('resubmitBtn')}
+                                                                                <svg className="icon-resubmit" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                                                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                                                                </svg>
+                                                                                <span>{t('resubmitBtn')}</span>
                                                                             </button>
                                                                         )}
                                                                     </div>

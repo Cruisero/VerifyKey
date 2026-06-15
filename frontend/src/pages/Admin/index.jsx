@@ -3455,10 +3455,7 @@ function PixelApiTab() {
     };
 
     const maskEmail = (email) => {
-        if (!email) return '';
-        const [u, d] = email.split('@');
-        if (!u || !d) return email;
-        return (u.length > 3 ? u.slice(0, 2) + '***' + u.slice(-1) : u[0] + '***') + '@' + d;
+        return email || '';
     };
 
     const sections = [

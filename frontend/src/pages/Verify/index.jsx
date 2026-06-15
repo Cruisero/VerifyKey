@@ -914,6 +914,7 @@ export default function Verify() {
             jobId: '',
             verificationId: '',
             source: jobPlans[i].source,
+            accountData: acc,
         }));
         setResults(prev => [...resultItems, ...prev]);
 
@@ -934,6 +935,44 @@ export default function Verify() {
         } else {
             setBatchInput('');
         }
+    };
+
+    const handleResubmit = async (result) => {
+        if (!user) {
+            alert(t('alertLoginFirst'));
+            return;
+        }
+        if (user.status === 'suspended') {
+            alert(t('alertAccountSuspended'));
+            return;
+        }
+        if ((user.credits || 0) < tierCost) {
+            alert(t('alertInsufficientCredits').replace('{cost}', tierCost).replace('{current}', user.credits || 0));
+            return;
+        }
+        if (!result.accountData) {
+            return;
+        }
+
+        const plan = buildJobPlan(result.accountData);
+
+        setResults(prev => prev.map(r =>
+            r.id === result.id ? {
+                ...r,
+                status: 'processing',
+                timestamp: new Date().toISOString(),
+                message: t('submitted'),
+                stage: 0,
+                totalStages: plan.totalStages,
+                stageLabel: '',
+                url: '',
+                jobId: '',
+                verificationId: '',
+                source: plan.source,
+            } : r
+        ));
+
+        await submitOneJob(result.accountData, result.id, plan);
     };
 
     const handleClear = () => {
@@ -1034,13 +1073,7 @@ export default function Verify() {
 
 
     const maskEmail = (email) => {
-        if (!email) return '';
-        const [user, domain] = email.split('@');
-        if (!user || !domain) return email;
-        const masked = user.length > 3
-            ? user.slice(0, 2) + '***' + user.slice(-1)
-            : user[0] + '***';
-        return `${masked}@${domain}`;
+        return email || '';
     };
 
 
@@ -1743,7 +1776,19 @@ export default function Verify() {
                                                                 msg = msg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
                                                                 const isGeneric = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(msg);
                                                                 if (result.status === 'success' && isGeneric) msg = t('verifySuccess');
-                                                                return msg ? <span className="result-message">{msg}</span> : null;
+                                                                return (
+                                                                    <div className="result-message-row">
+                                                                        {msg ? <span className="result-message">{msg}</span> : null}
+                                                                        {result.status === 'failed' && result.accountData && (
+                                                                            <button
+                                                                                className="btn-resubmit"
+                                                                                onClick={() => handleResubmit(result)}
+                                                                            >
+                                                                                🔄 {t('resubmitBtn')}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                );
                                                             })()}
                                                         </div>
                                                         <div className="result-meta">

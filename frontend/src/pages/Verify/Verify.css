@@ -2373,6 +2373,34 @@
     cursor: not-allowed;
 }
 
+.btn-resubmit {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-error);
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-left: 4px;
+}
+
+.btn-resubmit:hover {
+    color: white;
+    background: var(--color-error);
+    border-color: var(--color-error);
+    transform: translateY(-1px);
+}
+
+.btn-resubmit:active {
+    transform: translateY(0);
+}
+
 /* ===== Pixel API Mobile Responsive ===== */
 @media (max-width: 768px) {
     /* Service Tabs - compact on mobile */

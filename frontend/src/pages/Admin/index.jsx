@@ -6329,15 +6329,12 @@ export default function Admin() {
         { id: 'overview', label: t('tabOverview'), icon: '📊', permission: 'view_logs' },
         { id: 'live-monitor', label: '实时监控', icon: '📺', permission: 'view_logs' },
         { id: 'pixel-api', label: 'Pixel API', icon: '📡', permission: 'manage_config' },
-        { id: 'gpt-recharge', label: 'GPT 充值', icon: '🤖', permission: 'manage_config' },
-        { id: 'gpt-team', label: 'GPT Team', icon: '🧩', permission: 'manage_config' },
         { id: 'cdk', label: t('tabCdk'), icon: '🔑', permission: 'view_orders' },
         { id: 'users', label: t('tabUsers'), icon: '👥', permission: 'view_users' },
         { id: 'admin-roles', label: '子管理员', icon: '🛡️', permission: 'super_admin' },
         { id: 'audit', label: '资金对账单', icon: '💸', permission: 'view_orders' },
         { id: 'ai-generator', label: t('tabAiGen'), icon: '🤖', permission: 'manage_config' },
         { id: 'verify-status', label: t('tabVerifyStatus'), icon: '📋', permission: 'view_logs' },
-        { id: 'telegram-bot', label: t('tabTgBot'), icon: '🤖', permission: 'manage_config' },
         { id: 'settings', label: t('tabSettings'), icon: '⚙️', permission: 'manage_maintenance' },
     ].filter(tab => can(tab.permission));
 
@@ -7313,166 +7310,172 @@ export default function Admin() {
                                     </div>
 
 
-                                    <div
-                                        className={`provider-card ${aiProvider === 'telegram' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('telegram')}
-                                    >
-                                        <div className="provider-icon">📨</div>
-                                        <div className="provider-info">
-                                            <h4>Userbot</h4>
-                                            <p>调用外部 SheerID Bot 自动验证</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-warning">需配置</span>
-                                        </div>
-                                    </div>
+                                    {false && (
+                                        <>
+                                            <div
+                                                className={`provider-card ${aiProvider === 'telegram' ? 'active' : ''}`}
+                                                onClick={() => setAiProvider('telegram')}
+                                            >
+                                                <div className="provider-icon">📨</div>
+                                                <div className="provider-info">
+                                                    <h4>Userbot</h4>
+                                                    <p>调用外部 SheerID Bot 自动验证</p>
+                                                </div>
+                                                <div className="provider-status">
+                                                    <span className="badge badge-warning">需配置</span>
+                                                </div>
+                                            </div>
 
-                                    <div
-                                        className={`provider-card ${aiProvider === 'mixed' ? 'active' : ''}`}
-                                        onClick={() => {
-                                            setAiProvider('mixed');
-                                            fetch(`${API_BASE}/api/routing/stats`).then(r => r.ok ? r.json() : null).then(stats => {
-                                                if (stats) setRoutingStats(stats);
-                                            }).catch(() => { });
-                                        }}
-                                    >
-                                        <div className="provider-icon">🔀</div>
-                                        <div className="provider-info">
-                                            <h4>混合模式</h4>
-                                            <p>API + Bot 统一调度，自动分配</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-info">新</span>
-                                        </div>
-                                    </div>
+                                            <div
+                                                className={`provider-card ${aiProvider === 'mixed' ? 'active' : ''}`}
+                                                onClick={() => {
+                                                    setAiProvider('mixed');
+                                                    fetch(`${API_BASE}/api/routing/stats`).then(r => r.ok ? r.json() : null).then(stats => {
+                                                        if (stats) setRoutingStats(stats);
+                                                    }).catch(() => { });
+                                                }}
+                                            >
+                                                <div className="provider-icon">🔀</div>
+                                                <div className="provider-info">
+                                                    <h4>混合模式</h4>
+                                                    <p>API + Bot 统一调度，自动分配</p>
+                                                </div>
+                                                <div className="provider-status">
+                                                    <span className="badge badge-info">新</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
                             {/* ── 模板类 ── */}
-                            <div style={{ marginBottom: '12px' }}>
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                    marginBottom: '10px', paddingBottom: '8px',
-                                    borderBottom: '2px solid rgba(76,175,80,0.15)'
-                                }}>
-                                    <span style={{
-                                        fontSize: '11px', fontWeight: 700,
-                                        background: 'linear-gradient(135deg, #4caf50, #388e3c)',
-                                        color: 'white', padding: '3px 10px', borderRadius: '10px',
-                                        letterSpacing: '0.5px'
-                                    }}>📄 模板类</span>
-                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>本地生成</span>
-                                    <button
-                                        onClick={() => setShowTemplates(prev => !prev)}
-                                        style={{
-                                            marginLeft: 'auto', background: 'none', border: '1px solid var(--border-color)',
-                                            borderRadius: '6px', padding: '2px 10px', fontSize: '11px', cursor: 'pointer',
-                                            color: 'var(--text-secondary)'
-                                        }}
-                                    >{showTemplates ? '收起' : '展开'}</button>
+                            {false && (
+                                <div style={{ marginBottom: '12px' }}>
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        marginBottom: '10px', paddingBottom: '8px',
+                                        borderBottom: '2px solid rgba(76,175,80,0.15)'
+                                    }}>
+                                        <span style={{
+                                            fontSize: '11px', fontWeight: 700,
+                                            background: 'linear-gradient(135deg, #4caf50, #388e3c)',
+                                            color: 'white', padding: '3px 10px', borderRadius: '10px',
+                                            letterSpacing: '0.5px'
+                                        }}>📄 模板类</span>
+                                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>本地生成</span>
+                                        <button
+                                            onClick={() => setShowTemplates(prev => !prev)}
+                                            style={{
+                                                marginLeft: 'auto', background: 'none', border: '1px solid var(--border-color)',
+                                                borderRadius: '6px', padding: '2px 10px', fontSize: '11px', cursor: 'pointer',
+                                                color: 'var(--text-secondary)'
+                                            }}
+                                        >{showTemplates ? '收起' : '展开'}</button>
+                                    </div>
+                                    {showTemplates && <div className="provider-cards">
+
+                                        <div
+                                            className={`provider-card ${aiProvider === 'gemini' ? 'active' : ''}`}
+                                            onClick={() => setAiProvider('gemini')}
+                                        >
+                                            <div className="provider-icon">✨</div>
+                                            <div className="provider-info">
+                                                <h4>Gemini API</h4>
+                                                <p>直接调用 Google Gemini API</p>
+                                            </div>
+                                            <div className="provider-status">
+                                                <span className="badge badge-warning">需配置</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`provider-card ${aiProvider === 'puppeteer' ? 'active' : ''}`}
+                                            onClick={() => setAiProvider('puppeteer')}
+                                        >
+                                            <div className="provider-icon">🎨</div>
+                                            <div className="provider-info">
+                                                <h4>Puppeteer HTML 模板</h4>
+                                                <p>使用 Puppeteer 渲染 HTML 模板生成高质量证件</p>
+                                            </div>
+                                            <div className="provider-status">
+                                                <span className="badge badge-success">推荐</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`provider-card ${aiProvider === 'lionpath' ? 'active' : ''}`}
+                                            onClick={() => setAiProvider('lionpath')}
+                                        >
+                                            <div className="provider-icon">🦁</div>
+                                            <div className="provider-info">
+                                                <h4>LionPATH 课程表</h4>
+                                                <p>Penn State 学生门户截图，备选验证方式</p>
+                                            </div>
+                                            <div className="provider-status">
+                                                <span className="badge badge-info">备选</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`provider-card ${aiProvider === 'sheerid' ? 'active' : ''}`}
+                                            onClick={() => setAiProvider('sheerid')}
+                                        >
+                                            <div className="provider-icon">📚</div>
+                                            <div className="provider-info">
+                                                <h4>SheerID Generator</h4>
+                                                <p>通用文档生成：课程表/成绩单/学生证</p>
+                                            </div>
+                                            <div className="provider-status">
+                                                <span className="badge badge-warning">通用</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`provider-card ${aiProvider === 'vsid' ? 'active' : ''}`}
+                                            onClick={() => setAiProvider('vsid')}
+                                        >
+                                            <div className="provider-icon">🎓</div>
+                                            <div className="provider-info">
+                                                <h4>VSID Generator</h4>
+                                                <p>国际学生证生成：支持5种文档类型</p>
+                                            </div>
+                                            <div className="provider-status">
+                                                <span className="badge badge-success">新</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`provider-card ${aiProvider === 'uiuc' ? 'active' : ''}`}
+                                            onClick={() => setAiProvider('uiuc')}
+                                        >
+                                            <div className="provider-icon">🏛️</div>
+                                            <div className="provider-info">
+                                                <h4>UIUC i-card</h4>
+                                                <p>伊利诺伊大学厄巴纳-香槟分校学生证</p>
+                                            </div>
+                                            <div className="provider-status">
+                                                <span className="badge badge-info">专属</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`provider-card ${aiProvider === 'onepasshtml' ? 'active' : ''}`}
+                                            onClick={() => setAiProvider('onepasshtml')}
+                                        >
+                                            <div className="provider-icon">📝</div>
+                                            <div className="provider-info">
+                                                <h4>OnepassHTML 固定模板</h4>
+                                                <p>固定学校 HTML 模板，仅修改学生信息</p>
+                                            </div>
+                                            <div className="provider-status">
+                                                <span className="badge badge-success">新</span>
+                                            </div>
+                                        </div>
+
+                                    </div>}
                                 </div>
-                                {showTemplates && <div className="provider-cards">
-
-                                    <div
-                                        className={`provider-card ${aiProvider === 'gemini' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('gemini')}
-                                    >
-                                        <div className="provider-icon">✨</div>
-                                        <div className="provider-info">
-                                            <h4>Gemini API</h4>
-                                            <p>直接调用 Google Gemini API</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-warning">需配置</span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`provider-card ${aiProvider === 'puppeteer' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('puppeteer')}
-                                    >
-                                        <div className="provider-icon">🎨</div>
-                                        <div className="provider-info">
-                                            <h4>Puppeteer HTML 模板</h4>
-                                            <p>使用 Puppeteer 渲染 HTML 模板生成高质量证件</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-success">推荐</span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`provider-card ${aiProvider === 'lionpath' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('lionpath')}
-                                    >
-                                        <div className="provider-icon">🦁</div>
-                                        <div className="provider-info">
-                                            <h4>LionPATH 课程表</h4>
-                                            <p>Penn State 学生门户截图，备选验证方式</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-info">备选</span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`provider-card ${aiProvider === 'sheerid' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('sheerid')}
-                                    >
-                                        <div className="provider-icon">📚</div>
-                                        <div className="provider-info">
-                                            <h4>SheerID Generator</h4>
-                                            <p>通用文档生成：课程表/成绩单/学生证</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-warning">通用</span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`provider-card ${aiProvider === 'vsid' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('vsid')}
-                                    >
-                                        <div className="provider-icon">🎓</div>
-                                        <div className="provider-info">
-                                            <h4>VSID Generator</h4>
-                                            <p>国际学生证生成：支持5种文档类型</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-success">新</span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`provider-card ${aiProvider === 'uiuc' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('uiuc')}
-                                    >
-                                        <div className="provider-icon">🏛️</div>
-                                        <div className="provider-info">
-                                            <h4>UIUC i-card</h4>
-                                            <p>伊利诺伊大学厄巴纳-香槟分校学生证</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-info">专属</span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`provider-card ${aiProvider === 'onepasshtml' ? 'active' : ''}`}
-                                        onClick={() => setAiProvider('onepasshtml')}
-                                    >
-                                        <div className="provider-icon">📝</div>
-                                        <div className="provider-info">
-                                            <h4>OnepassHTML 固定模板</h4>
-                                            <p>固定学校 HTML 模板，仅修改学生信息</p>
-                                        </div>
-                                        <div className="provider-status">
-                                            <span className="badge badge-success">新</span>
-                                        </div>
-                                    </div>
-
-                                </div>}
-                            </div>
+                            )}
 
                             {/* Mixed Mode — Unified Smart Routing Panel */}
                             {aiProvider === 'mixed' && (() => {

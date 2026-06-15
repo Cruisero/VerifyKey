@@ -305,27 +305,7 @@ def generate_uiuc_image(first_name: str, last_name: str,
                         card: str = None, card_expires: str = None,
                         class_standing: str = None, major: str = None,
                         gpa: str = None, matriculation_year: int = None) -> Tuple[bytes, str, dict]:
-    """
-    生成 UIUC 文档截图 PNG
-
-    Args:
-        first_name: 名字
-        last_name: 姓氏
-        template_name: 模板文件名
-        uiu: UIU 号码 (可选，不传则自动生成)
-        library: Library 号码 (可选，不传则自动生成)
-        card: Card 号码 (可选，不传则自动生成)
-        card_expires: 过期日期 (可选，不传则自动生成)
-        class_standing: 年级 (enrollment模板使用)
-        major: 专业 (enrollment模板使用)
-        gpa: GPA (enrollment模板使用)
-        matriculation_year: 入学年份 (enrollment模板使用)
-
-    Returns:
-        Tuple[bytes, str, dict]: (PNG 图片数据, 文件名, 学生数据字典)
-    """
-    try:
-        import concurrent.futures
+    raise Exception("HTML 证件生成模块已被禁用，当前仅支持 API 通道。")
         
         def run_playwright():
             from playwright.sync_api import sync_playwright

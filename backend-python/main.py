@@ -12338,7 +12338,12 @@ GPT_CHANNELS = (*GPT_KEY_CHANNELS, "tg", "api")
 
 import uuid as _uuid
 import asyncio as _asyncio
-from telethon import events
+class MockEvents:
+    class NewMessage:
+        def __init__(self, *args, **kwargs): pass
+    class MessageEdited:
+        def __init__(self, *args, **kwargs): pass
+events = MockEvents
 
 _gpt_tg_account_locks: Dict[str, asyncio.Lock] = {}
 

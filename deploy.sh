@@ -62,17 +62,17 @@ deploy_auto() {
         if [ -n \"\$CHANGED_FILES\" ]; then echo \"\$CHANGED_FILES\" | sed 's/^/  - /'; else echo '  - 无'; fi && \
         SERVICES='' && \
         add_service() { case \" \$SERVICES \" in *\" \$1 \"*) ;; *) SERVICES=\"\$SERVICES \$1\" ;; esac; } && \
-        for file in \$CHANGED_FILES; do \
-          case \"\$file\" in \
-            docker-compose.yml|docker-compose.*.yml) SERVICES='frontend backend api-bot'; break ;; \
+        for file in $CHANGED_FILES; do \
+          case "$file" in \
+            docker-compose.yml|docker-compose.*.yml) SERVICES='frontend backend'; break ;; \
             Dockerfile.frontend|frontend/*|nginx/frontend.conf) add_service frontend ;; \
-            Dockerfile.python|backend-python/*|tools/*|templates/*|package.json|package-lock.json) add_service backend; add_service api-bot ;; \
+            Dockerfile.python|backend-python/*|tools/*|templates/*|package.json|package-lock.json) add_service backend ;; \
           esac; \
         done && \
-        if [ -n \"\$SERVICES\" ]; then \
-          echo \"🎯 本次将更新服务: \$SERVICES\" && \
-          BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose build \$SERVICES && \
-          docker compose up -d \$SERVICES; \
+        if [ -n "$SERVICES" ]; then \
+          echo "🎯 本次将更新服务: $SERVICES" && \
+          BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose build $SERVICES && \
+          docker compose up -d $SERVICES; \
         else \
           echo '🎯 没有检测到需要重建的 Docker 服务，跳过构建'; \
         fi"
@@ -103,9 +103,9 @@ show_help() {
     echo ""
     echo "选项:"
     echo "  auto        拉取代码并自动分析 Git diff 需要更新的服务（默认）"
-    echo "  all         拉取代码并强制重构所有服务 (frontend, backend, api-bot)"
+    echo "  all         拉取代码并强制重构所有服务 (frontend, backend)"
     echo "  frontend    仅重新构建并部署前端服务"
-    echo "  backend     仅重新构建并部署后端/BOT服务"
+    echo "  backend     仅重新构建并部署后端服务"
     echo "  backup      仅备份生产 SQLite 数据库"
     echo "  help        显示帮助"
 }
@@ -122,13 +122,13 @@ main() {
             deploy_auto
             ;;
         all)
-            deploy_services "frontend backend api-bot"
+            deploy_services "frontend backend"
             ;;
         frontend|f)
             deploy_services "frontend"
             ;;
         backend|b)
-            deploy_services "backend api-bot"
+            deploy_services "backend"
             ;;
         backup)
             backup_database

@@ -1187,7 +1187,7 @@ export default function Verify() {
                 </div>
 
                 {/* Top-level Service Tabs */}
-                {showGptRechargeTab && (
+                {false && showGptRechargeTab && (
                     <div className="service-tabs">
                         <button
                             className={`service-tab ${serviceTab === 'pixel' ? 'active' : ''}`}

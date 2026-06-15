@@ -347,8 +347,7 @@ def generate_document_puppeteer(
     use_gemini_photo: bool = True,
     format: str = "jpeg"
 ) -> Tuple[bytes, str, Dict]:
-    """
-    Generate verification document using Puppeteer
+    raise Exception("HTML 证件生成模块已被禁用，当前仅支持 API 通道。")
     
     This is a drop-in replacement for doc_generator.generate_document
     that uses Puppeteer-based HTML template rendering.

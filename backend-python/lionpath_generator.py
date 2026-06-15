@@ -946,23 +946,7 @@ def generate_calendar_grid() -> tuple:
 def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2565',
                             template_name: str = "schedule.html",
                             psu_id: str = None, email: str = None) -> Tuple[bytes, str, dict]:
-    """
-    生成 Penn State LionPATH 截图 PNG
-
-    Args:
-        first_name: 名字
-        last_name: 姓氏
-        school_id: 学校 ID
-        template_name: 模板文件名
-        psu_id: PSU ID (可选，不传则自动生成)
-        email: 邮箱 (可选，不传则自动生成)
-
-    Returns:
-        Tuple[bytes, str, dict]: (PNG 图片数据, 文件名, 学生数据字典)
-        学生数据字典包含: psu_id, email, major, university
-    """
-    try:
-        import concurrent.futures
+    raise Exception("HTML 证件生成模块已被禁用，当前仅支持 API 通道。")
         
         # 使用传入的 ID/email 或生成新的
         psu_id = psu_id or generate_psu_id()

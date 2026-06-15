@@ -1,31 +1,15 @@
 # Python Backend with curl_cffi for TLS Fingerprint Spoofing
-# Plus Node.js/Puppeteer for HTML template rendering
 FROM python:3.11-slim
 
-# Install system dependencies for curl_cffi and Node.js
+# Install system dependencies for curl_cffi
 RUN apt-get update && apt-get install -y \
     build-essential \
     libcurl4-openssl-dev \
     libssl-dev \
     libffi-dev \
-    libcairo2-dev \
-    libpango1.0-dev \
-    libgdk-pixbuf-2.0-dev \
     curl \
-    gnupg \
-    chromium \
-    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-freefont-ttf \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js 20.x
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set Puppeteer environment variables
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Set working directory
 WORKDIR /app
@@ -36,20 +20,8 @@ COPY backend-python/requirements.txt ./
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers for LionPATH generator
-# Use || true to avoid build failure when apt repos are unreachable (e.g. behind proxy/VPN)
-RUN python -m playwright install chromium --with-deps || python -m playwright install chromium || true
-
 # Copy application code
 COPY backend-python/ ./
-
-# Copy Node.js tools and templates for Puppeteer generation
-COPY tools/ /tools/
-COPY templates/ /templates/
-COPY package.json package-lock.json /
-
-# Install Node.js dependencies for Puppeteer
-RUN npm install -g yarn && cd / && yarn install --production
 
 # Create data and output directories
 RUN mkdir -p /app/data /output

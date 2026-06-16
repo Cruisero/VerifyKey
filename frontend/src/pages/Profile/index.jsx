@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
+import { useLang } from '../../stores/LanguageContext';
 import './Profile.css';
 
 export default function Profile() {
+    const { lang, t } = useLang();
     const { user, loading, logout, updateCredits } = useAuth();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('info');
@@ -41,23 +43,23 @@ export default function Profile() {
     };
 
     const tabs = [
-        { id: 'info', label: '个人信息', icon: '👤' },
-        { id: 'quota', label: '配额记录', icon: '🎫' },
-        { id: 'records', label: '验证记录', icon: '📊' },
-        { id: 'security', label: '安全设置', icon: '🔐' },
+        { id: 'info', label: t('tabPersonalInfo'), icon: '👤' },
+        { id: 'quota', label: t('tabQuotaHistory'), icon: '🎫' },
+        { id: 'records', label: t('tabVerifyRecords'), icon: '📊' },
+        { id: 'security', label: t('tabSecuritySettings'), icon: '🔐' },
     ];
 
     const handleChangePassword = () => {
         if (passwords.new !== passwords.confirm) {
-            alert('两次输入的密码不一致');
+            alert(t('alertPasswordsMismatch'));
             return;
         }
         if (passwords.new.length < 6) {
-            alert('密码长度至少6位');
+            alert(t('alertPasswordLength'));
             return;
         }
         // 模拟修改密码
-        alert('密码修改成功');
+        alert(t('alertPasswordSuccess'));
         setShowPasswordModal(false);
         setPasswords({ current: '', new: '', confirm: '' });
     };
@@ -80,20 +82,20 @@ export default function Profile() {
                     <div className="user-details">
                         <h1 className="user-name">{user.username}</h1>
                         <p className="user-email">{user.email}</p>
-                        <span className="user-role">{user.role === 'admin' ? '👑 管理员' : '👤 普通用户'}</span>
+                        <span className="user-role">{user.role === 'admin' ? t('roleAdmin') : t('roleUser')}</span>
                     </div>
                     <div className="header-stats">
                         <div className="stat-item">
                             <span className="stat-value">{user.credits}</span>
-                            <span className="stat-label">配额余额</span>
+                            <span className="stat-label">{t('quotaBalance')}</span>
                         </div>
                         <div className="stat-item">
                             <span className="stat-value">{stats.totalVerifications}</span>
-                            <span className="stat-label">总验证次数</span>
+                            <span className="stat-label">{t('totalVerificationsLabel')}</span>
                         </div>
                         <div className="stat-item">
                             <span className="stat-value">{stats.successRate}%</span>
-                            <span className="stat-label">成功率</span>
+                            <span className="stat-label">{t('statRate')}</span>
                         </div>
                     </div>
                 </div>
@@ -117,22 +119,22 @@ export default function Profile() {
                     {/* 个人信息 */}
                     {activeTab === 'info' && (
                         <div className="info-section card">
-                            <h3>👤 基本信息</h3>
+                            <h3>{t('basicInfoTitle')}</h3>
                             <div className="info-grid">
                                 <div className="info-item">
-                                    <label>用户名</label>
+                                    <label>{t('usernameLabel')}</label>
                                     <span>{user.username}</span>
                                 </div>
                                 <div className="info-item">
-                                    <label>邮箱</label>
+                                    <label>{t('emailLabel')}</label>
                                     <span>{user.email}</span>
                                 </div>
                                 <div className="info-item">
-                                    <label>用户角色</label>
-                                    <span>{user.role === 'admin' ? '管理员' : '普通用户'}</span>
+                                    <label>{lang === 'zh' ? '用户角色' : 'Role'}</label>
+                                    <span>{user.role === 'admin' ? t('roleAdminLabel') : t('roleUserLabel')}</span>
                                 </div>
                                 <div className="info-item">
-                                    <label>注册时间</label>
+                                    <label>{t('regTime')}</label>
                                     <span>{user.createdAt?.split('T')[0] || '2026-01-20'}</span>
                                 </div>
                             </div>
@@ -143,28 +145,28 @@ export default function Profile() {
                     {activeTab === 'quota' && (
                         <div className="quota-section card">
                             <div className="section-header">
-                                <h3>🎫 配额使用记录</h3>
-                                <span className="current-quota">当前余额: <strong>{user.credits} 次</strong></span>
+                                <h3>{t('quotaUsageHistoryTitle')}</h3>
+                                <span className="current-quota" dangerouslySetInnerHTML={{ __html: t('currentBalanceUnit').replace('{credits}', user.credits) }} />
                             </div>
                             <div className="history-table">
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>日期</th>
-                                            <th>操作</th>
-                                            <th>变动</th>
-                                            <th>余额</th>
+                                            <th>{t('thDate')}</th>
+                                            <th>{t('thAction')}</th>
+                                            <th>{t('thChange')}</th>
+                                            <th>{t('thBalance')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {usageHistory.map(item => (
                                             <tr key={item.id}>
                                                 <td>{item.date}</td>
-                                                <td>{item.action}</td>
+                                                <td>{item.action === '验证成功' ? t('verifySuccess') : item.action === '验证失败' ? t('verifyFailed') : item.action === '充值' ? t('rechargeAction') : item.action === '注册赠送' ? t('regGift') : item.action}</td>
                                                 <td className={item.quota > 0 ? 'positive' : item.quota < 0 ? 'negative' : ''}>
                                                     {item.quota > 0 ? `+${item.quota}` : item.quota}
                                                 </td>
-                                                <td>{item.balance} 次</td>
+                                                <td>{item.balance} {t('timesUnit')}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -177,19 +179,19 @@ export default function Profile() {
                     {activeTab === 'records' && (
                         <div className="records-section card">
                             <div className="section-header">
-                                <h3>📊 验证记录</h3>
+                                <h3>📊 {t('tabVerifyRecords')}</h3>
                                 <div className="stats-summary">
-                                    <span className="stat success">✓ {stats.successCount} 成功</span>
-                                    <span className="stat fail">✕ {stats.failCount} 失败</span>
+                                    <span className="stat success">✓ {stats.successCount} {t('verifySuccess')}</span>
+                                    <span className="stat fail">✕ {stats.failCount} {t('verifyFailed')}</span>
                                 </div>
                             </div>
                             <div className="records-table">
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>验证ID</th>
-                                            <th>状态</th>
-                                            <th>时间</th>
+                                            <th>{t('thVerifyId')}</th>
+                                            <th>{t('thStatus')}</th>
+                                            <th>{t('thTime')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -198,7 +200,7 @@ export default function Profile() {
                                                 <td className="mono">{record.verificationId}</td>
                                                 <td>
                                                     <span className={`status-badge ${record.status}`}>
-                                                        {record.status === 'success' ? '✓ 成功' : '✕ 失败'}
+                                                        {record.status === 'success' ? `✓ ${t('verifySuccess')}` : `✕ ${t('verifyFailed')}`}
                                                     </span>
                                                 </td>
                                                 <td>{record.time}</td>
@@ -213,30 +215,30 @@ export default function Profile() {
                     {/* 安全设置 */}
                     {activeTab === 'security' && (
                         <div className="security-section card">
-                            <h3>🔐 安全设置</h3>
+                            <h3>{t('tabSecuritySettings')}</h3>
                             <div className="security-items">
                                 <div className="security-item">
                                     <div className="security-info">
-                                        <span className="security-title">修改密码</span>
-                                        <span className="security-desc">定期更换密码可以提高账号安全性</span>
+                                        <span className="security-title">{lang === 'zh' ? '修改密码' : 'Change Password'}</span>
+                                        <span className="security-desc">{lang === 'zh' ? '定期更换密码可以提高账号安全性' : 'Change password regularly to improve security'}</span>
                                     </div>
                                     <button
                                         className="btn btn-secondary"
                                         onClick={() => setShowPasswordModal(true)}
                                     >
-                                        修改
+                                        {t('editBtn')}
                                     </button>
                                 </div>
                                 <div className="security-item">
                                     <div className="security-info">
-                                        <span className="security-title">退出登录</span>
-                                        <span className="security-desc">退出当前账号</span>
+                                        <span className="security-title">{lang === 'zh' ? '退出登录' : 'Log Out'}</span>
+                                        <span className="security-desc">{lang === 'zh' ? '退出当前账号' : 'Log out of current account'}</span>
                                     </div>
                                     <button
                                         className="btn btn-outline"
                                         onClick={handleLogout}
                                     >
-                                        退出
+                                        {t('exitBtn')}
                                     </button>
                                 </div>
                             </div>
@@ -250,12 +252,12 @@ export default function Profile() {
                 <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
                     <div className="modal card" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>🔐 修改密码</h2>
+                            <h2>{t('changePasswordTitle')}</h2>
                             <button className="modal-close" onClick={() => setShowPasswordModal(false)}>×</button>
                         </div>
                         <div className="modal-body">
                             <div className="input-group">
-                                <label>当前密码</label>
+                                <label>{t('labelCurrentPassword')}</label>
                                 <input
                                     type="password"
                                     className="input"
@@ -264,7 +266,7 @@ export default function Profile() {
                                 />
                             </div>
                             <div className="input-group">
-                                <label>新密码</label>
+                                <label>{t('labelNewPassword')}</label>
                                 <input
                                     type="password"
                                     className="input"
@@ -273,7 +275,7 @@ export default function Profile() {
                                 />
                             </div>
                             <div className="input-group">
-                                <label>确认新密码</label>
+                                <label>{t('labelConfirmNewPassword')}</label>
                                 <input
                                     type="password"
                                     className="input"
@@ -283,8 +285,8 @@ export default function Profile() {
                             </div>
                         </div>
                         <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setShowPasswordModal(false)}>取消</button>
-                            <button className="btn btn-primary" onClick={handleChangePassword}>确认修改</button>
+                            <button className="btn btn-secondary" onClick={() => setShowPasswordModal(false)}>{t('cancelBtn')}</button>
+                            <button className="btn btn-primary" onClick={handleChangePassword}>{t('confirmChangeBtn')}</button>
                         </div>
                     </div>
                 </div>

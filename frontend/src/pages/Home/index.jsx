@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
+import { useLang } from '../../stores/LanguageContext';
 import logoImg from '../../assets/logo.png';
 import './Home.css';
 
 export default function Home() {
+    const { lang, t } = useLang();
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -70,12 +72,12 @@ export default function Home() {
             });
             const data = await res.json();
             if (res.ok) {
-                setForgotMsg(data.message || '重置链接已发送到您的邮箱');
+                setForgotMsg(data.message || t('forgotLinkSent'));
             } else {
-                setForgotError(data.detail || '发送失败，请稍后重试');
+                setForgotError(data.detail || t('forgotLinkFailed'));
             }
         } catch {
-            setForgotError('网络错误，请稍后重试');
+            setForgotError(t('networkError'));
         } finally {
             setForgotLoading(false);
         }
@@ -84,23 +86,23 @@ export default function Home() {
     const features = [
         {
             icon: '💎',
-            title: '账户积分系统',
-            desc: '购买 CDK 卡密兑换积分到账户，积分统一管理，随用随扣'
+            title: t('featureCreditsTitle'),
+            desc: t('featureCreditsDesc')
         },
         {
             icon: '⚡',
-            title: 'Google One 验证',
-            desc: '批量提交 Google 账号，自动完成学生资格验证，支持普通/Pro 双通道'
+            title: t('geminiServiceTitle'),
+            desc: t('featureVerifyDesc')
         },
         {
             icon: '🤖',
-            title: 'GPT 充值',
-            desc: '一键为 ChatGPT Plus 账户充值，快速便捷'
+            title: t('gptRecharge'),
+            desc: t('featureGptDesc')
         },
         {
             icon: '🎁',
-            title: '邀请返利',
-            desc: '邀请好友注册，双方都可获得积分奖励'
+            title: t('featureInviteTitle'),
+            desc: t('featureInviteDesc')
         }
     ];
 
@@ -117,32 +119,31 @@ export default function Home() {
                     <div className="hero-content">
                         <div className="hero-badge">
                             <span>🚀</span>
-                            <span>领先的验证自动化平台</span>
+                            <span>{t('heroBadgeText')}</span>
                         </div>
 
                         <h1 className="hero-title">
                             <img src={logoImg} alt="OnePASS" className="hero-logo" />
                             <br />
-                            批量自动化验证工具
+                            {t('heroTitleText')}
                         </h1>
 
                         <p className="hero-desc">
-                            一站式 Google One 学生验证 & GPT 充值平台。注册账户后使用 CDK 卡密兑换积分，
-                            即可批量提交验证或为 ChatGPT 充值，全程自动化处理。
+                            {t('heroDescText')}
                         </p>
 
                         <div className="hero-stats">
                             <div className="stat-item">
                                 <span className="stat-value">10K+</span>
-                                <span className="stat-label">成功验证</span>
+                                <span className="stat-label">{t('statVerified')}</span>
                             </div>
                             <div className="stat-item">
                                 <span className="stat-value">99.9%</span>
-                                <span className="stat-label">成功率</span>
+                                <span className="stat-label">{t('statRate')}</span>
                             </div>
                             <div className="stat-item">
                                 <span className="stat-value">24/7</span>
-                                <span className="stat-label">在线服务</span>
+                                <span className="stat-label">{t('statServices')}</span>
                             </div>
                         </div>
                     </div>
@@ -154,24 +155,24 @@ export default function Home() {
                                 className={`auth-tab ${isLogin ? 'active' : ''}`}
                                 onClick={() => setIsLogin(true)}
                             >
-                                登录
+                                {t('loginTab')}
                             </button>
                             <button
                                 className={`auth-tab ${!isLogin ? 'active' : ''}`}
                                 onClick={() => setIsLogin(false)}
                             >
-                                注册
+                                {t('registerTab')}
                             </button>
                         </div>
 
                         <form className="auth-form" onSubmit={handleSubmit}>
                             {!isLogin && (
                                 <div className="input-group">
-                                    <label className="input-label">用户名</label>
+                                    <label className="input-label">{t('usernameLabel')}</label>
                                     <input
                                         type="text"
                                         className="input"
-                                        placeholder="输入用户名"
+                                        placeholder={t('usernamePlaceholder')}
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
                                         required={!isLogin}
@@ -180,7 +181,7 @@ export default function Home() {
                             )}
 
                             <div className="input-group">
-                                <label className="input-label">邮箱</label>
+                                <label className="input-label">{t('emailLabel')}</label>
                                 <input
                                     type="email"
                                     className="input"
@@ -192,7 +193,7 @@ export default function Home() {
                             </div>
 
                             <div className="input-group">
-                                <label className="input-label">密码</label>
+                                <label className="input-label">{t('passwordLabel')}</label>
                                 <input
                                     type="password"
                                     className="input"
@@ -213,12 +214,12 @@ export default function Home() {
                                 {loading ? (
                                     <span className="loading-spinner"></span>
                                 ) : (
-                                    isLogin ? '登录' : '创建账户'
+                                    isLogin ? t('loginTab') : t('btnRegister')
                                 )}
                             </button>
 
                             {isLogin && (
-                                <a href="#" className="forgot-password" onClick={(e) => { e.preventDefault(); setShowForgot(true); setForgotMsg(''); setForgotError(''); setForgotEmail(email || ''); }}>忘记密码？</a>
+                                <a href="#" className="forgot-password" onClick={(e) => { e.preventDefault(); setShowForgot(true); setForgotMsg(''); setForgotError(''); setForgotEmail(email || ''); }}>{t('forgotPasswordBtn')}</a>
                             )}
                         </form>
 
@@ -226,8 +227,8 @@ export default function Home() {
                         {showForgot && (
                             <div className="forgot-modal-overlay" onClick={() => setShowForgot(false)}>
                                 <div className="forgot-modal" onClick={e => e.stopPropagation()}>
-                                    <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700 }}>🔑 重置密码</h3>
-                                    <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#64748b' }}>输入您注册时使用的邮箱，我们将发送密码重置链接</p>
+                                    <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700 }}>{t('resetPasswordTitle')}</h3>
+                                    <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#64748b' }}>{t('resetPasswordDesc')}</p>
                                     <form onSubmit={handleForgotPassword}>
                                         <input
                                             className="input"
@@ -242,8 +243,8 @@ export default function Home() {
                                         {forgotMsg && <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'rgba(34,197,94,0.08)', color: '#16a34a', fontSize: '13px', fontWeight: 500, marginBottom: '12px' }}>✅ {forgotMsg}</div>}
                                         {forgotError && <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: '13px', fontWeight: 500, marginBottom: '12px' }}>❌ {forgotError}</div>}
                                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                            <button type="button" className="btn" onClick={() => setShowForgot(false)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>取消</button>
-                                            <button type="submit" className="btn btn-primary" disabled={forgotLoading} style={{ padding: '8px 24px', borderRadius: '8px', fontWeight: 600 }}>{forgotLoading ? '发送中...' : '发送重置链接'}</button>
+                                            <button type="button" className="btn" onClick={() => setShowForgot(false)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>{t('cancelBtn')}</button>
+                                            <button type="submit" className="btn btn-primary" disabled={forgotLoading} style={{ padding: '8px 24px', borderRadius: '8px', fontWeight: 600 }}>{forgotLoading ? t('sendingBtn') : t('sendResetLinkBtn')}</button>
                                         </div>
                                     </form>
                                 </div>
@@ -274,22 +275,22 @@ export default function Home() {
                         <div className="step-item">
                             <div className="step-number">1</div>
                             <div className="step-content">
-                                <h3>注册 / 登录账户</h3>
-                                <p>创建您的 OnePASS 账户，所有积分和记录统一管理</p>
+                                <h3>{t('stepRegisterTitle')}</h3>
+                                <p>{t('stepRegisterDesc')}</p>
                             </div>
                         </div>
                         <div className="step-item">
                             <div className="step-number">2</div>
                             <div className="step-content">
-                                <h3>购买并兑换 CDK</h3>
-                                <p>从 haodongxi.shop 购买 CDK 卡密，在平台内兑换积分到账户</p>
+                                <h3>{t('stepRedeemTitle')}</h3>
+                                <p>{lang === 'zh' ? '从 haodongxi.shop 购买 CDK 卡密，在平台内兑换积分到账户' : 'Purchase CDK keys from haodongxi.shop and redeem them to your account'}</p>
                             </div>
                         </div>
                         <div className="step-item">
                             <div className="step-number">3</div>
                             <div className="step-content">
-                                <h3>提交验证 / 充值</h3>
-                                <p>输入 Google 账号批量验证，或一键 GPT 充值，积分自动扣除</p>
+                                <h3>{t('stepSubmitTitle')}</h3>
+                                <p>{lang === 'zh' ? '输入 Google 账号批量验证，或一键 GPT 充值，积分自动扣除' : 'Submit Google accounts for batch verification, or recharge GPT with one click. Credits are deducted automatically.'}</p>
                             </div>
                         </div>
                     </div>

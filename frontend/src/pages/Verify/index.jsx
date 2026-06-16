@@ -302,96 +302,75 @@ export default function Verify() {
     const parseBatchInput = (text) => {
         if (!text) return [];
 
-        // 1. Match all emails as anchors and record their positions
-        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-        const matches = [];
-        let match;
-        while ((match = emailRegex.exec(text)) !== null) {
-            matches.push({
-                email: match[0],
-                index: match.index,
-                length: match[0].length
-            });
-        }
-
-        if (matches.length === 0) {
-            return [];
-        }
-
-        // 2. Filter out backup emails: if the text block between this email and the next one
-        // does not contain a password (meaning it has 0 tokens or only 1 token that looks like a 2FA secret),
-        // it's likely a backup email for the previous account rather than a new account.
-        for (let i = matches.length - 1; i >= 1; i--) {
-            const m = matches[i];
-            const nextM = matches[i + 1];
-            const blockStart = m.index + m.length;
-            const blockEnd = nextM ? nextM.index : text.length;
-            const block = text.substring(blockStart, blockEnd).trim();
-            const tokens = block.split(/[\s\-|｜,，\t]+/).filter(t => t.length > 0);
-            if (tokens.length === 0 || (tokens.length === 1 && /^[a-zA-Z2-70189]{16,64}$/i.test(tokens[0]))) {
-                matches.splice(i, 1);
-            }
-        }
-
         const accounts = [];
+        const lines = text.split('\n');
 
-        // 3. Split data block for each email and extract fields
-        for (let i = 0; i < matches.length; i++) {
-            const currentMatch = matches[i];
-            const nextMatch = matches[i + 1];
-            
-            const start = currentMatch.index + currentMatch.length;
-            const end = nextMatch ? nextMatch.index : text.length;
-            
-            let blockText = text.substring(start, end).trim();
-            const email = normalizeGmailEmail(currentMatch.email);
-            
-            let password = "";
-            let totp_secret = "";
-            let backupEmail = "";
+        for (const line of lines) {
+            const cleanLine = line.trim();
+            if (!cleanLine || cleanLine.startsWith('#')) continue;
 
-            // A. Extract space-separated 2FA codes first (e.g. "abcd efgh ijkl mnop ...")
-            const spaceTotpRegex = /\b([a-zA-Z2-70189]{4}\s+){3,15}[a-zA-Z2-70189]{4}\b/gi;
-            const spaceTotpMatch = blockText.match(spaceTotpRegex);
-            if (spaceTotpMatch) {
-                totp_secret = spaceTotpMatch[0].replace(/\s+/g, '').toUpperCase();
-                blockText = blockText.replace(spaceTotpMatch[0], '');
+            // Split by delimiters: ----, ---, --, |, ｜, commas, tabs, 2+ spaces
+            let parts = cleanLine.split(/----+|---+|--+|[|｜]+|[,，\t]+|(?:\s{2,})/);
+            parts = parts.map(p => p.trim()).filter(p => p);
+
+            if (parts.length < 2) continue;
+
+            // Email regex for validation
+            const emailRe = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            // Strict Base32 2FA secret: A-Z, 2-7 only, 16-64 chars
+            const totpRe = /^[A-Za-z2-7]{16,64}$/;
+
+            let email = '';
+            let password = '';
+            let totp_secret = '';
+            let backupEmail = '';
+
+            // First part must be an email (the account email)
+            if (!parts[0].includes('@')) continue;
+            if (emailRe.test(parts[0])) {
+                email = normalizeGmailEmail(parts[0]);
+            } else {
+                continue;
             }
 
-            // B. Split remaining text block by line breaks and general delimiters
-            let lines = blockText.split(/\n+/);
-            let parts = [];
-            lines.forEach(line => {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) return;
-                
-                if (/----+|---+|--+|[|｜]+|[,，\t]+/.test(trimmedLine)) {
-                    const subParts = trimmedLine.split(/----+|---+|--+|[|｜]+|[,，\t]+/);
-                    parts.push(...subParts.map(p => p.trim()));
-                } else if (/\s{2,}/.test(trimmedLine)) {
-                    const subParts = trimmedLine.split(/\s{2,}/);
-                    parts.push(...subParts.map(p => p.trim()));
-                } else {
-                    parts.push(trimmedLine);
-                }
-            });
-            parts = parts.filter(p => p);
+            // Second part is always the password
+            if (parts.length >= 2) {
+                password = parts[1];
+            }
 
-            // C. Classify each part
-            for (let part of parts) {
-                // If it's a 2FA secret (16-64 chars base32, no @)
-                if (!totp_secret && /^[a-zA-Z2-70189]{16,64}$/i.test(part)) {
-                    totp_secret = part.toUpperCase();
-                    continue;
-                }
-                // If it's an email (and different from current account email)
-                if (part.includes('@') && /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(part)) {
-                    backupEmail = normalizeGmailEmail(part);
-                    continue;
-                }
-                // If password is not set yet, we assign it to password
-                if (!password) {
-                    password = part;
+            // Remaining parts: classify as backup email, 2FA, or ignore (dates, countries)
+            if (parts.length > 2) {
+                const candidates = parts.slice(2);
+                for (const part of candidates) {
+                    if (!part) continue;
+
+                    // Skip pure year numbers (e.g. "2024")
+                    if (/^\d{4}$/.test(part)) continue;
+
+                    // Skip date-like patterns (e.g. "May 21", "4 Apr", "26 May")
+                    if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}$/i.test(part)) continue;
+                    if (/^\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/i.test(part)) continue;
+
+                    // Skip common country/region names
+                    if (/^(?:Bangladesh|India|Indonesia|Pakistan|Vietnam|Philippines|Nigeria|Egypt|Brazil|Turkey|Thailand|Myanmar|Nepal|Sri Lanka|Malaysia|Cambodia|Kenya|Ghana|Tanzania|Ethiopia|Uganda|Senegal|Mali|Morocco|Tunisia|Algeria|Iraq|Iran|Afghanistan|USA|UK|Russia|China|Japan|Korea|Mexico|Colombia|Argentina|Peru|Chile|Germany|France|Spain|Italy|Netherlands|Poland|Ukraine|Romania|Portugal|Sweden|Norway|Denmark|Finland|Australia|Canada|New Zealand|Singapore|Taiwan|Hong Kong)$/i.test(part)) continue;
+
+                    // If it's an email → backup email
+                    if (emailRe.test(part)) {
+                        if (!backupEmail) backupEmail = normalizeGmailEmail(part);
+                        continue;
+                    }
+
+                    // If it matches 2FA pattern (strict Base32, >=16 chars) → 2FA secret
+                    if (!totp_secret && totpRe.test(part)) {
+                        totp_secret = part.toUpperCase();
+                        continue;
+                    }
+
+                    // Relaxed 2FA: alphanumeric only, >= 16 chars, no spaces
+                    if (!totp_secret && /^[A-Za-z0-9]{16,64}$/.test(part) && part.length >= 16) {
+                        totp_secret = part.toUpperCase();
+                        continue;
+                    }
                 }
             }
 
@@ -1223,7 +1202,7 @@ export default function Verify() {
                             订阅工具
                         </a> */}
                         <a href="https://www.notion.so/Pixel-351964dd56958040bf54c48ce60f9e86?source=copy_link" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
-                            教程和常见错误
+                            {t('tutorialsAndErrors')}
                         </a>
                         <Link to="/api-docs" className="api-entry-pill">
                             <span className="api-entry-dot"></span>
@@ -1331,7 +1310,7 @@ export default function Verify() {
                                         border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px',
                                         padding: '8px 12px', fontSize: '12px', fontWeight: 500, marginBottom: '12px',
                                     }}>
-                                        ⚠️ 常见错误都是未开启2FA和未删除付款资料
+                                        {t('commonErrorsWarning')}
                                         <a href="https://www.notion.so/Pixel-351964dd56958040bf54c48ce60f9e86?source=copy_link"
                                             target="_blank" rel="noopener noreferrer"
                                             style={{
@@ -1340,7 +1319,7 @@ export default function Verify() {
                                                 padding: '1px 8px', fontSize: '11px', fontWeight: 600,
                                                 textDecoration: 'none', marginLeft: '8px', verticalAlign: 'middle',
                                             }}
-                                        >教程和常见错误 ▸</a>
+                                        >{t('tutorialsAndErrors')} ▸</a>
                                     </p>
                                     <ul className="guide-checklist">
                                         <li>
@@ -1407,7 +1386,7 @@ export default function Verify() {
                                                         fontSize: '11px', fontWeight: 600, textDecoration: 'none',
                                                         marginLeft: '6px', verticalAlign: 'middle',
                                                     }}
-                                                >绑卡教程 ▸</a>
+                                                >{t('tutorialBindCardBtn')}</a>
                                             </span>
                                         </li>
                                     </ul>
@@ -2268,7 +2247,7 @@ export default function Verify() {
                                                         {gptMode === 'team' ? t('gptTeamInvitingMsg') : (gptWaitMsg || t('gptRechargingMsg'))}
                                                     </p>
                                                     {gptWaitMsg && gptMode === 'plus' && (
-                                                        <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-tertiary)' }}>充值完成后积分自动扣除，请耐心等待</p>
+                                                        <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-tertiary)' }}>{t('gptRechargeWaitNote')}</p>
                                                     )}
                                                 </div>
                                             )}

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
+import { useLang } from '../../stores/LanguageContext';
 import './Recharge.css';
 
 export default function Recharge() {
+    const { lang, t } = useLang();
     const { user, loading, updateCredits } = useAuth();
     const navigate = useNavigate();
     const [selectedPlan, setSelectedPlan] = useState(null);
@@ -35,7 +37,7 @@ export default function Recharge() {
         setShowModal(false);
         setSelectedPlan(null);
 
-        alert(`充值成功！已获得 ${selectedPlan.quota} 次配额`);
+        alert(t('rechargeSuccessAlert').replace('{quota}', selectedPlan.quota));
         navigate('/verify');
     };
 
@@ -46,13 +48,13 @@ export default function Recharge() {
             <div className="container">
                 {/* Header */}
                 <div className="page-header">
-                    <h1 className="page-title">💰 充值配额</h1>
-                    <p className="page-desc">选择适合您的套餐，获取验证配额</p>
+                    <h1 className="page-title">{t('rechargeQuotaTitle')}</h1>
+                    <p className="page-desc">{t('rechargeQuotaDesc')}</p>
                     <div className="current-balance">
-                        <span className="balance-label">当前余额</span>
+                        <span className="balance-label">{t('currentBalanceLabel')}</span>
                         <span className="balance-value">
                             <span className="balance-icon">🎫</span>
-                            {user.credits} 次
+                            {user.credits} {t('timesUnit')}
                         </span>
                     </div>
                 </div>
@@ -65,11 +67,11 @@ export default function Recharge() {
                             className={`plan-card card ${plan.popular ? 'popular' : ''}`}
                         >
                             {plan.popular && (
-                                <span className="popular-badge">🔥 最受欢迎</span>
+                                <span className="popular-badge">{t('mostPopular')}</span>
                             )}
                             <div className="plan-credits">
                                 <span className="credits-value">{plan.quota}</span>
-                                <span className="credits-label">次</span>
+                                <span className="credits-label">{t('timesUnit')}</span>
                             </div>
                             <div className="plan-price">
                                 <span className="price-currency">¥</span>
@@ -79,7 +81,7 @@ export default function Recharge() {
                                 className="btn btn-primary plan-btn"
                                 onClick={() => handleSelectPlan(plan)}
                             >
-                                立即购买
+                                {t('buyNowBtn')}
                             </button>
                         </div>
                     ))}
@@ -87,23 +89,23 @@ export default function Recharge() {
 
                 {/* Features */}
                 <div className="features-section">
-                    <h3>为什么选择我们的充值服务？</h3>
+                    <h3>{t('whyChooseRechargeTitle')}</h3>
                     <div className="features-list">
                         <div className="feature-item">
                             <span className="feature-icon">⚡</span>
-                            <span>即时到账</span>
+                            <span>{t('featureInstantTitle')}</span>
                         </div>
                         <div className="feature-item">
                             <span className="feature-icon">🔒</span>
-                            <span>安全支付</span>
+                            <span>{t('featureSecureTitle')}</span>
                         </div>
                         <div className="feature-item">
                             <span className="feature-icon">🎁</span>
-                            <span>买多更优惠</span>
+                            <span>{t('featureDiscountTitle')}</span>
                         </div>
                         <div className="feature-item">
                             <span className="feature-icon">💬</span>
-                            <span>7×24 客服支持</span>
+                            <span>{t('featureCsTitle')}</span>
                         </div>
                     </div>
                 </div>
@@ -114,7 +116,7 @@ export default function Recharge() {
                 <div className="modal-overlay" onClick={() => !isProcessing && setShowModal(false)}>
                     <div className="modal card payment-modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>确认订单</h2>
+                            <h2>{t('confirmOrderTitle')}</h2>
                             <button
                                 className="modal-close"
                                 onClick={() => !isProcessing && setShowModal(false)}
@@ -126,16 +128,16 @@ export default function Recharge() {
                         <div className="modal-body">
                             <div className="payment-summary">
                                 <div className="summary-row">
-                                    <span>购买配额</span>
-                                    <span>{selectedPlan.quota} 次</span>
+                                    <span>{lang === 'zh' ? '购买配额' : 'Purchase Quota'}</span>
+                                    <span>{selectedPlan.quota} {t('timesUnit')}</span>
                                 </div>
                                 <div className="summary-row total">
-                                    <span>应付金额</span>
+                                    <span>{t('payableAmount')}</span>
                                     <span className="total-price">¥{selectedPlan.price}</span>
                                 </div>
                             </div>
                             <div className="payment-methods">
-                                <h4>选择支付方式</h4>
+                                <h4>{t('selectPaymentMethod')}</h4>
                                 <div className="methods-list">
                                     <button
                                         className="method-btn"
@@ -143,15 +145,15 @@ export default function Recharge() {
                                         disabled={isProcessing}
                                     >
                                         <span className="method-icon">💙</span>
-                                        <span>支付宝</span>
+                                        <span>{t('alipay')}</span>
                                     </button>
                                     <button
                                         className="method-btn"
                                         onClick={() => handlePayment('wechat')}
                                         disabled={isProcessing}
                                     >
-                                        <span className="method-icon">�</span>
-                                        <span>微信支付</span>
+                                        <span className="method-icon">💚</span>
+                                        <span>{t('wechatPay')}</span>
                                     </button>
                                 </div>
                             </div>
@@ -159,7 +161,7 @@ export default function Recharge() {
                         {isProcessing && (
                             <div className="processing-overlay">
                                 <div className="processing-spinner"></div>
-                                <span>正在处理支付...</span>
+                                <span>{t('processingPayment')}</span>
                             </div>
                         )}
                     </div>

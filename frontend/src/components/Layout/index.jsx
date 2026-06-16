@@ -117,7 +117,7 @@ export default function Layout({ children }) {
         if (!code) return;
         if (!user) {
             setHeaderCdkStatus('error');
-            setHeaderCdkMsg('请先登录后再兑换积分');
+            setHeaderCdkMsg(t('cdkLoginFirst'));
             return;
         }
         setHeaderCdkStatus('checking');
@@ -132,19 +132,19 @@ export default function Layout({ children }) {
             const data = await res.json();
             if (res.ok && data.success) {
                 setHeaderCdkStatus('success');
-                setHeaderCdkMsg(`✅ 兑换成功！+${data.credits_added} 积分`);
+                setHeaderCdkMsg(t('redeemCreditsSuccess').replace('{credits}', data.credits_added));
                 setHeaderCdkCode('');
                 refreshUser?.();
                 setTimeout(() => { setHeaderCdkStatus(''); setHeaderCdkMsg(''); }, 3000);
             } else {
                 setHeaderCdkStatus('error');
-                setHeaderCdkMsg(data.detail || data.message || '兑换失败');
+                setHeaderCdkMsg(data.detail || data.message || t('cdkRedeemFailed'));
             }
         } catch {
             setHeaderCdkStatus('error');
-            setHeaderCdkMsg('网络错误，请重试');
+            setHeaderCdkMsg(t('networkError'));
         }
-    }, [headerCdkCode, user, getToken, refreshUser]);
+    }, [headerCdkCode, user, getToken, refreshUser, t]);
 
     return (
         <div className="layout">
@@ -165,7 +165,7 @@ export default function Layout({ children }) {
                                 <span className="credits-pill-amount">
                                     {user ? (typeof user.credits === 'number' ? user.credits.toFixed(1) : user.credits) : '0.0'}
                                 </span>
-                                <span className="credits-pill-label">积分</span>
+                                <span className="credits-pill-label">{t('credits')}</span>
                             </button>
 
                             {showCreditsPopover && (
@@ -175,11 +175,11 @@ export default function Layout({ children }) {
                                         <span className="credits-popover-balance-amount">
                                             {user ? (typeof user.credits === 'number' ? user.credits.toFixed(1) : user.credits) : '0.0'}
                                         </span>
-                                        <span className="credits-popover-balance-label">积分余额</span>
+                                        <span className="credits-popover-balance-label">{t('creditsBalance')}</span>
                                     </div>
                                     <div className="credits-popover-divider"></div>
                                     <div className="credits-popover-section">
-                                        <div className="credits-popover-section-title">🎁 兑换积分</div>
+                                        <div className="credits-popover-section-title">{t('redeemCreditsTitle')}</div>
                                         <div className="credits-popover-cdk-row">
                                             <input
                                                 type="text"
@@ -194,7 +194,7 @@ export default function Layout({ children }) {
                                                 onClick={handleHeaderCdkRedeem}
                                                 disabled={headerCdkStatus === 'checking'}
                                             >
-                                                {headerCdkStatus === 'checking' ? '...' : '兑换'}
+                                                {headerCdkStatus === 'checking' ? '...' : t('redeemBtn')}
                                             </button>
                                         </div>
                                         {headerCdkMsg && (
@@ -210,7 +210,7 @@ export default function Layout({ children }) {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                     >
-                                        🛒 购买积分
+                                        {t('purchaseCreditsTitle')}
                                     </a>
                                 </div>
                             )}
@@ -221,18 +221,16 @@ export default function Layout({ children }) {
                             <button
                                 className="header-invite-btn"
                                 onClick={() => setShowInviteModal(!showInviteModal)}
-                                title="邀请好友"
+                                title={t('inviteFriends')}
                             >
                                 <span>🎁</span>
-                                <span>邀请</span>
+                                <span>{t('inviteBtn')}</span>
                             </button>
 
                             {showInviteModal && (
                                 <div className="invite-popover">
-                                    <div className="invite-popover-title">🎁 邀请好友赚积分</div>
-                                    <p className="invite-popover-desc">
-                                        好友通过你的链接注册并购买积分后，你获得 <strong>+0.2 积分</strong>
-                                    </p>
+                                    <div className="invite-popover-title">{t('inviteFriendsEarn')}</div>
+                                    <p className="invite-popover-desc" dangerouslySetInnerHTML={{ __html: t('inviteDesc') }} />
                                     {user ? (
                                         <>
                                             <div className="invite-link-box">
@@ -246,46 +244,54 @@ export default function Layout({ children }) {
                                                     className="invite-copy-btn"
                                                     onClick={handleCopyInvite}
                                                 >
-                                                    {copied ? '✓ 已复制' : '复制'}
+                                                    {copied ? t('copied') : t('copy')}
                                                 </button>
                                             </div>
                                             <div className="invite-stats-row">
                                                 <div className="invite-stat">
                                                     <span className="invite-stat-val">{inviteStats?.invitedCount ?? 0}</span>
-                                                    <span className="invite-stat-label">已邀请</span>
+                                                    <span className="invite-stat-label">{t('invitedCountLabel')}</span>
                                                 </div>
                                                 <div className="invite-stat">
                                                     <span className="invite-stat-val">+{inviteStats?.totalRewards?.toFixed(1) ?? '0.0'}</span>
-                                                    <span className="invite-stat-label">获得积分</span>
+                                                    <span className="invite-stat-label">{t('earnedCreditsLabel')}</span>
                                                 </div>
                                             </div>
                                             {inviteStats?.details && inviteStats.details.length > 0 && (
                                                 <div className="invite-details-section">
-                                                    <div className="invite-details-title">最近邀请记录</div>
+                                                    <div className="invite-details-title">{t('recentInvites')}</div>
                                                     <div className="invite-details-list">
                                                         {inviteStats.details.map((d, i) => (
                                                             <div className="invite-detail-item" key={i}>
-                                                                <div className="invite-detail-left">
-                                                                    <span className="invite-detail-email">{d.email}</span>
-                                                                    <span className="invite-detail-time">
-                                                                        {d.registeredAt ? new Date(d.registeredAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : ''}
-                                                                    </span>
-                                                                </div>
-                                                                <span className={`invite-detail-badge ${d.rewarded ? 'rewarded' : 'pending'}`}>
-                                                                    {d.rewarded ? '✓ 已返利' : '待购买'}
-                                                                </span>
+                                                                 <div className="invite-detail-left">
+                                                                     <span className="invite-detail-email">{d.email}</span>
+                                                                     <span className="invite-detail-time">
+                                                                         {d.registeredAt ? new Date(d.registeredAt).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' }) : ''}
+                                                                     </span>
+                                                                 </div>
+                                                                 <span className={`invite-detail-badge ${d.rewarded ? 'rewarded' : 'pending'}`}>
+                                                                     {d.rewarded ? t('rewardedStatus') : t('pendingStatus')}
+                                                                 </span>
                                                             </div>
                                                         ))}
                                                     </div>
                                                 </div>
                                             )}
                                             {inviteStats && inviteStats.details && inviteStats.details.length === 0 && (
-                                                <div className="invite-empty-hint">还没有邀请记录，分享链接给好友吧 🚀</div>
+                                                <div className="invite-empty-hint">{t('noInvitesYet')}</div>
                                             )}
                                         </>
                                     ) : (
                                         <div className="invite-login-hint">
-                                            <Link to={loginPath} onClick={() => setShowInviteModal(false)}>登录</Link> 后即可获取邀请链接
+                                            {lang === 'zh' ? (
+                                                <>
+                                                    <Link to={loginPath} onClick={() => setShowInviteModal(false)}>登录</Link> 后即可获取邀请链接
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Please <Link to={loginPath} onClick={() => setShowInviteModal(false)}>Log in</Link> to get your referral link
+                                                </>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -349,7 +355,7 @@ export default function Layout({ children }) {
                         ) : (
                             <Link to={loginPath} className="header-login-btn">
                                 <span>👤</span>
-                                <span>登录</span>
+                                <span>{t('loginTab')}</span>
                             </Link>
                         )}
                     </div>
@@ -382,7 +388,7 @@ export default function Layout({ children }) {
                 <div className="footer-content">
                     <p>{t('footerRights')}</p>
                     <div className="footer-links">
-                        <Link to="/api-docs">API 文档</Link>
+                        <Link to="/api-docs">{t('apiDocsLink')}</Link>
                         <a href="#">{t('terms')}</a>
                         <a href="#">{t('privacy')}</a>
                         <a href="#">{t('contact')}</a>
@@ -395,12 +401,12 @@ export default function Layout({ children }) {
                     <button
                         className="customer-support-float-btn"
                         onClick={() => setShowCsPopover(!showCsPopover)}
-                        title="联系客服"
+                        title={t('contactCustomerService')}
                     >
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="cs-float-svg">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
-                        <span className="cs-float-text">客服</span>
+                        <span className="cs-float-text">{t('customerServiceTitle')}</span>
                     </button>
 
                     {showCsPopover && (
@@ -410,7 +416,7 @@ export default function Layout({ children }) {
                                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#7c5cfc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                                     </svg>
-                                    <h4>联系客服</h4>
+                                    <h4>{t('contactCustomerService')}</h4>
                                 </div>
                                 <button className="cs-popover-close" onClick={() => setShowCsPopover(false)}>✕</button>
                             </div>
@@ -418,14 +424,14 @@ export default function Layout({ children }) {
                                 {config.customerService.qrCodeUrl && (
                                     <div className="cs-qr-container">
                                         <img src={config.customerService.qrCodeUrl} alt="Customer Support QR Code" className="cs-qr-code" />
-                                        <p className="cs-qr-hint">扫码联系客服</p>
+                                        <p className="cs-qr-hint">{t('scanQrContact')}</p>
                                     </div>
                                 )}
                                 <div className="cs-wechat-row">
-                                    <span className="cs-wechat-label">{config.customerService.channelName || '客服账号'}:</span>
+                                    <span className="cs-wechat-label">{config.customerService.channelName || t('csAccountLabel')}:</span>
                                     <span className="cs-wechat-value">{config.customerService.wechatId}</span>
                                     <button className="cs-copy-btn" onClick={handleCopyWechat}>
-                                        {wechatCopied ? '✓' : '复制'}
+                                        {wechatCopied ? '✓' : t('copy')}
                                     </button>
                                 </div>
                             </div>

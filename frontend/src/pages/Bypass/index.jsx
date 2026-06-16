@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
+import { useLang } from '../../stores/LanguageContext';
 import './Bypass.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3003' : '');
 
 function Bypass() {
+    const { lang, t } = useLang();
     const [link, setLink] = useState('');
     const [running, setRunning] = useState(false);
     const [logs, setLogs] = useState([]);
@@ -64,7 +66,7 @@ function Bypass() {
                 }
             }
         } catch (e) {
-            setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), level: 'error', message: `连接错误: ${e.message}` }]);
+            setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), level: 'error', message: t('connectError').replace('{error}', e.message) }]);
         }
 
         setRunning(false);
@@ -121,11 +123,11 @@ function Bypass() {
                         {running ? (
                             <>
                                 <span className="bypass-spinner"></span>
-                                执行中...
+                                {t('executing')}
                             </>
                         ) : (
                             <>
-                                <span>⚡</span> 开始 Bypass
+                                <span>⚡</span> {t('startBypass')}
                             </>
                         )}
                     </button>
@@ -136,8 +138,8 @@ function Bypass() {
                             <span className="bypass-result-icon">{result.success ? '✅' : '❌'}</span>
                             <span>
                                 {result.success
-                                    ? `Bypass 完成! ${result.uploads !== undefined ? `成功上传 ${result.uploads} 次` : '链接已是成功状态'}`
-                                    : `Bypass 失败: ${result.error || '未知错误'}`}
+                                    ? (lang === 'zh' ? 'Bypass 完成! ' : 'Bypass completed! ') + (result.uploads !== undefined ? t('uploadCount').replace('{uploads}', result.uploads) : t('linkAlreadySuccess'))
+                                    : t('bypassFailed') + ': ' + (result.error || (lang === 'zh' ? '未知错误' : 'Unknown error'))}
                             </span>
                         </div>
                     )}
@@ -155,7 +157,7 @@ function Bypass() {
                     </div>
                     <div className="bypass-terminal-body" ref={logRef}>
                         {logs.length === 0 ? (
-                            <div className="bypass-terminal-empty">等待操作...</div>
+                            <div className="bypass-terminal-empty">{t('waitingOp')}</div>
                         ) : (
                             logs.map((log, i) => (
                                 <div key={i} className="bypass-log-line" style={{ color: getLogColor(log.level) }}>

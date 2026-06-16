@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLang } from '../../stores/LanguageContext';
 import logoImg from '../../assets/logo.png';
 import '../Home/Home.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function ResetPassword() {
+    const { t } = useLang();
     const [searchParams] = useSearchParams();
     const token = searchParams.get('token') || '';
     const navigate = useNavigate();
@@ -21,11 +23,11 @@ export default function ResetPassword() {
         setError('');
 
         if (password.length < 6) {
-            setError('密码长度不能少于 6 位');
+            setError(t('resetPasswordAlertLength'));
             return;
         }
         if (password !== confirmPassword) {
-            setError('两次输入的密码不一致');
+            setError(t('resetPasswordAlertMismatch'));
             return;
         }
 
@@ -40,10 +42,10 @@ export default function ResetPassword() {
             if (res.ok && data.success) {
                 setSuccess(true);
             } else {
-                setError(data.detail || '重置失败');
+                setError(data.detail || t('resetPasswordFailed'));
             }
         } catch {
-            setError('网络错误，请稍后重试');
+            setError(t('networkError'));
         } finally {
             setLoading(false);
         }
@@ -59,12 +61,12 @@ export default function ResetPassword() {
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
                     <div className="auth-card glass" style={{ maxWidth: '440px', textAlign: 'center' }}>
                         <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-                        <h2 style={{ margin: '0 0 8px', fontSize: '20px' }}>无效的重置链接</h2>
+                        <h2 style={{ margin: '0 0 8px', fontSize: '20px' }}>{t('invalidResetLinkTitle')}</h2>
                         <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
-                            请从邮件中重新点击重置链接，或重新申请密码重置
+                            {t('invalidResetLinkDesc')}
                         </p>
                         <button className="btn btn-primary" onClick={() => navigate('/login')} style={{ padding: '10px 32px', borderRadius: '10px', fontWeight: 600 }}>
-                            返回登录
+                            {t('btnGoToLogin')}
                         </button>
                     </div>
                 </div>
@@ -82,27 +84,27 @@ export default function ResetPassword() {
                 <div className="auth-card glass" style={{ maxWidth: '440px', width: '100%' }}>
                     <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                         <img src={logoImg} alt="OnePASS" style={{ maxWidth: '180px', marginBottom: '16px' }} />
-                        <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>设置新密码</h2>
-                        <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '14px' }}>请输入您的新密码</p>
+                        <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>{t('setNewPasswordTitle')}</h2>
+                        <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '14px' }}>{t('setNewPasswordDesc')}</p>
                     </div>
 
                     {success ? (
                         <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-                            <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>密码重置成功！</h3>
-                            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>您的密码已更新，请使用新密码登录</p>
+                            <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>{t('resetSuccessTitle')}</h3>
+                            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>{t('resetSuccessDesc')}</p>
                             <button className="btn btn-primary btn-lg auth-submit" onClick={() => navigate('/login')}>
-                                前往登录
+                                {t('goToLoginBtn')}
                             </button>
                         </div>
                     ) : (
                         <form className="auth-form" onSubmit={handleSubmit}>
                             <div className="input-group">
-                                <label className="input-label">新密码</label>
+                                <label className="input-label">{t('newPasswordLabel')}</label>
                                 <input
                                     type="password"
                                     className="input"
-                                    placeholder="至少 6 位"
+                                    placeholder={t('min6Chars')}
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     required
@@ -111,11 +113,11 @@ export default function ResetPassword() {
                                 />
                             </div>
                             <div className="input-group">
-                                <label className="input-label">确认新密码</label>
+                                <label className="input-label">{t('confirmNewPasswordLabel')}</label>
                                 <input
                                     type="password"
                                     className="input"
-                                    placeholder="再次输入新密码"
+                                    placeholder={t('inputNewPasswordAgain')}
                                     value={confirmPassword}
                                     onChange={e => setConfirmPassword(e.target.value)}
                                     required
@@ -125,11 +127,11 @@ export default function ResetPassword() {
                             {error && <div className="auth-error">{error}</div>}
 
                             <button type="submit" className="btn btn-primary btn-lg auth-submit" disabled={loading}>
-                                {loading ? <span className="loading-spinner"></span> : '重置密码'}
+                                {loading ? <span className="loading-spinner"></span> : t('resetPasswordBtn')}
                             </button>
 
                             <a href="/login" style={{ textAlign: 'center', fontSize: '13px', color: '#64748b', display: 'block' }}>
-                                返回登录页面
+                                {t('backToLoginBtn')}
                             </a>
                         </form>
                     )}

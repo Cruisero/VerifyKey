@@ -31,18 +31,17 @@ export default function Maintenance({ message, estimatedEnd }) {
                 </div>
 
                 <h1 className="maintenance-title">
-                    维护中
-                    <span className="maintenance-title-en">Under Maintenance</span>
+                    {t('underMaintenance')}
                 </h1>
 
                 <p className="maintenance-message">
-                    {message || '系统维护中，请稍后再试'}
+                    {message || t('maintenanceMsg')}
                 </p>
 
                 {endTimeStr && (
                     <div className="maintenance-eta">
                         <span className="maintenance-eta-icon">🕐</span>
-                        <span>预计恢复时间: {endTimeStr}</span>
+                        <span>{t('etaLabel').replace('{time}', endTimeStr)}</span>
                     </div>
                 )}
 
@@ -53,7 +52,7 @@ export default function Maintenance({ message, estimatedEnd }) {
                 </div>
 
                 <p className="maintenance-sub">
-                    我们正在进行系统升级，请稍后访问
+                    {t('maintenanceSub')}
                 </p>
             </div>
         </div>

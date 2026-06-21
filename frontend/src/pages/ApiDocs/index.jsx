@@ -15,7 +15,7 @@ const ENDPOINTS = [
                     { name: 'email', type: 'string', required: true, desc: '邮箱地址' },
                     { name: 'password', type: 'string', required: true, desc: '密码' },
                     { name: 'username', type: 'string', required: false, desc: '用户名（默认取邮箱前缀）' },
-                    { name: 'inviteCode', type: 'string', required: false, desc: '邀请码（有效邀请人将获得 +0.2 积分）' },
+                    { name: 'inviteCode', type: 'string', required: false, desc: '邀请码' },
                 ],
                 response: `{
   "success": true,
@@ -25,8 +25,7 @@ const ENDPOINTS = [
     "email": "user@example.com",
     "username": "user",
     "credits": 0,
-    "role": "user",
-    "invite_code": "A1B2C3"
+    "role": "user"
   }
 }`,
             },
@@ -45,7 +44,7 @@ const ENDPOINTS = [
     "id": 1,
     "email": "user@example.com",
     "username": "user",
-    "credits": 5.5,
+    "credits": 10.0,
     "role": "user"
   }
 }`,
@@ -53,19 +52,17 @@ const ENDPOINTS = [
             {
                 method: 'GET',
                 path: '/api/auth/me',
-                desc: '获取当前用户信息',
+                desc: '获取当前用户信息与余额',
                 params: [
                     { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
                 ],
                 response: `{
-  "success": true,
   "user": {
     "id": 1,
     "email": "user@example.com",
     "username": "user",
-    "credits": 5.5,
-    "role": "user",
-    "invite_code": "A1B2C3"
+    "credits": 10.0,
+    "role": "user"
   }
 }`,
             },
@@ -102,87 +99,101 @@ const ENDPOINTS = [
             {
                 method: 'POST',
                 path: '/api/cdk/validate',
-                desc: '验证 CDK 有效性',
+                desc: '验证 CDK 卡密有效性与额度',
                 params: [
                     { name: 'code', type: 'string', required: true, desc: 'CDK 激活码' },
                 ],
                 response: `{
   "valid": true,
   "remaining": 5.0,
-  "total": 5,
-  "used": 0,
-  "note": "赠送码"
+  "total": 5.0,
+  "used": 0.0,
+  "note": "CDK充值码"
 }`,
             },
             {
                 method: 'POST',
                 path: '/api/cdk/redeem',
-                desc: '兑换 CDK 积分到账户',
+                desc: '兑换 CDK 积分到账户余额',
                 params: [
-                    { name: 'code', type: 'string', required: true, desc: 'CDK 激活码' },
                     { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
+                    { name: 'code', type: 'string', required: true, desc: 'CDK 激活码' },
                 ],
                 response: `{
   "success": true,
   "credits_added": 5.0,
-  "new_balance": 5.0,
+  "new_balance": 15.0,
   "message": "兑换成功，获得 5.0 积分"
 }`,
             },
         ],
     },
     {
-        group: '📡 Gemini 验证服务 (Pixel)',
+        group: '📡 Gemini 验证服务 (UPixel)',
         items: [
             {
                 method: 'POST',
                 path: '/api/pixel/jobs',
                 desc: '提交 Gemini 验证任务',
                 params: [
+                    { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
                     { name: 'email', type: 'string', required: true, desc: 'Google 账号邮箱' },
                     { name: 'password', type: 'string', required: true, desc: '账号密码' },
                     { name: 'totp_secret', type: 'string', required: true, desc: '2FA TOTP 密钥（Base32 编码）' },
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 1~2 积分）' },
-                    { name: 'priority', type: 'string', required: false, desc: '优先级：normal / high（Pro）' },
+                    { name: 'mode', type: 'string', required: false, desc: '验证模式：semi-auto (普通验证，扣1.0积分) / auto (高级验证，扣2.0积分)，默认为 semi-auto' },
+                    { name: 'priority', type: 'number', required: false, desc: '任务优先级（默认 0）' },
                 ],
                 response: `{
-  "job_id": "abc123-def456",
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
-  "queue_position": 3,
-  "estimated_wait_seconds": 120
+  "queue_position": 2,
+  "estimated_wait_seconds": 240
 }`,
             },
             {
                 method: 'GET',
                 path: '/api/pixel/jobs/{job_id}',
-                desc: '查询验证任务状态',
+                desc: '查询验证任务处理进度与状态',
                 params: [
-                    { name: 'job_id', type: 'string', required: true, desc: '任务 ID（URL 参数）' },
+                    { name: 'job_id', type: 'string', required: true, desc: '任务 ID（URL 路径参数）' },
                 ],
                 response: `{
-  "job_id": "abc123-def456",
-  "status": "completed",
-  "result": "success",
-  "message": "验证完成",
-  "created_at": "2026-03-22T12:00:00Z",
-  "completed_at": "2026-03-22T12:05:30Z"
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "success",
+  "url": "https://one.google.com/partner-eft-onboard/XXXXXXX",
+  "queue_position": -1,
+  "estimated_wait_seconds": 0
+}`,
+            },
+            {
+                method: 'POST',
+                path: '/api/pixel/jobs/{job_id}/cancel',
+                desc: '取消排队中 (queued) 的验证任务 (取消成功将全额退还积分)',
+                params: [
+                    { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
+                    { name: 'job_id', type: 'string', required: true, desc: '任务 ID（URL 路径参数）' },
+                ],
+                response: `{
+  "success": true,
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "cancelled"
 }`,
             },
             {
                 method: 'GET',
                 path: '/api/pixel/health',
-                desc: 'Pixel 服务健康检查',
+                desc: 'UPixel 验证服务健康检查',
                 params: [],
                 response: `{
   "status": "ok",
   "api_key_configured": true,
-  "base_url": "https://api.iqless.icu"
+  "base_url": "https://api.example.com"
 }`,
             },
             {
                 method: 'GET',
                 path: '/api/pixel/balance',
-                desc: '查询 Pixel API 余额',
+                desc: '查询 UPixel 底层运行余额',
                 params: [],
                 response: `{
   "balance": 150.0,
@@ -191,143 +202,23 @@ const ENDPOINTS = [
             },
         ],
     },
-    {
-        group: '🚀 OnePass 自动化审核引擎 (DualBot)',
-        items: [
-            {
-                method: 'POST',
-                path: '/api/verify/dualbot',
-                desc: '批量提交流水线任务 (EventStream 流式返回)',
-                params: [
-                    { name: 'links', type: 'array', required: true, desc: '包含多个 SheerID verify 链接的数组' },
-                    { name: 'cdk', type: 'string', required: true, desc: '当前有效并有余量的卡密' },
-                    { name: 'mode', type: 'string', required: false, desc: '模式：auto (全自动) 或 semi-auto (半自动)' },
-                ],
-                response: `// 此接口为流式响应 (text/event-stream)
-event: message
-data: {"verificationId": "1234abcd", "currentStep": "processing", "message": "正在分配底层验证节点..."}
-
-event: message
-data: {"verificationId": "1234abcd", "currentStep": "pass", "message": "验证通过"}`,
-            },
-            {
-                method: 'GET',
-                path: '/api/check-status/{verificationId}',
-                desc: '丢失重连与探活复原单据状态',
-                params: [
-                    { name: 'verificationId', type: 'string', required: true, desc: '16位验证 ID' },
-                ],
-                response: `{
-  "verificationId": "1234abcd",
-  "currentStep": "pass",
-  "status": "success"
-}`,
-            },
-        ],
-    },
-    {
-        group: '🤖 ChatGPT 充值服务',
-        items: [
-            {
-                method: 'POST',
-                path: '/api/gpt/recharge',
-                desc: 'ChatGPT Plus 月度充值',
-                params: [
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码（消耗 1.5 积分）' },
-                    { name: 'card_key', type: 'string', required: true, desc: '充值卡密' },
-                    { name: 'account', type: 'string', required: true, desc: 'ChatGPT 账号' },
-                    { name: 'email', type: 'string', required: false, desc: '绑定邮箱（记录用）' },
-                ],
-                response: `{
-  "success": true,
-  "message": "充值成功"
-}`,
-            },
-            {
-                method: 'POST',
-                path: '/api/gpt/exchange',
-                desc: '用积分兑换充值卡密',
-                params: [
-                    { name: 'cdk', type: 'string', required: true, desc: 'CDK 激活码' },
-                ],
-                response: `{
-  "success": true,
-  "card_key": "GPT-XXXX-XXXX-XXXX",
-  "message": "兑换成功"
-}`,
-            },
-        ],
-    },
-    {
-        group: '📊 实时验证状态',
-        items: [
-            {
-                method: 'GET',
-                path: '/api/verify/history',
-                desc: '获取验证历史（公开、脱敏）',
-                params: [],
-                response: `{
-  "history": [
-    { "id": "abc123", "status": "pass", "timestamp": "2026-03-22T12:00:00Z" },
-    { "id": "def456", "status": "failed", "timestamp": "2026-03-22T11:55:00Z" }
-  ],
-  "stats": {
-    "total": 138,
-    "pass": 133,
-    "failed": 5,
-    "processing": 0,
-    "cancel": 0
-  }
-}`,
-            },
-        ],
-    },
-    {
-        group: '🔧 系统状态',
-        items: [
-            {
-                method: 'GET',
-                path: '/api/status',
-                desc: '系统健康检查',
-                params: [],
-                response: `{
-  "status": "running",
-  "version": "2.0.0",
-  "uptime": "3d 12h 45m"
-}`,
-            },
-            {
-                method: 'GET',
-                path: '/api/config',
-                desc: '获取前端配置',
-                params: [],
-                response: `{
-  "siteName": "OnePass",
-  "pixelEnabled": true,
-  "gptEnabled": true,
-  "registerEnabled": true
-}`,
-            },
-        ],
-    },
 ];
 
 const CREDITS_TABLE = [
-    { service: 'Gemini 普通认证', cost: '-1 积分' },
-    { service: 'Gemini 高级认证', cost: '-2 积分' },
-    { service: 'ChatGPT Plus 月度充值', cost: '-1.5 积分' },
+    { service: 'UPixel 普通验证 (semi-auto)', cost: '-1.0 积分' },
+    { service: 'UPixel 高级验证 (auto)', cost: '-2.0 积分' },
     { service: '邀请好友（首次兑换后）', cost: '+0.2 积分' },
 ];
 
 const ERROR_CODES = [
     { code: 400, desc: '请求参数错误' },
     { code: 401, desc: '未登录或 Token 过期' },
-    { code: 403, desc: '权限不足（需要 Admin）' },
+    { code: 403, desc: '权限不足（账号被禁用等）' },
     { code: 404, desc: '资源不存在' },
     { code: 429, desc: '请求过于频繁' },
     { code: 500, desc: '服务器内部错误' },
     { code: 502, desc: '上游服务不可用' },
-    { code: 503, desc: '服务未启用或未配置' },
+    { code: 503, desc: '服务未启用或处于维护状态' },
 ];
 
 const FULL_EXAMPLE = `import requests
@@ -353,27 +244,29 @@ redeem = requests.post(f"{BASE}/api/cdk/redeem",
 ).json()
 print(f"兑换成功，新余额: {redeem['new_balance']}")
 
-# 4. 提交 Gemini 验证
+# 4. 提交 Gemini 验证任务 (普通验证)
 job = requests.post(f"{BASE}/api/pixel/jobs", json={
     "email": "google@gmail.com",
     "password": "google_password",
     "totp_secret": "JBSWY3DPEHPK3PXP",
-    "cdk": "CDK-XXXXXXXX",
-    "priority": "normal"
-}).json()
+    "mode": "semi-auto"
+}, headers=headers).json()
 print(f"任务已提交: {job['job_id']}")
 
-# 5. 轮询状态
+# 5. 轮询状态 (查询状态接口不需要携带 Token)
 import time
 while True:
     status = requests.get(
         f"{BASE}/api/pixel/jobs/{job['job_id']}"
     ).json()
     print(f"  状态: {status['status']}")
-    if status["status"] in ("completed", "failed"):
-        print(f"  结果: {status.get('result', 'N/A')}")
+    if status["status"] in ("success", "failed"):
+        if status["status"] == "success":
+            print(f"  验证成功，优惠链接: {status.get('url')}")
+        else:
+            print(f"  验证失败，原因: {status.get('error')}")
         break
-    time.sleep(10)`;
+    time.sleep(5)`;
 
 export default function ApiDocs() {
     const [expanded, setExpanded] = useState({});
@@ -410,7 +303,7 @@ export default function ApiDocs() {
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">
                     <span className="step-num">3</span>
-                    <span className="step-label">提交验证 / 充值</span>
+                    <span className="step-label">提交验证</span>
                 </div>
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">

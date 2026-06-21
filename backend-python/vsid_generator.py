@@ -233,6 +233,7 @@ def generate_vsid_document(
 ) -> Tuple[bytes, str, dict]:
     raise Exception("HTML 证件生成模块已被禁用，当前仅支持 API 通道。")
     
+    """
     Args:
         doc_type: One of 'student_id', 'enrollment', 'schedule', 'admission', 'transcript'
         first_name: Student's first name

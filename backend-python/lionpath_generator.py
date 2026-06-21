@@ -947,7 +947,7 @@ def generate_lionpath_image(first_name: str, last_name: str, school_id: str = '2
                             template_name: str = "schedule.html",
                             psu_id: str = None, email: str = None) -> Tuple[bytes, str, dict]:
     raise Exception("HTML 证件生成模块已被禁用，当前仅支持 API 通道。")
-        
+    try:
         # 使用传入的 ID/email 或生成新的
         psu_id = psu_id or generate_psu_id()
         email = email or generate_psu_email(first_name, last_name)

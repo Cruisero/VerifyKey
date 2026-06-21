@@ -306,7 +306,7 @@ def generate_uiuc_image(first_name: str, last_name: str,
                         class_standing: str = None, major: str = None,
                         gpa: str = None, matriculation_year: int = None) -> Tuple[bytes, str, dict]:
     raise Exception("HTML 证件生成模块已被禁用，当前仅支持 API 通道。")
-        
+    try:
         def run_playwright():
             from playwright.sync_api import sync_playwright
             

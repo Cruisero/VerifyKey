@@ -69,41 +69,6 @@ const ENDPOINTS = [
         ],
     },
     {
-        group: '💳 CDK 积分管理',
-        items: [
-            {
-                method: 'POST',
-                path: '/api/cdk/validate',
-                desc: '验证 CDK 卡密有效性与额度',
-                params: [
-                    { name: 'code', type: 'string', required: true, desc: 'CDK 激活码' },
-                ],
-                response: `{
-  "valid": true,
-  "remaining": 5.0,
-  "total": 5.0,
-  "used": 0.0,
-  "note": "CDK充值码"
-}`,
-            },
-            {
-                method: 'POST',
-                path: '/api/cdk/redeem',
-                desc: '兑换 CDK 积分到账户余额',
-                params: [
-                    { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
-                    { name: 'code', type: 'string', required: true, desc: 'CDK 激活码' },
-                ],
-                response: `{
-  "success": true,
-  "credits_added": 5.0,
-  "new_balance": 15.0,
-  "message": "兑换成功，获得 5.0 积分"
-}`,
-            },
-        ],
-    },
-    {
         group: '📡 Gemini 验证服务 (UPixel)',
         items: [
             {
@@ -211,14 +176,7 @@ headers = {"Authorization": f"Bearer {token}"}
 me = requests.get(f"{BASE}/api/auth/me", headers=headers).json()
 print(f"当前积分: {me['user']['credits']}")
 
-# 3. 兑换 CDK 积分
-redeem = requests.post(f"{BASE}/api/cdk/redeem", 
-    json={"code": "CDK-XXXXXXXX"},
-    headers=headers
-).json()
-print(f"兑换成功，新余额: {redeem['new_balance']}")
-
-# 4. 提交 Gemini 验证任务 (普通验证)
+# 3. 提交 Gemini 验证任务 (普通验证)
 job = requests.post(f"{BASE}/api/pixel/jobs", json={
     "email": "google@gmail.com",
     "password": "google_password",
@@ -227,7 +185,7 @@ job = requests.post(f"{BASE}/api/pixel/jobs", json={
 }, headers=headers).json()
 print(f"任务已提交: {job['job_id']}")
 
-# 5. 轮询状态 (查询状态接口不需要携带 Token)
+# 4. 轮询状态 (查询状态接口不需要携带 Token)
 import time
 while True:
     status = requests.get(
@@ -255,7 +213,7 @@ export default function ApiDocs() {
             <div className="api-hero">
                 <h1>OnePass API 文档</h1>
                 <p className="api-subtitle">
-                    通过 API 管理用户认证、积分兑换、Gemini 验证、ChatGPT 充值等服务。
+                    通过 API 进行用户认证与 Gemini 自动化验证 (UPixel) 服务对接。
                 </p>
                 <div className="api-base-url">
                     Base URL: <code>{API_BASE_URL}</code>
@@ -272,7 +230,7 @@ export default function ApiDocs() {
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">
                     <span className="step-num">2</span>
-                    <span className="step-label">兑换 CDK 积分</span>
+                    <span className="step-label">确认积分余额</span>
                 </div>
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">
@@ -288,7 +246,7 @@ export default function ApiDocs() {
 
             {/* Credits info */}
             <div className="api-info-banner">
-                所有服务使用积分支付。新用户默认 0 积分，需通过 CDK 兑换或邀请好友获取。
+                所有验证服务使用账户内的积分支付。新账户默认 0 积分，请在网页端充值或由管理员直接为您划转积分。
             </div>
 
             {/* Credits Table */}

@@ -25,7 +25,7 @@ Authorization: Bearer <your_access_token>
 
 ```
 1. 注册/登录 (POST /api/auth/login)  --> 获取 Token
-2. 充值积分 (POST /api/cdk/redeem)    --> 兑换 CDK 卡密增加积分余额
+2. 确认积分余额 (GET /api/auth/me)   --> 查询积分是否充足，若不足请在网页端或联系管理员充值
 3. 提交任务 (POST /api/pixel/jobs)   --> 开启验证，选择模式，扣除积分，获取 job_id
 4. 轮询结果 (GET /api/pixel/jobs/{id}) --> 每 5 秒轮询直到 terminal 状态 (success/failed)
 ```
@@ -102,52 +102,6 @@ Authorization: Bearer <your_access_token>
       "credits": 10.0,
       "role": "user"
     }
-  }
-  ```
-
----
-
-### 2. CDK 积分管理
-
-在调用验证服务前，请确保账户内有足够积分。您可以通过兑换 CDK 增加积分余额。
-
-#### 2.1 验证 CDK 卡密
-* **请求方法**: `POST`
-* **路径**: `/api/cdk/validate`
-* **请求体 (JSON)**:
-  ```json
-  {
-    "code": "CDK-XXXX-XXXX"
-  }
-  ```
-* **成功响应 (200)**:
-  ```json
-  {
-    "valid": true,
-    "remaining": 5.0,
-    "total": 5.0,
-    "used": 0.0,
-    "note": "CDK充值码"
-  }
-  ```
-
-#### 2.2 兑换 CDK 充值积分
-* **请求方法**: `POST`
-* **路径**: `/api/cdk/redeem`
-* **请求头**: `Authorization: Bearer <token>`
-* **请求体 (JSON)**:
-  ```json
-  {
-    "code": "CDK-XXXX-XXXX"
-  }
-  ```
-* **成功响应 (200)**:
-  ```json
-  {
-    "success": true,
-    "credits_added": 5.0,
-    "new_balance": 15.0,
-    "message": "兑换成功，获得 5.0 积分"
   }
   ```
 

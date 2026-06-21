@@ -270,6 +270,27 @@ export default function ApiDocs() {
                                                 </table>
                                             </>
                                         )}
+                                        {(() => {
+                                            const headerParams = ep.params.filter(p => p.type === 'Header');
+                                            if (headerParams.length > 0) {
+                                                const headersText = headerParams.map(p => {
+                                                    if (p.name === 'Authorization') {
+                                                        return 'Authorization: Bearer your_static_api_token';
+                                                    }
+                                                    return `${p.name}: your_value`;
+                                                }).join('\n') + (ep.requestBody ? '\nContent-Type: application/json' : '');
+                                                return (
+                                                    <>
+                                                        <h5>请求头示例 (Headers)</h5>
+                                                        <div className="api-code-block" style={{ marginBottom: '16px' }}>
+                                                            <span className="code-lang">HTTP</span>
+                                                            <pre>{headersText}</pre>
+                                                        </div>
+                                                    </>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                         {ep.requestBody && (
                                             <>
                                                 <h5>请求示例 (Body)</h5>

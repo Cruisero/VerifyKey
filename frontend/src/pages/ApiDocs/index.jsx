@@ -5,63 +5,21 @@ const API_BASE_URL = 'https://onepass.fun';
 
 const ENDPOINTS = [
     {
-        group: '🔐 用户认证',
+        group: '🔑 鉴权与商户余额',
         items: [
-            {
-                method: 'POST',
-                path: '/api/auth/register',
-                desc: '用户注册',
-                params: [
-                    { name: 'email', type: 'string', required: true, desc: '邮箱地址' },
-                    { name: 'password', type: 'string', required: true, desc: '密码' },
-                    { name: 'username', type: 'string', required: false, desc: '用户名（默认取邮箱前缀）' },
-                    { name: 'inviteCode', type: 'string', required: false, desc: '邀请码' },
-                ],
-                response: `{
-  "success": true,
-  "token": "eyJhbGci...",
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "username": "user",
-    "credits": 0,
-    "role": "user"
-  }
-}`,
-            },
-            {
-                method: 'POST',
-                path: '/api/auth/login',
-                desc: '用户登录',
-                params: [
-                    { name: 'email', type: 'string', required: true, desc: '邮箱地址' },
-                    { name: 'password', type: 'string', required: true, desc: '密码' },
-                ],
-                response: `{
-  "success": true,
-  "token": "eyJhbGci...",
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "username": "user",
-    "credits": 10.0,
-    "role": "user"
-  }
-}`,
-            },
             {
                 method: 'GET',
                 path: '/api/auth/me',
-                desc: '获取当前用户信息与余额',
+                desc: '查询商户账户余额与状态',
                 params: [
                     { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {token}' },
                 ],
                 response: `{
   "user": {
     "id": 1,
-    "email": "user@example.com",
-    "username": "user",
-    "credits": 10.0,
+    "email": "merchant@example.com",
+    "username": "merchant",
+    "credits": 100.0,
     "role": "user"
   }
 }`,
@@ -164,17 +122,13 @@ const FULL_EXAMPLE = `import requests
 
 BASE = "${API_BASE_URL}"
 
-# 1. 登录获取 Token
-login = requests.post(f"{BASE}/api/auth/login", json={
-    "email": "user@example.com",
-    "password": "your_password"
-}).json()
-token = login["token"]
-headers = {"Authorization": f"Bearer {token}"}
+# 1. 配置商户永久 Token (在后台生成)
+TOKEN = "your_static_api_token"
+headers = {"Authorization": f"Bearer {TOKEN}"}
 
-# 2. 查看当前积分
+# 2. 查看商户积分余额
 me = requests.get(f"{BASE}/api/auth/me", headers=headers).json()
-print(f"当前积分: {me['user']['credits']}")
+print(f"当前商户积分余额: {me['user']['credits']}")
 
 # 3. 提交 Gemini 验证任务 (普通验证)
 job = requests.post(f"{BASE}/api/pixel/jobs", json={
@@ -213,7 +167,7 @@ export default function ApiDocs() {
             <div className="api-hero">
                 <h1>OnePass API 文档</h1>
                 <p className="api-subtitle">
-                    通过 API 进行用户认证与 Gemini 自动化验证 (UPixel) 服务对接。
+                    通过 API 进行商户余额查询与 Gemini 自动化验证 (UPixel) 服务对接。
                 </p>
                 <div className="api-base-url">
                     Base URL: <code>{API_BASE_URL}</code>
@@ -225,12 +179,12 @@ export default function ApiDocs() {
             <div className="api-flow">
                 <div className="flow-step">
                     <span className="step-num">1</span>
-                    <span className="step-label">注册 / 登录</span>
+                    <span className="step-label">配置 API Token</span>
                 </div>
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">
                     <span className="step-num">2</span>
-                    <span className="step-label">确认积分余额</span>
+                    <span className="step-label">确认商户余额</span>
                 </div>
                 <span className="flow-arrow">→</span>
                 <div className="flow-step">

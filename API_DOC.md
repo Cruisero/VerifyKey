@@ -16,16 +16,15 @@ Authorization: Bearer <your_access_token>
 ```
 
 > **如何获取 Token？**
-> 1. 调用注册接口 `/api/auth/register` 或登录接口 `/api/auth/login`。
-> 2. 从返回的 JSON 响应中提取 `token`。
+> 请登录商户管理后台，在个人中心生成或获取您专属的静态 API Token。
 
 ---
 
 ## 调用流程说明
 
 ```
-1. 注册/登录 (POST /api/auth/login)  --> 获取 Token
-2. 确认积分余额 (GET /api/auth/me)   --> 查询积分是否充足，若不足请在网页端或联系管理员充值
+1. 配置 Token                       --> 将商户永久 Token 配置到请求头 Authorization 中
+2. 查询商户余额 (GET /api/auth/me)   --> 查询积分是否充足，若不足请在网页端充值或联系管理员
 3. 提交任务 (POST /api/pixel/jobs)   --> 开启验证，选择模式，扣除积分，获取 job_id
 4. 轮询结果 (GET /api/pixel/jobs/{id}) --> 每 5 秒轮询直到 terminal 状态 (success/failed)
 ```
@@ -34,61 +33,9 @@ Authorization: Bearer <your_access_token>
 
 ## 接口列表
 
-### 1. 用户认证
+### 1. 商户余额与状态查询
 
-#### 1.1 注册账号
-* **请求方法**: `POST`
-* **路径**: `/api/auth/register`
-* **请求体 (JSON)**:
-  ```json
-  {
-    "email": "user@example.com",
-    "password": "your_password",
-    "username": "user",
-    "inviteCode": "A1B2C3" // 可选邀请码
-  }
-  ```
-* **成功响应 (200)**:
-  ```json
-  {
-    "success": true,
-    "token": "eyJhbGci...",
-    "user": {
-      "id": 1,
-      "email": "user@example.com",
-      "username": "user",
-      "credits": 0.0,
-      "role": "user"
-    }
-  }
-  ```
-
-#### 1.2 登录账号
-* **请求方法**: `POST`
-* **路径**: `/api/auth/login`
-* **请求体 (JSON)**:
-  ```json
-  {
-    "email": "user@example.com",
-    "password": "your_password"
-  }
-  ```
-* **成功响应 (200)**:
-  ```json
-  {
-    "success": true,
-    "token": "eyJhbGci...",
-    "user": {
-      "id": 1,
-      "email": "user@example.com",
-      "username": "user",
-      "credits": 10.0,
-      "role": "user"
-    }
-  }
-  ```
-
-#### 1.3 获取个人信息与余额
+#### 1.1 查询商户余额与状态
 * **请求方法**: `GET`
 * **路径**: `/api/auth/me`
 * **请求头**: `Authorization: Bearer <token>`
@@ -97,9 +44,9 @@ Authorization: Bearer <your_access_token>
   {
     "user": {
       "id": 1,
-      "email": "user@example.com",
-      "username": "user",
-      "credits": 10.0,
+      "email": "merchant@example.com",
+      "username": "merchant",
+      "credits": 100.0,
       "role": "user"
     }
   }

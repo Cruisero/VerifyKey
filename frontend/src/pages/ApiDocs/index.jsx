@@ -66,31 +66,6 @@ const ENDPOINTS = [
   }
 }`,
             },
-            {
-                method: 'POST',
-                path: '/api/auth/forgot-password',
-                desc: '发送密码重置邮件',
-                params: [
-                    { name: 'email', type: 'string', required: true, desc: '注册邮箱' },
-                ],
-                response: `{
-  "success": true,
-  "message": "重置链接已发送到邮箱"
-}`,
-            },
-            {
-                method: 'POST',
-                path: '/api/auth/reset-password',
-                desc: '重置密码',
-                params: [
-                    { name: 'token', type: 'string', required: true, desc: '重置令牌（来自邮件链接）' },
-                    { name: 'password', type: 'string', required: true, desc: '新密码' },
-                ],
-                response: `{
-  "success": true,
-  "message": "密码已重置"
-}`,
-            },
         ],
     },
     {
@@ -207,7 +182,6 @@ const ENDPOINTS = [
 const CREDITS_TABLE = [
     { service: 'UPixel 普通验证 (semi-auto)', cost: '-1.0 积分' },
     { service: 'UPixel 高级验证 (auto)', cost: '-2.0 积分' },
-    { service: '邀请好友（首次兑换后）', cost: '+0.2 积分' },
 ];
 
 const ERROR_CODES = [

@@ -10062,58 +10062,6 @@ async def pixel_health():
         return {"status": "offline", "error": str(e)}
 
 
-@app.get("/api/pixel/balance")
-async def pixel_balance(authorization: Optional[str] = Header(None)):
-    """Proxy: get Pixel API key balance (admin only)."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="No authorization header")
-    token = authorization.replace("Bearer ", "")
-    user = auth.verify_token(token)
-    if not auth.user_has_permission(user, "manage_config"):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    pixel_cfg = _get_pixel_config()
-    if not pixel_cfg["apiKey"]:
-        raise HTTPException(status_code=503, detail="Pixel API 未配置")
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"{pixel_cfg['baseUrl']}/api/balance",
-                headers={"X-API-Key": pixel_cfg["apiKey"]},
-            )
-        if resp.status_code == 200:
-            return resp.json()
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@app.get("/api/pixel/queue")
-async def pixel_queue(authorization: Optional[str] = Header(None)):
-    """Proxy: get Pixel API queue status (admin only)."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="No authorization header")
-    token = authorization.replace("Bearer ", "")
-    user = auth.verify_token(token)
-    if not auth.user_has_permission(user, "manage_config"):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    pixel_cfg = _get_pixel_config()
-    if not pixel_cfg["apiKey"]:
-        raise HTTPException(status_code=503, detail="Pixel API 未配置")
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"{pixel_cfg['baseUrl']}/api/queue",
-                headers={"X-API-Key": pixel_cfg["apiKey"]},
-            )
-        if resp.status_code == 200:
-            return resp.json()
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-
 @app.post("/api/admin/recover-timeout-jobs")
 async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)):
     """Recover jobs that were marked as timeout failures — re-query upstream for actual status."""

@@ -2059,8 +2059,6 @@ function PixelApiTab() {
 
     const [activeSection, setActiveSection] = useState('status');
     const [health, setHealth] = useState(null);
-    const [balance, setBalance] = useState(null);
-    const [queue, setQueue] = useState(null);
     const [pixelConfig, setPixelConfig] = useState({ enabled: false, apiKey: '', baseUrl: 'https://iqless.icu', hasKey: false });
     const [configSaving, setConfigSaving] = useState(false);
     const [newApiKey, setNewApiKey] = useState('');
@@ -2076,14 +2074,8 @@ function PixelApiTab() {
     // Fetch status data
     const fetchStatus = async () => {
         try {
-            const [hRes, bRes, qRes] = await Promise.all([
-                fetch(`${API_BASE}/api/pixel/health`),
-                fetch(`${API_BASE}/api/pixel/balance`, { headers: authHeaders }).catch(() => null),
-                fetch(`${API_BASE}/api/pixel/queue`, { headers: authHeaders }).catch(() => null),
-            ]);
+            const hRes = await fetch(`${API_BASE}/api/pixel/health`);
             if (hRes.ok) setHealth(await hRes.json());
-            if (bRes && bRes.ok) setBalance(await bRes.json());
-            if (qRes && qRes.ok) setQueue(await qRes.json());
         } catch (e) {
             console.warn('Pixel status fetch error:', e);
         }
@@ -2293,8 +2285,6 @@ function PixelApiTab() {
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
                                         <span>📱 设备 {health?.devices?.connected ?? '-'}/{health?.devices?.total ?? '-'}</span>
-                                        <span style={{ color: '#d97706', fontWeight: 600 }}>💰 余额 {balance?.balance ?? balance?.credits ?? '-'}</span>
-                                        <span>📋 队列 {queue?.queued ?? queue?.queue_length ?? '-'}</span>
                                         {health?.devices?.ready !== undefined && <span>✅ 就绪 {health.devices.ready}</span>}
                                     </div>
                                 </div>

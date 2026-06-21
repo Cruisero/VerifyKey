@@ -16,7 +16,7 @@ Authorization: Bearer <your_access_token>
 ```
 
 > **如何获取 Token？**
-> 请登录商户管理后台，在个人中心生成或获取您专属的静态 API Token。
+> 请联系平台管理员为您开通账号并获取您专属的静态 API Token。
 
 ---
 

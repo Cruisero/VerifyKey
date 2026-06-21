@@ -8,7 +8,7 @@ import string
 import random
 import threading
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import database
 
@@ -278,6 +278,63 @@ def get_all_cdks() -> List[Dict]:
         }
         for r in cursor.fetchall()
     ]
+
+
+def get_cdks_paginated(
+    page: int = 1,
+    limit: int = 50,
+    status: str = "all",
+    search: str = ""
+) -> Tuple[List[Dict], int]:
+    """Get a paginated list of CDKs, filtered by status and search term, and return (cdks, total_count)"""
+    conn = database.get_connection()
+    where_clauses = []
+    params = []
+    
+    if status and status != "all":
+        where_clauses.append("status = ?")
+        params.append(status)
+        
+    if search:
+        search_term = f"%{search}%"
+        where_clauses.append("(code LIKE ? OR note LIKE ?)")
+        params.extend([search_term, search_term])
+        
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+    # Get total count matching criteria
+    count_query = f"SELECT COUNT(*) FROM cdkeys {where_sql}"
+    total_count = conn.execute(count_query, params).fetchone()[0]
+    
+    # Get paginated data
+    offset = (page - 1) * limit
+    data_query = f"""
+        SELECT code, quota, used, status, created_at, last_used_at, note, redeemed_by 
+        FROM cdkeys 
+        {where_sql} 
+        ORDER BY created_at DESC 
+        LIMIT ? OFFSET ?
+    """
+    query_params = params + [limit, offset]
+    cursor = conn.execute(data_query, query_params)
+    
+    cdks = [
+        {
+            "code": r["code"],
+            "quota": r["quota"],
+            "used": r["used"],
+            "status": r["status"],
+            "remaining": r["quota"] - r["used"],
+            "createdAt": r["created_at"],
+            "lastUsedAt": r["last_used_at"],
+            "note": r["note"],
+            "redeemedBy": r["redeemed_by"]
+        }
+        for r in cursor.fetchall()
+    ]
+    return cdks, total_count
 
 
 def delete_cdk(code: str) -> bool:

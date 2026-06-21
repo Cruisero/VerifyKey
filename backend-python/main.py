@@ -5835,13 +5835,36 @@ async def generate_cdk_endpoint(request: CDKGenerateRequest, authorization: Opti
 
 
 @app.get("/api/cdk/list")
-async def list_cdks_endpoint(authorization: Optional[str] = Header(None)):
+async def list_cdks_endpoint(
+    authorization: Optional[str] = Header(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=500),
+    status: str = Query("all"),
+    search: str = Query(""),
+):
     """List all CDKs (admin only)"""
     _verify_admin_token(authorization, "view_orders")
     
-    cdks = cdk_manager.get_all_cdks()
+    cdks, total = cdk_manager.get_cdks_paginated(
+        page=page,
+        limit=per_page,
+        status=status,
+        search=search
+    )
     stats = cdk_manager.get_cdk_stats()
-    return {"cdks": cdks, "stats": stats}
+    
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    
+    return {
+        "cdks": cdks,
+        "stats": stats,
+        "pagination": {
+            "currentPage": page,
+            "totalPages": total_pages,
+            "total": total,
+            "perPage": per_page
+        }
+    }
 
 
 @app.post("/api/cdk/delete")

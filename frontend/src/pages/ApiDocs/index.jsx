@@ -41,6 +41,12 @@ const ENDPOINTS = [
                     { name: 'mode', type: 'string', required: false, desc: '验证模式：semi-auto (普通验证，扣1.0积分) / auto (高级验证，扣2.0积分)，默认为 semi-auto' },
                     { name: 'priority', type: 'number', required: false, desc: '任务优先级（默认 0）' },
                 ],
+                requestBody: `{
+  "email": "user@example.com",
+  "password": "your_password",
+  "totp_secret": "JBSWY3DPEHPK3PXP",
+  "mode": "semi-auto"
+}`,
                 response: `{
   "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
@@ -274,6 +280,15 @@ export default function ApiDocs() {
                                                 </table>
                                             </>
                                         )}
+                                        {ep.requestBody && (
+                                            <>
+                                                <h5>请求示例 (Body)</h5>
+                                                <div className="api-code-block" style={{ marginBottom: '16px' }}>
+                                                    <span className="code-lang">JSON</span>
+                                                    <pre>{ep.requestBody}</pre>
+                                                </div>
+                                            </>
+                                        )}
                                         <h5>响应示例</h5>
                                         <div className="api-code-block">
                                             <span className="code-lang">JSON</span>
@@ -310,8 +325,7 @@ export default function ApiDocs() {
             <h3 className="api-section-title">认证方式</h3>
             <div className="api-info-banner">
                 需要认证的接口请在请求头中携带 <code>Authorization: Bearer {'<token>'}</code>。
-                Token 通过 <code>/api/auth/login</code> 或 <code>/api/auth/register</code> 获取。
-                Token 有效期 7 天，过期后需重新登录。
+                Token 可以联系平台管理员为您开通账号并获取专属的静态 API Token。
             </div>
 
             {/* Full Example */}

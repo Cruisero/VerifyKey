@@ -3813,6 +3813,46 @@ export default function Admin() {
         }
     };
 
+    const handleGenerateUserToken = async (userId) => {
+        if (!confirm('确定要为此商户生成/重置 API Token 吗？原 Token 将立即失效。')) return;
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/users/${userId}/token`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                alert('API Token 生成成功！');
+                fetchUsers();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.detail || '生成失败');
+            }
+        } catch (e) {
+            alert('生成失败: ' + e.message);
+        }
+    };
+
+    const handleRevokeUserToken = async (userId) => {
+        if (!confirm('确定要注销此商户的 API Token 吗？注销后该 Token 将无法再调用 API。')) return;
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/admin/users/${userId}/token`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                alert('API Token 已注销');
+                fetchUsers();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.detail || '注销失败');
+            }
+        } catch (e) {
+            alert('注销失败: ' + e.message);
+        }
+    };
+
     const handleViewUserHistory = async (targetUser) => {
         setHistoryUser(targetUser);
         setUserHistory([]);
@@ -5007,6 +5047,7 @@ export default function Admin() {
                                         <th>邮箱</th>
                                         <th>角色</th>
                                         <th>积分</th>
+                                        <th>API Token</th>
                                         <th>邀请码</th>
                                         <th>邀请数</th>
                                         <th>状态</th>
@@ -5016,10 +5057,10 @@ export default function Admin() {
                                 </thead>
                                 <tbody>
                                     {users.length === 0 && !usersLoading && (
-                                        <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>暂无用户数据</td></tr>
+                                        <tr><td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>暂无用户数据</td></tr>
                                     )}
                                     {usersLoading && (
-                                        <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>加载中...</td></tr>
+                                        <tr><td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>加载中...</td></tr>
                                     )}
                                     {displayUsers.map(u => (
                                         <tr key={u.id}>
@@ -5032,6 +5073,54 @@ export default function Admin() {
                                                 </span>
                                             </td>
                                             <td style={{ fontWeight: 600, color: u.credits > 0 ? '#16a34a' : '#94a3b8' }}>{u.credits ?? 0}</td>
+                                            <td>
+                                                {u.api_token ? (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <code 
+                                                            style={{ 
+                                                                fontSize: '11px', 
+                                                                padding: '2px 6px', 
+                                                                background: 'rgba(22,163,74,0.08)', 
+                                                                borderRadius: '4px', 
+                                                                color: '#16a34a', 
+                                                                cursor: 'pointer',
+                                                                maxWidth: '90px',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap',
+                                                                display: 'inline-block'
+                                                            }}
+                                                            onClick={() => { 
+                                                                navigator.clipboard.writeText(u.api_token);
+                                                                alert('API Token 已复制到剪贴板！');
+                                                            }}
+                                                            title={u.api_token + "\n(点击复制)"}>
+                                                            {u.api_token.substring(0, 10)}...
+                                                        </code>
+                                                        <button 
+                                                            className="btn btn-sm btn-outline" 
+                                                            style={{ padding: '2px 6px', fontSize: '10px', height: 'auto', lineHeight: 1, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', borderRadius: '4px', cursor: 'pointer' }}
+                                                            onClick={() => handleGenerateUserToken(u.id)}
+                                                            title="重新生成 Token">
+                                                            🔄
+                                                        </button>
+                                                        <button 
+                                                            className="btn btn-sm" 
+                                                            style={{ padding: '2px 6px', fontSize: '10px', height: 'auto', lineHeight: 1, background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                            onClick={() => handleRevokeUserToken(u.id)}
+                                                            title="注销 Token">
+                                                            ❌
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button 
+                                                        className="btn btn-sm btn-primary" 
+                                                        style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '6px', height: 'auto', lineHeight: 1, fontWeight: 600 }}
+                                                        onClick={() => handleGenerateUserToken(u.id)}>
+                                                        🔑 生成
+                                                    </button>
+                                                )}
+                                            </td>
                                             <td>
                                                 {u.invite_code ? (
                                                     <code style={{ fontSize: '12px', padding: '2px 6px', background: 'rgba(124,92,252,0.08)', borderRadius: '4px', color: '#7c5cfc', cursor: 'pointer' }}

@@ -2206,6 +2206,41 @@ async def update_user_credits_endpoint(user_id: int, request: Request, authoriza
     return {"success": True, "credits": float(credits)}
 
 
+@app.post("/api/admin/users/{user_id}/token")
+async def generate_user_token_endpoint(user_id: int, authorization: str = Header(None)):
+    """Generate permanent B2B API Token for user (admin only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    admin = auth.verify_token(token)
+    if not auth.user_has_permission(admin, "view_users"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        api_token = auth.generate_user_api_token(user_id)
+        return {"success": True, "api_token": api_token}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/admin/users/{user_id}/token")
+async def revoke_user_token_endpoint(user_id: int, authorization: str = Header(None)):
+    """Revoke B2B API Token for user (admin only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    admin = auth.verify_token(token)
+    if not auth.user_has_permission(admin, "view_users"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    success = auth.revoke_user_api_token(user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True}
+
+
 @app.post("/api/admin/users/{user_id}")
 async def update_user_admin_endpoint(user_id: int, request: Request, authorization: str = Header(None)):
     """Update user editable fields (admin only)."""

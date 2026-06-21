@@ -94,7 +94,7 @@ def init_database():
     """)
     
     # Ensure invite columns exist for older DBs
-    for col, typedef in [("invite_code", "TEXT"), ("invited_by", "INTEGER"), ("status", "TEXT DEFAULT 'active'"), ("admin_permissions", "TEXT")]:
+    for col, typedef in [("invite_code", "TEXT"), ("invited_by", "INTEGER"), ("status", "TEXT DEFAULT 'active'"), ("admin_permissions", "TEXT"), ("api_token", "TEXT")]:
         try:
             cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
         except:
@@ -421,12 +421,29 @@ def generate_token(user: dict) -> str:
 def verify_token(token: str) -> Optional[dict]:
     """Verify JWT token and return user"""
     try:
-        decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        
+        # First, try to query the database directly for a matching static api_token
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, email, username, role, credits, status, invite_code, admin_permissions, created_at 
+            SELECT id, email, username, role, credits, status, invite_code, admin_permissions, created_at, api_token
+            FROM users WHERE api_token = ?
+        """, (token,))
+        user_row = cursor.fetchone()
+        
+        if user_row:
+            u_dict = dict(user_row)
+            if not u_dict.get("invite_code"):
+                code = _generate_invite_code(cursor)
+                cursor.execute("UPDATE users SET invite_code = ? WHERE id = ?", (code, u_dict["id"]))
+                conn.commit()
+                u_dict["invite_code"] = code
+            conn.close()
+            return hydrate_admin_permissions(u_dict)
+
+        # If not found directly, verify as a normal JWT token
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        cursor.execute("""
+            SELECT id, email, username, role, credits, status, invite_code, admin_permissions, created_at, api_token
             FROM users WHERE id = ?
         """, (decoded["userId"],))
         user_row = cursor.fetchone()
@@ -444,6 +461,10 @@ def verify_token(token: str) -> Optional[dict]:
         conn.close()
         return None
     except:
+        try:
+            conn.close()
+        except:
+            pass
         return None
 
 
@@ -452,7 +473,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, email, username, role, credits, invite_code, admin_permissions, created_at 
+        SELECT id, email, username, role, credits, invite_code, admin_permissions, created_at, api_token 
         FROM users WHERE id = ?
     """, (user_id,))
     user_row = cursor.fetchone()
@@ -633,7 +654,7 @@ def list_all_users() -> list:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, email, username, role, credits, invite_code, invited_by, status, admin_permissions, created_at, updated_at
+        SELECT id, email, username, role, credits, invite_code, invited_by, status, admin_permissions, created_at, updated_at, api_token
         FROM users ORDER BY id ASC
     """)
     rows = cursor.fetchall()
@@ -745,3 +766,39 @@ def _log_credit_transaction(user_id: int, amount: float, balance_after: float, r
         conn.commit()
     except Exception as e:
         print(f"[Audit] Failed to log credit transaction for user {user_id}: {e}")
+
+
+def generate_user_api_token(user_id: int) -> str:
+    """Generate a permanent/long-lived API token for a user and save to database"""
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError("User not found")
+    
+    # Generate a long-lived JWT token (10 years)
+    payload = {
+        "userId": user["id"],
+        "email": user["email"],
+        "role": user.get("role", "user"),
+        "exp": datetime.utcnow() + timedelta(days=3650)
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    
+    # Save to database
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET api_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (token, user_id))
+    conn.commit()
+    conn.close()
+    
+    return token
+
+
+def revoke_user_api_token(user_id: int) -> bool:
+    """Revoke (delete) the API token for a user"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET api_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0

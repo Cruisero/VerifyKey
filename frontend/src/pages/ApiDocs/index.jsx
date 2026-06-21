@@ -94,16 +94,6 @@ const ENDPOINTS = [
   "base_url": "https://api.example.com"
 }`,
             },
-            {
-                method: 'GET',
-                path: '/api/pixel/balance',
-                desc: '查询 UPixel 底层运行余额',
-                params: [],
-                response: `{
-  "balance": 150.0,
-  "currency": "CNY"
-}`,
-            },
         ],
     },
 ];

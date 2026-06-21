@@ -10063,8 +10063,15 @@ async def pixel_health():
 
 
 @app.get("/api/pixel/balance")
-async def pixel_balance():
-    """Proxy: get Pixel API key balance."""
+async def pixel_balance(authorization: Optional[str] = Header(None)):
+    """Proxy: get Pixel API key balance (admin only)."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not auth.user_has_permission(user, "manage_config"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["apiKey"]:
         raise HTTPException(status_code=503, detail="Pixel API 未配置")
@@ -10082,8 +10089,15 @@ async def pixel_balance():
 
 
 @app.get("/api/pixel/queue")
-async def pixel_queue():
-    """Proxy: get Pixel API queue status."""
+async def pixel_queue(authorization: Optional[str] = Header(None)):
+    """Proxy: get Pixel API queue status (admin only)."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    token = authorization.replace("Bearer ", "")
+    user = auth.verify_token(token)
+    if not auth.user_has_permission(user, "manage_config"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["apiKey"]:
         raise HTTPException(status_code=503, detail="Pixel API 未配置")

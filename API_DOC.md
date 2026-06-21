@@ -166,17 +166,6 @@ Authorization: Bearer <your_access_token>
   }
   ```
 
-#### 3.5 检查 API 余额
-* **请求方法**: `GET`
-* **路径**: `/api/pixel/balance`
-* **成功响应 (200)**:
-  ```json
-  {
-    "balance": 150.0,
-    "currency": "CNY"
-  }
-  ```
-
 ---
 
 ## 积分消耗对照表

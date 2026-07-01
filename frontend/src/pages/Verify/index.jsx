@@ -474,7 +474,59 @@ export default function Verify() {
 
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-                const rawMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+                const detail = err.detail;
+
+                if (detail && typeof detail === 'object') {
+                    if (detail.code === 'already_processed') {
+                        const msg = detail.result_msg || detail.message || t('verifySuccess');
+                        const url = detail.url || '';
+                        setResults(prev => prev.map(r =>
+                            r.id === resultId ? {
+                                ...r,
+                                status: 'success',
+                                message: `✅ ${msg}`,
+                                url: url,
+                                stageLabel: 'DONE',
+                                totalStages: 0,
+                            } : r
+                        ));
+                        await refreshUser();
+                        fetchHistory();
+                        fetchUserHistory('pixel');
+                        return;
+                    } else if (detail.code === 'already_queued') {
+                        const msg = detail.message || t('submitted');
+                        const jobId = detail.job_id || '';
+                        setResults(prev => prev.map(r =>
+                            r.id === resultId ? {
+                                ...r,
+                                jobId,
+                                verificationId: jobId,
+                                tier: verifyTier,
+                                source: jobSourceDefault,
+                                message: msg,
+                                status: 'processing',
+                            } : r
+                        ));
+                        if (jobId) {
+                            if (jobSourceDefault === 'kpixel' || jobSourceDefault === 'vpixel' || jobSourceDefault === 'ypixel') {
+                                const statusUrl = jobSourceDefault === 'vpixel'
+                                    ? `${API_BASE}/api/vpixel/jobs/${jobId}/status`
+                                    : jobSourceDefault === 'ypixel'
+                                        ? `${API_BASE}/api/ypixel/jobs/${jobId}/status`
+                                        : `${API_BASE}/api/kpixel/jobs/${jobId}/status`;
+                                pollKPixelJob(jobId, resultId, statusUrl);
+                            } else {
+                                pollJob(jobId, resultId);
+                            }
+                        }
+                        return;
+                    }
+                }
+
+                const rawMsg = detail && typeof detail === 'object'
+                    ? (detail.message || JSON.stringify(detail))
+                    : (typeof detail === 'string' ? detail : JSON.stringify(err));
                 setResults(prev => prev.map(r =>
                     r.id === resultId ? { ...r, status: 'failed', message: `❌ ${rawMsg}` } : r
                 ));

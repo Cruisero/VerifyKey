@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh:*)",
+      "Bash(scp /tmp/q.py root@159.195.71.45:/tmp/q.py)",
+      "Bash(echo \"exit: $?\")"
+    ]
+  }
+}

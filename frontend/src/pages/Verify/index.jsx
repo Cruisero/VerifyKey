@@ -1253,7 +1253,7 @@ export default function Verify() {
                         {/* <a href="/ghelper.html" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
                             订阅工具
                         </a> */}
-                        <a href="https://www.notion.so/Pixel-351964dd56958040bf54c48ce60f9e86?source=copy_link" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
+                        <a href="https://ocnklud9ghxt.feishu.cn/wiki/HVq2wiNPhiLX4FkctcDcftaFnHb" target="_blank" rel="noopener noreferrer" className="api-entry-pill">
                             {t('tutorialsAndErrors')}
                         </a>
                         <Link to="/api-docs" className="api-entry-pill">
@@ -1363,7 +1363,7 @@ export default function Verify() {
                                         padding: '8px 12px', fontSize: '12px', fontWeight: 500, marginBottom: '12px',
                                     }}>
                                         {t('commonErrorsWarning')}
-                                        <a href="https://www.notion.so/Pixel-351964dd56958040bf54c48ce60f9e86?source=copy_link"
+                                        <a href="https://ocnklud9ghxt.feishu.cn/wiki/HVq2wiNPhiLX4FkctcDcftaFnHb"
                                             target="_blank" rel="noopener noreferrer"
                                             style={{
                                                 background: 'rgba(239,68,68,0.15)', color: '#dc2626',
@@ -1430,7 +1430,7 @@ export default function Verify() {
                                         <li>
                                             <span className="check-icon warn">🌐</span>
                                             <span><strong>{t('guideBindCard')}</strong>{t('guideBindCardDesc')}
-                                                <a href="https://www.notion.so/34a964dd569580a6a6cccc5a7d6d5284?source=copy_link"
+                                                <a href="https://ocnklud9ghxt.feishu.cn/wiki/GnW6wJI8givrSIk77Jtcp5Wjnxe"
                                                     target="_blank" rel="noopener noreferrer"
                                                     style={{
                                                         background: 'rgba(99,102,241,0.1)', color: '#6366f1',

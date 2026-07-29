@@ -386,6 +386,31 @@ def get_successful_history_by_email(email: str, user_id: int = 0) -> Dict:
     return {}
 
 
+def get_processing_history_by_email(email: str) -> Dict:
+    """Check if ANY task for this email is currently in 'processing' status."""
+    if not email:
+        return {}
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
+        "FROM verification_history WHERE email = ? AND status = 'processing' ORDER BY rowid DESC LIMIT 1",
+        (email,)
+    )
+    row = cursor.fetchone()
+    if row:
+        return {
+            "id": row["id"],
+            "status": "processing",
+            "verificationId": row["verification_id"],
+            "message": row["message"],
+            "cdk": row["cdk"],
+            "via": row["via"] if "via" in row.keys() else "",
+            "submitEmail": row["email"] if "email" in row.keys() else "",
+            "timestamp": row["timestamp"]
+        }
+    return {}
+
+
 # ========== Atomic State Machine ==========
 
 def _extract_user_id(cdk: str) -> int:

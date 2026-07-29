@@ -9519,6 +9519,27 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             "estimated_wait_seconds": 0,
         }
 
+    # Intercept duplicate active submissions for the same email
+    existing_processing = verification_history.get_processing_history_by_email(request.email)
+    if existing_processing:
+        job_id = existing_processing.get("verificationId") or existing_processing.get("id")
+        logging.info(f"[Pixel] Intercepted duplicate active submission for {request.email}, attaching to existing job {job_id}")
+        event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
+        broadcast_verify_event({
+            "type": "progress",
+            "vid": job_id,
+            "step": "processing",
+            "status": "queued",
+            "message": "⏳ 任务已经在处理队列中",
+            **event_meta,
+        })
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "queue_position": -1,
+            "estimated_wait_seconds": 60,
+        }
+
     if credits < cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {cost} 积分）")
 

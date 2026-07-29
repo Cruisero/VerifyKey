@@ -9150,21 +9150,15 @@ async def _repair_timeout_failed_tasks():
                 if upstream_status == "success":
                     url = data.get("url", "")
                     msg = f"✅ 订阅成功（已修正扣费）: {url}" if url else "✅ 订阅成功（已修正扣费）"
-                    conn2 = database.get_connection()
-                    conn2.execute(
-                        "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ?",
-                        (msg, vid),
-                    )
-                    conn2.commit()
-                    # Deduct credits
-                    try:
-                        auth.deduct_credits(user_id, sweep_cost)
-                        deducted += 1
-                        logging.info(f"[PixelRepair] Deducted {sweep_cost} from user {user_id} for {vid}")
-                    except Exception as deduct_err:
-                        logging.warning(f"[PixelRepair] Deduct failed for user {user_id}: {deduct_err}")
-                    repaired += 1
-                    logging.info(f"[PixelRepair] Repaired {vid} -> SUCCESS (user {user_id})")
+                    import verification_history as vh
+                    result = vh.transition_task_status(vid, "pass", message=msg, user_id=user_id, via=sse_source, email=email)
+                    if result.get("success"):
+                        repaired += 1
+                        if result.get("deducted"):
+                            deducted += 1
+                        logging.info(f"[PixelRepair] Repaired {vid} -> SUCCESS (user {user_id}, prev={result.get('prev_status')}, deducted={result.get('deducted')})")
+                    else:
+                        logging.info(f"[PixelRepair] Skipped {vid}: {result.get('reason', 'unknown')}")
                     event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
                     broadcast_verify_event({
                         "type": "progress", "vid": vid, "step": "result",
@@ -9590,36 +9584,85 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 "estimated_wait_seconds": data.get("estimated_wait_seconds", 0),
             }
         else:
-            refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
-            # 409 Conflict: distinguish already_queued vs already_processed
+            # === Handle non-200 responses ===
+            # IMPORTANT: Do NOT refund unconditionally here.
+            # Check 409 type first to decide whether to refund.
+
             if resp.status_code == 409:
                 try:
                     err409 = resp.json()
                     code409 = err409.get("code", "")
+
                     if code409 == "already_processed":
-                        # Pixel already has a success record — return URL to user
+                        # Upstream already has a success record (e.g. manual processing).
+                        # Keep the pre-deducted credits — this is a legitimate successful result.
                         url409 = err409.get("url", "")
                         result_msg409 = err409.get("result_msg", "")
-                        created_at409 = err409.get("created_at", "")
-                        raise HTTPException(status_code=409, detail={
-                            "code": "already_processed",
-                            "message": "该邮箱已处理成功",
+
+                        # Generate a local job_id and write pass record to verification_history
+                        ap_job_id = f"ap-{uuid.uuid4().hex[:8]}"
+                        if url409:
+                            success_msg = f"✅ 获取成功: {url409}"
+                        elif result_msg409:
+                            success_msg = f"✅ 订阅成功: {result_msg409}"
+                        else:
+                            success_msg = "✅ 订阅成功"
+
+                        _upsert_user_verification_result(
+                            ap_job_id, user_id, "pass", success_msg,
+                            via=sse_source, email=request.email
+                        )
+                        # Lock cost and is_refunded=0 into the DB row
+                        conn = database.get_connection()
+                        conn.execute(
+                            "UPDATE verification_history SET cost = ?, is_refunded = 0 WHERE verification_id = ?",
+                            (cost, ap_job_id)
+                        )
+                        conn.commit()
+
+                        logging.info(f"[Pixel] already_processed: kept {cost} credits from user {user_id} for {request.email}, vid={ap_job_id}")
+
+                        # Broadcast SSE success event
+                        event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
+                        broadcast_verify_event({
+                            "type": "progress",
+                            "vid": ap_job_id,
+                            "step": "result", "status": "approved",
+                            "success": True,
+                            "message": "✅ 验证已成功（上游已处理）",
                             "url": url409,
-                            "result_msg": result_msg409,
-                            "created_at": created_at409,
+                            "forceTerminalUpdate": True,
+                            **event_meta,
                         })
+
+                        return {
+                            "job_id": ap_job_id,
+                            "status": "success",
+                            "url": url409,
+                            "queue_position": -1,
+                            "estimated_wait_seconds": 0,
+                        }
+
                     else:
+                        # already_queued — the original task is still in the queue.
+                        # Refund the duplicate pre-deduction; the original task handles settlement.
+                        _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
                         job_id409 = err409.get("job_id", "")
                         raise HTTPException(status_code=409, detail={
                             "code": "already_queued",
                             "message": "该邮箱已在队列中，请等待当前任务完成",
                             "job_id": job_id409,
                         })
+
                 except HTTPException:
                     raise
                 except Exception:
+                    # Failed to parse 409 body — refund to be safe
+                    _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
                     raise HTTPException(status_code=409, detail={"code": "already_queued", "message": "该邮箱已在队列中，请等待当前任务完成"})
-            # Other errors: parse upstream response
+
+            # Other non-200/non-409 errors: refund credits
+            refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
             try:
                 err = resp.json()
                 detail = err.get("detail", {})
@@ -9824,24 +9867,54 @@ async def pixel_get_job(job_id: str):
             })
 
         # Safety net: if upstream reached terminal state but user_id was not available,
-        # at least update verification_history so the task doesn't stay stuck in 'processing' forever
+        # recover user_id from DB and handle credits properly
         if upstream_status in ("success", "failed", "cancelled") and not user_id:
-            logging.warning(f"[Pixel] GET auto-finalize: upstream={upstream_status} but no user_id for {job_id}, updating DB directly")
+            logging.warning(f"[Pixel] GET auto-finalize: upstream={upstream_status} but no user_id for {job_id}, recovering from DB")
             try:
                 conn = database.get_connection()
+                # Recover user_id and cost from DB
+                db_row = conn.execute(
+                    "SELECT cdk, cost, via FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+                    (job_id,)
+                ).fetchone()
+                recovered_uid = 0
+                recovered_cost = 0
+                if db_row:
+                    cdk_val = db_row["cdk"] or ""
+                    if cdk_val.startswith("user:"):
+                        try:
+                            recovered_uid = int(cdk_val.replace("user:", ""))
+                        except ValueError:
+                            pass
+                    recovered_cost = db_row["cost"] if "cost" in db_row.keys() else 0
+                    if not recovered_cost or recovered_cost <= 0:
+                        row_via = db_row["via"] if "via" in db_row.keys() else ""
+                        recovered_cost = 2.0 if "auto" in (row_via or "") else 1.0
+
                 if upstream_status == "success":
                     url = data.get("url", "")
                     conn.execute(
-                        "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ? AND status = 'processing'",
+                        "UPDATE verification_history SET status = 'pass', is_refunded = 0, message = ? WHERE verification_id = ? AND status = 'processing'",
                         (f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", job_id),
                     )
+                    conn.commit()
+                    logging.info(f"[Pixel] Safety-net: marked {job_id} as pass (credits kept, user {recovered_uid})")
                 else:
                     err = _get_pixel_failure_message(data)
                     conn.execute(
-                        "UPDATE verification_history SET status = 'failed', message = ? WHERE verification_id = ? AND status = 'processing'",
+                        "UPDATE verification_history SET status = 'failed', is_refunded = 1, message = ? WHERE verification_id = ? AND status = 'processing'",
                         (f"失败: {err}", job_id),
                     )
-                conn.commit()
+                    conn.commit()
+                    # Refund credits if we recovered the user_id
+                    if recovered_uid and recovered_cost > 0:
+                        try:
+                            auth.update_credits(recovered_uid, recovered_cost, reason="pixel_safety_refund", ref_id=job_id)
+                            logging.info(f"[Pixel] Safety-net: refunded {recovered_cost} credits to user {recovered_uid} for {job_id}")
+                        except Exception as refund_err:
+                            logging.error(f"[Pixel] Safety-net: refund failed for user {recovered_uid} on {job_id}: {refund_err}")
+                    else:
+                        logging.warning(f"[Pixel] Safety-net: could not refund for {job_id} (uid={recovered_uid}, cost={recovered_cost})")
                 _complete_async_task("pixel", job_id)
             except Exception as safety_err:
                 logging.error(f"[Pixel] Safety-net DB update failed for {job_id}: {safety_err}")

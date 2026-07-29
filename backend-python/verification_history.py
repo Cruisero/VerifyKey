@@ -356,16 +356,20 @@ def get_history_by_user(user_id: int, limit: int = 50) -> List[Dict]:
     ]
 
 
-def get_successful_history_by_email(email: str, user_id: int) -> Dict:
-    """Check if the user has already successfully verified this email."""
-    if not email or not user_id:
+def get_successful_history_by_email(email: str, user_id: int = 0) -> Dict:
+    """Check if ANY user has already successfully verified this email (global dedup).
+    
+    Same email is only charged once across all users. If any user has a 'pass'
+    record for this email, subsequent submissions by any user return the cached
+    result without charging.
+    """
+    if not email:
         return {}
     conn = database.get_connection()
-    cdk_tag = f"user:{user_id}"
     cursor = conn.execute(
         "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
-        "FROM verification_history WHERE email = ? AND cdk = ? AND status = 'pass' ORDER BY rowid DESC LIMIT 1",
-        (email, cdk_tag)
+        "FROM verification_history WHERE email = ? AND status = 'pass' ORDER BY rowid DESC LIMIT 1",
+        (email,)
     )
     row = cursor.fetchone()
     if row:

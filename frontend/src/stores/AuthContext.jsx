@@ -21,7 +21,44 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    const fetchCurrentUser = async (authToken) => {
+    // Real-time polling & event-based credits auto-refresh
+    useEffect(() => {
+        const savedToken = token || localStorage.getItem('verifykey-token');
+        if (!savedToken) return;
+
+        // Poll credits silently every 3 seconds for real-time accuracy
+        const interval = setInterval(() => {
+            fetchCurrentUser(savedToken, true);
+        }, 3000);
+
+        // Immediate refresh when tab regains focus or becomes visible
+        const handleFocus = () => {
+            fetchCurrentUser(savedToken, true);
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchCurrentUser(savedToken, true);
+            }
+        };
+
+        // Custom event for instant refresh on action completion (e.g. submit, redeem)
+        const handleRefreshEvent = () => {
+            fetchCurrentUser(savedToken, true);
+        };
+
+        window.addEventListener('focus', handleFocus);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('credits:refresh', handleRefreshEvent);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('credits:refresh', handleRefreshEvent);
+        };
+    }, [token]);
+
+    const fetchCurrentUser = async (authToken, silent = false) => {
         try {
             const res = await fetch(`${API_BASE}/api/auth/me`, {
                 headers: {
@@ -33,15 +70,19 @@ export function AuthProvider({ children }) {
                 const data = await res.json();
                 setUser(data.user);
                 setToken(authToken);
-            } else {
+            } else if (!silent) {
                 // Token invalid, clear storage
                 localStorage.removeItem('verifykey-token');
             }
         } catch (error) {
             console.error('Failed to fetch user:', error);
-            localStorage.removeItem('verifykey-token');
+            if (!silent) {
+                localStorage.removeItem('verifykey-token');
+            }
         } finally {
-            setLoading(false);
+            if (!silent) {
+                setLoading(false);
+            }
         }
     };
 

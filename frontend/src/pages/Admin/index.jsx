@@ -5503,7 +5503,20 @@ export default function Admin() {
                                                     {log.amount > 0 ? `+${log.amount}` : log.amount}
                                                 </td>
                                                 <td style={{ fontWeight: 600 }}>{log.balance_after}</td>
-                                                <td><span className="badge">{log.reason}</span></td>
+                                                <td>
+                                                    <span className={`badge ${
+                                                        log.reason === 'cdk_redeem' ? 'badge-success' :
+                                                        log.reason?.includes('refund') ? 'badge-warning' :
+                                                        log.reason?.includes('deduct') ? 'badge-error' :
+                                                        'badge-info'
+                                                    }`}>
+                                                        {log.reason === 'cdk_redeem' ? '🎟️ CDK兑换' :
+                                                         log.reason === 'pixel_deduct' ? '⚡ 验证扣费' :
+                                                         log.reason === 'pixel_refund' ? '🔄 失败退款' :
+                                                         log.reason === 'adjust' ? '⚙️ 余额调整' :
+                                                         log.reason}
+                                                    </span>
+                                                </td>
                                                 <td style={{ fontFamily: "'SF Mono', monospace", fontSize: '11px' }}>{log.ref_id || '-'}</td>
                                                 <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                                                     {log.timestamp ? new Date(log.timestamp).toLocaleString('zh-CN', { hour12: false }) : '-'}

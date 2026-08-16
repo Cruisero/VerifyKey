@@ -109,7 +109,7 @@ def redeem_cdk(code: str, user_id: int) -> Dict:
             return {"success": False, "message": "CDK 积分已用完"}
 
         # Transfer all remaining credits to user account
-        auth.update_credits(user_id, remaining)
+        auth.update_credits(user_id, remaining, reason="cdk_redeem", ref_id=code)
 
         # Mark CDK as fully used
         now = datetime.now().isoformat()

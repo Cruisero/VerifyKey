@@ -2846,7 +2846,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                         <input
                             className="input"
                             type="text"
-                            placeholder="搜索代码或备注..."
+                            placeholder="搜索代码、备注或用户ID..."
                             value={cdkSearchInput}
                             onChange={(e) => {
                                 const val = e.target.value;
@@ -2858,7 +2858,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                     fetchCDKs(1, cdkFilter);
                                 }, 500);
                             }}
-                            style={{ width: '180px', height: '32px', padding: '0 8px', fontSize: 'var(--text-sm)', borderRadius: '6px' }}
+                            style={{ width: '220px', height: '32px', padding: '0 8px', fontSize: 'var(--text-sm)', borderRadius: '6px' }}
                         />
                         {['all', 'unused', 'active', 'used'].map(f => (
                             <button key={f} className={`btn btn-sm ${cdkFilter === f ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setCdkFilter(f); setCdkPage(1); setSelectedCdks(new Set()); fetchCDKs(1, f); }}>

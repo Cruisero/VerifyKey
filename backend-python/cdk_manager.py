@@ -296,9 +296,19 @@ def get_cdks_paginated(
         params.append(status)
         
     if search:
-        search_term = f"%{search}%"
-        where_clauses.append("(code LIKE ? OR note LIKE ?)")
-        params.extend([search_term, search_term])
+        search_clean = search.strip()
+        search_term = f"%{search_clean}%"
+        if search_clean.lower().startswith("user:"):
+            uid_str = search_clean[5:].strip()
+            if uid_str.isdigit():
+                where_clauses.append("redeemed_by = ?")
+                params.append(int(uid_str))
+            else:
+                where_clauses.append("(code LIKE ? OR note LIKE ? OR CAST(redeemed_by AS TEXT) LIKE ?)")
+                params.extend([search_term, search_term, search_term])
+        else:
+            where_clauses.append("(code LIKE ? OR note LIKE ? OR CAST(redeemed_by AS TEXT) LIKE ?)")
+            params.extend([search_term, search_term, search_term])
         
     where_sql = ""
     if where_clauses:

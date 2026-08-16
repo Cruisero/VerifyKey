@@ -2881,7 +2881,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                 <th>绑定用户ID</th>
                                 <th>状态</th>
                                 <th>备注</th>
-                                <th>创建时间</th>
+                                <th>兑换 / 创建时间</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -2904,7 +2904,18 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                             </span>
                                         </td>
                                         <td style={{ color: 'var(--text-muted)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.note || '-'}</td>
-                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{c.createdAt ? new Date(c.createdAt).toLocaleString() : '-'}</td>
+                                        <td style={{ fontSize: 'var(--text-xs)' }}>
+                                            {c.lastUsedAt ? (
+                                                <div style={{ color: 'var(--text-primary)', fontWeight: 500 }} title="兑换使用时间">
+                                                    ⚡ {new Date(c.lastUsedAt).toLocaleString('zh-CN', { hour12: false })}
+                                                </div>
+                                            ) : (
+                                                <div style={{ color: 'var(--text-muted)' }}>-</div>
+                                            )}
+                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }} title="生成创建时间">
+                                                建于: {c.createdAt ? new Date(c.createdAt).toLocaleString('zh-CN', { hour12: false }) : '-'}
+                                            </div>
+                                        </td>
                                         <td>
                                             <div className="action-btns">
                                                 <button className="btn btn-sm btn-secondary" onClick={() => fetchCdkHistory(c.code)} title="查看验证记录"

@@ -145,14 +145,20 @@ export default function Verify() {
                     const targetPct = (r.stage / r.totalStages) * 100;
                     const nextStagePct = Math.min(((r.stage + 1) / r.totalStages) * 100, 99);
                     const elapsed = (Date.now() - currentSnap.ts) / 1000;
-                    const avgStageTime = 40; // ~40s per stage (~4min total for 6 stages)
+
+                    const isJio = r.tier === 'jio' || r.via === 'pixel_jio' || r.source === 'pixel_jio';
+                    const isStandard = r.tier === 'standard' || r.via === 'pixel' || r.source === 'pixel';
+                    // 极速验证全流程约 60 秒 (6个阶段，每阶段约 10 秒)
+                    // 普通验证约 90-110 秒 (每阶段约 18 秒)
+                    // 高级验证约 210 秒 (每阶段约 35 秒)
+                    const avgStageTime = isJio ? 10 : (isStandard ? 18 : 35);
                     const progress = Math.min(elapsed / avgStageTime, 1);
                     // Ease-out: fast start, slow finish
                     const eased = 1 - Math.pow(1 - progress, 2);
 
                     // Phase 1: smoothly transition from fromPct to targetPct (catch-up)
                     // Phase 2: then creep from targetPct toward nextStagePct
-                    const catchUpDuration = 15; // seconds to catch up to new basePct
+                    const catchUpDuration = isJio ? 3 : (isStandard ? 6 : 12);
                     if (elapsed < catchUpDuration && currentSnap.fromPct < targetPct) {
                         const catchUpProgress = Math.min(elapsed / catchUpDuration, 1);
                         // Using linear progression instead of fast ease-out to avoid rapid jumps at the start
@@ -170,7 +176,7 @@ export default function Verify() {
                 }
                 return changed ? next : prev;
             });
-        }, 1000);
+        }, 500);
         return () => clearInterval(ticker);
     }, [results]);
 

@@ -1525,42 +1525,45 @@ export default function Verify() {
                                     {/* Verify Tier Tabs */}
                                     <div className="tier-tabs">
                                         <button
-                                            className={`tier-tab ${verifyTier === 'standard' ? 'active' : ''}`}
+                                            className={`tier-tab ${verifyTier === 'standard' ? 'active' : ''} ${serviceStatus?.upixel?.standardAvailable === false ? 'is-maint' : ''}`}
                                             onClick={() => {
                                                 const stdAvail = serviceStatus?.upixel?.standardAvailable !== false;
                                                 if (stdAvail) setVerifyTier('standard');
                                             }}
-                                            style={serviceStatus?.upixel?.standardAvailable === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                            disabled={serviceStatus?.upixel?.standardAvailable === false}
                                         >
-                                            {t('tierStandardTab')} <span className="tier-cost">1 {t('credits')}</span>
+                                            <span className="tier-tab-title">{t('tierStandardTab')}</span>
+                                            <span className="tier-cost">1 {t('credits')}</span>
                                             {serviceStatus?.upixel?.standardAvailable === false && (
-                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
+                                                <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
                                             )}
                                         </button>
                                         <button
-                                            className={`tier-tab tier-tab-pro ${verifyTier === 'pro' ? 'active' : ''}`}
+                                            className={`tier-tab tier-tab-pro ${verifyTier === 'pro' ? 'active' : ''} ${(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) ? 'is-maint' : ''}`}
                                             onClick={() => {
                                                 const proAvail = serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
                                                 if (proAvail) setVerifyTier('pro');
                                             }}
-                                            style={(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                            disabled={serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false}
                                         >
-                                            {t('tierProTab')} <span className="tier-cost">2 {t('credits')}</span>
+                                            <span className="tier-tab-title">{t('tierProTab')}</span>
+                                            <span className="tier-cost">2 {t('credits')}</span>
                                             {(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) && (
-                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
+                                                <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
                                             )}
                                         </button>
                                         <button
-                                            className={`tier-tab tier-tab-jio ${verifyTier === 'jio' ? 'active' : ''}`}
+                                            className={`tier-tab tier-tab-jio ${verifyTier === 'jio' ? 'active' : ''} ${serviceStatus?.upixel?.jioAvailable === false ? 'is-maint' : ''}`}
                                             onClick={() => {
                                                 const jioAvail = serviceStatus?.upixel?.jioAvailable !== false;
                                                 if (jioAvail) setVerifyTier('jio');
                                             }}
-                                            style={serviceStatus?.upixel?.jioAvailable === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                            disabled={serviceStatus?.upixel?.jioAvailable === false}
                                         >
-                                            {t('tierJioTab')} <span className="tier-cost">2 {t('credits')}</span>
+                                            <span className="tier-tab-title">{t('tierJioTab')}</span>
+                                            <span className="tier-cost">2 {t('credits')}</span>
                                             {serviceStatus?.upixel?.jioAvailable === false && (
-                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
+                                                <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
                                             )}
                                         </button>
                                     </div>

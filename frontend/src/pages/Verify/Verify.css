@@ -1994,12 +1994,13 @@
 }
 
 .tier-tab {
+    position: relative;
     flex: 1;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 10px 16px;
+    padding: 10px 8px;
     border: 2px solid var(--border-primary);
     background: var(--bg-secondary);
     color: var(--text-secondary);
@@ -2007,7 +2008,34 @@
     font-weight: 600;
     border-radius: var(--radius-md);
     cursor: pointer;
+    white-space: nowrap;
     transition: all 0.2s ease;
+}
+
+.tier-tab.is-maint {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.tier-tab-title {
+    white-space: nowrap;
+}
+
+.tier-maint-badge {
+    position: absolute;
+    top: -7px;
+    right: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #dc2626;
+    background: #fee2e2;
+    border: 1px solid rgba(220, 38, 38, 0.35);
+    padding: 0 5px;
+    border-radius: 999px;
+    line-height: 15px;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    pointer-events: none;
 }
 
 .tier-tab:hover {

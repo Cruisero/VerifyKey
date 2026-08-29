@@ -325,9 +325,16 @@ DEFAULT_CONFIG = {
 
     # Per-service manual maintenance overrides
     "serviceMaintenance": {
+        "gemini_normal": False,
+        "gemini_advanced": False,
+        "gemini_jio": False,
         "upixel": False,
+        "upixel_normal": False,
+        "upixel_advanced": False,
+        "upixel_jio": False,
         "kpixel": False,
         "vpixel": False,
+        "ypixel": False,
         "gpt": False,
         "gpt_tg": False,
         "gpt_team": False
@@ -351,12 +358,14 @@ DEFAULT_CONFIG = {
         "channelName": "微信号"
     },
     
-    # Pixel API (Google One via iqless.icu) — "UPixel" 普通验证
+    # Pixel API (Google One via iqless.icu / auto.onepass.fun) — "UPixel" 验证
     "pixelApi": {
         "enabled": False,
         "apiKey": "",  # ak_XXXX-XXXX-... format
         "baseUrl": "https://iqless.icu",
-        "creditCost": 1.0
+        "creditCost": 1.0,
+        "autoCost": 2.0,
+        "jioCost": 2.0
     },
     
     # KPixel API (Google One via kckc1818.com) — "KPixel" Pro 验证

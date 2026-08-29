@@ -93,6 +93,7 @@ def main():
     
     COST_MAP = {
         "pixel_auto": 2.0,
+        "pixel_jio": 2.0,
         "pixel": 1.0,
         "vpixel": 2.0,
         "kpixel": 2.0,

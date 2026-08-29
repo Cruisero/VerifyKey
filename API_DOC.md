@@ -66,13 +66,14 @@ Authorization: Bearer <your_access_token>
     "email": "user@gmail.com",
     "password": "your_password",
     "totp_secret": "JBSWY3DPEHPK3PXP", // 2FA TOTP 密钥 (Base32 编码)
-    "mode": "semi-auto", // semi-auto (普通验证，扣1分) 或 auto (高级验证，扣2分)
+    "mode": "semi-auto", // semi-auto (普通验证，扣1分) / auto (高级验证，扣2分) / jio (Jio免卡升级验证，扣2分)
     "priority": 0 // 优先级 (可选，默认0)
   }
   ```
 
 * **普通验证 (semi-auto) 扣减 1.0 积分**：登录 Google 账号获取 Google One 优惠链接，不执行绑卡。任务成功后返回 `url`。
-* **高级验证 (auto) 扣减 2.0 积分**：登录 + 自动绑卡 + 完成订阅。任务成功后返回 `result_msg`。
+* **高级验证 (auto) 扣减 2.0 积分**：登录 + 自动绑卡 + 完成订阅。任务成功后返回 `result_msg: "订阅成功"`。
+* **Jio 免卡升级 (jio) 扣减 2.0 积分**：登录 + 自动使用 Jio 激活链接完成免卡升级 18 个月 Pro。任务成功后返回 `result_msg: "激活成功"`。
 
 * **成功响应 (进入处理队列)**:
   ```json
@@ -174,3 +175,4 @@ Authorization: Bearer <your_access_token>
 | :--- | :--- | :--- |
 | **UPixel 普通验证 (semi-auto)** | **-1.0 积分** | 登录并生成 Partner 优惠链接，由人工/下游进行后续绑定 |
 | **UPixel 高级验证 (auto)** | **-2.0 积分** | 自动完成登录、绑卡、确认订阅全套流程 |
+| **UPixel Jio 免卡升级 (jio)** | **-2.0 积分** | 自动登录并通过 Jio 激活链接免信用卡直接升级 18 个月 Pro |

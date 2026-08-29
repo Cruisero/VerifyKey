@@ -558,7 +558,7 @@ def broadcast_verify_event(event: dict):
             if event.get("success") and "creditCost" not in event:
                 _source = event.get("source", "")
                 _COST_BY_SOURCE = {
-                    "pixel": 1.0, "pixel_auto": 2.0,
+                    "pixel": 1.0, "pixel_auto": 2.0, "pixel_jio": 2.0,
                     "kpixel": 2.0, "vpixel": 2.0, "ypixel": 1.0,
                     "pro_submit": 2.0,
                     "gpt": 1.5,
@@ -6113,7 +6113,7 @@ async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
     cursor = conn.execute(
         "SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded "
         "FROM verification_history "
-        "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
+        "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
         "ORDER BY rowid DESC LIMIT 500",
         (today_start,)
     )
@@ -6265,7 +6265,7 @@ async def _fetch_upstream_result_url(vid: str, via: str) -> str:
         via_lower = (via or "").lower()
         
         # UPixel: GET {baseUrl}/api/jobs/{job_id}  →  response.url
-        if via_lower in ("pixel", "pixel_auto", "pixel_api"):
+        if via_lower in ("pixel", "pixel_auto", "pixel_jio", "pixel_api"):
             pixel_cfg = _get_pixel_config()
             if not pixel_cfg.get("apiKey"):
                 return ""
@@ -6424,7 +6424,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                     cost = 2.0
                 elif vid.startswith("kp_") or via == "kpixel":
                     cost = 2.0
-                elif via == "pixel_auto":
+                elif via in ("pixel_auto", "pixel_jio"):
                     cost = 2.0
                 elif via == "pro_submit":
                     cost = 2.0
@@ -6636,7 +6636,7 @@ async def override_verification_by_vid(request: VidOverrideRequest):
                     cost = 2.0
                 elif vid_str.startswith("kp_") or via == "kpixel":
                     cost = 2.0
-                elif via == "pixel_auto":
+                elif via in ("pixel_auto", "pixel_jio"):
                     cost = 2.0
                 elif via == "pro_submit":
                     cost = 2.0
@@ -8548,10 +8548,12 @@ async def get_service_status():
             upixel_reason = "无法连接 API"
 
     # Apply per-mode maintenance overrides
-    upixel_normal_available = upixel_ok and not manual.get("upixel_normal")
-    upixel_advanced_available = upixel_ok and not manual.get("upixel_advanced")
-    upixel_normal_reason = "管理员手动维护中" if manual.get("upixel_normal") else upixel_reason
-    upixel_advanced_reason = "管理员手动维护中" if manual.get("upixel_advanced") else upixel_reason
+    upixel_normal_available = upixel_ok and not (manual.get("upixel_normal") or manual.get("gemini_normal"))
+    upixel_advanced_available = upixel_ok and not (manual.get("upixel_advanced") or manual.get("gemini_advanced"))
+    upixel_jio_available = upixel_ok and not (manual.get("upixel_jio") or manual.get("gemini_jio"))
+    upixel_normal_reason = "管理员手动维护中" if (manual.get("upixel_normal") or manual.get("gemini_normal")) else upixel_reason
+    upixel_advanced_reason = "管理员手动维护中" if (manual.get("upixel_advanced") or manual.get("gemini_advanced")) else upixel_reason
+    upixel_jio_reason = "管理员手动维护中" if (manual.get("upixel_jio") or manual.get("gemini_jio")) else upixel_reason
 
     # --- KPixel auto-detect ---
     kpixel_ok = False
@@ -8629,12 +8631,16 @@ async def get_service_status():
             ypixel_reason = "数据库查询失败"
 
     # --- Gemini 普通验证: purely manual toggle ---
-    standard_available = not manual.get("gemini_normal", False)
-    standard_reason = "管理员手动维护中" if manual.get("gemini_normal") else ""
+    standard_available = not (manual.get("gemini_normal", False) or manual.get("upixel_normal", False))
+    standard_reason = "管理员手动维护中" if (manual.get("gemini_normal") or manual.get("upixel_normal")) else ""
 
     # --- Gemini 高级验证: purely manual toggle ---
-    pro_available = not manual.get("gemini_advanced", False)
-    pro_reason = "管理员手动维护中" if manual.get("gemini_advanced") else ""
+    pro_available = not (manual.get("gemini_advanced", False) or manual.get("upixel_advanced", False))
+    pro_reason = "管理员手动维护中" if (manual.get("gemini_advanced") or manual.get("upixel_advanced")) else ""
+
+    # --- Gemini Jio 免卡验证: purely manual toggle ---
+    jio_available = not (manual.get("gemini_jio", False) or manual.get("upixel_jio", False))
+    jio_reason = "管理员手动维护中" if (manual.get("gemini_jio") or manual.get("upixel_jio")) else ""
 
     # --- GPT Plus: purely manual toggle (per-channel status kept for admin info) ---
     gpt_channels_status = {}
@@ -8685,10 +8691,12 @@ async def get_service_status():
     return {
         "upixel": {
             "available": upixel_ok, "reason": upixel_reason,
-            "normalAvailable": standard_available,
-            "advancedAvailable": pro_available,
-            "normalReason": standard_reason,
-            "advancedReason": pro_reason,
+            "normalAvailable": standard_available and upixel_normal_available,
+            "advancedAvailable": pro_available and upixel_advanced_available,
+            "jioAvailable": jio_available and upixel_jio_available,
+            "normalReason": standard_reason or upixel_normal_reason,
+            "advancedReason": pro_reason or upixel_advanced_reason,
+            "jioReason": jio_reason or upixel_jio_reason,
             "ypixelUp": ypixel_ok, "standardAvailable": standard_available,
         },
         "ypixel": {"available": ypixel_ok, "reason": ypixel_reason},
@@ -8699,9 +8707,13 @@ async def get_service_status():
         "manual": {
             "gemini_normal": manual.get("gemini_normal", False),
             "gemini_advanced": manual.get("gemini_advanced", False),
+            "gemini_jio": manual.get("gemini_jio", False),
             "gpt_plus": manual.get("gpt_plus", False),
             "gpt_team": manual.get("gpt_team", False),
             "upixel": manual.get("upixel", False),
+            "upixel_normal": manual.get("upixel_normal", False),
+            "upixel_advanced": manual.get("upixel_advanced", False),
+            "upixel_jio": manual.get("upixel_jio", False),
             "kpixel": manual.get("kpixel", False),
             "vpixel": manual.get("vpixel", False),
             "ypixel": manual.get("ypixel", False),
@@ -8732,7 +8744,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("gemini_normal", "gemini_advanced", "gpt_plus", "gpt_team", "upixel", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api"):
+    for key in ("gemini_normal", "gemini_advanced", "gemini_jio", "gpt_plus", "gpt_team", "upixel", "upixel_normal", "upixel_advanced", "upixel_jio", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api"):
         if key in data:
             sm[key] = bool(data[key])
 
@@ -8985,7 +8997,7 @@ async def _pixel_job_sweep():
             conn = database.get_connection()
             rows = conn.execute(
                 "SELECT verification_id, cdk, email, via, timestamp FROM verification_history "
-                "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto') "
+                "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto', 'pixel_jio') "
                 "ORDER BY rowid DESC LIMIT 200"
             ).fetchall()
 
@@ -9019,7 +9031,14 @@ async def _pixel_job_sweep():
                             f"{base_url}/api/jobs/{vid}",
                             headers={"X-API-Key": api_key},
                         )
-                    sse_source = "pixel_auto" if "auto" in (row["via"] or "") else "pixel"
+                    row_via = row["via"] or ""
+                    if "jio" in row_via:
+                        sse_source = "pixel_jio"
+                    elif "auto" in row_via:
+                        sse_source = "pixel_auto"
+                    else:
+                        sse_source = "pixel"
+
                     if resp.status_code == 404:
                         # Upstream lost this job (404 Not Found) — mark failed via state machine (auto-refunds)
                         import verification_history as vh
@@ -9039,7 +9058,11 @@ async def _pixel_job_sweep():
 
                     if upstream_status == "success":
                         url = data.get("url", "")
-                        msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                        result_msg = data.get("result_msg", "")
+                        if "激活成功" in result_msg or sse_source == "pixel_jio":
+                            msg = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
+                        else:
+                            msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
                         import verification_history as vh
                         vh.transition_task_status(vid, "pass", message=msg, user_id=user_id, via=sse_source, email=email)
                         _complete_async_task("pixel", vid)
@@ -9132,8 +9155,15 @@ async def _repair_timeout_failed_tasks():
             if not user_id:
                 continue
 
-            sse_source = "pixel_auto" if "auto" in current_via else "pixel"
-            sweep_cost = 2.0 if "auto" in sse_source else 1.0
+            if "jio" in current_via:
+                sse_source = "pixel_jio"
+                sweep_cost = float(pixel.get("jioCost", 2.0))
+            elif "auto" in current_via:
+                sse_source = "pixel_auto"
+                sweep_cost = float(pixel.get("autoCost", 2.0))
+            else:
+                sse_source = "pixel"
+                sweep_cost = float(pixel.get("creditCost", 1.0))
 
             try:
                 async with httpx.AsyncClient(timeout=15) as client:
@@ -9149,7 +9179,11 @@ async def _repair_timeout_failed_tasks():
 
                 if upstream_status == "success":
                     url = data.get("url", "")
-                    msg = f"✅ 订阅成功（已修正扣费）: {url}" if url else "✅ 订阅成功（已修正扣费）"
+                    result_msg = data.get("result_msg", "")
+                    if "激活成功" in result_msg or sse_source == "pixel_jio":
+                        msg = f"✅ 激活成功（已修正扣费）: {url}" if url else "✅ 激活成功（已修正扣费）"
+                    else:
+                        msg = f"✅ 订阅成功（已修正扣费）: {url}" if url else "✅ 订阅成功（已修正扣费）"
                     import verification_history as vh
                     result = vh.transition_task_status(vid, "pass", message=msg, user_id=user_id, via=sse_source, email=email)
                     if result.get("success"):
@@ -9322,7 +9356,12 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
     mode = payload.get("mode", "semi-auto")
     user_id = int(payload.get("user_id", 0) or 0)
     email = payload.get("email", "")
-    sse_source = "pixel_auto" if mode == "auto" else "pixel"
+    if mode == "jio":
+        sse_source = "pixel_jio"
+    elif mode == "auto":
+        sse_source = "pixel_auto"
+    else:
+        sse_source = "pixel"
     event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
 
     # Store context so GET endpoint can also finalize if frontend polls
@@ -9344,13 +9383,20 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
 
         if status == "success":
             url = data.get("url", "")
-            result = _finalize_user_success(task_id, user_id, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
+            result_msg = data.get("result_msg", "")
+            if "激活成功" in result_msg or mode == "jio":
+                success_text = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
+                display_msg = "✅ 激活成功（重启恢复）"
+            else:
+                success_text = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                display_msg = "✅ 获取成功（重启恢复）"
+            result = _finalize_user_success(task_id, user_id, cost, success_text, via=sse_source, email=email)
             _complete_async_task("pixel", task_id)
             if not result.get("already_done"):
                 broadcast_verify_event({
                     "type": "progress", "vid": task_id, "step": "result",
                     "status": "approved", "success": True,
-                    "message": "✅ 获取成功（重启恢复）",
+                    "message": display_msg,
                     "url": url, "recovered": True,
                     **event_meta,
                 })
@@ -9462,9 +9508,11 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     # Check per-mode maintenance flags
     import config_manager as _cfg_mgr_pixel
     _pixel_maint = _cfg_mgr_pixel.get_config().get("serviceMaintenance", {})
-    if request.mode == "auto" and _pixel_maint.get("upixel_advanced"):
+    if request.mode == "jio" and (_pixel_maint.get("gemini_jio") or _pixel_maint.get("upixel_jio")):
+        raise HTTPException(status_code=503, detail="UPixel Jio 免卡验证正在维护中，请稍后再试")
+    if request.mode == "auto" and (_pixel_maint.get("gemini_advanced") or _pixel_maint.get("upixel_advanced")):
         raise HTTPException(status_code=503, detail="UPixel 高级验证正在维护中，请稍后再试")
-    if request.mode != "auto" and _pixel_maint.get("upixel_normal"):
+    if request.mode not in ("auto", "jio") and (_pixel_maint.get("gemini_normal") or _pixel_maint.get("upixel_normal")):
         raise HTTPException(status_code=503, detail="UPixel 普通验证正在维护中，请稍后再试")
 
     pixel_cfg = _get_pixel_config()
@@ -9489,8 +9537,15 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
-    cost = 2.0 if request.mode == "auto" else 1.0
-    sse_source = "pixel_auto" if request.mode == "auto" else "pixel"
+    if request.mode == "jio":
+        cost = float(pixel_cfg.get("jioCost", 2.0))
+        sse_source = "pixel_jio"
+    elif request.mode == "auto":
+        cost = float(pixel_cfg.get("autoCost", 2.0))
+        sse_source = "pixel_auto"
+    else:
+        cost = float(pixel_cfg.get("creditCost", 1.0))
+        sse_source = "pixel"
     import verification_history
     import uuid
     existing_success = verification_history.get_successful_history_by_email(request.email, user_id)
@@ -9498,7 +9553,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         job_id = existing_success.get("verificationId") or existing_success.get("id") or ("auto-" + str(uuid.uuid4())[:8])
         event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
         msg = existing_success.get("message", "")
-        url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 获取成功", "").replace("✅ 订阅成功", "").strip()
+        url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 激活成功: ", "").replace("✅ 获取成功", "").replace("✅ 订阅成功", "").replace("✅ 激活成功", "").strip()
         if not url.startswith("http"):
             url = ""
         
@@ -9574,7 +9629,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
 
             # Write initial processing record to DB so sweep can find this job
             # even if the user closes browser and in-memory context is lost
-            sse_source_tag = "pixel_auto" if request.mode == "auto" else "pixel"
+            sse_source_tag = sse_source
             _upsert_user_verification_result(
                 job_id, user_id, "processing",
                 "任务已提交，等待设备处理...",
@@ -9625,7 +9680,12 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                         if url409:
                             success_msg = f"✅ 获取成功: {url409}"
                         elif result_msg409:
-                            success_msg = f"✅ 订阅成功: {result_msg409}"
+                            if "激活成功" in result_msg409 or request.mode == "jio":
+                                success_msg = f"✅ {result_msg409}"
+                            else:
+                                success_msg = f"✅ 订阅成功: {result_msg409}"
+                        elif request.mode == "jio":
+                            success_msg = "✅ 激活成功"
                         else:
                             success_msg = "✅ 订阅成功"
 
@@ -9736,10 +9796,10 @@ async def pixel_get_job(job_id: str):
         status = row["status"]
         msg = row["message"]
         if status == "pass":
-            url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 验证已成功（获取历史记录）", "").strip()
+            url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 激活成功: ", "").replace("✅ 验证已成功（获取历史记录）", "").strip()
             if not url.startswith("http"):
                 url = ""
-            return {"job_id": job_id, "status": "success", "url": url, "queue_position": -1, "estimated_wait_seconds": 0}
+            return {"job_id": job_id, "status": "success", "url": url, "result_msg": msg, "queue_position": -1, "estimated_wait_seconds": 0}
         else:
             return {"job_id": job_id, "status": "failed", "error": msg, "queue_position": -1, "estimated_wait_seconds": 0}
 
@@ -9778,10 +9838,18 @@ async def pixel_get_job(job_id: str):
                         except ValueError:
                             pass
                     if uid_from_db:
-                        # Determine cost by via/mode: pixel_auto=2.0, pixel=1.0
+                        # Determine cost by via/mode: pixel_jio=2.0, pixel_auto=2.0, pixel=1.0
                         row_via = row["via"] if "via" in row.keys() else ""
-                        recover_cost = 2.0 if "auto" in (row_via or "") else 1.0
-                        ctx = {"user_id": uid_from_db, "email": db_email, "cost": recover_cost, "mode": "auto" if "auto" in (row_via or "") else "semi-auto"}
+                        if "jio" in (row_via or ""):
+                            recover_cost = float(pixel_cfg.get("jioCost", 2.0))
+                            recover_mode = "jio"
+                        elif "auto" in (row_via or ""):
+                            recover_cost = float(pixel_cfg.get("autoCost", 2.0))
+                            recover_mode = "auto"
+                        else:
+                            recover_cost = float(pixel_cfg.get("creditCost", 1.0))
+                            recover_mode = "semi-auto"
+                        ctx = {"user_id": uid_from_db, "email": db_email, "cost": recover_cost, "mode": recover_mode}
                         _pixel_job_context[job_id] = ctx
             except Exception:
                 pass
@@ -9789,13 +9857,27 @@ async def pixel_get_job(job_id: str):
         cost = ctx.get("cost", 1.0)
         user_id = ctx.get("user_id")
         email = ctx.get("email", "")
-        sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+        mode_val = ctx.get("mode", "")
+        if mode_val == "jio":
+            sse_source = "pixel_jio"
+        elif mode_val == "auto":
+            sse_source = "pixel_auto"
+        else:
+            sse_source = "pixel"
         event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api") if user_id else {}
 
         # Auto-finalize on terminal states (idempotent via _finalize_user_*)
         if upstream_status == "success" and user_id:
             url = data.get("url", "")
-            result = _finalize_user_success(job_id, user_id, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=email)
+            result_msg = data.get("result_msg", "")
+            is_jio = (mode_val == "jio") or ("jio" in sse_source) or ("激活成功" in result_msg)
+            if is_jio:
+                success_text = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
+                display_success_msg = "✅ 激活成功（补偿确认）" if result.get("reconciled") else "✅ 激活成功"
+            else:
+                success_text = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                display_success_msg = "✅ 获取成功（补偿确认）" if result.get("reconciled") else "✅ 获取成功"
+            result = _finalize_user_success(job_id, user_id, cost, success_text, via=sse_source, email=email)
             _complete_async_task("pixel", job_id)
             # Stop any lingering background poll
             task = _pixel_polling_tasks.pop(job_id, None)
@@ -9808,7 +9890,7 @@ async def pixel_get_job(job_id: str):
                     "step": "result",
                     "status": "approved",
                     "success": True,
-                    "message": "✅ 获取成功（补偿确认）" if result.get("reconciled") else "✅ 获取成功",
+                    "message": display_success_msg,
                     "url": url,
                     "forceTerminalUpdate": bool(result.get("reconciled")),
                     "reconciledLateSuccess": bool(result.get("reconciled")),
@@ -9910,13 +9992,24 @@ async def pixel_get_job(job_id: str):
                     recovered_cost = db_row["cost"] if "cost" in db_row.keys() else 0
                     if not recovered_cost or recovered_cost <= 0:
                         row_via = db_row["via"] if "via" in db_row.keys() else ""
-                        recovered_cost = 2.0 if "auto" in (row_via or "") else 1.0
+                        if "jio" in (row_via or ""):
+                            recovered_cost = float(pixel_cfg.get("jioCost", 2.0))
+                        elif "auto" in (row_via or ""):
+                            recovered_cost = float(pixel_cfg.get("autoCost", 2.0))
+                        else:
+                            recovered_cost = float(pixel_cfg.get("creditCost", 1.0))
 
                 if upstream_status == "success":
                     url = data.get("url", "")
+                    result_msg = data.get("result_msg", "")
+                    is_jio = ("jio" in (db_row.get("via", "") if db_row else "")) or ("激活成功" in result_msg)
+                    if is_jio:
+                        succ_db_msg = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
+                    else:
+                        succ_db_msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
                     conn.execute(
                         "UPDATE verification_history SET status = 'pass', is_refunded = 0, message = ? WHERE verification_id = ? AND status = 'processing'",
-                        (f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", job_id),
+                        (succ_db_msg, job_id),
                     )
                     conn.commit()
                     logging.info(f"[Pixel] Safety-net: marked {job_id} as pass (credits kept, user {recovered_uid})")
@@ -9968,11 +10061,25 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
     status = data.get("status", "")
     ctx = _pixel_job_context.get(job_id) or {}
     cost = ctx.get("cost", 1.0)
-    sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+    mode_val = ctx.get("mode", "")
+    if mode_val == "jio":
+        sse_source = "pixel_jio"
+    elif mode_val == "auto":
+        sse_source = "pixel_auto"
+    else:
+        sse_source = "pixel"
     event_meta = _build_verify_event_meta(sse_source, ctx.get("email", ""), user.get("id"), "pixel_api")
     if status == "success":
         url = data.get("url", "")
-        result = _finalize_user_success(job_id, user.get("id"), cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_source, email=ctx.get("email", ""))
+        result_msg = data.get("result_msg", "")
+        is_jio = (mode_val == "jio") or ("jio" in sse_source) or ("激活成功" in result_msg)
+        if is_jio:
+            success_text = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
+            display_confirm_msg = "✅ 激活成功（补偿确认）"
+        else:
+            success_text = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+            display_confirm_msg = "✅ 获取成功（补偿确认）"
+        result = _finalize_user_success(job_id, user.get("id"), cost, success_text, via=sse_source, email=ctx.get("email", ""))
         _complete_async_task("pixel", job_id)
         broadcast_verify_event({
             "type": "progress",
@@ -9980,7 +10087,7 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
             "step": "result",
             "status": "approved",
             "success": True,
-            "message": "✅ 获取成功（补偿确认）" if result.get("reconciled") else "✅ 获取成功",
+            "message": display_confirm_msg if result.get("reconciled") else ("✅ 激活成功" if is_jio else "✅ 获取成功"),
             "url": url,
             "forceTerminalUpdate": bool(result.get("reconciled")),
             "reconciledLateSuccess": bool(result.get("reconciled")),
@@ -10009,14 +10116,20 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
     user_id = ctx.get("user_id", 0)
     cost = ctx.get("cost", 1.0)
     email = ctx.get("email", "")
-    sse_source = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+    mode_val = ctx.get("mode", "")
+    if mode_val == "jio":
+        sse_source = "pixel_jio"
+    elif mode_val == "auto":
+        sse_source = "pixel_auto"
+    else:
+        sse_source = "pixel"
 
     # Fallback: if in-memory context was lost (e.g. server restart), recover from DB
     if not user_id:
         import database as _db_cancel
         _conn = _db_cancel.get_connection()
         _row = _conn.execute(
-            "SELECT cdk, via, email FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
+            "SELECT cdk, via, email, cost FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1",
             (job_id,)
         ).fetchone()
         if _row:
@@ -10027,9 +10140,14 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
                 except Exception:
                     pass
             _via = _row["via"] if "via" in _row.keys() else ""
-            if _via == "pixel_auto":
+            if _via == "pixel_jio":
+                sse_source = "pixel_jio"
+                cost = float(_row["cost"]) if _row and _row.get("cost") else 2.0
+            elif _via == "pixel_auto":
                 sse_source = "pixel_auto"
-                cost = 2.0
+                cost = float(_row["cost"]) if _row and _row.get("cost") else 2.0
+            else:
+                cost = float(_row["cost"]) if _row and _row.get("cost") else 1.0
             email = _row["email"] if "email" in _row.keys() else email
 
     # Regular users can only cancel their own jobs
@@ -10200,7 +10318,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
            WHERE status = 'failed'
              AND timestamp >= ?
              AND (message LIKE '%排队超时%' OR message LIKE '%轮询超时%' OR message LIKE '%运行%超时%')
-             AND (via IN ('pixel', 'pixel_auto') OR via = '')
+             AND (via IN ('pixel', 'pixel_auto', 'pixel_jio') OR via = '')
            ORDER BY rowid DESC""",
         (today,)
     ).fetchall()
@@ -10239,6 +10357,15 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                 if upstream_status == "success":
                     url = data.get("url", "")
+                    result_msg = data.get("result_msg", "")
+                    is_jio = (via == "pixel_jio") or ("激活成功" in result_msg)
+                    if is_jio:
+                        succ_msg = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
+                        disp_msg = "✅ 激活成功（超时恢复）"
+                    else:
+                        succ_msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                        disp_msg = "✅ 获取成功（超时恢复）"
+
                     # Find user_id from the cdk field (format: "user:123")
                     cdk = conn.execute("SELECT cdk FROM verification_history WHERE verification_id = ? ORDER BY rowid DESC LIMIT 1", (vid,)).fetchone()
                     cdk_val = cdk["cdk"] if cdk else ""
@@ -10251,13 +10378,13 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                     if user_id:
                         # Update record to success (this will also handle credit reconciliation)
-                        result = _finalize_user_success(vid, user_id, 0, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=via, email=email)
+                        result = _finalize_user_success(vid, user_id, 0, succ_msg, via=via, email=email)
                         sse_source = via or "pixel"
                         event_meta = _build_verify_event_meta(sse_source, email, user_id, "pixel_api")
                         broadcast_verify_event({
                             "type": "progress", "vid": vid, "step": "result",
                             "status": "approved", "success": True,
-                            "message": "✅ 获取成功（超时恢复）",
+                            "message": disp_msg,
                             "url": url, "recovered": True,
                             **event_meta,
                         })
@@ -10267,7 +10394,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
                         # Can't find user_id, just update the record directly
                         conn.execute(
                             "UPDATE verification_history SET status = 'pass', message = ? WHERE verification_id = ? AND status = 'failed'",
-                            (f"✅ 订阅成功: {url}" if url else "✅ 订阅成功（超时恢复）", vid)
+                            (succ_msg, vid)
                         )
                         conn.commit()
                         recovered += 1
@@ -10297,8 +10424,17 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
 
                     if user_id:
                         # Restore context
-                        recover_cost = 2.0 if "auto" in (row.get("via") or "") else 1.0
-                        _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": recover_cost, "mode": "auto" if "auto" in (row.get("via") or "") else "semi-auto"}
+                        row_via = row.get("via") or ""
+                        if "jio" in row_via:
+                            recover_cost = float(pixel_cfg.get("jioCost", 2.0))
+                            recover_mode = "jio"
+                        elif "auto" in row_via:
+                            recover_cost = float(pixel_cfg.get("autoCost", 2.0))
+                            recover_mode = "auto"
+                        else:
+                            recover_cost = float(pixel_cfg.get("creditCost", 1.0))
+                            recover_mode = "semi-auto"
+                        _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": recover_cost, "mode": recover_mode}
                         conn.execute(
                             "UPDATE verification_history SET status = 'processing', message = '⏳ 已恢复，正在查询上游...' WHERE verification_id = ? AND status = 'failed'",
                             (vid,)
@@ -10328,15 +10464,29 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
                                     uid = ctx.get("user_id")
                                     cost = ctx.get("cost", 0)
                                     em = ctx.get("email", "")
-                                    sse_src = "pixel_auto" if ctx.get("mode") == "auto" else "pixel"
+                                    mode_rec = ctx.get("mode", "")
+                                    if mode_rec == "jio":
+                                        sse_src = "pixel_jio"
+                                    elif mode_rec == "auto":
+                                        sse_src = "pixel_auto"
+                                    else:
+                                        sse_src = "pixel"
                                     evt_meta = _build_verify_event_meta(sse_src, em, uid, "pixel_api") if uid else {}
 
                                     if st == "success":
                                         url = d.get("url", "")
-                                        result = _finalize_user_success(job_id, uid, cost, f"✅ 订阅成功: {url}" if url else "✅ 订阅成功", via=sse_src, email=em)
+                                        result_msg = d.get("result_msg", "")
+                                        is_jio_rec = (mode_rec == "jio") or ("激活成功" in result_msg)
+                                        if is_jio_rec:
+                                            success_text = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
+                                            disp_poll_msg = "✅ 激活成功（恢复确认）"
+                                        else:
+                                            success_text = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
+                                            disp_poll_msg = "✅ 获取成功（恢复确认）"
+                                        result = _finalize_user_success(job_id, uid, cost, success_text, via=sse_src, email=em)
                                         _complete_async_task("pixel", job_id)
                                         if not result.get("already_done"):
-                                            broadcast_verify_event({"type": "progress", "vid": job_id, "step": "result", "status": "approved", "success": True, "message": "✅ 获取成功（恢复确认）", "url": url, **evt_meta})
+                                            broadcast_verify_event({"type": "progress", "vid": job_id, "step": "result", "status": "approved", "success": True, "message": disp_poll_msg, "url": url, **evt_meta})
                                         _pixel_job_context.pop(job_id, None)
                                         return
                                     elif st in ("failed", "cancelled"):
@@ -10477,22 +10627,26 @@ async def get_result_by_email(email: str, authorization: Optional[str] = Header(
     if existing_success:
         msg = existing_success.get("message", "")
         via = existing_success.get("via", "")
-        # Extract URL from message field (stored as "✅ 订阅成功: https://..." or similar)
+        # Extract URL from message field
         url = (
             msg.replace("✅ 获取成功: ", "")
                .replace("✅ 订阅成功: ", "")
+               .replace("✅ 激活成功: ", "")
                .replace("✅ 获取成功（补偿确认）", "")
+               .replace("✅ 激活成功（补偿确认）", "")
                .replace("✅ 验证已成功（获取历史记录）", "")
                .replace("✅ 获取成功", "")
                .replace("✅ 订阅成功", "")
+               .replace("✅ 激活成功", "")
                .strip()
         )
         if not url.startswith("http"):
             url = ""
+        mode_val = "jio" if ("jio" in via or "激活成功" in msg) else ("auto" if ("auto" in via) else "semi-auto")
         return {
             "email": email,
             "status": "success",
-            "mode": "auto" if ("auto" in via) else "semi-auto",
+            "mode": mode_val,
             "url": url,
             "result_msg": msg,
             "created_at": existing_success.get("timestamp", ""),
@@ -10504,7 +10658,7 @@ async def get_result_by_email(email: str, authorization: Optional[str] = Header(
             return {
                 "email": email,
                 "status": "running",
-                "mode": "auto" if ctx.get("mode") == "auto" else "semi-auto",
+                "mode": ctx.get("mode", "semi-auto"),
                 "job_id": job_id,
             }
 

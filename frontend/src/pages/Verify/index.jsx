@@ -24,9 +24,9 @@ export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
 
-    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (KPixel 2pt)
+    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (2pt) | 'jio' (2pt)
     const [verifyTier, setVerifyTier] = useState('standard');
-    const tierCost = verifyTier === 'pro' ? 2 : 1;
+    const tierCost = (verifyTier === 'pro' || verifyTier === 'jio') ? 2 : 1;
 
     // Top-level service tab: 'pixel' | 'gpt'
     const [serviceTab, setServiceTab] = useState('pixel');
@@ -417,6 +417,15 @@ export default function Verify() {
     const buildJobPlan = (account) => {
         const normalizedTotp = (account.totp_secret || '').replace(/\s+/g, '');
 
+        if (verifyTier === 'jio') {
+            return {
+                apiUrl: `${API_BASE}/api/pixel/jobs`,
+                payload: { email: account.email, password: account.password, totp_secret: normalizedTotp, mode: 'jio' },
+                source: 'pixel_jio',
+                totalStages: 6,
+            };
+        }
+
         if (verifyTier === 'pro') {
             const kpixelUp = Boolean(serviceStatus?.kpixel?.kpixelUp);
             const vpixelUp = Boolean(serviceStatus?.kpixel?.vpixelUp);
@@ -706,7 +715,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'success',
-                            message: r.tier === 'pro' ? t('subscribeSuccess') : t('fetchSuccess'),
+                            message: r.tier === 'jio' ? (data.result_msg || '✅ 激活成功') : (r.tier === 'pro' ? t('subscribeSuccess') : t('fetchSuccess')),
                             url,
                             stage,
                             totalStages,
@@ -1461,6 +1470,10 @@ export default function Verify() {
                                             <span className="tier-badge pro">{t('tierPro')}</span>
                                             <span dangerouslySetInnerHTML={{ __html: t('tierProDesc') }} />
                                         </div>
+                                        <div className="tier-item">
+                                            <span className="tier-badge jio">{t('tierJio')}</span>
+                                            <span dangerouslySetInnerHTML={{ __html: t('tierJioDesc') }} />
+                                        </div>
                                     </div>
 
                                 </div>
@@ -1504,7 +1517,7 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">📡</span>
-                                        <span>{verifyTier === 'pro' ? t('panelTitlePro') : t('panelTitleStandard')}</span>
+                                        <span>{verifyTier === 'jio' ? t('panelTitleJio') : (verifyTier === 'pro' ? t('panelTitlePro') : t('panelTitleStandard'))}</span>
                                     </div>
                                 </div>
 
@@ -1534,6 +1547,19 @@ export default function Verify() {
                                         >
                                             {t('tierProTab')} <span className="tier-cost">2 {t('credits')}</span>
                                             {(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) && (
+                                                <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
+                                            )}
+                                        </button>
+                                        <button
+                                            className={`tier-tab tier-tab-jio ${verifyTier === 'jio' ? 'active' : ''}`}
+                                            onClick={() => {
+                                                const jioAvail = serviceStatus?.upixel?.jioAvailable !== false;
+                                                if (jioAvail) setVerifyTier('jio');
+                                            }}
+                                            style={serviceStatus?.upixel?.jioAvailable === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                        >
+                                            {t('tierJioTab')} <span className="tier-cost">2 {t('credits')}</span>
+                                            {serviceStatus?.upixel?.jioAvailable === false && (
                                                 <span style={{ display: 'block', fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>{t('maintenance')}</span>
                                             )}
                                         </button>

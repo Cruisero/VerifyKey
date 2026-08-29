@@ -2132,7 +2132,7 @@ function PixelApiTab() {
         es.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.source !== 'pixel' && data.source !== 'pixel_auto') return;
+                if (data.source !== 'pixel' && data.source !== 'pixel_auto' && data.source !== 'pixel_jio') return;
 
                 setPixelJobs(prev => {
                     const jobId = data.vid || '';
@@ -2367,6 +2367,7 @@ function PixelApiTab() {
                                                     const srcMap = {
                                                         pixel: { label: 'UPixel', bg: 'rgba(16,185,129,0.12)', color: '#059669' },
                                                         pixel_auto: { label: 'UPixel Auto', bg: 'rgba(234,88,12,0.12)', color: '#ea580c' },
+                                                        pixel_jio: { label: 'UPixel Jio', bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
                                                     };
                                                     const s = srcMap[job.source] || srcMap.pixel;
                                                     return (
@@ -3166,7 +3167,7 @@ export default function Admin() {
     const [csSaved, setCsSaved] = useState(false);
 
     // Service maintenance toggles (used in settings tab)
-    const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gpt_plus: false, gpt_team: false });
+    const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gemini_jio: false, gpt_plus: false, gpt_team: false });
 
     // User management state
     const [users, setUsers] = useState([]);
@@ -4745,6 +4746,7 @@ export default function Admin() {
                                                         const viaColors = {
                                                             pixel: { bg: '#059669', label: 'UPixel' },
                                                             pixel_auto: { bg: '#ea580c', label: 'UPixel Auto' },
+                                                            pixel_jio: { bg: '#8b5cf6', label: 'UPixel Jio' },
                                                             kpixel: { bg: '#7c5cfc', label: 'KPixel' },
                                                             vpixel: { bg: '#0891b2', label: 'VPixel' },
                                                             ypixel: { bg: '#d97706', label: 'YPixel' },
@@ -5378,7 +5380,7 @@ export default function Admin() {
                                             {userHistory.map(item => {
                                                 const isPass = item.status === 'pass';
                                                 const isFailed = item.status === 'failed';
-                                                const badgeBg = (item.via === 'gpt' || item.type === 'gpt') ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : item.via === 'pixel_auto' ? '#ea580c' : '#059669');
+                                                const badgeBg = (item.via === 'gpt' || item.type === 'gpt') ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : item.via === 'pixel_jio' ? '#8b5cf6' : item.via === 'pixel_auto' ? '#ea580c' : '#059669');
                                                 return (
                                                     <div key={item.id} style={{
                                                         border: '1px solid var(--border-primary)',
@@ -5956,6 +5958,7 @@ export default function Admin() {
                                 {[
                                     { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '开启后用户无法提交 Gemini 普通验证（1 积分）' },
                                     { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '开启后用户无法提交 Gemini 高级验证（2 积分）' },
+                                    { key: 'gemini_jio', label: '🎁 Gemini Jio 免卡升级', desc: '开启后用户无法提交 Gemini Jio 免卡验证（2 积分）' },
                                     { key: 'gpt_plus', label: '🤖 ChatGPT Plus 充值', desc: '开启后用户无法提交 GPT Plus 月度充值（3 积分）' },
                                     { key: 'gpt_team', label: '👥 ChatGPT Team 邀请', desc: '开启后用户无法使用 GPT Team 邀请功能（0.6 积分）' },
                                 ].map(s => (

@@ -522,7 +522,7 @@ def transition_task_status(
             # 如果因为幽灵对账单导致 cost 丢失为 0，我们可以智能推断它本该有的金额
             if (not cost or cost <= 0) and via:
                 via_text = str(via).lower()
-                if any(key in via_text for key in ("auto", "kpixel", "vpixel", "pro_submit")):
+                if any(key in via_text for key in ("auto", "jio", "kpixel", "vpixel", "pro_submit")):
                     cost = 2.0
                 elif "pixel" in via_text:
                     cost = 1.0

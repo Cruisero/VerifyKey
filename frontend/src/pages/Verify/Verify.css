@@ -2052,6 +2052,23 @@
     color: #d97706;
 }
 
+.tier-tab-jio:hover {
+    border-color: #8b5cf6;
+    color: #8b5cf6;
+}
+
+.tier-tab-jio.active {
+    border-color: #8b5cf6;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(168, 85, 247, 0.08));
+    color: #7c3aed;
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25);
+}
+
+.tier-tab-jio.active .tier-cost {
+    background: rgba(139, 92, 246, 0.15);
+    color: #7c3aed;
+}
+
 /* Submit Mode Tabs */
 .submit-mode-tabs {
     display: flex;
@@ -3656,6 +3673,11 @@
 .tier-badge.pro {
     background: rgba(124, 92, 252, 0.12);
     color: #7c5cfc;
+}
+
+.tier-badge.jio {
+    background: rgba(139, 92, 246, 0.15);
+    color: #7c3aed;
 }
 
 /* Disclaimer */

@@ -38,7 +38,7 @@ const ENDPOINTS = [
                     { name: 'email', type: 'string', required: true, desc: 'Google 账号邮箱' },
                     { name: 'password', type: 'string', required: true, desc: '账号密码' },
                     { name: 'totp_secret', type: 'string', required: true, desc: '2FA TOTP 密钥（Base32 编码）' },
-                    { name: 'mode', type: 'string', required: false, desc: '验证模式：semi-auto (普通验证，扣1.0积分) / auto (高级验证，扣2.0积分) / jio (极速验证，扣2.0积分)，默认为 semi-auto' },
+                    { name: 'mode', type: 'string', required: false, desc: '验证模式：semi-auto (普通验证，扣1.0积分) / auto (高级验证，扣2.0积分) / jio (极速订阅，扣2.0积分)，默认为 semi-auto' },
                     { name: 'priority', type: 'number', required: false, desc: '任务优先级（默认 0）' },
                 ],
                 requestBody: `{

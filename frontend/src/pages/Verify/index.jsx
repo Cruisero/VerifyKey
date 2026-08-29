@@ -152,7 +152,7 @@ export default function Verify() {
                     }
                     const snap = stageSnapshotRef.current[r.id];
                     if (!snap) {
-                        stageSnapshotRef.current[r.id] = { stage: r.stage, ts: Date.now(), fromPct: 0 };
+                        stageSnapshotRef.current[r.id] = { stage: r.stage, ts: Date.now(), startTs: Date.now(), fromPct: 0 };
                         next[r.id] = 0;
                         changed = true;
                         continue;
@@ -162,27 +162,47 @@ export default function Verify() {
                         stageSnapshotRef.current[r.id] = {
                             stage: r.stage,
                             ts: Date.now(),
+                            startTs: snap.startTs || snap.ts || Date.now(),
                             fromPct: next[r.id] ?? snap.savedDisplayPct ?? 0,
                         };
                     }
                     const currentSnap = stageSnapshotRef.current[r.id];
+                    const isJio = r.tier === 'jio' || r.via === 'pixel_jio' || r.source === 'pixel_jio';
+
+                    if (isJio) {
+                        // 极速验证全流程约 55-60 秒，随时间持续匀速且自然平滑推进至 95%
+                        const totalElapsed = (Date.now() - (currentSnap.startTs || currentSnap.ts)) / 1000;
+                        let displayPct = 0;
+                        if (totalElapsed <= 45) {
+                            // 0 ~ 45s -> 0% ~ 88%
+                            const ratio = totalElapsed / 45;
+                            const eased = Math.sin((ratio * Math.PI) / 2);
+                            displayPct = Math.min(Math.round(eased * 88), 88);
+                        } else {
+                            // 45s+ -> 88% ~ 95%
+                            const extra = Math.min((totalElapsed - 45) / 35, 1);
+                            displayPct = Math.min(Math.round(88 + extra * 7), 95);
+                        }
+                        displayPct = Math.max(displayPct, next[r.id] || 0);
+                        if (next[r.id] !== displayPct) { next[r.id] = displayPct; changed = true; }
+                        continue;
+                    }
+
                     const targetPct = (r.stage / r.totalStages) * 100;
                     const nextStagePct = Math.min(((r.stage + 1) / r.totalStages) * 100, 99);
                     const elapsed = (Date.now() - currentSnap.ts) / 1000;
 
-                    const isJio = r.tier === 'jio' || r.via === 'pixel_jio' || r.source === 'pixel_jio';
                     const isStandard = r.tier === 'standard' || r.via === 'pixel' || r.source === 'pixel';
-                    // 极速验证全流程约 60 秒 (6个阶段，每阶段约 10 秒)
                     // 普通验证约 90-110 秒 (每阶段约 18 秒)
                     // 高级验证约 210 秒 (每阶段约 35 秒)
-                    const avgStageTime = isJio ? 10 : (isStandard ? 18 : 35);
+                    const avgStageTime = isStandard ? 18 : 35;
                     const progress = Math.min(elapsed / avgStageTime, 1);
                     // Ease-out: fast start, slow finish
                     const eased = 1 - Math.pow(1 - progress, 2);
 
                     // Phase 1: smoothly transition from fromPct to targetPct (catch-up)
                     // Phase 2: then creep from targetPct toward nextStagePct
-                    const catchUpDuration = isJio ? 3 : (isStandard ? 6 : 12);
+                    const catchUpDuration = isStandard ? 6 : 12;
                     if (elapsed < catchUpDuration && currentSnap.fromPct < targetPct) {
                         const catchUpProgress = Math.min(elapsed / catchUpDuration, 1);
                         // Using linear progression instead of fast ease-out to avoid rapid jumps at the start

@@ -1844,6 +1844,9 @@ export default function Verify() {
                                                     displayMsg = displayMsg.replace(/[:：]\s*$/, '').trim();
                                                     // Strip internal repair markers (admin-only info)
                                                     displayMsg = displayMsg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
+                                                    if (displayMsg.includes('Jio 优惠链接') || displayMsg.includes('Jio 服务提交失败') || displayMsg.includes('No available Jio link') || displayMsg.includes('JIO_FAILED')) {
+                                                        displayMsg = '凭证库存不足';
+                                                    }
 
                                                     // Determine what to show as the primary line
                                                     const maskedEmail = maskEmail(item.email);
@@ -2020,6 +2023,9 @@ export default function Verify() {
                                                                 msg = msg.replace(/^(失败|成功)[:：]\s*/i, '').trim();
                                                                 msg = msg.replace(/^订阅(成功|失败)[:：]?\s*/i, '').trim();
                                                                 msg = msg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
+                                                                if (msg.includes('Jio 优惠链接') || msg.includes('Jio 服务提交失败') || msg.includes('No available Jio link') || msg.includes('JIO_FAILED')) {
+                                                                    msg = '凭证库存不足';
+                                                                }
                                                                 const isGeneric = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(msg);
                                                                 if (result.status === 'success' && isGeneric) msg = t('verifySuccess');
                                                                 return (

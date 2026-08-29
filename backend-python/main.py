@@ -9484,12 +9484,11 @@ async def _resume_pending_gpt_task(task_id: str, payload: dict):
 def _get_pixel_failure_message(data: dict) -> str:
     """Prefer Pixel API's result text verbatim, then fall back to the raw error code."""
     result_msg = (data or {}).get("result_msg", "")
-    if isinstance(result_msg, str) and result_msg.strip():
-        return result_msg.strip()
-    error = (data or {}).get("error", "UNKNOWN_ERROR")
-    if isinstance(error, str) and error.strip():
-        return error.strip()
-    return "UNKNOWN_ERROR"
+    error = (data or {}).get("error", "")
+    msg = (result_msg if isinstance(result_msg, str) and result_msg.strip() else (error if isinstance(error, str) and error.strip() else "UNKNOWN_ERROR")).strip()
+    if any(k in msg for k in ("没有可用的 Jio 优惠链接", "Jio 服务提交失败", "No available Jio link", "no_link", "JIO_FAILED")):
+        return "凭证库存不足"
+    return msg
 
 
 class PixelJobRequest(BaseModel):

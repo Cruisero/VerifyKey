@@ -9509,7 +9509,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     import config_manager as _cfg_mgr_pixel
     _pixel_maint = _cfg_mgr_pixel.get_config().get("serviceMaintenance", {})
     if request.mode == "jio" and (_pixel_maint.get("gemini_jio") or _pixel_maint.get("upixel_jio")):
-        raise HTTPException(status_code=503, detail="J验证正在维护中，请稍后再试")
+        raise HTTPException(status_code=503, detail="极速验证正在维护中，请稍后再试")
     if request.mode == "auto" and (_pixel_maint.get("gemini_advanced") or _pixel_maint.get("upixel_advanced")):
         raise HTTPException(status_code=503, detail="UPixel 高级验证正在维护中，请稍后再试")
     if request.mode not in ("auto", "jio") and (_pixel_maint.get("gemini_normal") or _pixel_maint.get("upixel_normal")):

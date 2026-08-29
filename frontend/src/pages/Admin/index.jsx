@@ -2367,7 +2367,7 @@ function PixelApiTab() {
                                                     const srcMap = {
                                                         pixel: { label: 'UPixel', bg: 'rgba(16,185,129,0.12)', color: '#059669' },
                                                         pixel_auto: { label: 'UPixel Auto', bg: 'rgba(234,88,12,0.12)', color: '#ea580c' },
-                                                        pixel_jio: { label: 'J验证', bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
+                                                        pixel_jio: { label: '极速验证', bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
                                                     };
                                                     const s = srcMap[job.source] || srcMap.pixel;
                                                     return (
@@ -4746,7 +4746,7 @@ export default function Admin() {
                                                         const viaColors = {
                                                             pixel: { bg: '#059669', label: 'UPixel' },
                                                             pixel_auto: { bg: '#ea580c', label: 'UPixel Auto' },
-                                                            pixel_jio: { bg: '#8b5cf6', label: 'J验证' },
+                                                            pixel_jio: { bg: '#8b5cf6', label: '极速验证' },
                                                             kpixel: { bg: '#7c5cfc', label: 'KPixel' },
                                                             vpixel: { bg: '#0891b2', label: 'VPixel' },
                                                             ypixel: { bg: '#d97706', label: 'YPixel' },
@@ -5958,7 +5958,7 @@ export default function Admin() {
                                 {[
                                     { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '开启后用户无法提交 Gemini 普通验证（1 积分）' },
                                     { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '开启后用户无法提交 Gemini 高级验证（2 积分）' },
-                                    { key: 'gemini_jio', label: 'Gemini J验证', desc: '开启后用户无法提交 Gemini J验证（2 积分）' },
+                                    { key: 'gemini_jio', label: 'Gemini 极速验证', desc: '开启后用户无法提交 Gemini 极速验证（2 积分）' },
                                     { key: 'gpt_plus', label: '🤖 ChatGPT Plus 充值', desc: '开启后用户无法提交 GPT Plus 月度充值（3 积分）' },
                                     { key: 'gpt_team', label: '👥 ChatGPT Team 邀请', desc: '开启后用户无法使用 GPT Team 邀请功能（0.6 积分）' },
                                 ].map(s => (

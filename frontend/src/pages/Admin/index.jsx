@@ -5958,7 +5958,7 @@ export default function Admin() {
                                 {[
                                     { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '开启后用户无法提交 Gemini 普通验证（1 积分）' },
                                     { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '开启后用户无法提交 Gemini 高级验证（2 积分）' },
-                                    { key: 'gemini_jio', label: '🎁 Gemini Jio 免卡升级', desc: '开启后用户无法提交 Gemini Jio 免卡验证（2 积分）' },
+                                    { key: 'gemini_jio', label: 'Gemini J验证', desc: '开启后用户无法提交 Gemini J验证（2 积分）' },
                                     { key: 'gpt_plus', label: '🤖 ChatGPT Plus 充值', desc: '开启后用户无法提交 GPT Plus 月度充值（3 积分）' },
                                     { key: 'gpt_team', label: '👥 ChatGPT Team 邀请', desc: '开启后用户无法使用 GPT Team 邀请功能（0.6 积分）' },
                                 ].map(s => (

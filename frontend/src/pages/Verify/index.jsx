@@ -25,7 +25,19 @@ export default function Verify() {
     const navigate = useNavigate();
 
     // Verify tier: 'standard' (UPixel 1pt) | 'pro' (2pt) | 'jio' (2pt)
-    const [verifyTier, setVerifyTier] = useState('standard');
+    const [verifyTier, setVerifyTier] = useState(() => {
+        try {
+            const cached = localStorage.getItem('onepass_service_status');
+            if (cached) {
+                const s = JSON.parse(cached);
+                if (s?.upixel?.standardAvailable === false) {
+                    if (s?.upixel?.advancedAvailable !== false && s?.kpixel?.available !== false) return 'pro';
+                    if (s?.upixel?.jioAvailable !== false) return 'jio';
+                }
+            }
+        } catch {}
+        return 'standard';
+    });
     const tierCost = (verifyTier === 'pro' || verifyTier === 'jio') ? 2 : 1;
 
     // Top-level service tab: 'pixel' | 'gpt'
@@ -92,10 +104,22 @@ export default function Verify() {
     const [showCdkInput, setShowCdkInput] = useState(false);
     const [cdkChecking, setCdkChecking] = useState(false);
     const [cdkRedeemMsg, setCdkRedeemMsg] = useState('');
-    const [cdkRedeemStatus, setCdkRedeemStatus] = useState(''); // 'success' | 'error'
+    // Service maintenance status (cached in localStorage to eliminate render delay on page refresh)
+    const [serviceStatus, setServiceStatus] = useState(() => {
+        try {
+            const cached = localStorage.getItem('onepass_service_status');
+            return cached ? JSON.parse(cached) : null;
+        } catch {
+            return null;
+        }
+    });
 
-    // Service maintenance status
-    const [serviceStatus, setServiceStatus] = useState(null);
+    const isStandardInMaint = serviceStatus?.upixel?.standardAvailable === false;
+    const isProInMaint = serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false;
+    const isJioInMaint = serviceStatus?.upixel?.jioAvailable === false;
+    const isCurrentTierInMaint = (verifyTier === 'standard' && isStandardInMaint) ||
+                                (verifyTier === 'pro' && isProInMaint) ||
+                                (verifyTier === 'jio' && isJioInMaint);
 
     // Polling refs
     const pollingRefs = useRef({});
@@ -250,15 +274,40 @@ export default function Verify() {
         const fetchServiceStatus = async () => {
             try {
                 const res = await fetch(`${API_BASE}/api/service-status`);
-                if (res.ok) setServiceStatus(await res.json());
+                if (res.ok) {
+                    const data = await res.json();
+                    setServiceStatus(data);
+                    try {
+                        localStorage.setItem('onepass_service_status', JSON.stringify(data));
+                    } catch {}
+                }
             } catch (e) {
                 console.warn('Failed to fetch service status:', e);
             }
         };
         fetchServiceStatus();
-        const interval = setInterval(fetchServiceStatus, 60000);
+        const interval = setInterval(fetchServiceStatus, 15000);
         return () => clearInterval(interval);
     }, []);
+
+    // Ensure selected tier is available whenever serviceStatus loads or changes
+    useEffect(() => {
+        if (!serviceStatus) return;
+        const stdAvail = serviceStatus?.upixel?.standardAvailable !== false;
+        const proAvail = serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
+        const jioAvail = serviceStatus?.upixel?.jioAvailable !== false;
+
+        if (verifyTier === 'standard' && !stdAvail) {
+            if (proAvail) setVerifyTier('pro');
+            else if (jioAvail) setVerifyTier('jio');
+        } else if (verifyTier === 'pro' && !proAvail) {
+            if (stdAvail) setVerifyTier('standard');
+            else if (jioAvail) setVerifyTier('jio');
+        } else if (verifyTier === 'jio' && !jioAvail) {
+            if (stdAvail) setVerifyTier('standard');
+            else if (proAvail) setVerifyTier('pro');
+        }
+    }, [serviceStatus, verifyTier]);
 
     // Redeem CDK — transfer credits to user account
     const handleRedeemCdk = async () => {
@@ -1007,6 +1056,11 @@ export default function Verify() {
             return;
         }
 
+        if (isCurrentTierInMaint) {
+            alert(t('underMaintenance') || '该验证服务正在维护中，无法提交');
+            return;
+        }
+
         let accounts = [];
 
         if (submitMode === 'single') {
@@ -1682,13 +1736,16 @@ export default function Verify() {
                                             <button
                                                 className="btn btn-primary btn-lg"
                                                 onClick={handleVerify}
-                                                disabled={verifyStatus === 'processing' || !user || (user.credits || 0) < tierCost || (submitMode === 'single' ? (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim()) : batchCount === 0)}
+                                                disabled={verifyStatus === 'processing' || isCurrentTierInMaint || !user || (user.credits || 0) < tierCost || (submitMode === 'single' ? (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim()) : batchCount === 0)}
+                                                style={isCurrentTierInMaint ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                             >
                                                 {verifyStatus === 'processing' ? (
                                                     <>
                                                         <span className="loading-spinner small"></span>
                                                         {t('submitting')}
                                                     </>
+                                                ) : isCurrentTierInMaint ? (
+                                                    t('underMaintenance') || '维护中'
                                                 ) : (
                                                     t('submitVerify')
                                                 )}

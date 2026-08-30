@@ -170,18 +170,18 @@ export default function Verify() {
                     const isJio = r.tier === 'jio' || r.via === 'pixel_jio' || r.source === 'pixel_jio';
 
                     if (isJio) {
-                        // 极速验证全流程约 55-60 秒，随时间持续匀速且自然平滑推进至 95%
+                        // 极速订阅全流程约 55-65 秒
                         const totalElapsed = (Date.now() - (currentSnap.startTs || currentSnap.ts)) / 1000;
                         let displayPct = 0;
-                        if (totalElapsed <= 45) {
-                            // 0 ~ 45s -> 0% ~ 88%
-                            const ratio = totalElapsed / 45;
-                            const eased = Math.sin((ratio * Math.PI) / 2);
-                            displayPct = Math.min(Math.round(eased * 88), 88);
+                        if (totalElapsed <= 55) {
+                            // 0 ~ 55s: 平滑递增至 88%
+                            const ratio = totalElapsed / 55;
+                            const curve = ratio * (2 - ratio); // quadratic ease-out
+                            displayPct = Math.min(Math.round(curve * 88), 88);
                         } else {
-                            // 45s+ -> 88% ~ 95%
-                            const extra = Math.min((totalElapsed - 45) / 35, 1);
-                            displayPct = Math.min(Math.round(88 + extra * 7), 95);
+                            // 55s+: 持续稳步向前推进至 96%，绝不停止或卡死
+                            const extraRatio = Math.min((totalElapsed - 55) / 35, 1);
+                            displayPct = Math.min(Math.round(88 + extraRatio * 8), 96);
                         }
                         displayPct = Math.max(displayPct, next[r.id] || 0);
                         if (next[r.id] !== displayPct) { next[r.id] = displayPct; changed = true; }
@@ -1924,7 +1924,7 @@ export default function Verify() {
                                                         <div className="result-status">
                                                             {result.status === 'processing' && (() => {
                                                                 const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);
-                                                                const isQueued = result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted');
+                                                                const isQueued = result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0);
                                                                 return isQueued ? (
                                                                     <div className="progress-ring indeterminate">
                                                                         <svg viewBox="0 0 36 36" className="progress-ring-svg">
@@ -1962,7 +1962,7 @@ export default function Verify() {
                                                                     </button>
                                                                 )}
                                                             </div>
-                                                            {result.status === 'processing' && result.totalStages > 0 && !result.message?.includes('排队') && !result.message?.includes('queue') && !result.message?.includes('提交') && !result.message?.includes('Submitting') && !result.message?.includes('Submitted') ? (() => {
+                                                            {result.status === 'processing' && result.totalStages > 0 && !(result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) ? (() => {
                                                                 const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
                                                                 return (
                                                                     <div className="progress-bar-container">
@@ -1977,12 +1977,12 @@ export default function Verify() {
                                                                     <span className="result-message">
                                                                         {(() => {
                                                                             const raw = (result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
-                                                                            const isQueueMsg = raw.includes('排队') || raw.includes('queue') || raw.includes('Queuing') || raw.includes('提交') || raw.includes('Submitting') || raw.includes('Submitted');
+                                                                            const isQueueMsg = result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0);
                                                                             if (isQueueMsg && result.queuePosition >= 0) return `排队中 (第 ${result.queuePosition + 1} 位)`;
                                                                             return raw;
                                                                         })()}
                                                                     </span>
-                                                                    {result.jobId && (result.message?.includes('排队') || result.message?.includes('queue') || result.message?.includes('Queuing') || result.message?.includes('提交') || result.message?.includes('Submitting') || result.message?.includes('Submitted')) && (
+                                                                    {result.jobId && (result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) && (
                                                                         <button
                                                                             className="cancel-job-btn"
                                                                             onClick={() => handleCancelJob(result.jobId, result.id)}

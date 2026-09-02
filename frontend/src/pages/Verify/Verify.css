@@ -726,6 +726,10 @@
 
 /* Responsive */
 @media (max-width: 1024px) {
+    .quick-actions {
+        display: none !important;
+    }
+
     .verify-content {
         grid-template-columns: 1fr;
     }
@@ -761,14 +765,6 @@
 
     .welcome-desc {
         font-size: var(--text-sm);
-    }
-
-    .quick-actions {
-        width: 100%;
-    }
-
-    .quick-actions .api-entry-pill {
-        margin-left: auto;
     }
 
     .stats-grid {

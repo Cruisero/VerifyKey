@@ -104,6 +104,7 @@ export default function Verify() {
     const [showCdkInput, setShowCdkInput] = useState(false);
     const [cdkChecking, setCdkChecking] = useState(false);
     const [cdkRedeemMsg, setCdkRedeemMsg] = useState('');
+    const [cdkRedeemStatus, setCdkRedeemStatus] = useState('');
     // Service maintenance status (cached in localStorage to eliminate render delay on page refresh)
     const [serviceStatus, setServiceStatus] = useState(() => {
         try {

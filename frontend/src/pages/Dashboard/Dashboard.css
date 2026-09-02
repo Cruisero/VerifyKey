@@ -297,6 +297,10 @@
 
 /* Responsive */
 @media (max-width: 1024px) {
+    .quick-actions {
+        display: none !important;
+    }
+
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -311,17 +315,6 @@
         flex-direction: column;
         align-items: flex-start;
         gap: var(--spacing-lg);
-    }
-
-    .quick-actions {
-        width: 100%;
-        flex-wrap: wrap;
-    }
-
-    .quick-action-btn {
-        flex: 1;
-        min-width: 120px;
-        justify-content: center;
     }
 
     .stats-grid {

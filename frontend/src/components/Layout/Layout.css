@@ -706,6 +706,12 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+    .main-content {
+        padding: 0;
+    }
+}
+
 @media (max-width: 768px) {
     .header-content {
         padding: var(--spacing-sm) var(--spacing-lg);

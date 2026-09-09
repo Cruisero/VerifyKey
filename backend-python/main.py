@@ -10342,7 +10342,7 @@ async def pixel_stats(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=403, detail="仅管理员可访问")
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             resp = await client.get(
                 f"{pixel_cfg['baseUrl']}/api/stats",
                 headers={"X-API-Key": pixel_cfg["apiKey"]},
@@ -10362,7 +10362,7 @@ async def pixel_health():
     pixel_cfg = _get_pixel_config()
     base_url = pixel_cfg.get("baseUrl", "https://iqless.icu")
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             resp = await client.get(f"{base_url}/api/health")
         if resp.status_code == 200:
             return resp.json()
@@ -10405,13 +10405,17 @@ async def pixel_test_connection(request: Request, authorization: Optional[str] =
         "error": None
     }
 
-    # 1. Health check test
+    # 1. Health check test (follow redirects so http -> https doesn't return 308)
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
             h_resp = await client.get(f"{base_url}/api/health")
             latency = int((time.time() - start_time) * 1000)
             result["latencyMs"] = latency
             if h_resp.status_code == 200:
+                final_base = str(h_resp.url).split("/api/health")[0].rstrip("/")
+                if final_base and final_base != base_url:
+                    base_url = final_base
+                    result["baseUrl"] = final_base
                 try:
                     result["health"] = h_resp.json()
                 except Exception:
@@ -10436,7 +10440,7 @@ async def pixel_test_connection(request: Request, authorization: Optional[str] =
     # 2. Key validation test (if provided or configured)
     if api_key:
         try:
-            async with httpx.AsyncClient(timeout=8) as client:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
                 s_resp = await client.get(
                     f"{base_url}/api/stats",
                     headers={"X-API-Key": api_key},

@@ -24,7 +24,7 @@ export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
 
-    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (2pt) | 'jio' (2pt)
+    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (2pt) | 'jio' (2pt) | 'threeMonth' (2pt)
     const [verifyTier, setVerifyTier] = useState(() => {
         try {
             const cached = localStorage.getItem('onepass_service_status');
@@ -33,12 +33,13 @@ export default function Verify() {
                 if (s?.upixel?.standardAvailable === false) {
                     if (s?.upixel?.advancedAvailable !== false && s?.kpixel?.available !== false) return 'pro';
                     if (s?.upixel?.jioAvailable !== false) return 'jio';
+                    if (s?.upixel?.threeMonthAvailable !== false) return 'threeMonth';
                 }
             }
         } catch {}
         return 'standard';
     });
-    const tierCost = (verifyTier === 'pro' || verifyTier === 'jio') ? 2 : 1;
+    const tierCost = (verifyTier === 'pro' || verifyTier === 'jio' || verifyTier === 'threeMonth') ? 2 : 1;
 
     // Top-level service tab: 'pixel' | 'gpt'
     const [serviceTab, setServiceTab] = useState('pixel');
@@ -115,12 +116,25 @@ export default function Verify() {
         }
     });
 
-    const isStandardInMaint = serviceStatus?.upixel?.standardAvailable === false;
-    const isProInMaint = serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false;
-    const isJioInMaint = serviceStatus?.upixel?.jioAvailable === false;
+    const isStdHidden = !!(serviceStatus?.upixel?.standardHidden || serviceStatus?.hidden?.gemini_normal || serviceStatus?.manual?.gemini_normal === 'hidden');
+    const isProHidden = !!(serviceStatus?.upixel?.advancedHidden || serviceStatus?.hidden?.gemini_advanced || serviceStatus?.manual?.gemini_advanced === 'hidden');
+    const isJioHidden = !!(serviceStatus?.upixel?.jioHidden || serviceStatus?.hidden?.gemini_jio || serviceStatus?.manual?.gemini_jio === 'hidden');
+    const isThreeMonthHidden = !!(serviceStatus?.upixel?.threeMonthHidden || serviceStatus?.hidden?.gemini_three_month || serviceStatus?.manual?.gemini_three_month === 'hidden');
+    const isGptHidden = !!(serviceStatus?.gpt?.hidden || serviceStatus?.hidden?.gpt_plus || serviceStatus?.manual?.gpt_plus === 'hidden');
+    const isGptTeamHidden = !!(serviceStatus?.gpt_team?.hidden || serviceStatus?.hidden?.gpt_team || serviceStatus?.manual?.gpt_team === 'hidden');
+
+    const isStandardInMaint = !isStdHidden && serviceStatus?.upixel?.standardAvailable === false;
+    const isProInMaint = !isProHidden && (serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false);
+    const isJioInMaint = !isJioHidden && serviceStatus?.upixel?.jioAvailable === false;
+    const isThreeMonthInMaint = !isThreeMonthHidden && serviceStatus?.upixel?.threeMonthAvailable === false;
     const isCurrentTierInMaint = (verifyTier === 'standard' && isStandardInMaint) ||
                                 (verifyTier === 'pro' && isProInMaint) ||
-                                (verifyTier === 'jio' && isJioInMaint);
+                                (verifyTier === 'jio' && isJioInMaint) ||
+                                (verifyTier === 'threeMonth' && isThreeMonthInMaint);
+    const isCurrentTierHidden = (verifyTier === 'standard' && isStdHidden) ||
+                                (verifyTier === 'pro' && isProHidden) ||
+                                (verifyTier === 'jio' && isJioHidden) ||
+                                (verifyTier === 'threeMonth' && isThreeMonthHidden);
 
     // Polling refs
     const pollingRefs = useRef({});
@@ -168,7 +182,8 @@ export default function Verify() {
                         };
                     }
                     const currentSnap = stageSnapshotRef.current[r.id];
-                    const isJio = r.tier === 'jio' || r.via === 'pixel_jio' || r.source === 'pixel_jio';
+                    const isJio = r.tier === 'jio' || r.via === 'pixel_jio' || r.source === 'pixel_jio' ||
+                                  r.tier === 'threeMonth' || r.via === 'pixel_three_month' || r.source === 'pixel_three_month';
 
                     if (isJio) {
                         // 极速订阅全流程约 55-65 秒
@@ -311,22 +326,36 @@ export default function Verify() {
         return () => clearInterval(interval);
     }, []);
 
-    // Ensure selected tier is available whenever serviceStatus loads or changes
+    // Ensure selected tier is available and not hidden whenever serviceStatus loads or changes
     useEffect(() => {
         if (!serviceStatus) return;
-        const stdAvail = serviceStatus?.upixel?.standardAvailable !== false;
-        const proAvail = serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
-        const jioAvail = serviceStatus?.upixel?.jioAvailable !== false;
+        const stdHidden = !!(serviceStatus?.upixel?.standardHidden || serviceStatus?.hidden?.gemini_normal || serviceStatus?.manual?.gemini_normal === 'hidden');
+        const proHidden = !!(serviceStatus?.upixel?.advancedHidden || serviceStatus?.hidden?.gemini_advanced || serviceStatus?.manual?.gemini_advanced === 'hidden');
+        const jioHidden = !!(serviceStatus?.upixel?.jioHidden || serviceStatus?.hidden?.gemini_jio || serviceStatus?.manual?.gemini_jio === 'hidden');
+        const tmHidden = !!(serviceStatus?.upixel?.threeMonthHidden || serviceStatus?.hidden?.gemini_three_month || serviceStatus?.manual?.gemini_three_month === 'hidden');
 
-        if (verifyTier === 'standard' && !stdAvail) {
-            if (proAvail) setVerifyTier('pro');
-            else if (jioAvail) setVerifyTier('jio');
-        } else if (verifyTier === 'pro' && !proAvail) {
-            if (stdAvail) setVerifyTier('standard');
-            else if (jioAvail) setVerifyTier('jio');
-        } else if (verifyTier === 'jio' && !jioAvail) {
+        const stdAvail = !stdHidden && serviceStatus?.upixel?.standardAvailable !== false;
+        const proAvail = !proHidden && serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
+        const jioAvail = !jioHidden && serviceStatus?.upixel?.jioAvailable !== false;
+        const tmAvail = !tmHidden && serviceStatus?.upixel?.threeMonthAvailable !== false;
+
+        const currentInvalid = 
+            (verifyTier === 'standard' && (stdHidden || !stdAvail)) ||
+            (verifyTier === 'pro' && (proHidden || !proAvail)) ||
+            (verifyTier === 'jio' && (jioHidden || !jioAvail)) ||
+            (verifyTier === 'threeMonth' && (tmHidden || !tmAvail));
+
+        if (currentInvalid) {
+            // First priority: available (not maint and not hidden)
             if (stdAvail) setVerifyTier('standard');
             else if (proAvail) setVerifyTier('pro');
+            else if (jioAvail) setVerifyTier('jio');
+            else if (tmAvail) setVerifyTier('threeMonth');
+            // Second priority: visible (even if in maintenance, as long as not hidden)
+            else if (!stdHidden) setVerifyTier('standard');
+            else if (!proHidden) setVerifyTier('pro');
+            else if (!jioHidden) setVerifyTier('jio');
+            else if (!tmHidden) setVerifyTier('threeMonth');
         }
     }, [serviceStatus, verifyTier]);
 
@@ -492,6 +521,15 @@ export default function Verify() {
 
     const buildJobPlan = (account) => {
         const normalizedTotp = (account.totp_secret || '').replace(/\s+/g, '');
+
+        if (verifyTier === 'threeMonth') {
+            return {
+                apiUrl: `${API_BASE}/api/pixel/jobs`,
+                payload: { email: account.email, password: account.password, totp_secret: normalizedTotp, mode: '3-Month' },
+                source: 'pixel_three_month',
+                totalStages: 6,
+            };
+        }
 
         if (verifyTier === 'jio') {
             return {
@@ -791,7 +829,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'success',
-                            message: r.tier === 'jio' ? (data.result_msg || '✅ 激活成功') : (r.tier === 'pro' ? t('subscribeSuccess') : t('fetchSuccess')),
+                            message: r.tier === 'threeMonth' ? (data.result_msg || '✅ 3-Month 订阅成功') : (r.tier === 'jio' ? (data.result_msg || '✅ 激活成功') : (r.tier === 'pro' ? t('subscribeSuccess') : t('fetchSuccess'))),
                             url,
                             stage,
                             totalStages,
@@ -1126,6 +1164,7 @@ export default function Verify() {
             jobId: '',
             verificationId: '',
             source: jobPlans[i].source,
+            tier: verifyTier,
             accountData: acc,
         }));
         setResults(prev => [...resultItems, ...prev]);
@@ -1393,36 +1432,62 @@ export default function Verify() {
                             </div>
                             <div className="guide-card-body">
                                 <div className="credits-price-grid">
-                                    <div className="credits-price-item">
-                                        <div className="credits-price-service">
-                                            <span className="credits-dot gemini"></span>
-                                            {t('geminiStandard')}
+                                    {!isStdHidden && (
+                                        <div className="credits-price-item">
+                                            <div className="credits-price-service">
+                                                <span className="credits-dot gemini"></span>
+                                                {t('geminiStandard')}
+                                            </div>
+                                            <span className="credits-price-val">-1 {t('credits')}</span>
                                         </div>
-                                        <span className="credits-price-val">-1 {t('credits')}</span>
-                                    </div>
-                                    <div className="credits-price-item">
-                                        <div className="credits-price-service">
-                                            <span className="credits-dot pro"></span>
-                                            {t('geminiPro')}
+                                    )}
+                                    {!isProHidden && (
+                                        <div className="credits-price-item">
+                                            <div className="credits-price-service">
+                                                <span className="credits-dot pro"></span>
+                                                {t('geminiPro')}
+                                            </div>
+                                            <span className="credits-price-val">-2 {t('credits')}</span>
                                         </div>
-                                        <span className="credits-price-val">-2 {t('credits')}</span>
-                                    </div>
+                                    )}
+                                    {!isJioHidden && (
+                                        <div className="credits-price-item">
+                                            <div className="credits-price-service">
+                                                <span className="credits-dot jio"></span>
+                                                {t('tierJioTab')}
+                                            </div>
+                                            <span className="credits-price-val">-2 {t('credits')}</span>
+                                        </div>
+                                    )}
+                                    {!isThreeMonthHidden && (
+                                        <div className="credits-price-item">
+                                            <div className="credits-price-service">
+                                                <span className="credits-dot three-month"></span>
+                                                {t('tierThreeMonthTab')}
+                                            </div>
+                                            <span className="credits-price-val">-2 {t('credits')}</span>
+                                        </div>
+                                    )}
                                     {showGptRechargeTab && (
                                         <>
-                                            <div className="credits-price-item">
-                                                <div className="credits-price-service">
-                                                    <span className="credits-dot gpt"></span>
-                                                    {t('gptMonthly')}
+                                            {!isGptHidden && (
+                                                <div className="credits-price-item">
+                                                    <div className="credits-price-service">
+                                                        <span className="credits-dot gpt"></span>
+                                                        {t('gptMonthly')}
+                                                    </div>
+                                                    <span className="credits-price-val">-3 {t('credits')}</span>
                                                 </div>
-                                                <span className="credits-price-val">-3 {t('credits')}</span>
-                                            </div>
-                                            <div className="credits-price-item">
-                                                <div className="credits-price-service">
-                                                    <span className="credits-dot gpt"></span>
-                                                    {t('gptTeamInviteRule')}
+                                            )}
+                                            {!isGptTeamHidden && (
+                                                <div className="credits-price-item">
+                                                    <div className="credits-price-service">
+                                                        <span className="credits-dot gpt"></span>
+                                                        {t('gptTeamInviteRule')}
+                                                    </div>
+                                                    <span className="credits-price-val">-0.6 {t('credits')}</span>
                                                 </div>
-                                                <span className="credits-price-val">-0.6 {t('credits')}</span>
-                                            </div>
+                                            )}
                                         </>
                                     )}
                                     <div className="credits-price-item invite">
@@ -1533,28 +1598,40 @@ export default function Verify() {
                                         </li>
                                     </ul>
                                     <div className="guide-tier-info">
-                                        <div className="tier-item">
-                                            <span className="tier-badge normal">{t('tierNormal')}</span>
-                                            <span dangerouslySetInnerHTML={{ __html: t('tierNormalDesc') }} />
-                                            {showSubscriptionTool && (
-                                                <a href="/ghelper.html" target="_blank" rel="noopener noreferrer"
-                                                    style={{
-                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
-                                                        fontSize: '11px', fontWeight: 600, textDecoration: 'none',
-                                                        marginLeft: '6px', verticalAlign: 'middle', whiteSpace: 'nowrap',
-                                                    }}
-                                                >自行绑卡点击订阅工具 ▸</a>
-                                            )}
-                                        </div>
-                                        <div className="tier-item">
-                                            <span className="tier-badge pro">{t('tierPro')}</span>
-                                            <span dangerouslySetInnerHTML={{ __html: t('tierProDesc') }} />
-                                        </div>
-                                        <div className="tier-item">
-                                            <span className="tier-badge jio">{t('tierJio')}</span>
-                                            <span dangerouslySetInnerHTML={{ __html: t('tierJioDesc') }} />
-                                        </div>
+                                        {!isStdHidden && (
+                                            <div className="tier-item">
+                                                <span className="tier-badge normal">{t('tierNormal')}</span>
+                                                <span dangerouslySetInnerHTML={{ __html: t('tierNormalDesc') }} />
+                                                {showSubscriptionTool && (
+                                                    <a href="/ghelper.html" target="_blank" rel="noopener noreferrer"
+                                                        style={{
+                                                            background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                            border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                            fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                            marginLeft: '6px', verticalAlign: 'middle', whiteSpace: 'nowrap',
+                                                        }}
+                                                    >自行绑卡点击订阅工具 ▸</a>
+                                                )}
+                                            </div>
+                                        )}
+                                        {!isProHidden && (
+                                            <div className="tier-item">
+                                                <span className="tier-badge pro">{t('tierPro')}</span>
+                                                <span dangerouslySetInnerHTML={{ __html: t('tierProDesc') }} />
+                                            </div>
+                                        )}
+                                        {!isJioHidden && (
+                                            <div className="tier-item">
+                                                <span className="tier-badge jio">{t('tierJio')}</span>
+                                                <span dangerouslySetInnerHTML={{ __html: t('tierJioDesc') }} />
+                                            </div>
+                                        )}
+                                        {!isThreeMonthHidden && (
+                                            <div className="tier-item">
+                                                <span className="tier-badge three-month">{t('tierThreeMonth')}</span>
+                                                <span dangerouslySetInnerHTML={{ __html: t('tierThreeMonthDesc') }} />
+                                            </div>
+                                        )}
                                     </div>
 
                                 </div>
@@ -1598,55 +1675,77 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">📡</span>
-                                        <span>{verifyTier === 'jio' ? t('panelTitleJio') : (verifyTier === 'pro' ? t('panelTitlePro') : t('panelTitleStandard'))}</span>
+                                        <span>{verifyTier === 'threeMonth' ? t('panelTitleThreeMonth') : (verifyTier === 'jio' ? t('panelTitleJio') : (verifyTier === 'pro' ? t('panelTitlePro') : t('panelTitleStandard')))}</span>
                                     </div>
                                 </div>
 
                                 <div className="panel-body">
                                     {/* Verify Tier Tabs */}
                                     <div className="tier-tabs">
-                                        <button
-                                            className={`tier-tab ${verifyTier === 'standard' ? 'active' : ''} ${serviceStatus?.upixel?.standardAvailable === false ? 'is-maint' : ''}`}
-                                            onClick={() => {
-                                                const stdAvail = serviceStatus?.upixel?.standardAvailable !== false;
-                                                if (stdAvail) setVerifyTier('standard');
-                                            }}
-                                            disabled={serviceStatus?.upixel?.standardAvailable === false}
-                                        >
-                                            <span className="tier-tab-title">{t('tierStandardTab')}</span>
-                                            <span className="tier-cost">1 {t('credits')}</span>
-                                            {serviceStatus?.upixel?.standardAvailable === false && (
-                                                <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
-                                            )}
-                                        </button>
-                                        <button
-                                            className={`tier-tab tier-tab-pro ${verifyTier === 'pro' ? 'active' : ''} ${(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) ? 'is-maint' : ''}`}
-                                            onClick={() => {
-                                                const proAvail = serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
-                                                if (proAvail) setVerifyTier('pro');
-                                            }}
-                                            disabled={serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false}
-                                        >
-                                            <span className="tier-tab-title">{t('tierProTab')}</span>
-                                            <span className="tier-cost">2 {t('credits')}</span>
-                                            {(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) && (
-                                                <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
-                                            )}
-                                        </button>
-                                        <button
-                                            className={`tier-tab tier-tab-jio ${verifyTier === 'jio' ? 'active' : ''} ${serviceStatus?.upixel?.jioAvailable === false ? 'is-maint' : ''}`}
-                                            onClick={() => {
-                                                const jioAvail = serviceStatus?.upixel?.jioAvailable !== false;
-                                                if (jioAvail) setVerifyTier('jio');
-                                            }}
-                                            disabled={serviceStatus?.upixel?.jioAvailable === false}
-                                        >
-                                            <span className="tier-tab-title">{t('tierJioTab')}</span>
-                                            <span className="tier-cost">2 {t('credits')}</span>
-                                            {serviceStatus?.upixel?.jioAvailable === false && (
-                                                <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
-                                            )}
-                                        </button>
+                                        {!isStdHidden && (
+                                            <button
+                                                className={`tier-tab ${verifyTier === 'standard' ? 'active' : ''} ${serviceStatus?.upixel?.standardAvailable === false ? 'is-maint' : ''}`}
+                                                onClick={() => {
+                                                    const stdAvail = serviceStatus?.upixel?.standardAvailable !== false;
+                                                    if (stdAvail) setVerifyTier('standard');
+                                                }}
+                                                disabled={serviceStatus?.upixel?.standardAvailable === false}
+                                            >
+                                                <span className="tier-cost">1 {t('credits')}</span>
+                                                <span className="tier-tab-title">{t('tierStandardTab')}</span>
+                                                {serviceStatus?.upixel?.standardAvailable === false && (
+                                                    <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
+                                                )}
+                                            </button>
+                                        )}
+                                        {!isProHidden && (
+                                            <button
+                                                className={`tier-tab tier-tab-pro ${verifyTier === 'pro' ? 'active' : ''} ${(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) ? 'is-maint' : ''}`}
+                                                onClick={() => {
+                                                    const proAvail = serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
+                                                    if (proAvail) setVerifyTier('pro');
+                                                }}
+                                                disabled={serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false}
+                                            >
+                                                <span className="tier-cost">2 {t('credits')}</span>
+                                                <span className="tier-tab-title">{t('tierProTab')}</span>
+                                                {(serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false) && (
+                                                    <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
+                                                )}
+                                            </button>
+                                        )}
+                                        {!isJioHidden && (
+                                            <button
+                                                className={`tier-tab tier-tab-jio ${verifyTier === 'jio' ? 'active' : ''} ${serviceStatus?.upixel?.jioAvailable === false ? 'is-maint' : ''}`}
+                                                onClick={() => {
+                                                    const jioAvail = serviceStatus?.upixel?.jioAvailable !== false;
+                                                    if (jioAvail) setVerifyTier('jio');
+                                                }}
+                                                disabled={serviceStatus?.upixel?.jioAvailable === false}
+                                            >
+                                                <span className="tier-cost">2 {t('credits')}</span>
+                                                <span className="tier-tab-title">{t('tierJioTab')}</span>
+                                                {serviceStatus?.upixel?.jioAvailable === false && (
+                                                    <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
+                                                )}
+                                            </button>
+                                        )}
+                                        {!isThreeMonthHidden && (
+                                            <button
+                                                className={`tier-tab tier-tab-three-month ${verifyTier === 'threeMonth' ? 'active' : ''} ${serviceStatus?.upixel?.threeMonthAvailable === false ? 'is-maint' : ''}`}
+                                                onClick={() => {
+                                                    const tmAvail = serviceStatus?.upixel?.threeMonthAvailable !== false;
+                                                    if (tmAvail) setVerifyTier('threeMonth');
+                                                }}
+                                                disabled={serviceStatus?.upixel?.threeMonthAvailable === false}
+                                            >
+                                                <span className="tier-cost">2 {t('credits')}</span>
+                                                <span className="tier-tab-title">{t('tierThreeMonthTab')}</span>
+                                                {serviceStatus?.upixel?.threeMonthAvailable === false && (
+                                                    <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Submit Mode Tabs */}

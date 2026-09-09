@@ -1,32 +1,43 @@
 services:
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
+    image: node:20-alpine
+    container_name: verifykey-frontend
+    working_dir: /app
     restart: always
     ports:
-      - "3001:80"
+      - "3003:5173"
+    environment:
+      - TZ=Asia/Shanghai
+      - VITE_BACKEND_URL=http://backend:3002
+    volumes:
+      - /home/Rawbump/Code/VerifyKey/frontend:/app
+    command: sh -c "node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173"
     depends_on:
       - backend
     networks:
       - onepass-network
 
-  # Python Backend with curl_cffi TLS fingerprint spoofing
+  # Python Backend with curl_cffi TLS fingerprint spoofing (Hot Reload)
   backend:
+    image: verifykey-backend:latest
     build:
-      context: .
+      context: /home/Rawbump/Code/VerifyKey
       dockerfile: Dockerfile.python
+    container_name: verifykey-backend
     restart: always
     ports:
       - "3002:3002"
     environment:
       - PORT=3002
       - PYTHONUNBUFFERED=1
+      - TZ=Asia/Shanghai
     env_file:
-      - ./backend-python/.env
+      - /home/Rawbump/Code/VerifyKey/backend-python/.env
     volumes:
+      - /home/Rawbump/Code/VerifyKey/backend-python:/app
       - backend-data:/app/data
-      - ./output:/output
+      - /home/Rawbump/Code/VerifyKey/output:/output
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 3002 --reload
     networks:
       - onepass-network
   # API Telegram Bot

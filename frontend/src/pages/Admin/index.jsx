@@ -2071,6 +2071,50 @@ function PixelApiTab() {
     const [historyTotal, setHistoryTotal] = useState(0);
     const HISTORY_LIMIT = 20;
 
+    const [testingConnection, setTestingConnection] = useState(false);
+    const [testResult, setTestResult] = useState(null);
+
+    // Test connection
+    const handleTestConnection = async (customBaseUrl, customApiKey) => {
+        setTestingConnection(true);
+        setTestResult(null);
+        try {
+            const body = {};
+            if (customBaseUrl !== undefined && customBaseUrl.trim()) body.baseUrl = customBaseUrl.trim();
+            if (customApiKey !== undefined && customApiKey.trim()) body.apiKey = customApiKey.trim();
+
+            const res = await fetch(`${API_BASE}/api/pixel/test-connection`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify(body),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTestResult(data);
+                if (data.health) {
+                    setHealth(data.health);
+                }
+            } else {
+                let errText = `HTTP ${res.status}`;
+                try {
+                    const errData = await res.json();
+                    errText = errData.detail || errText;
+                } catch {}
+                setTestResult({
+                    success: false,
+                    message: `请求失败: ${errText}`,
+                });
+            }
+        } catch (e) {
+            setTestResult({
+                success: false,
+                message: `网络错误: ${e.message}`,
+            });
+        } finally {
+            setTestingConnection(false);
+        }
+    };
+
     // Fetch status data
     const fetchStatus = async () => {
         try {
@@ -2132,7 +2176,7 @@ function PixelApiTab() {
         es.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.source !== 'pixel' && data.source !== 'pixel_auto' && data.source !== 'pixel_jio') return;
+                if (data.source !== 'pixel' && data.source !== 'pixel_auto' && data.source !== 'pixel_jio' && data.source !== 'pixel_three_month') return;
 
                 setPixelJobs(prev => {
                     const jobId = data.vid || '';
@@ -2254,9 +2298,19 @@ function PixelApiTab() {
             {/* ===== Status Section ===== */}
             {activeSection === 'status' && (
                 <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>📡 Pixel API 状态</span>
-                        <button className="btn btn-sm btn-secondary" onClick={fetchStatus} style={{ padding: '2px 10px', fontSize: '12px' }}>🔄 刷新</button>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <button
+                                className="btn btn-sm btn-secondary"
+                                onClick={() => handleTestConnection()}
+                                disabled={testingConnection}
+                                style={{ padding: '2px 10px', fontSize: '12px' }}
+                            >
+                                {testingConnection ? '⏳ 测试中...' : '🔌 测试连接'}
+                            </button>
+                            <button className="btn btn-sm btn-secondary" onClick={fetchStatus} style={{ padding: '2px 10px', fontSize: '12px' }}>🔄 刷新</button>
+                        </div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
                         {/* UPixel Card */}
@@ -2287,10 +2341,63 @@ function PixelApiTab() {
                                         <span>📱 设备 {health?.devices?.connected ?? '-'}/{health?.devices?.total ?? '-'}</span>
                                         {health?.devices?.ready !== undefined && <span>✅ 就绪 {health.devices.ready}</span>}
                                     </div>
+                                    {health?.error && (
+                                        <div style={{
+                                            fontSize: '11px',
+                                            color: '#dc2626',
+                                            background: 'rgba(220,38,38,0.06)',
+                                            border: '1px solid rgba(220,38,38,0.15)',
+                                            padding: '6px 10px',
+                                            borderRadius: '6px',
+                                            marginTop: '4px',
+                                            wordBreak: 'break-all'
+                                        }}>
+                                            ⚠️ 连通异常: {health.error}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })()}
                     </div>
+
+                    {/* Test result diagnosis banner */}
+                    {testResult && (
+                        <div style={{
+                            marginTop: '12px',
+                            padding: '12px 14px',
+                            borderRadius: '8px',
+                            background: testResult.success ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
+                            border: `1px solid ${testResult.success ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            fontSize: '13px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ fontWeight: 700, color: testResult.success ? '#16a34a' : '#dc2626' }}>
+                                    {testResult.success ? '✅ 测试连接成功' : '❌ 测试连接失败'}
+                                </span>
+                                {testResult.latencyMs !== null && (
+                                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                        耗时: <strong style={{ color: testResult.latencyMs < 1000 ? '#16a34a' : '#f59e0b' }}>{testResult.latencyMs}ms</strong>
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                                {testResult.message}
+                            </div>
+                            {testResult.error && (
+                                <div style={{ fontSize: '11px', color: '#dc2626', fontFamily: 'monospace', wordBreak: 'break-all', background: 'rgba(0,0,0,0.04)', padding: '4px 8px', borderRadius: '4px' }}>
+                                    详情: {testResult.error}
+                                </div>
+                            )}
+                            {testResult.baseUrl && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                    测试地址: {testResult.baseUrl}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {/* Config status */}
                     <div className="card" style={{ padding: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -2368,6 +2475,7 @@ function PixelApiTab() {
                                                         pixel: { label: 'UPixel', bg: 'rgba(16,185,129,0.12)', color: '#059669' },
                                                         pixel_auto: { label: 'UPixel Auto', bg: 'rgba(234,88,12,0.12)', color: '#ea580c' },
                                                         pixel_jio: { label: '极速订阅', bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
+                                                        pixel_three_month: { label: '3-Month 订阅', bg: 'rgba(14,165,233,0.12)', color: '#0284c7' },
                                                     };
                                                     const s = srcMap[job.source] || srcMap.pixel;
                                                     return (
@@ -2581,15 +2689,63 @@ function PixelApiTab() {
                             <input className="input"
                                 value={newBaseUrl}
                                 onChange={e => setNewBaseUrl(e.target.value)}
-                                placeholder="https://iqless.icu"
+                                placeholder="https://auto.onepass.fun"
                                 style={{ width: '100%' }}
                             />
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                常用上游地址：<code>https://auto.onepass.fun</code> 或 <code>https://iqless.icu</code>
+                            </div>
                         </div>
                     </div>
-                    <button className="btn btn-primary" style={{ marginTop: 'var(--spacing-lg)' }}
-                        onClick={saveConfig} disabled={configSaving}>
-                        {configSaving ? '⏳ 保存中...' : '💾 保存 UPixel 配置'}
-                    </button>
+
+                    {/* Test result diagnosis banner in Config */}
+                    {testResult && (
+                        <div style={{
+                            marginTop: 'var(--spacing-md)',
+                            padding: '12px 14px',
+                            borderRadius: '8px',
+                            background: testResult.success ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
+                            border: `1px solid ${testResult.success ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            fontSize: '13px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ fontWeight: 700, color: testResult.success ? '#16a34a' : '#dc2626' }}>
+                                    {testResult.success ? '✅ 测试连接成功' : '❌ 测试连接失败'}
+                                </span>
+                                {testResult.latencyMs !== null && (
+                                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                        耗时: <strong style={{ color: testResult.latencyMs < 1000 ? '#16a34a' : '#f59e0b' }}>{testResult.latencyMs}ms</strong>
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>{testResult.message}</div>
+                            {testResult.error && (
+                                <div style={{ fontSize: '11px', color: '#dc2626', fontFamily: 'monospace', wordBreak: 'break-all', background: 'rgba(0,0,0,0.04)', padding: '4px 8px', borderRadius: '4px' }}>
+                                    详情: {testResult.error}
+                                </div>
+                            )}
+                            {testResult.baseUrl && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                    测试地址: {testResult.baseUrl}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '12px', marginTop: 'var(--spacing-lg)', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button className="btn btn-primary"
+                            onClick={saveConfig} disabled={configSaving}>
+                            {configSaving ? '⏳ 保存中...' : '💾 保存 UPixel 配置'}
+                        </button>
+                        <button className="btn btn-secondary"
+                            onClick={() => handleTestConnection(newBaseUrl, newApiKey)}
+                            disabled={testingConnection}>
+                            {testingConnection ? '⏳ 测试中...' : '🔌 测试连接 (使用上方输入)'}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
@@ -3167,7 +3323,7 @@ export default function Admin() {
     const [csSaved, setCsSaved] = useState(false);
 
     // Service maintenance toggles (used in settings tab)
-    const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gemini_jio: false, gpt_plus: false, gpt_team: false });
+    const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gemini_jio: false, gemini_three_month: false, gpt_plus: false, gpt_team: false });
 
     // User management state
     const [users, setUsers] = useState([]);
@@ -4747,6 +4903,7 @@ export default function Admin() {
                                                             pixel: { bg: '#059669', label: 'UPixel' },
                                                             pixel_auto: { bg: '#ea580c', label: 'UPixel Auto' },
                                                             pixel_jio: { bg: '#8b5cf6', label: '极速订阅' },
+                                                            pixel_three_month: { bg: '#0284c7', label: '3-Month 订阅' },
                                                             kpixel: { bg: '#7c5cfc', label: 'KPixel' },
                                                             vpixel: { bg: '#0891b2', label: 'VPixel' },
                                                             ypixel: { bg: '#d97706', label: 'YPixel' },
@@ -5380,7 +5537,7 @@ export default function Admin() {
                                             {userHistory.map(item => {
                                                 const isPass = item.status === 'pass';
                                                 const isFailed = item.status === 'failed';
-                                                const badgeBg = (item.via === 'gpt' || item.type === 'gpt') ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : item.via === 'pixel_jio' ? '#8b5cf6' : item.via === 'pixel_auto' ? '#ea580c' : '#059669');
+                                                const badgeBg = (item.via === 'gpt' || item.type === 'gpt') ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : item.via === 'pixel_three_month' ? '#0284c7' : item.via === 'pixel_jio' ? '#8b5cf6' : item.via === 'pixel_auto' ? '#ea580c' : '#059669');
                                                 return (
                                                     <div key={item.id} style={{
                                                         border: '1px solid var(--border-primary)',
@@ -5951,55 +6108,119 @@ export default function Admin() {
 
                             {/* Service Maintenance Toggles */}
                             <div className="settings-section card">
-                                <h3>🔧 服务维护开关</h3>
+                                <h3>🔧 服务维护与下架开关</h3>
                                 <p className="settings-desc">
-                                    手动控制各服务的维护状态。开启维护后用户将看到"维护中"提示，无法使用该服务。
+                                    手动控制各服务的在线、维护或下架状态。设为「维护中」用户端将提示维护角标且无法提交；设为「下架」后前端选项栏（tier-tabs）、使用教程与积分规则中将彻底隐藏该模式。
                                 </p>
                                 {[
-                                    { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '开启后用户无法提交 Gemini 普通验证（1 积分）' },
-                                    { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '开启后用户无法提交 Gemini 高级验证（2 积分）' },
-                                    { key: 'gemini_jio', label: 'Gemini 极速订阅', desc: '开启后用户无法提交 Gemini 极速订阅（2 积分）' },
-                                    { key: 'gpt_plus', label: '🤖 ChatGPT Plus 充值', desc: '开启后用户无法提交 GPT Plus 月度充值（3 积分）' },
-                                    { key: 'gpt_team', label: '👥 ChatGPT Team 邀请', desc: '开启后用户无法使用 GPT Team 邀请功能（0.6 积分）' },
-                                ].map(s => (
-                                    <div key={s.key} style={{
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                        padding: '12px 0', borderBottom: '1px solid var(--border-primary)',
-                                    }}>
-                                        <div>
-                                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{s.label}</div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>
-                                        </div>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                            <span style={{
-                                                fontSize: '11px', fontWeight: 600,
-                                                color: serviceMaint[s.key] ? '#dc2626' : '#16a34a',
+                                    { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '控制 Gemini 普通验证（1 积分）' },
+                                    { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '控制 Gemini 高级验证（2 积分）' },
+                                    { key: 'gemini_jio', label: 'Gemini 极速订阅', desc: '控制 Gemini 极速订阅（2 积分）' },
+                                    { key: 'gemini_three_month', label: 'Gemini 3-Month 订阅', desc: '控制 Gemini 3-Month 订阅（2 积分）' },
+                                    { key: 'gpt_plus', label: '🤖 ChatGPT Plus 充值', desc: '控制 GPT Plus 月度充值（3 积分）' },
+                                    { key: 'gpt_team', label: '👥 ChatGPT Team 邀请', desc: '控制 GPT Team 邀请功能（0.6 积分）' },
+                                ].map(s => {
+                                    const currentVal = serviceMaint[s.key];
+                                    const currentStatus = (currentVal === 'hidden' || currentVal === 'delisted')
+                                        ? 'hidden'
+                                        : (currentVal === true || currentVal === 'maintenance' || currentVal === 'maint')
+                                            ? 'maintenance'
+                                            : 'normal';
+                                    return (
+                                        <div key={s.key} style={{
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            padding: '12px 0', borderBottom: '1px solid var(--border-primary)', gap: '12px', flexWrap: 'wrap',
+                                        }}>
+                                            <div>
+                                                <div style={{ fontSize: '13px', fontWeight: 600 }}>{s.label}</div>
+                                                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>
+                                            </div>
+                                            <div style={{
+                                                display: 'inline-flex', gap: '3px', background: 'var(--bg-tertiary)',
+                                                padding: '3px', borderRadius: '8px', border: '1px solid var(--border-primary)',
                                             }}>
-                                                {serviceMaint[s.key] ? '维护中' : '正常'}
-                                            </span>
-                                            <input
-                                                type="checkbox"
-                                                checked={!!serviceMaint[s.key]}
-                                                onChange={async (e) => {
-                                                    const val = e.target.checked;
-                                                    setServiceMaint(prev => ({ ...prev, [s.key]: val }));
-                                                    try {
-                                                        const _token = user?.token || localStorage.getItem('verifykey-token');
-                                                        await fetch(`${API_BASE}/api/service-status`, {
-                                                            method: 'POST',
-                                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
-                                                            body: JSON.stringify({ [s.key]: val }),
-                                                        });
-                                                    } catch (err) {
-                                                        console.warn('Service maint toggle failed:', err);
-                                                        setServiceMaint(prev => ({ ...prev, [s.key]: !val }));
-                                                    }
-                                                }}
-                                                style={{ width: '36px', height: '20px', accentColor: '#dc2626' }}
-                                            />
-                                        </label>
-                                    </div>
-                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const val = false;
+                                                        setServiceMaint(prev => ({ ...prev, [s.key]: val }));
+                                                        try {
+                                                            const _token = user?.token || localStorage.getItem('verifykey-token');
+                                                            await fetch(`${API_BASE}/api/service-status`, {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+                                                                body: JSON.stringify({ [s.key]: val }),
+                                                            });
+                                                        } catch (err) {
+                                                            console.warn('Service status update failed:', err);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                        background: currentStatus === 'normal' ? '#16a34a' : 'transparent',
+                                                        color: currentStatus === 'normal' ? '#ffffff' : 'var(--text-secondary)',
+                                                        boxShadow: currentStatus === 'normal' ? '0 1px 3px rgba(22, 163, 74, 0.3)' : 'none',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                >
+                                                    正常
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const val = true;
+                                                        setServiceMaint(prev => ({ ...prev, [s.key]: val }));
+                                                        try {
+                                                            const _token = user?.token || localStorage.getItem('verifykey-token');
+                                                            await fetch(`${API_BASE}/api/service-status`, {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+                                                                body: JSON.stringify({ [s.key]: val }),
+                                                            });
+                                                        } catch (err) {
+                                                            console.warn('Service status update failed:', err);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                        background: currentStatus === 'maintenance' ? '#f59e0b' : 'transparent',
+                                                        color: currentStatus === 'maintenance' ? '#ffffff' : 'var(--text-secondary)',
+                                                        boxShadow: currentStatus === 'maintenance' ? '0 1px 3px rgba(245, 158, 11, 0.3)' : 'none',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                >
+                                                    维护中
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const val = 'hidden';
+                                                        setServiceMaint(prev => ({ ...prev, [s.key]: val }));
+                                                        try {
+                                                            const _token = user?.token || localStorage.getItem('verifykey-token');
+                                                            await fetch(`${API_BASE}/api/service-status`, {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+                                                                body: JSON.stringify({ [s.key]: val }),
+                                                            });
+                                                        } catch (err) {
+                                                            console.warn('Service status update failed:', err);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '4px 10px', fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                        background: currentStatus === 'hidden' ? '#dc2626' : 'transparent',
+                                                        color: currentStatus === 'hidden' ? '#ffffff' : 'var(--text-secondary)',
+                                                        boxShadow: currentStatus === 'hidden' ? '0 1px 3px rgba(220, 38, 38, 0.3)' : 'none',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                >
+                                                    下架
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
 
                             {/* Feature Flags */}

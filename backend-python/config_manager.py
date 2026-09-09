@@ -328,10 +328,12 @@ DEFAULT_CONFIG = {
         "gemini_normal": False,
         "gemini_advanced": False,
         "gemini_jio": False,
+        "gemini_three_month": False,
         "upixel": False,
         "upixel_normal": False,
         "upixel_advanced": False,
         "upixel_jio": False,
+        "upixel_three_month": False,
         "kpixel": False,
         "vpixel": False,
         "ypixel": False,
@@ -365,7 +367,8 @@ DEFAULT_CONFIG = {
         "baseUrl": "https://iqless.icu",
         "creditCost": 1.0,
         "autoCost": 2.0,
-        "jioCost": 2.0
+        "jioCost": 2.0,
+        "threeMonthCost": 2.0
     },
     
     # KPixel API (Google One via kckc1818.com) — "KPixel" Pro 验证

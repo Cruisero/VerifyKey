@@ -559,6 +559,7 @@ def broadcast_verify_event(event: dict):
                 _source = event.get("source", "")
                 _COST_BY_SOURCE = {
                     "pixel": 1.0, "pixel_auto": 2.0, "pixel_jio": 2.0,
+                    "pixel_three_month": 2.0,
                     "kpixel": 2.0, "vpixel": 2.0, "ypixel": 1.0,
                     "pro_submit": 2.0,
                     "gpt": 1.5,
@@ -6113,7 +6114,7 @@ async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
     cursor = conn.execute(
         "SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded "
         "FROM verification_history "
-        "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
+        "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'pixel_three_month', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
         "ORDER BY rowid DESC LIMIT 500",
         (today_start,)
     )
@@ -6265,7 +6266,7 @@ async def _fetch_upstream_result_url(vid: str, via: str) -> str:
         via_lower = (via or "").lower()
         
         # UPixel: GET {baseUrl}/api/jobs/{job_id}  →  response.url
-        if via_lower in ("pixel", "pixel_auto", "pixel_jio", "pixel_api"):
+        if via_lower in ("pixel", "pixel_auto", "pixel_jio", "pixel_three_month", "pixel_api"):
             pixel_cfg = _get_pixel_config()
             if not pixel_cfg.get("apiKey"):
                 return ""
@@ -6424,7 +6425,7 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                     cost = 2.0
                 elif vid.startswith("kp_") or via == "kpixel":
                     cost = 2.0
-                elif via in ("pixel_auto", "pixel_jio"):
+                elif via in ("pixel_auto", "pixel_jio", "pixel_three_month"):
                     cost = 2.0
                 elif via == "pro_submit":
                     cost = 2.0
@@ -6636,7 +6637,7 @@ async def override_verification_by_vid(request: VidOverrideRequest):
                     cost = 2.0
                 elif vid_str.startswith("kp_") or via == "kpixel":
                     cost = 2.0
-                elif via in ("pixel_auto", "pixel_jio"):
+                elif via in ("pixel_auto", "pixel_jio", "pixel_three_month"):
                     cost = 2.0
                 elif via == "pro_submit":
                     cost = 2.0
@@ -8547,13 +8548,29 @@ async def get_service_status():
         except Exception:
             upixel_reason = "无法连接 API"
 
+    def _status_flags(val):
+        if val in ("hidden", "delisted"):
+            return True, True
+        if val in ("maintenance", "maint") or val is True:
+            return True, False
+        return False, False
+
+    normal_maint, normal_hidden = _status_flags(manual.get("gemini_normal") or manual.get("upixel_normal"))
+    pro_maint, pro_hidden = _status_flags(manual.get("gemini_advanced") or manual.get("upixel_advanced"))
+    jio_maint, jio_hidden = _status_flags(manual.get("gemini_jio") or manual.get("upixel_jio"))
+    three_month_maint, three_month_hidden = _status_flags(manual.get("gemini_three_month") or manual.get("upixel_three_month"))
+    gpt_maint, gpt_hidden = _status_flags(manual.get("gpt_plus"))
+    gpt_team_maint, gpt_team_hidden = _status_flags(manual.get("gpt_team"))
+
     # Apply per-mode maintenance overrides
-    upixel_normal_available = upixel_ok and not (manual.get("upixel_normal") or manual.get("gemini_normal"))
-    upixel_advanced_available = upixel_ok and not (manual.get("upixel_advanced") or manual.get("gemini_advanced"))
-    upixel_jio_available = upixel_ok and not (manual.get("upixel_jio") or manual.get("gemini_jio"))
-    upixel_normal_reason = "管理员手动维护中" if (manual.get("upixel_normal") or manual.get("gemini_normal")) else upixel_reason
-    upixel_advanced_reason = "管理员手动维护中" if (manual.get("upixel_advanced") or manual.get("gemini_advanced")) else upixel_reason
-    upixel_jio_reason = "管理员手动维护中" if (manual.get("upixel_jio") or manual.get("gemini_jio")) else upixel_reason
+    upixel_normal_available = upixel_ok and not normal_maint
+    upixel_advanced_available = upixel_ok and not pro_maint
+    upixel_jio_available = upixel_ok and not jio_maint
+    upixel_three_month_available = upixel_ok and not three_month_maint
+    upixel_normal_reason = ("该服务已下架" if normal_hidden else "管理员手动维护中") if normal_maint else upixel_reason
+    upixel_advanced_reason = ("该服务已下架" if pro_hidden else "管理员手动维护中") if pro_maint else upixel_reason
+    upixel_jio_reason = ("该服务已下架" if jio_hidden else "管理员手动维护中") if jio_maint else upixel_reason
+    upixel_three_month_reason = ("该服务已下架" if three_month_hidden else "管理员手动维护中") if three_month_maint else upixel_reason
 
     # --- KPixel auto-detect ---
     kpixel_ok = False
@@ -8631,16 +8648,20 @@ async def get_service_status():
             ypixel_reason = "数据库查询失败"
 
     # --- Gemini 普通验证: purely manual toggle ---
-    standard_available = not (manual.get("gemini_normal", False) or manual.get("upixel_normal", False))
-    standard_reason = "管理员手动维护中" if (manual.get("gemini_normal") or manual.get("upixel_normal")) else ""
+    standard_available = not normal_maint
+    standard_reason = ("该服务已下架" if normal_hidden else "管理员手动维护中") if normal_maint else ""
 
     # --- Gemini 高级验证: purely manual toggle ---
-    pro_available = not (manual.get("gemini_advanced", False) or manual.get("upixel_advanced", False))
-    pro_reason = "管理员手动维护中" if (manual.get("gemini_advanced") or manual.get("upixel_advanced")) else ""
+    pro_available = not pro_maint
+    pro_reason = ("该服务已下架" if pro_hidden else "管理员手动维护中") if pro_maint else ""
 
     # --- Gemini Jio 免卡验证: purely manual toggle ---
-    jio_available = not (manual.get("gemini_jio", False) or manual.get("upixel_jio", False))
-    jio_reason = "管理员手动维护中" if (manual.get("gemini_jio") or manual.get("upixel_jio")) else ""
+    jio_available = not jio_maint
+    jio_reason = ("该服务已下架" if jio_hidden else "管理员手动维护中") if jio_maint else ""
+
+    # --- Gemini 3-Month 订阅: purely manual toggle ---
+    three_month_available = not three_month_maint
+    three_month_reason = ("该服务已下架" if three_month_hidden else "管理员手动维护中") if three_month_maint else ""
 
     # --- GPT Plus: purely manual toggle (per-channel status kept for admin info) ---
     gpt_channels_status = {}
@@ -8681,56 +8702,50 @@ async def get_service_status():
                     gpt_channels_status[ch] = {"available": False, "reason": "无可用卡密"}
             except Exception:
                 gpt_channels_status[ch] = {"available": False, "reason": "数据库查询失败"}
-    gpt_ok = not manual.get("gpt_plus", False)
-    gpt_reason = "管理员手动维护中" if manual.get("gpt_plus") else ""
+    gpt_ok = not gpt_maint
+    gpt_reason = ("该服务已下架" if gpt_hidden else "管理员手动维护中") if gpt_maint else ""
 
     # --- GPT Team: purely manual toggle ---
-    gpt_team_ok = not manual.get("gpt_team", False)
-    gpt_team_reason = "管理员手动维护中" if manual.get("gpt_team") else ""
+    gpt_team_ok = not gpt_team_maint
+    gpt_team_reason = ("该服务已下架" if gpt_team_hidden else "管理员手动维护中") if gpt_team_maint else ""
 
     return {
         "upixel": {
             "available": upixel_ok, "reason": upixel_reason,
-            "normalAvailable": standard_available and upixel_normal_available,
-            "advancedAvailable": pro_available and upixel_advanced_available,
-            "jioAvailable": jio_available and upixel_jio_available,
+            "normalAvailable": standard_available,
+            "advancedAvailable": pro_available,
+            "jioAvailable": jio_available,
+            "threeMonthAvailable": three_month_available,
+            "standardHidden": normal_hidden,
+            "advancedHidden": pro_hidden,
+            "jioHidden": jio_hidden,
+            "threeMonthHidden": three_month_hidden,
             "normalReason": standard_reason or upixel_normal_reason,
             "advancedReason": pro_reason or upixel_advanced_reason,
             "jioReason": jio_reason or upixel_jio_reason,
+            "threeMonthReason": three_month_reason or upixel_three_month_reason,
             "ypixelUp": ypixel_ok, "standardAvailable": standard_available,
         },
         "ypixel": {"available": ypixel_ok, "reason": ypixel_reason},
         "kpixel": {"available": pro_available, "reason": pro_reason,
                    "kpixelUp": kpixel_ok, "vpixelUp": vpixel_ok},
-        "gpt": {"available": gpt_ok, "reason": gpt_reason, "channels": gpt_channels_status},
-        "gpt_team": {"available": gpt_team_ok, "reason": gpt_team_reason},
-        "manual": {
-            "gemini_normal": manual.get("gemini_normal", False),
-            "gemini_advanced": manual.get("gemini_advanced", False),
-            "gemini_jio": manual.get("gemini_jio", False),
-            "gpt_plus": manual.get("gpt_plus", False),
-            "gpt_team": manual.get("gpt_team", False),
-            "upixel": manual.get("upixel", False),
-            "upixel_normal": manual.get("upixel_normal", False),
-            "upixel_advanced": manual.get("upixel_advanced", False),
-            "upixel_jio": manual.get("upixel_jio", False),
-            "kpixel": manual.get("kpixel", False),
-            "vpixel": manual.get("vpixel", False),
-            "ypixel": manual.get("ypixel", False),
-            "gpt_sbs": manual.get("gpt_sbs", False),
-            "gpt_red": manual.get("gpt_red", False),
-            "gpt_vip": manual.get("gpt_vip", False),
-            "gpt_aic": manual.get("gpt_aic", False),
-            "gpt_nitro": manual.get("gpt_nitro", False),
-            "gpt_tg": manual.get("gpt_tg", False),
-            "gpt_api": manual.get("gpt_api", False),
-        }
+        "gpt": {"available": gpt_ok, "reason": gpt_reason, "hidden": gpt_hidden, "channels": gpt_channels_status},
+        "gpt_team": {"available": gpt_team_ok, "reason": gpt_team_reason, "hidden": gpt_team_hidden},
+        "hidden": {
+            "gemini_normal": normal_hidden,
+            "gemini_advanced": pro_hidden,
+            "gemini_jio": jio_hidden,
+            "gemini_three_month": three_month_hidden,
+            "gpt_plus": gpt_hidden,
+            "gpt_team": gpt_team_hidden,
+        },
+        "manual": manual,
     }
 
 
 @app.post("/api/service-status")
 async def toggle_service_maintenance(request: Request, authorization: Optional[str] = Header(None)):
-    """Admin: toggle per-service manual maintenance."""
+    """Admin: toggle per-service manual maintenance / delist status."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="未登录")
     token = authorization.replace("Bearer ", "")
@@ -8744,9 +8759,15 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("gemini_normal", "gemini_advanced", "gemini_jio", "gpt_plus", "gpt_team", "upixel", "upixel_normal", "upixel_advanced", "upixel_jio", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api"):
+    for key in ("gemini_normal", "gemini_advanced", "gemini_jio", "gemini_three_month", "gpt_plus", "gpt_team", "upixel", "upixel_normal", "upixel_advanced", "upixel_jio", "upixel_three_month", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api"):
         if key in data:
-            sm[key] = bool(data[key])
+            val = data[key]
+            if val in ("hidden", "delisted"):
+                sm[key] = "hidden"
+            elif val in ("maintenance", "maint") or val is True:
+                sm[key] = True
+            else:
+                sm[key] = False
 
     result = config_manager.update_config({"serviceMaintenance": sm})
     if result:
@@ -8997,7 +9018,7 @@ async def _pixel_job_sweep():
             conn = database.get_connection()
             rows = conn.execute(
                 "SELECT verification_id, cdk, email, via, timestamp FROM verification_history "
-                "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto', 'pixel_jio') "
+                "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'pixel_three_month') "
                 "ORDER BY rowid DESC LIMIT 200"
             ).fetchall()
 
@@ -9032,7 +9053,9 @@ async def _pixel_job_sweep():
                             headers={"X-API-Key": api_key},
                         )
                     row_via = row["via"] or ""
-                    if "jio" in row_via:
+                    if "three_month" in row_via or "3month" in row_via:
+                        sse_source = "pixel_three_month"
+                    elif "jio" in row_via:
                         sse_source = "pixel_jio"
                     elif "auto" in row_via:
                         sse_source = "pixel_auto"
@@ -9059,7 +9082,9 @@ async def _pixel_job_sweep():
                     if upstream_status == "success":
                         url = data.get("url", "")
                         result_msg = data.get("result_msg", "")
-                        if "激活成功" in result_msg or sse_source == "pixel_jio":
+                        if "3-Month" in result_msg or sse_source == "pixel_three_month":
+                            msg = f"✅ 3-Month 订阅成功: {url}" if url else f"✅ {result_msg or '3-Month 订阅成功'}"
+                        elif "激活成功" in result_msg or sse_source == "pixel_jio":
                             msg = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
                         else:
                             msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
@@ -9155,7 +9180,10 @@ async def _repair_timeout_failed_tasks():
             if not user_id:
                 continue
 
-            if "jio" in current_via:
+            if "three_month" in current_via or "3month" in current_via:
+                sse_source = "pixel_three_month"
+                sweep_cost = float(pixel.get("threeMonthCost", 2.0))
+            elif "jio" in current_via:
                 sse_source = "pixel_jio"
                 sweep_cost = float(pixel.get("jioCost", 2.0))
             elif "auto" in current_via:
@@ -9356,7 +9384,9 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
     mode = payload.get("mode", "semi-auto")
     user_id = int(payload.get("user_id", 0) or 0)
     email = payload.get("email", "")
-    if mode == "jio":
+    if mode in ("3-Month", "three_month", "3month"):
+        sse_source = "pixel_three_month"
+    elif mode == "jio":
         sse_source = "pixel_jio"
     elif mode == "auto":
         sse_source = "pixel_auto"
@@ -9384,7 +9414,10 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
         if status == "success":
             url = data.get("url", "")
             result_msg = data.get("result_msg", "")
-            if "激活成功" in result_msg or mode == "jio":
+            if "3-Month" in result_msg or mode in ("3-Month", "three_month", "3month"):
+                success_text = f"✅ 3-Month 订阅成功: {url}" if url else f"✅ {result_msg or '3-Month 订阅成功'}"
+                display_msg = "✅ 3-Month 订阅成功（重启恢复）"
+            elif "激活成功" in result_msg or mode == "jio":
                 success_text = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
                 display_msg = "✅ 激活成功（重启恢复）"
             else:
@@ -9488,6 +9521,8 @@ def _get_pixel_failure_message(data: dict) -> str:
     msg = (result_msg if isinstance(result_msg, str) and result_msg.strip() else (error if isinstance(error, str) and error.strip() else "UNKNOWN_ERROR")).strip()
     if any(k in msg for k in ("没有可用的 Jio 优惠链接", "Jio 服务提交失败", "No available Jio link", "no_link", "JIO_FAILED")):
         return "凭证库存不足"
+    if any(k in msg for k in ("3-Month 优惠链接库存不足", "3-Month 服务提交失败", "THREE_MONTH_FAILED")):
+        return "3-Month 优惠链接库存不足" if "链接" in msg else msg
     return msg
 
 
@@ -9507,12 +9542,30 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     # Check per-mode maintenance flags
     import config_manager as _cfg_mgr_pixel
     _pixel_maint = _cfg_mgr_pixel.get_config().get("serviceMaintenance", {})
-    if request.mode == "jio" and (_pixel_maint.get("gemini_jio") or _pixel_maint.get("upixel_jio")):
-        raise HTTPException(status_code=503, detail="极速订阅正在维护中，请稍后再试")
-    if request.mode == "auto" and (_pixel_maint.get("gemini_advanced") or _pixel_maint.get("upixel_advanced")):
-        raise HTTPException(status_code=503, detail="UPixel 高级验证正在维护中，请稍后再试")
-    if request.mode not in ("auto", "jio") and (_pixel_maint.get("gemini_normal") or _pixel_maint.get("upixel_normal")):
-        raise HTTPException(status_code=503, detail="UPixel 普通验证正在维护中，请稍后再试")
+    def _is_maint_or_hidden(val):
+        return val is True or val == "hidden" or str(val).lower() in ("true", "1", "maintenance", "hidden")
+
+    def _get_err_msg(val, name):
+        if val == "hidden" or str(val).lower() == "hidden":
+            return f"{name}已下架，暂停提供"
+        return f"{name}正在维护中，请稍后再试"
+
+    is_3m = request.mode in ("3-Month", "three_month", "3month")
+    val_3m = _pixel_maint.get("gemini_three_month") or _pixel_maint.get("upixel_three_month")
+    if is_3m and _is_maint_or_hidden(val_3m):
+        raise HTTPException(status_code=503, detail=_get_err_msg(val_3m, "3-Month 订阅"))
+
+    val_jio = _pixel_maint.get("gemini_jio") or _pixel_maint.get("upixel_jio")
+    if request.mode == "jio" and _is_maint_or_hidden(val_jio):
+        raise HTTPException(status_code=503, detail=_get_err_msg(val_jio, "极速订阅"))
+
+    val_adv = _pixel_maint.get("gemini_advanced") or _pixel_maint.get("upixel_advanced")
+    if request.mode == "auto" and _is_maint_or_hidden(val_adv):
+        raise HTTPException(status_code=503, detail=_get_err_msg(val_adv, "UPixel 高级验证"))
+
+    val_norm = _pixel_maint.get("gemini_normal") or _pixel_maint.get("upixel_normal")
+    if not is_3m and request.mode not in ("auto", "jio") and _is_maint_or_hidden(val_norm):
+        raise HTTPException(status_code=503, detail=_get_err_msg(val_norm, "UPixel 普通验证"))
 
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["enabled"] or not pixel_cfg["apiKey"]:
@@ -9536,7 +9589,10 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
-    if request.mode == "jio":
+    if is_3m:
+        cost = float(pixel_cfg.get("threeMonthCost", 2.0))
+        sse_source = "pixel_three_month"
+    elif request.mode == "jio":
         cost = float(pixel_cfg.get("jioCost", 2.0))
         sse_source = "pixel_jio"
     elif request.mode == "auto":
@@ -9611,7 +9667,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         "password": request.password,
         "totp_secret": normalized_totp_secret,
         "priority": request.priority,
-        "mode": request.mode,
+        "mode": "3-Month" if is_3m else request.mode,
     }
 
     try:
@@ -9679,10 +9735,14 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                         if url409:
                             success_msg = f"✅ 获取成功: {url409}"
                         elif result_msg409:
-                            if "激活成功" in result_msg409 or request.mode == "jio":
+                            if "3-Month" in result_msg409 or is_3m:
+                                success_msg = f"✅ {result_msg409}"
+                            elif "激活成功" in result_msg409 or request.mode == "jio":
                                 success_msg = f"✅ {result_msg409}"
                             else:
                                 success_msg = f"✅ 订阅成功: {result_msg409}"
+                        elif is_3m:
+                            success_msg = "✅ 3-Month 订阅成功"
                         elif request.mode == "jio":
                             success_msg = "✅ 激活成功"
                         else:
@@ -9839,7 +9899,10 @@ async def pixel_get_job(job_id: str):
                     if uid_from_db:
                         # Determine cost by via/mode: pixel_jio=2.0, pixel_auto=2.0, pixel=1.0
                         row_via = row["via"] if "via" in row.keys() else ""
-                        if "jio" in (row_via or ""):
+                        if "three_month" in (row_via or "") or "3month" in (row_via or ""):
+                            recover_cost = float(pixel_cfg.get("threeMonthCost", 2.0))
+                            recover_mode = "3-Month"
+                        elif "jio" in (row_via or ""):
                             recover_cost = float(pixel_cfg.get("jioCost", 2.0))
                             recover_mode = "jio"
                         elif "auto" in (row_via or ""):
@@ -9857,7 +9920,9 @@ async def pixel_get_job(job_id: str):
         user_id = ctx.get("user_id")
         email = ctx.get("email", "")
         mode_val = ctx.get("mode", "")
-        if mode_val == "jio":
+        if mode_val in ("3-Month", "three_month", "3month"):
+            sse_source = "pixel_three_month"
+        elif mode_val == "jio":
             sse_source = "pixel_jio"
         elif mode_val == "auto":
             sse_source = "pixel_auto"
@@ -9869,8 +9934,12 @@ async def pixel_get_job(job_id: str):
         if upstream_status == "success" and user_id:
             url = data.get("url", "")
             result_msg = data.get("result_msg", "")
+            is_three_month = (mode_val in ("3-Month", "three_month", "3month")) or ("three_month" in sse_source) or ("3-Month" in result_msg)
             is_jio = (mode_val == "jio") or ("jio" in sse_source) or ("激活成功" in result_msg)
-            if is_jio:
+            if is_three_month:
+                success_text = f"✅ 3-Month 订阅成功: {url}" if url else f"✅ {result_msg or '3-Month 订阅成功'}"
+                display_success_msg = "✅ 3-Month 订阅成功（补偿确认）" if result.get("reconciled") else "✅ 3-Month 订阅成功"
+            elif is_jio:
                 success_text = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
                 display_success_msg = "✅ 激活成功（补偿确认）" if result.get("reconciled") else "✅ 激活成功"
             else:
@@ -9991,7 +10060,9 @@ async def pixel_get_job(job_id: str):
                     recovered_cost = db_row["cost"] if "cost" in db_row.keys() else 0
                     if not recovered_cost or recovered_cost <= 0:
                         row_via = db_row["via"] if "via" in db_row.keys() else ""
-                        if "jio" in (row_via or ""):
+                        if "three_month" in (row_via or "") or "3month" in (row_via or ""):
+                            recovered_cost = float(pixel_cfg.get("threeMonthCost", 2.0))
+                        elif "jio" in (row_via or ""):
                             recovered_cost = float(pixel_cfg.get("jioCost", 2.0))
                         elif "auto" in (row_via or ""):
                             recovered_cost = float(pixel_cfg.get("autoCost", 2.0))
@@ -10001,8 +10072,12 @@ async def pixel_get_job(job_id: str):
                 if upstream_status == "success":
                     url = data.get("url", "")
                     result_msg = data.get("result_msg", "")
-                    is_jio = ("jio" in (db_row.get("via", "") if db_row else "")) or ("激活成功" in result_msg)
-                    if is_jio:
+                    row_via_lower = (db_row.get("via", "") if db_row else "").lower()
+                    is_three_month = ("three_month" in row_via_lower) or ("3month" in row_via_lower) or ("3-Month" in result_msg)
+                    is_jio = ("jio" in row_via_lower) or ("激活成功" in result_msg)
+                    if is_three_month:
+                        succ_db_msg = f"✅ 3-Month 订阅成功: {url}" if url else f"✅ {result_msg or '3-Month 订阅成功'}"
+                    elif is_jio:
                         succ_db_msg = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
                     else:
                         succ_db_msg = f"✅ 订阅成功: {url}" if url else "✅ 订阅成功"
@@ -10291,9 +10366,110 @@ async def pixel_health():
             resp = await client.get(f"{base_url}/api/health")
         if resp.status_code == 200:
             return resp.json()
-        return {"status": "error", "httpStatus": resp.status_code}
+        return {"status": "error", "httpStatus": resp.status_code, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
     except Exception as e:
         return {"status": "offline", "error": str(e)}
+
+
+@app.post("/api/pixel/test-connection")
+async def pixel_test_connection(request: Request, authorization: Optional[str] = Header(None)):
+    """Test connection to Pixel API (measures latency, checks health, validates API key)."""
+    _verify_admin_token(authorization, "manage_config")
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    pixel_cfg = _get_pixel_config()
+    raw_base_url = (body.get("baseUrl") or pixel_cfg.get("baseUrl", "https://iqless.icu")).strip()
+    if not raw_base_url.startswith("http://") and not raw_base_url.startswith("https://"):
+        raw_base_url = "https://" + raw_base_url
+    base_url = raw_base_url.rstrip("/")
+
+    # If apiKey was not supplied in body, use configured one
+    api_key = body.get("apiKey")
+    if api_key is None or api_key == "":
+        api_key = pixel_cfg.get("apiKey", "")
+    api_key = api_key.strip()
+
+    import time
+    start_time = time.time()
+    result = {
+        "success": False,
+        "baseUrl": base_url,
+        "latencyMs": None,
+        "health": None,
+        "authValid": None,
+        "message": "",
+        "error": None
+    }
+
+    # 1. Health check test
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            h_resp = await client.get(f"{base_url}/api/health")
+            latency = int((time.time() - start_time) * 1000)
+            result["latencyMs"] = latency
+            if h_resp.status_code == 200:
+                try:
+                    result["health"] = h_resp.json()
+                except Exception:
+                    result["health"] = {"status": "ok", "raw": h_resp.text[:200]}
+            else:
+                result["message"] = f"上游服务器响应异常 (HTTP {h_resp.status_code})"
+                result["error"] = h_resp.text[:300]
+                return result
+    except httpx.ConnectTimeout:
+        result["message"] = f"连接超时 (8秒): 无法连接到 {base_url}"
+        result["error"] = "连接超时 (ConnectTimeout)"
+        return result
+    except httpx.ConnectError as e:
+        result["message"] = f"无法建立连接: 目标地址不可达或 SSL 握手失败"
+        result["error"] = str(e)
+        return result
+    except Exception as e:
+        result["message"] = f"连接异常: {str(e)}"
+        result["error"] = str(e)
+        return result
+
+    # 2. Key validation test (if provided or configured)
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                s_resp = await client.get(
+                    f"{base_url}/api/stats",
+                    headers={"X-API-Key": api_key},
+                )
+                if s_resp.status_code == 200:
+                    result["authValid"] = True
+                    result["success"] = True
+                    try:
+                        result["stats"] = s_resp.json()
+                    except Exception:
+                        pass
+                    result["message"] = f"连接成功！节点在线，响应耗时 {result['latencyMs']}ms，API Key 鉴权通过。"
+                elif s_resp.status_code in (401, 403):
+                    result["authValid"] = False
+                    result["success"] = False
+                    result["message"] = f"节点连通成功 ({result['latencyMs']}ms)，但 API Key 无效或未授权 (HTTP {s_resp.status_code})"
+                    result["error"] = s_resp.text[:200]
+                else:
+                    result["authValid"] = False
+                    result["success"] = False
+                    result["message"] = f"节点连通，但 API Key 验证返回 HTTP {s_resp.status_code}"
+                    result["error"] = s_resp.text[:200]
+        except Exception as e:
+            result["authValid"] = False
+            result["message"] = f"节点在线，但验证 API Key 时发生网络错误: {str(e)}"
+            result["error"] = str(e)
+    else:
+        result["authValid"] = None
+        result["success"] = True
+        result["message"] = f"节点在线且连通正常 (耗时 {result['latencyMs']}ms)，当前未配置/输入 API Key。"
+
+    return result
+
 
 
 @app.post("/api/admin/recover-timeout-jobs")
@@ -13590,6 +13766,12 @@ async def gpt_team_invite(request: Request, authorization: Optional[str] = Heade
     if not user:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
 
+    import config_manager as _cfg_mgr_team
+    _team_maint = _cfg_mgr_team.get_config().get("serviceMaintenance", {}).get("gpt_team")
+    if _team_maint is True or _team_maint == "hidden" or str(_team_maint).lower() in ("true", "1", "maintenance", "hidden"):
+        msg = "ChatGPT Team 邀请已下架，暂停提供" if str(_team_maint).lower() == "hidden" else "ChatGPT Team 邀请正在维护中，请稍后再试"
+        raise HTTPException(status_code=503, detail=msg)
+
     user_id = user.get("id")
     credits = float(user.get("credits", 0) or 0)
     if credits < GPT_TEAM_INVITE_COST:
@@ -13732,6 +13914,11 @@ async def gpt_recharge(request: Request, authorization: Optional[str] = Header(N
     if not user:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
     user_id = user.get("id")
+    import config_manager as _cfg_mgr_plus
+    _plus_maint = _cfg_mgr_plus.get_config().get("serviceMaintenance", {}).get("gpt_plus")
+    if _plus_maint is True or _plus_maint == "hidden" or str(_plus_maint).lower() in ("true", "1", "maintenance", "hidden"):
+        msg = "ChatGPT Plus 充值已下架，暂停提供" if str(_plus_maint).lower() == "hidden" else "ChatGPT Plus 充值正在维护中，请稍后再试"
+        raise HTTPException(status_code=503, detail=msg)
 
     body = await request.json()
     card_key = body.get("card_key", "").strip()

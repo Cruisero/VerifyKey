@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/AuthContext';
 import { useLang } from '../../stores/LanguageContext';
+import { copyToClipboard, formatDisplayUrl } from '../../utils/clipboard';
 import './Admin.css';
 import '../Verify/Verify.css';
 
@@ -2059,7 +2060,9 @@ function PixelApiTab() {
 
     const [activeSection, setActiveSection] = useState('status');
     const [health, setHealth] = useState(null);
-    const [pixelConfig, setPixelConfig] = useState({ enabled: false, apiKey: '', baseUrl: 'https://iqless.icu', hasKey: false });
+    const [quotas, setQuotas] = useState(null);
+    const [pixelConfig, setPixelConfig] = useState({ enabled: false, apiKey: '', baseUrl: 'https://auto.onepass.fun', hasKey: false, sheeridCost: 3.0 });
+    const [sheeridCost, setSheeridCost] = useState('3.0');
     const [configSaving, setConfigSaving] = useState(false);
     const [newApiKey, setNewApiKey] = useState('');
     const [newBaseUrl, setNewBaseUrl] = useState('');
@@ -2120,6 +2123,11 @@ function PixelApiTab() {
         try {
             const hRes = await fetch(`${API_BASE}/api/pixel/health`);
             if (hRes.ok) setHealth(await hRes.json());
+            const qRes = await fetch(`${API_BASE}/api/pixel/quota`, { headers: authHeaders });
+            if (qRes.ok) {
+                const qData = await qRes.json();
+                setQuotas(qData.data || qData);
+            }
         } catch (e) {
             console.warn('Pixel status fetch error:', e);
         }
@@ -2132,7 +2140,8 @@ function PixelApiTab() {
             if (res.ok) {
                 const data = await res.json();
                 setPixelConfig(data);
-                setNewBaseUrl(data.baseUrl || 'https://iqless.icu');
+                setNewBaseUrl(data.baseUrl || 'https://auto.onepass.fun');
+                if (data.sheeridCost !== undefined) setSheeridCost(String(data.sheeridCost));
             }
         } catch (e) {
             console.warn('Pixel config fetch error:', e);
@@ -2176,7 +2185,7 @@ function PixelApiTab() {
         es.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.source !== 'pixel' && data.source !== 'pixel_auto' && data.source !== 'pixel_jio' && data.source !== 'pixel_three_month') return;
+                if (data.source !== 'pixel' && data.source !== 'pixel_auto' && data.source !== 'pixel_jio' && data.source !== 'pixel_three_month' && data.source !== 'pixel_sheerid') return;
 
                 setPixelJobs(prev => {
                     const jobId = data.vid || '';
@@ -2233,7 +2242,7 @@ function PixelApiTab() {
         }
         setConfigSaving(true);
         try {
-            const body = { enabled: pixelConfig.enabled };
+            const body = { enabled: pixelConfig.enabled, sheeridCost: parseFloat(sheeridCost) || 3.0 };
             if (newApiKey.trim()) body.apiKey = newApiKey.trim();
             if (newBaseUrl.trim()) body.baseUrl = newBaseUrl.trim();
 
@@ -2358,6 +2367,55 @@ function PixelApiTab() {
                                 </div>
                             );
                         })()}
+
+                        {/* AutoPixel Quotas Card */}
+                        {quotas?.quotas && (
+                            <div style={{
+                                borderRadius: '10px', padding: '12px 14px',
+                                background: 'var(--bg-card)', border: '1px solid var(--border-primary)',
+                                borderLeft: '3px solid #3b82f6',
+                                display: 'flex', flexDirection: 'column', gap: '8px',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                        💳 AutoPixel API 业务配额
+                                    </span>
+                                    {quotas.key_name && (
+                                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                            Key: {quotas.key_name}
+                                        </span>
+                                    )}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+                                    {Object.entries(quotas.quotas).map(([k, q]) => {
+                                        const labelMap = {
+                                            auto: '普通/高级',
+                                            jio: '极速订阅',
+                                            '3-Month': '3-Month',
+                                            sheerid: 'SheerID 认证',
+                                        };
+                                        const title = labelMap[k] || k;
+                                        const isLow = q.remaining <= 5;
+                                        return (
+                                            <div key={k} style={{
+                                                padding: '8px 10px', borderRadius: '6px',
+                                                background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)',
+                                                display: 'flex', flexDirection: 'column', gap: '2px',
+                                            }}>
+                                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{title}</span>
+                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                                                    <strong style={{ fontSize: '15px', color: isLow ? '#dc2626' : 'var(--text-primary)' }}>
+                                                        {q.remaining ?? 0}
+                                                    </strong>
+                                                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>/ {q.total ?? 0}</span>
+                                                </div>
+                                                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>已用: {q.used ?? 0}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Test result diagnosis banner */}
@@ -2476,6 +2534,7 @@ function PixelApiTab() {
                                                         pixel_auto: { label: 'UPixel Auto', bg: 'rgba(234,88,12,0.12)', color: '#ea580c' },
                                                         pixel_jio: { label: '极速订阅', bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
                                                         pixel_three_month: { label: '3-Month 订阅', bg: 'rgba(14,165,233,0.12)', color: '#0284c7' },
+                                                        pixel_sheerid: { label: 'SheerID 认证', bg: 'rgba(16,185,129,0.12)', color: '#059669' },
                                                     };
                                                     const s = srcMap[job.source] || srcMap.pixel;
                                                     return (
@@ -2555,7 +2614,7 @@ function PixelApiTab() {
                                                     🔗 {job.url.length > 60 ? job.url.slice(0, 57) + '...' : job.url}
                                                 </a>
                                                 <button
-                                                    onClick={() => navigator.clipboard.writeText(job.url)}
+                                                    onClick={() => copyToClipboard(job.url)}
                                                     style={{
                                                         background: 'none', border: 'none', cursor: 'pointer',
                                                         fontSize: '14px', padding: '2px',
@@ -2694,6 +2753,21 @@ function PixelApiTab() {
                             />
                             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
                                 常用上游地址：<code>https://auto.onepass.fun</code> 或 <code>https://iqless.icu</code>
+                            </div>
+                        </div>
+                        {/* SheerID Cost */}
+                        <div>
+                            <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                                SheerID 认证消耗积分
+                            </label>
+                            <input className="input" type="number" step="0.1" min="0"
+                                value={sheeridCost}
+                                onChange={e => setSheeridCost(e.target.value)}
+                                placeholder="3.0"
+                                style={{ width: '100%' }}
+                            />
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                默认消耗 3.0 积分，提交任务时扣除，若上游取消或失败则自动原路退还
                             </div>
                         </div>
                     </div>
@@ -2900,12 +2974,8 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
         } catch (e) { alert('消耗失败: ' + e.message); }
     };
 
-    const copyToClipboard = (text) => {
-        navigator.clipboard.writeText(text);
-    };
-
     const copyAllNewCodes = () => {
-        navigator.clipboard.writeText(cdkNewCodes.join('\n'));
+        copyToClipboard(cdkNewCodes.join('\n'));
     };
 
     return (
@@ -3323,7 +3393,7 @@ export default function Admin() {
     const [csSaved, setCsSaved] = useState(false);
 
     // Service maintenance toggles (used in settings tab)
-    const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gemini_jio: false, gemini_three_month: false, gpt_plus: false, gpt_team: false });
+    const [serviceMaint, setServiceMaint] = useState({ gemini_normal: false, gemini_advanced: false, gemini_jio: false, gemini_three_month: false, gemini_sheerid: false, gpt_plus: false, gpt_team: false });
 
     // User management state
     const [users, setUsers] = useState([]);
@@ -3377,6 +3447,11 @@ export default function Admin() {
     const [tipsContent, setTipsContent] = useState('在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。\n如果验证链接中 verificationId= 后面是空的，建议直接换号。\n一次消耗一个配额，成功后自动扣除。');
     const [tipsSaving, setTipsSaving] = useState(false);
     const [tipsSaved, setTipsSaved] = useState(false);
+
+    // Gemini Tutorial Mode state
+    const [geminiTutorialMode, setGeminiTutorialMode] = useState('sheerid');
+    const [tutorialModeSaving, setTutorialModeSaving] = useState(false);
+    const [tutorialModeSaved, setTutorialModeSaved] = useState(false);
 
     // Database backup state
     const [backupList, setBackupList] = useState([]);
@@ -3758,6 +3833,9 @@ export default function Admin() {
                         if (data.tipsInline?.content) {
                             setTipsContent(data.tipsInline.content);
                         }
+                        if (data.geminiTutorialMode) {
+                            setGeminiTutorialMode(data.geminiTutorialMode);
+                        }
                     }
                 } catch (e) {
                     console.warn('Failed to fetch tips config:', e);
@@ -3850,6 +3928,33 @@ export default function Admin() {
             alert('保存失败: ' + e.message);
         } finally {
             setTipsSaving(false);
+        }
+    };
+
+    const handleSaveTutorialMode = async () => {
+        setTutorialModeSaving(true);
+        setTutorialModeSaved(false);
+        try {
+            const token = user?.token || localStorage.getItem('verifykey-token');
+            const res = await fetch(`${API_BASE}/api/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ geminiTutorialMode })
+            });
+            if (res.ok) {
+                setTutorialModeSaved(true);
+                setTimeout(() => setTutorialModeSaved(false), 2000);
+            } else {
+                const err = await res.json();
+                alert(err.error || '保存失败');
+            }
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        } finally {
+            setTutorialModeSaving(false);
         }
     };
 
@@ -4904,6 +5009,7 @@ export default function Admin() {
                                                             pixel_auto: { bg: '#ea580c', label: 'UPixel Auto' },
                                                             pixel_jio: { bg: '#8b5cf6', label: '极速订阅' },
                                                             pixel_three_month: { bg: '#0284c7', label: '3-Month 订阅' },
+                                                            pixel_sheerid: { bg: '#0d9488', label: 'SheerID' },
                                                             kpixel: { bg: '#7c5cfc', label: 'KPixel' },
                                                             vpixel: { bg: '#0891b2', label: 'VPixel' },
                                                             ypixel: { bg: '#d97706', label: 'YPixel' },
@@ -4985,24 +5091,143 @@ export default function Admin() {
                                                                 >保存并推送</button>
                                                             </div>
                                                         </div>
-                                                    ) : (
-                                                        <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                                            {r.message && <span>{r.message}</span>}
-                                                            {(!isPass && !isProcessing && !isSubmissionFailure) && (
-                                                                <span
-                                                                    title="自定义编辑报错信息并推送给用户"
-                                                                    style={{ cursor: 'pointer', opacity: 0.6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', padding: '1px 6px', background: 'var(--bg-secondary)', borderRadius: '4px', flexShrink: 0, color: 'var(--text-secondary)', transition: 'all 0.2s' }}
-                                                                    onMouseOver={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
-                                                                    onMouseOut={e => { e.currentTarget.style.opacity = 0.6; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-secondary)'; }}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setEditingMsgText(r.message || "");
-                                                                        setEditingMsgVid(r.verificationId);
-                                                                    }}
-                                                                >✏️ 编辑</span>
-                                                            )}
-                                                        </div>
-                                                    )
+                                                    ) : (() => {
+                                                        const urlMatch = r.message ? r.message.match(/(https?:\/\/[^\s]+)/) : null;
+                                                        const detectedUrl = urlMatch ? urlMatch[1] : null;
+                                                        const cleanMsg = detectedUrl ? r.message.replace(detectedUrl, '').replace(/[:：]\s*$/, '').trim() : r.message;
+
+                                                        if (detectedUrl) {
+                                                            return (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '3px', width: '100%' }}>
+                                                                    {cleanMsg && (
+                                                                        <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                            <span>{cleanMsg}</span>
+                                                                            {(!isPass && !isProcessing && !isSubmissionFailure) && (
+                                                                                <span
+                                                                                    title="自定义编辑报错信息并推送给用户"
+                                                                                    style={{ cursor: 'pointer', opacity: 0.6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', padding: '1px 6px', background: 'var(--bg-secondary)', borderRadius: '4px', flexShrink: 0, color: 'var(--text-secondary)', transition: 'all 0.2s' }}
+                                                                                    onMouseOver={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                                                                                    onMouseOut={e => { e.currentTarget.style.opacity = 0.6; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setEditingMsgText(r.message || "");
+                                                                                        setEditingMsgVid(r.verificationId);
+                                                                                    }}
+                                                                                >✏️ 编辑</span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                    <div style={{
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '6px',
+                                                                        background: 'var(--bg-card)',
+                                                                        border: '1px solid var(--border-primary)',
+                                                                        padding: '3px 8px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '11px',
+                                                                        fontFamily: 'monospace',
+                                                                        maxWidth: '100%',
+                                                                        boxSizing: 'border-box'
+                                                                    }}>
+                                                                        <span style={{ opacity: 0.7 }}>🔗</span>
+                                                                        <a
+                                                                            href={detectedUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            title={`${detectedUrl}\n(点击直接打开完整链接)`}
+                                                                            style={{
+                                                                                color: '#3b82f6',
+                                                                                textDecoration: 'none',
+                                                                                overflow: 'hidden',
+                                                                                textOverflow: 'ellipsis',
+                                                                                whiteSpace: 'nowrap',
+                                                                                maxWidth: '460px',
+                                                                                display: 'inline-block'
+                                                                            }}
+                                                                            onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'}
+                                                                            onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}
+                                                                        >
+                                                                            {formatDisplayUrl(detectedUrl)}
+                                                                        </a>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                const ok = await copyToClipboard(detectedUrl);
+                                                                                if (ok) {
+                                                                                    const btn = e.currentTarget;
+                                                                                    const orig = btn.innerText;
+                                                                                    btn.innerText = '✓ 已复制';
+                                                                                    btn.style.color = '#10b981';
+                                                                                    btn.style.borderColor = '#10b981';
+                                                                                    setTimeout(() => {
+                                                                                        btn.innerText = orig;
+                                                                                        btn.style.color = '';
+                                                                                        btn.style.borderColor = '';
+                                                                                    }, 1800);
+                                                                                }
+                                                                            }}
+                                                                            style={{
+                                                                                fontSize: '11px',
+                                                                                padding: '1px 6px',
+                                                                                borderRadius: '4px',
+                                                                                border: '1px solid var(--border-primary)',
+                                                                                background: 'var(--bg-secondary)',
+                                                                                color: 'var(--text-secondary)',
+                                                                                cursor: 'pointer',
+                                                                                whiteSpace: 'nowrap',
+                                                                                transition: 'all 0.2s',
+                                                                                flexShrink: 0
+                                                                            }}
+                                                                            title="复制完整长链接"
+                                                                        >
+                                                                            📋 复制
+                                                                        </button>
+                                                                        <a
+                                                                            href={detectedUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            style={{
+                                                                                fontSize: '11px',
+                                                                                padding: '1px 6px',
+                                                                                borderRadius: '4px',
+                                                                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                                                                background: 'rgba(16, 185, 129, 0.08)',
+                                                                                color: '#10b981',
+                                                                                textDecoration: 'none',
+                                                                                fontWeight: 600,
+                                                                                whiteSpace: 'nowrap',
+                                                                                flexShrink: 0
+                                                                            }}
+                                                                            title="在新标签页中打开"
+                                                                        >
+                                                                            ↗ 打开
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div style={{ fontSize: '13px', fontWeight: 600, color: msgColor, marginTop: '3px', wordBreak: 'break-all', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                                                {r.message && <span>{r.message}</span>}
+                                                                {(!isPass && !isProcessing && !isSubmissionFailure) && (
+                                                                    <span
+                                                                        title="自定义编辑报错信息并推送给用户"
+                                                                        style={{ cursor: 'pointer', opacity: 0.6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', padding: '1px 6px', background: 'var(--bg-secondary)', borderRadius: '4px', flexShrink: 0, color: 'var(--text-secondary)', transition: 'all 0.2s' }}
+                                                                        onMouseOver={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                                                                        onMouseOut={e => { e.currentTarget.style.opacity = 0.6; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setEditingMsgText(r.message || "");
+                                                                            setEditingMsgVid(r.verificationId);
+                                                                        }}
+                                                                    >✏️ 编辑</span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()
                                                 )}
                                                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                     <span>{ts}</span>
@@ -5283,8 +5508,8 @@ export default function Admin() {
                                                                 whiteSpace: 'nowrap',
                                                                 display: 'inline-block'
                                                             }}
-                                                            onClick={() => { 
-                                                                navigator.clipboard.writeText(u.api_token);
+                                                            onClick={async () => { 
+                                                                await copyToClipboard(u.api_token);
                                                                 alert('API Token 已复制到剪贴板！');
                                                             }}
                                                             title={u.api_token + "\n(点击复制)"}>
@@ -5317,7 +5542,7 @@ export default function Admin() {
                                             <td>
                                                 {u.invite_code ? (
                                                     <code style={{ fontSize: '12px', padding: '2px 6px', background: 'rgba(124,92,252,0.08)', borderRadius: '4px', color: '#7c5cfc', cursor: 'pointer' }}
-                                                        onClick={() => { navigator.clipboard.writeText(u.invite_code); }}
+                                                        onClick={() => { copyToClipboard(u.invite_code); }}
                                                         title="点击复制">
                                                         {u.invite_code}
                                                     </code>
@@ -5537,7 +5762,7 @@ export default function Admin() {
                                             {userHistory.map(item => {
                                                 const isPass = item.status === 'pass';
                                                 const isFailed = item.status === 'failed';
-                                                const badgeBg = (item.via === 'gpt' || item.type === 'gpt') ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : item.via === 'pixel_three_month' ? '#0284c7' : item.via === 'pixel_jio' ? '#8b5cf6' : item.via === 'pixel_auto' ? '#ea580c' : '#059669');
+                                                const badgeBg = (item.via === 'gpt' || item.type === 'gpt') ? '#d97706' : (item.via === 'kpixel' ? '#7c5cfc' : item.via === 'vpixel' ? '#0891b2' : item.via === 'ypixel' ? '#d97706' : item.via === 'pixel_three_month' ? '#0284c7' : item.via === 'pixel_sheerid' ? '#0d9488' : item.via === 'pixel_jio' ? '#8b5cf6' : item.via === 'pixel_auto' ? '#ea580c' : '#059669');
                                                 return (
                                                     <div key={item.id} style={{
                                                         border: '1px solid var(--border-primary)',
@@ -6117,6 +6342,7 @@ export default function Admin() {
                                     { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '控制 Gemini 高级验证（2 积分）' },
                                     { key: 'gemini_jio', label: 'Gemini 极速订阅', desc: '控制 Gemini 极速订阅（2 积分）' },
                                     { key: 'gemini_three_month', label: 'Gemini 3-Month 订阅', desc: '控制 Gemini 3-Month 订阅（2 积分）' },
+                                    { key: 'gemini_sheerid', label: '🎓 Gemini SheerID 认证', desc: '控制 Gemini SheerID 教师/学生认证通道（默认 3 积分）' },
                                     { key: 'gpt_plus', label: '🤖 ChatGPT Plus 充值', desc: '控制 GPT Plus 月度充值（3 积分）' },
                                     { key: 'gpt_team', label: '👥 ChatGPT Team 邀请', desc: '控制 GPT Team 邀请功能（0.6 积分）' },
                                 ].map(s => {
@@ -6645,6 +6871,114 @@ export default function Admin() {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Gemini Tutorial Mode Config Card */}
+                            <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
+                                <div style={{
+                                    padding: '14px 20px',
+                                    background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
+                                    borderBottom: '1px solid #c4b5fd',
+                                    display: 'flex', alignItems: 'center', gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '20px' }}>🎓</span>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: '#5b21b6' }}>Gemini 教程展示模式</h3>
+                                    <span style={{ fontSize: '12px', color: '#7c3aed', marginLeft: 'auto' }}>控制前台展示的教程方案</span>
+                                </div>
+
+                                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+                                        您可以根据当前通道随时切换用户端「使用教程 & 积分规则」右侧卡片的展示方案。即使用户端默认为 SheerID 学生教程，原有的 Pixel 完整教程（包含 2FA 教程、33支持地区弹窗、家庭组规则、老号防封控、绑卡注意与自行绑卡工具）均已完整保留在系统中，随时可一键切换恢复。
+                                    </p>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+                                        <div
+                                            onClick={() => setGeminiTutorialMode('sheerid')}
+                                            style={{
+                                                padding: '16px',
+                                                borderRadius: '10px',
+                                                border: `2px solid ${geminiTutorialMode === 'sheerid' ? '#7c3aed' : 'var(--border-primary)'}`,
+                                                background: geminiTutorialMode === 'sheerid' ? 'rgba(124, 58, 237, 0.05)' : 'var(--bg-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                                <input
+                                                    type="radio"
+                                                    checked={geminiTutorialMode === 'sheerid'}
+                                                    onChange={() => setGeminiTutorialMode('sheerid')}
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                                <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>🎓 Gemini 学生 SheerID 认证教程（当前推荐）</strong>
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, paddingLeft: '22px' }}>
+                                                引导用户前往 <code>one.google.com/ai-student</code> 获取 SheerID 认证链接并提交，安全核验学生资格（零凭据）。
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            onClick={() => setGeminiTutorialMode('pixel')}
+                                            style={{
+                                                padding: '16px',
+                                                borderRadius: '10px',
+                                                border: `2px solid ${geminiTutorialMode === 'pixel' ? '#7c3aed' : 'var(--border-primary)'}`,
+                                                background: geminiTutorialMode === 'pixel' ? 'rgba(124, 58, 237, 0.05)' : 'var(--bg-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                                <input
+                                                    type="radio"
+                                                    checked={geminiTutorialMode === 'pixel'}
+                                                    onChange={() => setGeminiTutorialMode('pixel')}
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                                <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>📡 Pixel 一年优惠验证教程（原版备用）</strong>
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, paddingLeft: '22px' }}>
+                                                包含原版完整教程：Google 2FA 开启与密钥教程、33国支持地区弹窗、家庭组退出限制、老号防封控提示、绑卡注意与自行绑卡工具。
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{
+                                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px',
+                                    padding: '14px 20px',
+                                    borderTop: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-secondary, #f8fafc)'
+                                }}>
+                                    {tutorialModeSaved && (
+                                        <span style={{
+                                            color: '#10b981', fontSize: '13px', fontWeight: 500,
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                            animation: 'fadeIn 0.3s ease'
+                                        }}>
+                                            <span>✓</span> 已保存教程模式
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={handleSaveTutorialMode}
+                                        disabled={tutorialModeSaving}
+                                        style={{
+                                            padding: '8px 24px', borderRadius: '8px', border: 'none',
+                                            cursor: tutorialModeSaving ? 'not-allowed' : 'pointer',
+                                            fontSize: '14px', fontWeight: 600, color: '#fff',
+                                            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                                            boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)',
+                                            transition: 'all 0.2s ease',
+                                            opacity: tutorialModeSaving ? 0.7 : 1,
+                                            display: 'flex', alignItems: 'center', gap: '6px'
+                                        }}
+                                    >
+                                        {tutorialModeSaving ? (
+                                            <><span className="loading-spinner small" /> 保存中...</>
+                                        ) : '保存教程模式'}
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Customer Service Support Config Card */}
                             <div className="settings-section card" style={{ overflow: 'hidden', padding: 0 }}>
                                 <div style={{

@@ -411,6 +411,73 @@ def get_processing_history_by_email(email: str) -> Dict:
     return {}
 
 
+def get_successful_history_by_vid_or_url(vid: str = "", url: str = "") -> Dict:
+    """Check if a SheerID verification has already succeeded by verification_id or url."""
+    conn = database.get_connection()
+    if vid:
+        cursor = conn.execute(
+            "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
+            "FROM verification_history WHERE (verification_id = ? OR message LIKE ?) AND status = 'pass' ORDER BY rowid DESC LIMIT 1",
+            (vid, f"%{vid}%")
+        )
+        row = cursor.fetchone()
+        if row:
+            return {
+                "id": row["id"],
+                "status": row["status"],
+                "verificationId": row["verification_id"],
+                "message": row["message"],
+                "cdk": row["cdk"],
+                "via": row["via"] if "via" in row.keys() else "",
+                "submitEmail": row["email"] if "email" in row.keys() else "",
+                "timestamp": row["timestamp"]
+            }
+    if url:
+        cursor = conn.execute(
+            "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
+            "FROM verification_history WHERE message LIKE ? AND status = 'pass' ORDER BY rowid DESC LIMIT 1",
+            (f"%{url}%",)
+        )
+        row = cursor.fetchone()
+        if row:
+            return {
+                "id": row["id"],
+                "status": row["status"],
+                "verificationId": row["verification_id"],
+                "message": row["message"],
+                "cdk": row["cdk"],
+                "via": row["via"] if "via" in row.keys() else "",
+                "submitEmail": row["email"] if "email" in row.keys() else "",
+                "timestamp": row["timestamp"]
+            }
+    return {}
+
+
+def get_processing_history_by_vid(vid: str = "") -> Dict:
+    """Check if ANY task for this verification_id is currently in 'processing' status."""
+    if not vid:
+        return {}
+    conn = database.get_connection()
+    cursor = conn.execute(
+        "SELECT id, status, verification_id, message, cdk, timestamp, via, email "
+        "FROM verification_history WHERE (verification_id = ? OR message LIKE ?) AND status = 'processing' ORDER BY rowid DESC LIMIT 1",
+        (vid, f"%{vid}%")
+    )
+    row = cursor.fetchone()
+    if row:
+        return {
+            "id": row["id"],
+            "status": "processing",
+            "verificationId": row["verification_id"],
+            "message": row["message"],
+            "cdk": row["cdk"],
+            "via": row["via"] if "via" in row.keys() else "",
+            "submitEmail": row["email"] if "email" in row.keys() else "",
+            "timestamp": row["timestamp"]
+        }
+    return {}
+
+
 # ========== Atomic State Machine ==========
 
 def _extract_user_id(cdk: str) -> int:

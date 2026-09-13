@@ -5,6 +5,7 @@ import { useLang } from '../../stores/LanguageContext';
 import { useAuth } from '../../stores/AuthContext';
 import logoImg from '../../assets/logo.png';
 import logoDarkImg from '../../assets/logo-dark.png';
+import { copyToClipboard } from '../../utils/clipboard';
 import './Layout.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3003' : '');
@@ -96,20 +97,23 @@ export default function Layout({ children }) {
         ? `/login?ref=${encodeURIComponent(currentInviteRef)}`
         : '/login';
 
-    const handleCopyInvite = () => {
-        navigator.clipboard.writeText(inviteLink).then(() => {
+    const handleCopyInvite = async () => {
+        if (!inviteLink) return;
+        const ok = await copyToClipboard(inviteLink);
+        if (ok) {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-        });
+        }
     };
 
-    const handleCopyWechat = () => {
+    const handleCopyWechat = async () => {
         const wechatId = config?.customerService?.wechatId;
         if (!wechatId) return;
-        navigator.clipboard.writeText(wechatId).then(() => {
+        const ok = await copyToClipboard(wechatId);
+        if (ok) {
             setWechatCopied(true);
             setTimeout(() => setWechatCopied(false), 2000);
-        });
+        }
     };
 
     const handleHeaderCdkRedeem = useCallback(async () => {

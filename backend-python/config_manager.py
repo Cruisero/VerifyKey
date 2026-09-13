@@ -329,11 +329,13 @@ DEFAULT_CONFIG = {
         "gemini_advanced": False,
         "gemini_jio": False,
         "gemini_three_month": False,
+        "gemini_sheerid": False,
         "upixel": False,
         "upixel_normal": False,
         "upixel_advanced": False,
         "upixel_jio": False,
         "upixel_three_month": False,
+        "upixel_sheerid": False,
         "kpixel": False,
         "vpixel": False,
         "ypixel": False,
@@ -346,6 +348,9 @@ DEFAULT_CONFIG = {
     "tipsInline": {
         "content": "在 one.google.com/ai-student 的蓝色按钮上右键复制链接，不要点进去！建议用无痕窗口登录账户获取。\n如果验证链接中 verificationId= 后面是空的，建议直接换号。\n一次消耗一个配额，成功后自动扣除。"
     },
+
+    # Gemini Tutorial Mode: 'sheerid' (Gemini Student SheerID 认证教程，默认) | 'pixel' (Pixel 1年优惠原版教程)
+    "geminiTutorialMode": "sheerid",
 
     # Feature flags
     "features": {
@@ -368,7 +373,8 @@ DEFAULT_CONFIG = {
         "creditCost": 1.0,
         "autoCost": 2.0,
         "jioCost": 2.0,
-        "threeMonthCost": 2.0
+        "threeMonthCost": 2.0,
+        "sheeridCost": 3.0
     },
     
     # KPixel API (Google One via kckc1818.com) — "KPixel" Pro 验证

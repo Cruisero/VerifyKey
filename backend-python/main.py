@@ -559,7 +559,7 @@ def broadcast_verify_event(event: dict):
                 _source = event.get("source", "")
                 _COST_BY_SOURCE = {
                     "pixel": 1.0, "pixel_auto": 2.0, "pixel_jio": 2.0,
-                    "pixel_three_month": 2.0,
+                    "pixel_three_month": 2.0, "pixel_sheerid": 3.0,
                     "kpixel": 2.0, "vpixel": 2.0, "ypixel": 1.0,
                     "pro_submit": 2.0,
                     "gpt": 1.5,
@@ -6114,7 +6114,7 @@ async def get_admin_today_tasks(authorization: Optional[str] = Header(None)):
     cursor = conn.execute(
         "SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded "
         "FROM verification_history "
-        "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'pixel_three_month', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
+        "WHERE timestamp >= ? AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'pixel_three_month', 'pixel_sheerid', 'kpixel', 'vpixel', 'ypixel', 'gpt') "
         "ORDER BY rowid DESC LIMIT 500",
         (today_start,)
     )
@@ -6266,7 +6266,7 @@ async def _fetch_upstream_result_url(vid: str, via: str) -> str:
         via_lower = (via or "").lower()
         
         # UPixel: GET {baseUrl}/api/jobs/{job_id}  →  response.url
-        if via_lower in ("pixel", "pixel_auto", "pixel_jio", "pixel_three_month", "pixel_api"):
+        if via_lower in ("pixel", "pixel_auto", "pixel_jio", "pixel_three_month", "pixel_sheerid", "pixel_api"):
             pixel_cfg = _get_pixel_config()
             if not pixel_cfg.get("apiKey"):
                 return ""
@@ -6425,6 +6425,8 @@ async def override_verification_status(record_id: str, request: ManualOverrideRe
                     cost = 2.0
                 elif vid.startswith("kp_") or via == "kpixel":
                     cost = 2.0
+                elif via == "pixel_sheerid":
+                    cost = 3.0
                 elif via in ("pixel_auto", "pixel_jio", "pixel_three_month"):
                     cost = 2.0
                 elif via == "pro_submit":
@@ -6637,6 +6639,8 @@ async def override_verification_by_vid(request: VidOverrideRequest):
                     cost = 2.0
                 elif vid_str.startswith("kp_") or via == "kpixel":
                     cost = 2.0
+                elif via == "pixel_sheerid":
+                    cost = 3.0
                 elif via in ("pixel_auto", "pixel_jio", "pixel_three_month"):
                     cost = 2.0
                 elif via == "pro_submit":
@@ -8525,22 +8529,31 @@ async def get_service_status():
                 if h_resp.status_code == 200:
                     h_data = h_resp.json()
                     if h_data.get("status") in ("ok", "healthy"):
-                        # Check balance
-                        b_resp = await client.get(
-                            f"{pixel_cfg.get('baseUrl', 'https://iqless.icu')}/api/balance",
+                        # Check quota first, fallback to balance
+                        q_resp = await client.get(
+                            f"{pixel_cfg.get('baseUrl', 'https://iqless.icu')}/api/key/quota",
                             headers={"X-API-Key": pixel_cfg.get("apiKey", "")}
                         )
-                        if b_resp.status_code == 200:
-                            b_data = b_resp.json()
-                            bal = b_data.get("balance", b_data.get("credits", 0))
-                            if bal and bal > 0:
-                                upixel_ok = True
-                            else:
-                                upixel_reason = "API 余额不足"
-                        else:
-                            # Instead of failing, assume the API is up but doesn't implement balance checking
+                        if q_resp.status_code == 200:
                             upixel_ok = True
                             upixel_reason = ""
+                        else:
+                            # Check balance
+                            b_resp = await client.get(
+                                f"{pixel_cfg.get('baseUrl', 'https://iqless.icu')}/api/balance",
+                                headers={"X-API-Key": pixel_cfg.get("apiKey", "")}
+                            )
+                            if b_resp.status_code == 200:
+                                b_data = b_resp.json()
+                                bal = b_data.get("balance", b_data.get("credits", 0))
+                                if bal and bal > 0:
+                                    upixel_ok = True
+                                else:
+                                    upixel_reason = "API 余额不足"
+                            else:
+                                # Instead of failing, assume the API is up but doesn't implement balance checking
+                                upixel_ok = True
+                                upixel_reason = ""
                     else:
                         upixel_reason = "API 离线"
                 else:
@@ -8559,6 +8572,7 @@ async def get_service_status():
     pro_maint, pro_hidden = _status_flags(manual.get("gemini_advanced") or manual.get("upixel_advanced"))
     jio_maint, jio_hidden = _status_flags(manual.get("gemini_jio") or manual.get("upixel_jio"))
     three_month_maint, three_month_hidden = _status_flags(manual.get("gemini_three_month") or manual.get("upixel_three_month"))
+    sheerid_maint, sheerid_hidden = _status_flags(manual.get("gemini_sheerid") or manual.get("upixel_sheerid"))
     gpt_maint, gpt_hidden = _status_flags(manual.get("gpt_plus"))
     gpt_team_maint, gpt_team_hidden = _status_flags(manual.get("gpt_team"))
 
@@ -8567,10 +8581,12 @@ async def get_service_status():
     upixel_advanced_available = upixel_ok and not pro_maint
     upixel_jio_available = upixel_ok and not jio_maint
     upixel_three_month_available = upixel_ok and not three_month_maint
+    upixel_sheerid_available = upixel_ok and not sheerid_maint
     upixel_normal_reason = ("该服务已下架" if normal_hidden else "管理员手动维护中") if normal_maint else upixel_reason
     upixel_advanced_reason = ("该服务已下架" if pro_hidden else "管理员手动维护中") if pro_maint else upixel_reason
     upixel_jio_reason = ("该服务已下架" if jio_hidden else "管理员手动维护中") if jio_maint else upixel_reason
     upixel_three_month_reason = ("该服务已下架" if three_month_hidden else "管理员手动维护中") if three_month_maint else upixel_reason
+    upixel_sheerid_reason = ("该服务已下架" if sheerid_hidden else "管理员手动维护中") if sheerid_maint else upixel_reason
 
     # --- KPixel auto-detect ---
     kpixel_ok = False
@@ -8663,6 +8679,10 @@ async def get_service_status():
     three_month_available = not three_month_maint
     three_month_reason = ("该服务已下架" if three_month_hidden else "管理员手动维护中") if three_month_maint else ""
 
+    # --- Gemini SheerID 资格核验: purely manual toggle ---
+    sheerid_available = not sheerid_maint
+    sheerid_reason = ("该服务已下架" if sheerid_hidden else "管理员手动维护中") if sheerid_maint else ""
+
     # --- GPT Plus: purely manual toggle (per-channel status kept for admin info) ---
     gpt_channels_status = {}
     for ch in GPT_CHANNELS:
@@ -8716,14 +8736,18 @@ async def get_service_status():
             "advancedAvailable": pro_available,
             "jioAvailable": jio_available,
             "threeMonthAvailable": three_month_available,
+            "sheeridAvailable": upixel_sheerid_available,
             "standardHidden": normal_hidden,
             "advancedHidden": pro_hidden,
             "jioHidden": jio_hidden,
             "threeMonthHidden": three_month_hidden,
+            "sheeridHidden": sheerid_hidden,
             "normalReason": standard_reason or upixel_normal_reason,
             "advancedReason": pro_reason or upixel_advanced_reason,
             "jioReason": jio_reason or upixel_jio_reason,
             "threeMonthReason": three_month_reason or upixel_three_month_reason,
+            "sheeridReason": sheerid_reason or upixel_sheerid_reason,
+            "sheeridCost": float(pixel_cfg.get("sheeridCost", 3.0)),
             "ypixelUp": ypixel_ok, "standardAvailable": standard_available,
         },
         "ypixel": {"available": ypixel_ok, "reason": ypixel_reason},
@@ -8736,6 +8760,7 @@ async def get_service_status():
             "gemini_advanced": pro_hidden,
             "gemini_jio": jio_hidden,
             "gemini_three_month": three_month_hidden,
+            "gemini_sheerid": sheerid_hidden,
             "gpt_plus": gpt_hidden,
             "gpt_team": gpt_team_hidden,
         },
@@ -8759,7 +8784,7 @@ async def toggle_service_maintenance(request: Request, authorization: Optional[s
     current = config_manager.get_config()
     sm = current.get("serviceMaintenance", {})
     # Only update provided fields
-    for key in ("gemini_normal", "gemini_advanced", "gemini_jio", "gemini_three_month", "gpt_plus", "gpt_team", "upixel", "upixel_normal", "upixel_advanced", "upixel_jio", "upixel_three_month", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api"):
+    for key in ("gemini_normal", "gemini_advanced", "gemini_jio", "gemini_three_month", "gemini_sheerid", "gpt_plus", "gpt_team", "upixel", "upixel_normal", "upixel_advanced", "upixel_jio", "upixel_three_month", "upixel_sheerid", "kpixel", "vpixel", "ypixel", "gpt_sbs", "gpt_red", "gpt_vip", "gpt_aic", "gpt_nitro", "gpt_tg", "gpt_api"):
         if key in data:
             val = data[key]
             if val in ("hidden", "delisted"):
@@ -9018,7 +9043,7 @@ async def _pixel_job_sweep():
             conn = database.get_connection()
             rows = conn.execute(
                 "SELECT verification_id, cdk, email, via, timestamp FROM verification_history "
-                "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'pixel_three_month') "
+                "WHERE status = 'processing' AND via IN ('pixel', 'pixel_auto', 'pixel_jio', 'pixel_three_month', 'pixel_sheerid') "
                 "ORDER BY rowid DESC LIMIT 200"
             ).fetchall()
 
@@ -9053,7 +9078,9 @@ async def _pixel_job_sweep():
                             headers={"X-API-Key": api_key},
                         )
                     row_via = row["via"] or ""
-                    if "three_month" in row_via or "3month" in row_via:
+                    if "sheerid" in row_via:
+                        sse_source = "pixel_sheerid"
+                    elif "three_month" in row_via or "3month" in row_via:
                         sse_source = "pixel_three_month"
                     elif "jio" in row_via:
                         sse_source = "pixel_jio"
@@ -9082,7 +9109,9 @@ async def _pixel_job_sweep():
                     if upstream_status == "success":
                         url = data.get("url", "")
                         result_msg = data.get("result_msg", "")
-                        if "3-Month" in result_msg or sse_source == "pixel_three_month":
+                        if "sheerid" in row_via or sse_source == "pixel_sheerid":
+                            msg = f"✅ SheerID 验证成功: {url}" if url else f"✅ {result_msg or 'SheerID 验证成功'}"
+                        elif "3-Month" in result_msg or sse_source == "pixel_three_month":
                             msg = f"✅ 3-Month 订阅成功: {url}" if url else f"✅ {result_msg or '3-Month 订阅成功'}"
                         elif "激活成功" in result_msg or sse_source == "pixel_jio":
                             msg = f"✅ 激活成功: {url}" if url else f"✅ {result_msg or '激活成功'}"
@@ -9180,7 +9209,10 @@ async def _repair_timeout_failed_tasks():
             if not user_id:
                 continue
 
-            if "three_month" in current_via or "3month" in current_via:
+            if "sheerid" in current_via:
+                sse_source = "pixel_sheerid"
+                sweep_cost = float(pixel.get("sheeridCost", 3.0))
+            elif "three_month" in current_via or "3month" in current_via:
                 sse_source = "pixel_three_month"
                 sweep_cost = float(pixel.get("threeMonthCost", 2.0))
             elif "jio" in current_via:
@@ -9208,7 +9240,9 @@ async def _repair_timeout_failed_tasks():
                 if upstream_status == "success":
                     url = data.get("url", "")
                     result_msg = data.get("result_msg", "")
-                    if "激活成功" in result_msg or sse_source == "pixel_jio":
+                    if "sheerid" in current_via or sse_source == "pixel_sheerid":
+                        msg = f"✅ SheerID 验证成功（已修正扣费）: {url}" if url else "✅ SheerID 验证成功（已修正扣费）"
+                    elif "激活成功" in result_msg or sse_source == "pixel_jio":
                         msg = f"✅ 激活成功（已修正扣费）: {url}" if url else "✅ 激活成功（已修正扣费）"
                     else:
                         msg = f"✅ 订阅成功（已修正扣费）: {url}" if url else "✅ 订阅成功（已修正扣费）"
@@ -9384,7 +9418,9 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
     mode = payload.get("mode", "semi-auto")
     user_id = int(payload.get("user_id", 0) or 0)
     email = payload.get("email", "")
-    if mode in ("3-Month", "three_month", "3month"):
+    if mode == "sheerid":
+        sse_source = "pixel_sheerid"
+    elif mode in ("3-Month", "three_month", "3month"):
         sse_source = "pixel_three_month"
     elif mode == "jio":
         sse_source = "pixel_jio"
@@ -9414,7 +9450,10 @@ async def _resume_pending_pixel_task(task_id: str, payload: dict):
         if status == "success":
             url = data.get("url", "")
             result_msg = data.get("result_msg", "")
-            if "3-Month" in result_msg or mode in ("3-Month", "three_month", "3month"):
+            if mode == "sheerid" or sse_source == "pixel_sheerid":
+                success_text = f"✅ SheerID 验证成功: {url}" if url else f"✅ {result_msg or 'SheerID 验证成功'}"
+                display_msg = "✅ SheerID 验证成功（重启恢复）"
+            elif "3-Month" in result_msg or mode in ("3-Month", "three_month", "3month"):
                 success_text = f"✅ 3-Month 订阅成功: {url}" if url else f"✅ {result_msg or '3-Month 订阅成功'}"
                 display_msg = "✅ 3-Month 订阅成功（重启恢复）"
             elif "激活成功" in result_msg or mode == "jio":
@@ -9527,18 +9566,37 @@ def _get_pixel_failure_message(data: dict) -> str:
 
 
 class PixelJobRequest(BaseModel):
-    email: str
-    password: str
-    totp_secret: str
+    email: Optional[str] = ""
+    password: Optional[str] = ""
+    totp_secret: Optional[str] = ""
     cdk: str = ""
     priority: int = 0
     mode: str = "semi-auto"
+    url: Optional[str] = ""
+    link: Optional[str] = ""
+    offer_url: Optional[str] = ""
+    api_source: Optional[str] = ""
 
 
 @app.post("/api/pixel/jobs")
 async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str] = Header(None)):
-    """Submit a Pixel API job — validates user credits, proxies to iqless.icu, starts background poller."""
-    request.email = normalize_gmail_email(request.email)
+    """Submit a Pixel API job — validates user credits, proxies to iqless.icu / auto.onepass.fun, starts background poller."""
+    target_url = (request.url or request.link or request.offer_url or "").strip()
+    is_sheerid = (request.mode == "sheerid") or ("services.sheerid.com" in target_url)
+    extracted_vid = ""
+    if is_sheerid:
+        request.mode = "sheerid"
+        if not target_url:
+            raise HTTPException(status_code=400, detail="SheerID 模式必须提供完整验证链接 (url)")
+        vid_match = re.search(r"verificationId=([a-f0-9]{20,32})", target_url, re.I)
+        extracted_vid = vid_match.group(1) if vid_match else ""
+        if not request.email:
+            request.email = f"sheerid_{extracted_vid[:12]}" if extracted_vid else f"sheerid_{uuid.uuid4().hex[:10]}"
+    else:
+        if not request.email:
+            raise HTTPException(status_code=400, detail="请输入账号邮箱")
+        request.email = normalize_gmail_email(request.email)
+
     # Check per-mode maintenance flags
     import config_manager as _cfg_mgr_pixel
     _pixel_maint = _cfg_mgr_pixel.get_config().get("serviceMaintenance", {})
@@ -9549,6 +9607,10 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         if val == "hidden" or str(val).lower() == "hidden":
             return f"{name}已下架，暂停提供"
         return f"{name}正在维护中，请稍后再试"
+
+    val_sheerid = _pixel_maint.get("gemini_sheerid") or _pixel_maint.get("upixel_sheerid")
+    if is_sheerid and _is_maint_or_hidden(val_sheerid):
+        raise HTTPException(status_code=503, detail=_get_err_msg(val_sheerid, "SheerID 核验"))
 
     is_3m = request.mode in ("3-Month", "three_month", "3month")
     val_3m = _pixel_maint.get("gemini_three_month") or _pixel_maint.get("upixel_three_month")
@@ -9564,7 +9626,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         raise HTTPException(status_code=503, detail=_get_err_msg(val_adv, "UPixel 高级验证"))
 
     val_norm = _pixel_maint.get("gemini_normal") or _pixel_maint.get("upixel_normal")
-    if not is_3m and request.mode not in ("auto", "jio") and _is_maint_or_hidden(val_norm):
+    if not is_sheerid and not is_3m and request.mode not in ("auto", "jio") and _is_maint_or_hidden(val_norm):
         raise HTTPException(status_code=503, detail=_get_err_msg(val_norm, "UPixel 普通验证"))
 
     pixel_cfg = _get_pixel_config()
@@ -9589,7 +9651,11 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         raise HTTPException(status_code=403, detail="账号已被禁用")
     user_id = user.get("id")
     credits = user.get("credits", 0)
-    if is_3m:
+
+    if is_sheerid:
+        cost = float(pixel_cfg.get("sheeridCost", 3.0))
+        sse_source = "pixel_sheerid"
+    elif is_3m:
         cost = float(pixel_cfg.get("threeMonthCost", 2.0))
         sse_source = "pixel_three_month"
     elif request.mode == "jio":
@@ -9601,54 +9667,104 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
     else:
         cost = float(pixel_cfg.get("creditCost", 1.0))
         sse_source = "pixel"
+
     import verification_history
     import uuid
-    existing_success = verification_history.get_successful_history_by_email(request.email, user_id)
-    if existing_success:
-        job_id = existing_success.get("verificationId") or existing_success.get("id") or ("auto-" + str(uuid.uuid4())[:8])
-        event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
-        msg = existing_success.get("message", "")
-        url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 激活成功: ", "").replace("✅ 获取成功", "").replace("✅ 订阅成功", "").replace("✅ 激活成功", "").strip()
-        if not url.startswith("http"):
-            url = ""
-        
-        broadcast_verify_event({
-            "type": "progress",
-            "vid": job_id,
-            "step": "result", "status": "approved",
-            "success": True,
-            "message": "✅ 验证已成功（获取历史记录）",
-            "url": url,
-            "forceTerminalUpdate": True,
-            **event_meta,
-        })
-        return {
-            "job_id": job_id,
-            "status": "success",
-            "queue_position": -1,
-            "estimated_wait_seconds": 0,
-        }
 
-    # Intercept duplicate active submissions for the same email
-    existing_processing = verification_history.get_processing_history_by_email(request.email)
-    if existing_processing:
-        job_id = existing_processing.get("verificationId") or existing_processing.get("id")
-        logging.info(f"[Pixel] Intercepted duplicate active submission for {request.email}, attaching to existing job {job_id}")
-        event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
-        broadcast_verify_event({
-            "type": "progress",
-            "vid": job_id,
-            "step": "processing",
-            "status": "queued",
-            "message": "⏳ 任务已经在处理队列中",
-            **event_meta,
-        })
-        return {
-            "job_id": job_id,
-            "status": "queued",
-            "queue_position": -1,
-            "estimated_wait_seconds": 60,
-        }
+    if is_sheerid:
+        existing_success = verification_history.get_successful_history_by_vid_or_url(vid=extracted_vid, url=target_url)
+        if existing_success:
+            job_id = existing_success.get("verificationId") or existing_success.get("id") or ("sheerid-" + str(uuid.uuid4())[:8])
+            event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
+            broadcast_verify_event({
+                "type": "progress",
+                "vid": job_id,
+                "step": "result", "status": "approved",
+                "success": True,
+                "message": "✅ SheerID 验证已成功（获取历史记录）",
+                "url": target_url,
+                "forceTerminalUpdate": True,
+                **event_meta,
+            })
+            return {
+                "job_id": job_id,
+                "status": "success",
+                "mode": "sheerid",
+                "verification_id": extracted_vid,
+                "url": target_url,
+                "result_msg": "验证成功",
+                "queue_position": -1,
+                "estimated_wait_seconds": 0,
+            }
+
+        existing_processing = verification_history.get_processing_history_by_vid(extracted_vid)
+        if existing_processing:
+            job_id = existing_processing.get("verificationId") or existing_processing.get("id")
+            logging.info(f"[Pixel] Intercepted duplicate active SheerID submission for {extracted_vid}, attaching to existing job {job_id}")
+            event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
+            broadcast_verify_event({
+                "type": "progress",
+                "vid": job_id,
+                "step": "processing",
+                "status": "queued",
+                "message": "⏳ SheerID 任务已经在处理队列中",
+                **event_meta,
+            })
+            return {
+                "job_id": job_id,
+                "status": "queued",
+                "mode": "sheerid",
+                "verification_id": extracted_vid,
+                "queue_position": -1,
+                "estimated_wait_seconds": 60,
+            }
+    else:
+        existing_success = verification_history.get_successful_history_by_email(request.email, user_id)
+        if existing_success:
+            job_id = existing_success.get("verificationId") or existing_success.get("id") or ("auto-" + str(uuid.uuid4())[:8])
+            event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
+            msg = existing_success.get("message", "")
+            url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 激活成功: ", "").replace("✅ 获取成功", "").replace("✅ 订阅成功", "").replace("✅ 激活成功", "").strip()
+            if not url.startswith("http"):
+                url = ""
+            
+            broadcast_verify_event({
+                "type": "progress",
+                "vid": job_id,
+                "step": "result", "status": "approved",
+                "success": True,
+                "message": "✅ 验证已成功（获取历史记录）",
+                "url": url,
+                "forceTerminalUpdate": True,
+                **event_meta,
+            })
+            return {
+                "job_id": job_id,
+                "status": "success",
+                "queue_position": -1,
+                "estimated_wait_seconds": 0,
+            }
+
+        # Intercept duplicate active submissions for the same email
+        existing_processing = verification_history.get_processing_history_by_email(request.email)
+        if existing_processing:
+            job_id = existing_processing.get("verificationId") or existing_processing.get("id")
+            logging.info(f"[Pixel] Intercepted duplicate active submission for {request.email}, attaching to existing job {job_id}")
+            event_meta = _build_verify_event_meta(sse_source, request.email, user_id, "pixel_api")
+            broadcast_verify_event({
+                "type": "progress",
+                "vid": job_id,
+                "step": "processing",
+                "status": "queued",
+                "message": "⏳ 任务已经在处理队列中",
+                **event_meta,
+            })
+            return {
+                "job_id": job_id,
+                "status": "queued",
+                "queue_position": -1,
+                "estimated_wait_seconds": 60,
+            }
 
     if credits < cost:
         raise HTTPException(status_code=400, detail=f"积分不足（需要 {cost} 积分）")
@@ -9661,14 +9777,22 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         "X-API-Key": pixel_cfg["apiKey"],
         "Content-Type": "application/json",
     }
-    normalized_totp_secret = re.sub(r"\s+", "", request.totp_secret or "")
-    payload = {
-        "email": request.email,
-        "password": request.password,
-        "totp_secret": normalized_totp_secret,
-        "priority": request.priority,
-        "mode": "3-Month" if is_3m else request.mode,
-    }
+    if is_sheerid:
+        payload = {
+            "mode": "sheerid",
+            "url": target_url,
+            "api_source": request.api_source or (user.get("username") if user else "VerifyKey"),
+        }
+    else:
+        normalized_totp_secret = re.sub(r"\s+", "", request.totp_secret or "")
+        payload = {
+            "email": request.email,
+            "password": request.password,
+            "totp_secret": normalized_totp_secret,
+            "priority": request.priority,
+            "mode": "3-Month" if is_3m else request.mode,
+            "api_source": request.api_source or (user.get("username") if user else "VerifyKey"),
+        }
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -9678,16 +9802,21 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             data = resp.json()
             job_id = data.get("job_id", "")
             # Store job context for GET endpoint to use during finalization
-            # (no background polling — frontend polls GET /api/pixel/jobs/{id} which auto-finalizes)
-            _pixel_job_context[job_id] = {"email": request.email, "user_id": user_id, "cost": cost, "mode": request.mode}
+            _pixel_job_context[job_id] = {
+                "email": request.email,
+                "user_id": user_id,
+                "cost": cost,
+                "mode": request.mode,
+                "url": target_url if is_sheerid else "",
+                "verification_id": extracted_vid if is_sheerid else ""
+            }
             _register_async_task("pixel", job_id, _pixel_job_context[job_id])
 
-            # Write initial processing record to DB so sweep can find this job
-            # even if the user closes browser and in-memory context is lost
             sse_source_tag = sse_source
+            init_msg = data.get("message") or ("已提交 SheerID 验证任务，等待人工处理" if is_sheerid else "任务已提交，等待设备处理...")
             _upsert_user_verification_result(
                 job_id, user_id, "processing",
-                "任务已提交，等待设备处理...",
+                init_msg,
                 via=sse_source_tag, email=request.email
             )
             # Lock the cost into the DB row for the credit ledger
@@ -9704,16 +9833,22 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 "type": "progress",
                 "vid": job_id,
                 "step": "submitted",
-                "message": "任务已提交，等待设备处理...",
+                "message": init_msg,
                 **event_meta,
             })
 
-            return {
+            resp_result = {
                 "job_id": job_id,
                 "status": data.get("status", "queued"),
                 "queue_position": data.get("queue_position", -1),
                 "estimated_wait_seconds": data.get("estimated_wait_seconds", 0),
             }
+            if is_sheerid:
+                resp_result["mode"] = "sheerid"
+                resp_result["verification_id"] = extracted_vid or data.get("verification_id", "")
+                resp_result["url"] = target_url
+                resp_result["message"] = init_msg
+            return resp_result
         else:
             # === Handle non-200 responses ===
             # IMPORTANT: Do NOT refund unconditionally here.
@@ -9732,7 +9867,9 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
 
                         # Generate a local job_id and write pass record to verification_history
                         ap_job_id = f"ap-{uuid.uuid4().hex[:8]}"
-                        if url409:
+                        if is_sheerid:
+                            success_msg = f"✅ SheerID 验证成功: {url409 or target_url}"
+                        elif url409:
                             success_msg = f"✅ 获取成功: {url409}"
                         elif result_msg409:
                             if "3-Month" in result_msg409 or is_3m:
@@ -9770,18 +9907,23 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                             "step": "result", "status": "approved",
                             "success": True,
                             "message": "✅ 验证已成功（上游已处理）",
-                            "url": url409,
+                            "url": url409 or (target_url if is_sheerid else ""),
                             "forceTerminalUpdate": True,
                             **event_meta,
                         })
 
-                        return {
+                        resp_409 = {
                             "job_id": ap_job_id,
                             "status": "success",
-                            "url": url409,
+                            "url": url409 or (target_url if is_sheerid else ""),
+                            "result_msg": result_msg409 or ("验证成功" if is_sheerid else ""),
                             "queue_position": -1,
                             "estimated_wait_seconds": 0,
                         }
+                        if is_sheerid:
+                            resp_409["mode"] = "sheerid"
+                            resp_409["verification_id"] = extracted_vid
+                        return resp_409
 
                     else:
                         # already_queued — the original task is still in the queue.
@@ -9790,7 +9932,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                         job_id409 = err409.get("job_id", "")
                         raise HTTPException(status_code=409, detail={
                             "code": "already_queued",
-                            "message": "该邮箱已在队列中，请等待当前任务完成",
+                            "message": "该验证链接已在排队队列中，请等待当前任务完成" if is_sheerid else "该邮箱已在队列中，请等待当前任务完成",
                             "job_id": job_id409,
                         })
 
@@ -9799,7 +9941,15 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 except Exception:
                     # Failed to parse 409 body — refund to be safe
                     _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
-                    raise HTTPException(status_code=409, detail={"code": "already_queued", "message": "该邮箱已在队列中，请等待当前任务完成"})
+                    raise HTTPException(status_code=409, detail={"code": "already_queued", "message": "任务已经在排队处理中，请勿重复提交"})
+
+            if resp.status_code == 403:
+                _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
+                try:
+                    err403 = resp.json()
+                except Exception:
+                    err403 = {"detail": resp.text}
+                raise HTTPException(status_code=403, detail=err403)
 
             # Other non-200/non-409 errors: refund credits
             refund_result = _refund_user_credits(user_id, cost, request.email, via="pixel_submit")
@@ -9855,7 +10005,7 @@ async def pixel_get_job(job_id: str):
         status = row["status"]
         msg = row["message"]
         if status == "pass":
-            url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 激活成功: ", "").replace("✅ 验证已成功（获取历史记录）", "").strip()
+            url = msg.replace("✅ 获取成功: ", "").replace("✅ 订阅成功: ", "").replace("✅ 激活成功: ", "").replace("✅ SheerID 验证成功: ", "").replace("✅ 验证已成功（获取历史记录）", "").strip()
             if not url.startswith("http"):
                 url = ""
             return {"job_id": job_id, "status": "success", "url": url, "result_msg": msg, "queue_position": -1, "estimated_wait_seconds": 0}
@@ -9897,9 +10047,12 @@ async def pixel_get_job(job_id: str):
                         except ValueError:
                             pass
                     if uid_from_db:
-                        # Determine cost by via/mode: pixel_jio=2.0, pixel_auto=2.0, pixel=1.0
+                        # Determine cost by via/mode: pixel_sheerid=3.0, pixel_jio=2.0, pixel_auto=2.0, pixel=1.0
                         row_via = row["via"] if "via" in row.keys() else ""
-                        if "three_month" in (row_via or "") or "3month" in (row_via or ""):
+                        if "sheerid" in (row_via or ""):
+                            recover_cost = float(pixel_cfg.get("sheeridCost", 3.0))
+                            recover_mode = "sheerid"
+                        elif "three_month" in (row_via or "") or "3month" in (row_via or ""):
                             recover_cost = float(pixel_cfg.get("threeMonthCost", 2.0))
                             recover_mode = "3-Month"
                         elif "jio" in (row_via or ""):
@@ -9920,7 +10073,9 @@ async def pixel_get_job(job_id: str):
         user_id = ctx.get("user_id")
         email = ctx.get("email", "")
         mode_val = ctx.get("mode", "")
-        if mode_val in ("3-Month", "three_month", "3month"):
+        if mode_val == "sheerid" or "sheerid" in sse_source:
+            sse_source = "pixel_sheerid"
+        elif mode_val in ("3-Month", "three_month", "3month"):
             sse_source = "pixel_three_month"
         elif mode_val == "jio":
             sse_source = "pixel_jio"
@@ -9934,9 +10089,14 @@ async def pixel_get_job(job_id: str):
         if upstream_status == "success" and user_id:
             url = data.get("url", "")
             result_msg = data.get("result_msg", "")
+            is_sheerid = (mode_val == "sheerid") or ("sheerid" in sse_source) or (data.get("mode") == "sheerid")
             is_three_month = (mode_val in ("3-Month", "three_month", "3month")) or ("three_month" in sse_source) or ("3-Month" in result_msg)
             is_jio = (mode_val == "jio") or ("jio" in sse_source) or ("激活成功" in result_msg)
-            if is_three_month:
+            if is_sheerid:
+                ret_url = url or ctx.get("url", "")
+                success_text = f"✅ SheerID 验证成功: {ret_url}" if ret_url else f"✅ {result_msg or 'SheerID 验证成功'}"
+                display_success_msg = "✅ SheerID 验证成功"
+            elif is_three_month:
                 success_text = f"✅ 3-Month 订阅成功: {url}" if url else f"✅ {result_msg or '3-Month 订阅成功'}"
                 display_success_msg = "✅ 3-Month 订阅成功（补偿确认）" if result.get("reconciled") else "✅ 3-Month 订阅成功"
             elif is_jio:
@@ -10016,8 +10176,11 @@ async def pixel_get_job(job_id: str):
             stage = data.get("stage", 0)
             total_stages = data.get("total_stages", 6)
             stage_label = data.get("stage_label", "")
+            is_sheerid_task = (mode_val == "sheerid") or ("sheerid" in sse_source) or (data.get("mode") == "sheerid")
             if upstream_status == "queued":
-                if queue_pos >= 0:
+                if is_sheerid_task:
+                    msg = data.get("message") or (f"⏳ 排队中 (第 {queue_pos + 1} 位)" if queue_pos >= 0 else "⏳ 已提交 SheerID 验证任务，等待人工处理")
+                elif queue_pos >= 0:
                     msg = f"⏳ 排队中 (第 {queue_pos + 1} 位)"
                 else:
                     msg = "⏳ 排队中..."
@@ -10767,6 +10930,11 @@ async def pixel_update_config(request: Request, authorization: Optional[str] = H
         updates["apiKey"] = body["apiKey"]
     if "baseUrl" in body:
         updates["baseUrl"] = body["baseUrl"]
+    if "sheeridCost" in body:
+        try:
+            updates["sheeridCost"] = float(body["sheeridCost"])
+        except (ValueError, TypeError):
+            pass
 
     result = config_manager.update_config({"pixelApi": updates})
     if result:
@@ -10774,16 +10942,37 @@ async def pixel_update_config(request: Request, authorization: Optional[str] = H
     raise HTTPException(status_code=500, detail="保存失败")
 
 
+@app.get("/api/pixel/quota")
+async def pixel_get_quota(authorization: Optional[str] = Header(None)):
+    """Proxy: Pixel API key quota."""
+    pixel_cfg = _get_pixel_config()
+    if not pixel_cfg.get("apiKey"):
+        raise HTTPException(status_code=503, detail="Pixel API 未配置 API Key")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{pixel_cfg['baseUrl']}/api/key/quota",
+                headers={"X-API-Key": pixel_cfg["apiKey"]}
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"无法连接 Pixel API: {str(e)}")
+
+
 @app.get("/api/result")
-async def get_result_by_email(email: str, authorization: Optional[str] = Header(None)):
-    """Query verification result by email — no credits required.
+async def get_result_endpoint(
+    email: Optional[str] = None,
+    url: Optional[str] = None,
+    link: Optional[str] = None,
+    verification_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None)
+):
+    """Query verification result by email, SheerID URL, or verification_id — no credits required.
     
     Allows users who have insufficient credits to still retrieve their
-    already-completed verification result (e.g., UPixel subscription URL).
-    
-    Returns the most recent successful (pass) record for this user's email.
-    If a job is still in progress, returns running status.
-    If not found, returns HTTP 404.
+    already-completed verification result (e.g., UPixel subscription URL or SheerID outcome).
     """
     # Auth via JWT token
     if not authorization or not authorization.startswith("Bearer "):
@@ -10795,22 +10984,82 @@ async def get_result_by_email(email: str, authorization: Optional[str] = Header(
     if user.get("status") == "suspended":
         raise HTTPException(status_code=403, detail="账号已被禁用")
 
-    if not email:
-        raise HTTPException(status_code=400, detail="请提供 email 参数")
+    target_url = (url or link or "").strip()
+    target_vid = (verification_id or "").strip()
+    if not target_vid and target_url:
+        m = re.search(r"verificationId=([a-f0-9]{20,32})", target_url, re.I)
+        if m:
+            target_vid = m.group(1)
+
+    if not email and not target_url and not target_vid:
+        raise HTTPException(status_code=400, detail="请提供 email、url 或 verification_id 参数")
 
     user_id = user.get("id")
     import verification_history
 
-    # 1. Check for a successful (pass) record
+    # A. SheerID query by URL or verification_id
+    if target_url or target_vid:
+        existing_success = verification_history.get_successful_history_by_vid_or_url(vid=target_vid, url=target_url)
+        if existing_success:
+            msg = existing_success.get("message", "")
+            final_url = target_url or msg.replace("✅ SheerID 验证成功: ", "").strip()
+            return {
+                "status": "success",
+                "mode": "sheerid",
+                "verification_id": target_vid or existing_success.get("verificationId", ""),
+                "url": final_url,
+                "result_msg": "验证成功",
+                "created_at": existing_success.get("timestamp", ""),
+            }
+
+        # Check active pixel jobs
+        for job_id, ctx in list(_pixel_job_context.items()):
+            c_url = ctx.get("url", "")
+            c_vid = ctx.get("verification_id", "")
+            if (target_vid and c_vid == target_vid) or (target_url and c_url == target_url):
+                return {
+                    "job_id": job_id,
+                    "status": "queued",
+                    "mode": "sheerid",
+                    "verification_id": c_vid,
+                    "url": c_url,
+                }
+
+        # Query upstream
+        pixel_cfg = _get_pixel_config()
+        if pixel_cfg.get("apiKey"):
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    params = {}
+                    if target_url:
+                        params["url"] = target_url
+                    elif target_vid:
+                        params["verification_id"] = target_vid
+                    u_resp = await client.get(
+                        f"{pixel_cfg['baseUrl']}/api/result",
+                        headers={"X-API-Key": pixel_cfg["apiKey"]},
+                        params=params
+                    )
+                    if u_resp.status_code == 200:
+                        return u_resp.json()
+            except Exception:
+                pass
+
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": "未找到该验证链接或单号的记录"},
+        )
+
+    # B. Email query
     existing_success = verification_history.get_successful_history_by_email(email, user_id)
     if existing_success:
         msg = existing_success.get("message", "")
         via = existing_success.get("via", "")
-        # Extract URL from message field
-        url = (
+        url_extracted = (
             msg.replace("✅ 获取成功: ", "")
                .replace("✅ 订阅成功: ", "")
                .replace("✅ 激活成功: ", "")
+               .replace("✅ SheerID 验证成功: ", "")
                .replace("✅ 获取成功（补偿确认）", "")
                .replace("✅ 激活成功（补偿确认）", "")
                .replace("✅ 验证已成功（获取历史记录）", "")
@@ -10819,19 +11068,19 @@ async def get_result_by_email(email: str, authorization: Optional[str] = Header(
                .replace("✅ 激活成功", "")
                .strip()
         )
-        if not url.startswith("http"):
-            url = ""
-        mode_val = "jio" if ("jio" in via or "激活成功" in msg) else ("auto" if ("auto" in via) else "semi-auto")
+        if not url_extracted.startswith("http"):
+            url_extracted = ""
+        mode_val = "sheerid" if "sheerid" in via else ("jio" if ("jio" in via or "激活成功" in msg) else ("auto" if ("auto" in via) else "semi-auto"))
         return {
             "email": email,
             "status": "success",
             "mode": mode_val,
-            "url": url,
+            "url": url_extracted,
             "result_msg": msg,
             "created_at": existing_success.get("timestamp", ""),
         }
 
-    # 2. Check if this email has an active in-progress pixel job
+    # Check active pixel jobs
     for job_id, ctx in list(_pixel_job_context.items()):
         if ctx.get("email") == email and ctx.get("user_id") == user_id:
             return {
@@ -10841,7 +11090,7 @@ async def get_result_by_email(email: str, authorization: Optional[str] = Header(
                 "job_id": job_id,
             }
 
-    # 3. Check other pixel provider contexts
+    # Check other providers
     for job_id, ctx in list(_kpixel_job_context.items()):
         if ctx.get("email") == email and ctx.get("user_id") == user_id:
             return {"email": email, "status": "running", "mode": "semi-auto", "job_id": job_id}
@@ -10850,7 +11099,6 @@ async def get_result_by_email(email: str, authorization: Optional[str] = Header(
         if ctx.get("email") == email and ctx.get("user_id") == user_id:
             return {"email": email, "status": "running", "mode": "semi-auto", "job_id": job_id}
 
-    # 4. Not found
     raise HTTPException(
         status_code=404,
         detail={"code": "not_found", "message": "未找到该邮箱的记录"},

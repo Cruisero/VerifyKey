@@ -14,6 +14,11 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_BACKEND_URL || 'http://backend:3002',
         changeOrigin: true,
+        bypass(req) {
+          if (req.url && (req.url === '/api-docs' || req.url.startsWith('/api-docs/'))) {
+            return '/index.html';
+          }
+        },
       },
     },
   },

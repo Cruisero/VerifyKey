@@ -191,7 +191,13 @@
 .panel {
     display: flex;
     flex-direction: column;
-    min-height: 500px;
+    height: 100%;
+}
+
+.input-panel,
+.results-panel {
+    min-height: 480px;
+    height: 100%;
 }
 
 .panel-header {
@@ -259,7 +265,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: var(--spacing-md);
+    margin-top: auto;
     padding-top: var(--spacing-md);
     border-top: 1px solid var(--border-primary);
 }
@@ -317,6 +323,7 @@
     gap: 6px;
     max-height: 480px;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .result-item {
@@ -329,6 +336,11 @@
     font-size: var(--text-sm);
     animation: slideUp 0.2s ease;
     min-height: 52px;
+}
+
+/* History items should fade in smoothly without translateY to prevent momentary scrollbar overflow */
+.result-item.history {
+    animation: fadeIn 0.15s ease;
 }
 
 .result-item.success {
@@ -597,6 +609,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    user-select: text;
 }
 
 .result-message {
@@ -2174,6 +2187,150 @@
     box-shadow: 0 2px 6px rgba(14, 165, 233, 0.35);
 }
 
+/* SheerID Tab */
+.tier-tab-sheerid:hover {
+    border-color: #10b981;
+    color: #059669;
+}
+
+.tier-tab-sheerid:hover .tier-cost {
+    border-color: #10b981;
+    color: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(16, 185, 129, 0.2);
+}
+
+.tier-tab-sheerid.active {
+    border-color: #10b981;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(20, 184, 166, 0.08));
+    color: #059669;
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
+}
+
+.tier-tab-sheerid.active .tier-cost {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    border-color: #10b981 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
+}
+
+/* SheerID Form Optimization */
+.sheerid-input-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 2px 0;
+}
+
+.sheerid-label-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sheerid-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #059669;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.22);
+    padding: 3px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.2px;
+    user-select: none;
+}
+
+.sheerid-pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.sheerid-input-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.sheerid-field {
+    width: 100%;
+    padding-right: 36px !important;
+    font-size: 13.5px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace, sans-serif;
+}
+
+.sheerid-field:focus {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+}
+
+.sheerid-clear-btn {
+    position: absolute;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--bg-tertiary, #e2e8f0);
+    color: var(--text-secondary, #64748b);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sheerid-clear-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.sheerid-feedback-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    padding: 2px 2px;
+}
+
+.sheerid-feedback-row code {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.sheerid-feedback-row.is-valid {
+    color: #059669;
+}
+
+.sheerid-feedback-row.is-valid code {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+}
+
+.sheerid-feedback-row.is-warn {
+    color: #d97706;
+}
+
+.sheerid-feedback-row.is-warn code {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+}
+
 /* Submit Mode Tabs */
 .submit-mode-tabs {
     display: flex;
@@ -2378,6 +2535,7 @@
     display: block;
     flex: 1;
     min-width: 0;
+    user-select: all;
 }
 
 .result-url-link:hover {
@@ -2411,24 +2569,26 @@
 .copy-url-btn::after {
     content: '已复制 ✓';
     position: absolute;
-    top: -30px;
-    left: 50%;
-    transform: translateX(-50%) translateY(4px);
+    right: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%) translateX(4px);
     background: #10b981;
     color: #fff;
     font-size: 11px;
-    padding: 3px 10px;
+    font-weight: 600;
+    padding: 3px 8px;
     border-radius: 4px;
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s, transform 0.2s;
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    z-index: 20;
 }
 
 .copy-url-btn.copied::after {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(-50%) translateX(0);
 }
 
 .copy-url-btn.copied {
@@ -3534,6 +3694,102 @@
     color: var(--text-primary);
 }
 
+.guide-card-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.guide-mode-switch-btn {
+    margin-left: auto;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6366f1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.guide-mode-switch-btn:hover {
+    background: rgba(99, 102, 241, 0.16);
+    border-color: #6366f1;
+}
+
+/* SheerID Student Guide */
+.sheerid-portal-btn {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    border-radius: 6px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-decoration: none;
+    margin-left: 6px;
+    vertical-align: middle;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.sheerid-portal-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: #4f46e5;
+}
+
+.sheerid-checklist .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: rgba(99, 102, 241, 0.12);
+    color: #6366f1;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.sheerid-guide-footer-tip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(245, 158, 11, 0.06);
+    border: 1px solid rgba(245, 158, 11, 0.18);
+    border-radius: 6px;
+    font-size: 11.5px;
+    color: #b45309;
+    margin-top: 10px;
+    line-height: 1.45;
+}
+
+.sheerid-guide-footer-tip .tip-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.sheerid-guide-footer-tip strong {
+    color: #92400e;
+    margin-right: 2px;
+}
+
+[data-theme="dark"] .sheerid-guide-footer-tip {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+[data-theme="dark"] .sheerid-guide-footer-tip strong {
+    color: #fcd34d;
+}
+
 .guide-card-body {
     padding: 16px 18px;
 }
@@ -3573,6 +3829,9 @@
 
 .credits-dot.gemini { background: #10b981; }
 .credits-dot.pro { background: #7c5cfc; }
+.credits-dot.jio { background: #3b82f6; }
+.credits-dot.three-month { background: #ec4899; }
+.credits-dot.sheerid { background: #6366f1; }
 .credits-dot.gpt { background: #f59e0b; }
 .credits-dot.invite { background: #06b6d4; }
 
@@ -3962,3 +4221,275 @@
         flex-direction: column;
     }
 }
+
+/* ============================================
+   SheerID Result Card Redesign
+   ============================================ */
+
+.result-item.sheerid-result-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(5, 150, 105, 0.02) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.22);
+    border-left: 4px solid #10b981;
+    transition: all var(--transition-normal);
+    position: relative;
+}
+
+[data-theme='dark'] .result-item.sheerid-result-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 78, 59, 0.05) 100%);
+    border-color: rgba(16, 185, 129, 0.28);
+    border-left-color: #10b981;
+}
+
+.result-item.sheerid-result-card:hover {
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.08);
+}
+
+.result-item.sheerid-result-card.is-failed {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(185, 28, 28, 0.02) 100%);
+    border-color: rgba(239, 68, 68, 0.22);
+    border-left-color: #ef4444;
+}
+
+/* Status Badges */
+.sheerid-status-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #10b981;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+.sheerid-status-badge.failed {
+    background: #ef4444;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+}
+
+.sheerid-card-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Header */
+.sheerid-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sheerid-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sheerid-card-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #059669;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.2px;
+}
+
+[data-theme='dark'] .sheerid-card-badge {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.18);
+}
+
+.sheerid-card-badge.failed {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.25);
+}
+
+.sheerid-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.2px;
+}
+
+.sheerid-code-pill {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border-primary);
+    padding: 1px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.sheerid-code-pill:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: rgba(124, 92, 252, 0.08);
+}
+
+.sheerid-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* Subtitle */
+.sheerid-card-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.sheerid-failed-reason {
+    font-size: 12.5px;
+    color: #ef4444;
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+/* Link Box */
+.sheerid-link-box {
+    margin-top: 6px;
+    background: var(--bg-card);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme='dark'] .sheerid-link-box {
+    background: rgba(15, 23, 42, 0.45);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.sheerid-link-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sheerid-link-icon {
+    font-size: 13px;
+    opacity: 0.8;
+    flex-shrink: 0;
+}
+
+.sheerid-link-text {
+    font-size: 11.5px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: all;
+    cursor: text;
+    display: block;
+}
+
+.sheerid-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Action Buttons */
+.sheerid-btn-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(124, 92, 252, 0.3);
+    background: rgba(124, 92, 252, 0.08);
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+}
+
+.sheerid-btn-copy:hover {
+    background: rgba(124, 92, 252, 0.16);
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(124, 92, 252, 0.15);
+}
+
+.sheerid-btn-copy.copied {
+    background: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+    transform: translateY(0);
+}
+
+.sheerid-btn-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+    white-space: nowrap;
+}
+
+.sheerid-btn-open:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.35);
+    filter: brightness(1.05);
+}
+
+@media (max-width: 640px) {
+    .sheerid-link-box {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .sheerid-actions-group {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+

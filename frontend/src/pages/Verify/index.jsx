@@ -2,11 +2,18 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLang } from '../../stores/LanguageContext';
 import { useAuth } from '../../stores/AuthContext';
+import { copyToClipboard, formatDisplayUrl } from '../../utils/clipboard';
 import ConfettiBurst from './ConfettiBurst';
 import './Verify.css';
 
 // API base URL
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3003' : '';
+
+// Gemini / Google One Student SheerID Portal URL
+const GEMINI_STUDENT_PORTAL_URL = 'https://one.google.com/ai-student?plans=1%2C2&icid=advmktgsite&utm_source=gemini&utm_medium=web&utm_campaign=gemini_students_landing_page&_gl=1*172ds2l*_gcl_aw*R0NMLjE3ODc4ODY0NTkuQ2p3S0NBand3TF9VQmhBakVpd0FFaHVUNUVtVXNpVzA0Ml9OamdDZ0pZTWRQT29EVmlwNzRPWTUyemFRbkFSOG9hSWRRN0pqOFhMU1FCb0M5eGtRQXZEX0J3RQ..*_gcl_dc*R0NMLjE3ODc4ODY0NTkuQ2p3S0NBand3TF9VQmhBakVpd0FFaHVUNUVtVXNpVzA0Ml9OamdDZ0pZTWRQT29EVmlwNzRPWTUyemFRbkFSOG9hSWRRN0pqOFhMU1FCb0M5eGtRQXZEX0J3RQ..*_gcl_au*MTYzNTI5NTQ2Ny4xNzg3ODg2Mzgw*_ga*MTY0MjI2Njg2Ny4xNzg3ODg2NDU5*_ga_WC57KJ50ZZ*czE3ODkyMTk2NDAkbzIkZzAkdDE3ODkyMTk2NDAkajYwJGwwJGgw&g1_landing_page=75';
+
+// Card binding tutorial URL (Feishu)
+const BIND_CARD_TUTORIAL_URL = 'https://ocnklud9ghxt.feishu.cn/wiki/GnW6wJI8givrSIk77Jtcp5Wjnxe';
 
 const normalizeGmailEmail = (email) => {
     const trimmed = (email || '').trim();
@@ -24,7 +31,7 @@ export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
 
-    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (2pt) | 'jio' (2pt) | 'threeMonth' (2pt)
+    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (2pt) | 'jio' (2pt) | 'threeMonth' (2pt) | 'sheerid'
     const [verifyTier, setVerifyTier] = useState(() => {
         try {
             const cached = localStorage.getItem('onepass_service_status');
@@ -34,12 +41,12 @@ export default function Verify() {
                     if (s?.upixel?.advancedAvailable !== false && s?.kpixel?.available !== false) return 'pro';
                     if (s?.upixel?.jioAvailable !== false) return 'jio';
                     if (s?.upixel?.threeMonthAvailable !== false) return 'threeMonth';
+                    if (s?.upixel?.sheeridAvailable !== false) return 'sheerid';
                 }
             }
         } catch {}
         return 'standard';
     });
-    const tierCost = (verifyTier === 'pro' || verifyTier === 'jio' || verifyTier === 'threeMonth') ? 2 : 1;
 
     // Top-level service tab: 'pixel' | 'gpt'
     const [serviceTab, setServiceTab] = useState('pixel');
@@ -71,6 +78,7 @@ export default function Verify() {
     const [singleEmail, setSingleEmail] = useState('');
     const [singlePassword, setSinglePassword] = useState('');
     const [singleTotp, setSingleTotp] = useState('');
+    const [singleSheerIdUrl, setSingleSheerIdUrl] = useState('');
     const [emailError, setEmailError] = useState('');
     const [totpError, setTotpError] = useState('');
 
@@ -86,6 +94,7 @@ export default function Verify() {
     const [showGptHistory, setShowGptHistory] = useState(false);
     const [gptHistoryData, setGptHistoryData] = useState([]);
     const [hoveredItem, setHoveredItem] = useState(null);
+    const [copiedUrl, setCopiedUrl] = useState(null);
 
     // Confetti celebration trigger
     const [confettiTrigger, setConfettiTrigger] = useState(0);
@@ -99,6 +108,7 @@ export default function Verify() {
     // Feature flags (loaded from config)
     const [showSubscriptionTool, setShowSubscriptionTool] = useState(false);
     const [showGptRechargeTab, setShowGptRechargeTab] = useState(false);
+    const [geminiTutorialMode, setGeminiTutorialMode] = useState('sheerid');
 
     // CDK redeem state
     const [cdkCode, setCdkCode] = useState('');
@@ -116,10 +126,15 @@ export default function Verify() {
         }
     });
 
+    const tierCost = verifyTier === 'sheerid'
+        ? (serviceStatus?.upixel?.sheeridCost || 3)
+        : ((verifyTier === 'pro' || verifyTier === 'jio' || verifyTier === 'threeMonth') ? 2 : 1);
+
     const isStdHidden = !!(serviceStatus?.upixel?.standardHidden || serviceStatus?.hidden?.gemini_normal || serviceStatus?.manual?.gemini_normal === 'hidden');
     const isProHidden = !!(serviceStatus?.upixel?.advancedHidden || serviceStatus?.hidden?.gemini_advanced || serviceStatus?.manual?.gemini_advanced === 'hidden');
     const isJioHidden = !!(serviceStatus?.upixel?.jioHidden || serviceStatus?.hidden?.gemini_jio || serviceStatus?.manual?.gemini_jio === 'hidden');
     const isThreeMonthHidden = !!(serviceStatus?.upixel?.threeMonthHidden || serviceStatus?.hidden?.gemini_three_month || serviceStatus?.manual?.gemini_three_month === 'hidden');
+    const isSheerIdHidden = !!(serviceStatus?.upixel?.sheeridHidden || serviceStatus?.hidden?.gemini_sheerid || serviceStatus?.manual?.gemini_sheerid === 'hidden');
     const isGptHidden = !!(serviceStatus?.gpt?.hidden || serviceStatus?.hidden?.gpt_plus || serviceStatus?.manual?.gpt_plus === 'hidden');
     const isGptTeamHidden = !!(serviceStatus?.gpt_team?.hidden || serviceStatus?.hidden?.gpt_team || serviceStatus?.manual?.gpt_team === 'hidden');
 
@@ -127,14 +142,17 @@ export default function Verify() {
     const isProInMaint = !isProHidden && (serviceStatus?.upixel?.advancedAvailable === false || serviceStatus?.kpixel?.available === false);
     const isJioInMaint = !isJioHidden && serviceStatus?.upixel?.jioAvailable === false;
     const isThreeMonthInMaint = !isThreeMonthHidden && serviceStatus?.upixel?.threeMonthAvailable === false;
+    const isSheerIdInMaint = !isSheerIdHidden && serviceStatus?.upixel?.sheeridAvailable === false;
     const isCurrentTierInMaint = (verifyTier === 'standard' && isStandardInMaint) ||
                                 (verifyTier === 'pro' && isProInMaint) ||
                                 (verifyTier === 'jio' && isJioInMaint) ||
-                                (verifyTier === 'threeMonth' && isThreeMonthInMaint);
+                                (verifyTier === 'threeMonth' && isThreeMonthInMaint) ||
+                                (verifyTier === 'sheerid' && isSheerIdInMaint);
     const isCurrentTierHidden = (verifyTier === 'standard' && isStdHidden) ||
                                 (verifyTier === 'pro' && isProHidden) ||
                                 (verifyTier === 'jio' && isJioHidden) ||
-                                (verifyTier === 'threeMonth' && isThreeMonthHidden);
+                                (verifyTier === 'threeMonth' && isThreeMonthHidden) ||
+                                (verifyTier === 'sheerid' && isSheerIdHidden);
 
     // Polling refs
     const pollingRefs = useRef({});
@@ -291,6 +309,9 @@ export default function Verify() {
                     if (data.features?.showGptRechargeTab !== undefined) {
                         setShowGptRechargeTab(!!data.features.showGptRechargeTab);
                     }
+                    if (data.geminiTutorialMode) {
+                        setGeminiTutorialMode(data.geminiTutorialMode);
+                    }
                 }
             } catch (e) {
                 console.warn('Failed to fetch config:', e);
@@ -333,17 +354,20 @@ export default function Verify() {
         const proHidden = !!(serviceStatus?.upixel?.advancedHidden || serviceStatus?.hidden?.gemini_advanced || serviceStatus?.manual?.gemini_advanced === 'hidden');
         const jioHidden = !!(serviceStatus?.upixel?.jioHidden || serviceStatus?.hidden?.gemini_jio || serviceStatus?.manual?.gemini_jio === 'hidden');
         const tmHidden = !!(serviceStatus?.upixel?.threeMonthHidden || serviceStatus?.hidden?.gemini_three_month || serviceStatus?.manual?.gemini_three_month === 'hidden');
+        const sheeridHidden = !!(serviceStatus?.upixel?.sheeridHidden || serviceStatus?.hidden?.gemini_sheerid || serviceStatus?.manual?.gemini_sheerid === 'hidden');
 
         const stdAvail = !stdHidden && serviceStatus?.upixel?.standardAvailable !== false;
         const proAvail = !proHidden && serviceStatus?.upixel?.advancedAvailable !== false && serviceStatus?.kpixel?.available !== false;
         const jioAvail = !jioHidden && serviceStatus?.upixel?.jioAvailable !== false;
         const tmAvail = !tmHidden && serviceStatus?.upixel?.threeMonthAvailable !== false;
+        const sheeridAvail = !sheeridHidden && serviceStatus?.upixel?.sheeridAvailable !== false;
 
         const currentInvalid = 
             (verifyTier === 'standard' && (stdHidden || !stdAvail)) ||
             (verifyTier === 'pro' && (proHidden || !proAvail)) ||
             (verifyTier === 'jio' && (jioHidden || !jioAvail)) ||
-            (verifyTier === 'threeMonth' && (tmHidden || !tmAvail));
+            (verifyTier === 'threeMonth' && (tmHidden || !tmAvail)) ||
+            (verifyTier === 'sheerid' && (sheeridHidden || !sheeridAvail));
 
         if (currentInvalid) {
             // First priority: available (not maint and not hidden)
@@ -351,11 +375,13 @@ export default function Verify() {
             else if (proAvail) setVerifyTier('pro');
             else if (jioAvail) setVerifyTier('jio');
             else if (tmAvail) setVerifyTier('threeMonth');
+            else if (sheeridAvail) setVerifyTier('sheerid');
             // Second priority: visible (even if in maintenance, as long as not hidden)
             else if (!stdHidden) setVerifyTier('standard');
             else if (!proHidden) setVerifyTier('pro');
             else if (!jioHidden) setVerifyTier('jio');
             else if (!tmHidden) setVerifyTier('threeMonth');
+            else if (!sheeridHidden) setVerifyTier('sheerid');
         }
     }, [serviceStatus, verifyTier]);
 
@@ -409,6 +435,28 @@ export default function Verify() {
 
         const accounts = [];
         const lines = text.split('\n');
+
+        if (verifyTier === 'sheerid') {
+            for (const line of lines) {
+                const cleanLine = line.trim();
+                if (!cleanLine || cleanLine.startsWith('#')) continue;
+                const urlMatch = cleanLine.match(/https?:\/\/[^\s"'<>]+/i);
+                if (urlMatch) {
+                    accounts.push({
+                        url: urlMatch[0],
+                        email: urlMatch[0],
+                        isSheerId: true,
+                    });
+                } else if (/^[a-fA-F0-9]{24}$/.test(cleanLine)) {
+                    accounts.push({
+                        url: cleanLine,
+                        email: cleanLine,
+                        isSheerId: true,
+                    });
+                }
+            }
+            return accounts;
+        }
 
         for (const line of lines) {
             const cleanLine = line.trim();
@@ -521,6 +569,19 @@ export default function Verify() {
 
     const buildJobPlan = (account) => {
         const normalizedTotp = (account.totp_secret || '').replace(/\s+/g, '');
+
+        if (verifyTier === 'sheerid') {
+            const raw = account.url || account.email || '';
+            const vidMatch = raw.match(/verificationId=([a-fA-F0-9]{20,32})/i);
+            const extractedVid = vidMatch ? vidMatch[1] : '';
+            const sheeridEmail = extractedVid ? `sheerid_${extractedVid.slice(0, 12)}` : (raw.startsWith('sheerid_') ? raw : `sheerid_${raw.slice(0, 12)}`);
+            return {
+                apiUrl: `${API_BASE}/api/pixel/jobs`,
+                payload: { url: raw, email: sheeridEmail, mode: 'sheerid' },
+                source: 'pixel_sheerid',
+                totalStages: 0,
+            };
+        }
 
         if (verifyTier === 'threeMonth') {
             return {
@@ -661,18 +722,25 @@ export default function Verify() {
             const jobSource = data.source || jobSourceDefault;
 
             // Update with job ID and start polling
-            setResults(prev => prev.map(r =>
-                r.id === resultId ? {
-                    ...r,
-                    jobId,
-                    verificationId: jobId,
-                    tier: verifyTier,
-                    source: jobSource,
-                    message: t('submitted'),
-                    queuePosition: data.queue_position >= 0 ? data.queue_position : -1,
-                    estimatedWait: data.estimated_wait_seconds,
-                } : r
-            ));
+            setResults(prev => {
+                const sseItemIndex = prev.findIndex(r => (r.verificationId === jobId || r.jobId === jobId) && r.id !== resultId);
+                if (sseItemIndex >= 0) {
+                    return prev.filter(r => r.id !== resultId);
+                }
+                return prev.map(r =>
+                    r.id === resultId ? {
+                        ...r,
+                        jobId,
+                        verificationId: jobId,
+                        url: r.url || data.url || account.url || '',
+                        tier: verifyTier,
+                        source: jobSource,
+                        message: data.message || t('submitted'),
+                        queuePosition: data.queue_position >= 0 ? data.queue_position : -1,
+                        estimatedWait: data.estimated_wait_seconds,
+                    } : r
+                );
+            });
 
             // Start polling this job based on source
             if (jobSource === 'kpixel' || jobSource === 'vpixel' || jobSource === 'ypixel') {
@@ -829,7 +897,7 @@ export default function Verify() {
                         r.id === resultId ? {
                             ...r,
                             status: 'success',
-                            message: r.tier === 'threeMonth' ? (data.result_msg || '✅ 3-Month 订阅成功') : (r.tier === 'jio' ? (data.result_msg || '✅ 激活成功') : (r.tier === 'pro' ? t('subscribeSuccess') : t('fetchSuccess'))),
+                            message: r.tier === 'sheerid' ? (data.result_msg || '✅ SheerID 认证成功') : (r.tier === 'threeMonth' ? (data.result_msg || '✅ 3-Month 订阅成功') : (r.tier === 'jio' ? (data.result_msg || '✅ 激活成功') : (r.tier === 'pro' ? t('subscribeSuccess') : t('fetchSuccess')))),
                             url,
                             stage,
                             totalStages,
@@ -882,7 +950,7 @@ export default function Verify() {
                             queuePosition: data.queue_position,
                             estimatedWait: data.estimated_wait_seconds,
                             message: status === 'running'
-                                ? `${totalStages > 0 ? Math.min(Math.round((stage / totalStages) * 100), 99) : 0}%`
+                                ? (stageLabel ? `🔄 ${stageLabel}` : (totalStages > 0 ? `${Math.min(Math.round((stage / totalStages) * 100), 99)}%` : '🔄 处理中...'))
                                 : data.queue_position >= 0
                                     ? t('queueWaiting').replace('{pos}', data.queue_position)
                                     : t('queueing'),
@@ -956,6 +1024,19 @@ export default function Verify() {
                 );
             }
 
+            // Fallback for SheerID: match by verificationId in url/email, or pending sheerid item
+            if (index === -1 && (incoming.source === 'pixel_sheerid' || incoming.email?.startsWith('sheerid_') || incoming.url?.includes('sheerid.com'))) {
+                const incomingCode = (incoming.email || '').replace('sheerid_', '') || (incoming.url?.match(/verificationId=([a-fA-F0-9]+)/i)?.[1]?.slice(0, 12) ?? '');
+                index = prev.findIndex(item => {
+                    if (item.verificationId || item.jobId || item.status !== 'processing') return false;
+                    if (item.tier === 'sheerid' || item.isSheerId) {
+                        if (incomingCode && (item.email?.includes(incomingCode) || item.url?.includes(incomingCode))) return true;
+                        return true;
+                    }
+                    return false;
+                });
+            }
+
             if (index >= 0) {
                 const next = [...prev];
                 // If user already cancelled this job locally, don't let SSE overwrite it
@@ -976,7 +1057,9 @@ export default function Verify() {
                     ...next[index],
                     ...filtered,
                     id: next[index].id,
+                    jobId: incoming.verificationId,
                     verificationId: incoming.verificationId,
+                    url: next[index].url || incoming.url || '',
                     timestamp: incoming.timestamp || next[index].timestamp,
                 };
                 return next;
@@ -1123,21 +1206,34 @@ export default function Verify() {
         let accounts = [];
 
         if (submitMode === 'single') {
-            if (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim()) {
-                alert(t('alertFillAll'));
-                return;
+            if (verifyTier === 'sheerid') {
+                if (!singleSheerIdUrl.trim()) {
+                    alert(t('alertFillAll'));
+                    return;
+                }
+                const trimmedUrl = singleSheerIdUrl.trim();
+                accounts = [{
+                    url: trimmedUrl,
+                    email: trimmedUrl,
+                    isSheerId: true,
+                }];
+            } else {
+                if (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim()) {
+                    alert(t('alertFillAll'));
+                    return;
+                }
+                if (serviceTab === 'pixel' && !singleEmail.trim().toLowerCase().endsWith('@gmail.com')) {
+                    setEmailError(t('alertGmailOnly'));
+                    return;
+                }
+                // Validate TOTP secret: must be Base32 (letters+digits), not a pure-digit code
+                const trimmedTotp = singleTotp.trim();
+                if (/^\d{4,8}$/.test(trimmedTotp)) {
+                    setTotpError(t('alertTotpNotSecret'));
+                    return;
+                }
+                accounts = [{ email: normalizeGmailEmail(singleEmail), password: singlePassword.trim(), totp_secret: trimmedTotp }];
             }
-            if (serviceTab === 'pixel' && !singleEmail.trim().toLowerCase().endsWith('@gmail.com')) {
-                setEmailError(t('alertGmailOnly'));
-                return;
-            }
-            // Validate TOTP secret: must be Base32 (letters+digits), not a pure-digit code
-            const trimmedTotp = singleTotp.trim();
-            if (/^\d{4,8}$/.test(trimmedTotp)) {
-                setTotpError(t('alertTotpNotSecret'));
-                return;
-            }
-            accounts = [{ email: normalizeGmailEmail(singleEmail), password: singlePassword.trim(), totp_secret: trimmedTotp }];
         } else {
             accounts = parseBatchInput(batchInput);
             if (accounts.length === 0) {
@@ -1151,22 +1247,32 @@ export default function Verify() {
         const jobPlans = accounts.map(acc => buildJobPlan(acc));
 
         // Create result items
-        const resultItems = accounts.map((acc, i) => ({
-            id: Date.now() + i,
-            email: acc.email,
-            status: 'processing',
-            timestamp: new Date().toISOString(),
-            message: t('submitted'),
-            stage: 0,
-            totalStages: jobPlans[i].totalStages,
-            stageLabel: '',
-            url: '',
-            jobId: '',
-            verificationId: '',
-            source: jobPlans[i].source,
-            tier: verifyTier,
-            accountData: acc,
-        }));
+        const resultItems = accounts.map((acc, i) => {
+            const isSheerId = verifyTier === 'sheerid' || acc.isSheerId;
+            let vid = '';
+            if (isSheerId) {
+                const raw = acc.url || acc.email || '';
+                const m = raw.match(/verificationId=([a-fA-F0-9]{20,32})/i);
+                if (m) vid = m[1];
+            }
+            const sheeridEmail = vid ? `sheerid_${vid.slice(0, 12)}` : (acc.email || '');
+            return {
+                id: Date.now() + i,
+                email: isSheerId ? sheeridEmail : acc.email,
+                status: 'processing',
+                timestamp: new Date().toISOString(),
+                message: t('submitted'),
+                stage: 0,
+                totalStages: jobPlans[i].totalStages,
+                stageLabel: '',
+                url: isSheerId ? (acc.url || acc.email) : '',
+                jobId: '',
+                verificationId: '',
+                source: jobPlans[i].source,
+                tier: verifyTier,
+                accountData: acc,
+            };
+        });
         setResults(prev => [...resultItems, ...prev]);
 
         // Submit all jobs
@@ -1180,9 +1286,13 @@ export default function Verify() {
 
         setVerifyStatus('ready');
         if (submitMode === 'single') {
-            setSingleEmail('');
-            setSinglePassword('');
-            setSingleTotp('');
+            if (verifyTier === 'sheerid') {
+                setSingleSheerIdUrl('');
+            } else {
+                setSingleEmail('');
+                setSinglePassword('');
+                setSingleTotp('');
+            }
         } else {
             setBatchInput('');
         }
@@ -1312,6 +1422,24 @@ export default function Verify() {
         }
     };
 
+    const handleCopyUrl = async (url, e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (!url) return;
+        const ok = await copyToClipboard(url);
+        if (ok) {
+            setCopiedUrl(url);
+            if (e && e.currentTarget) {
+                const btn = e.currentTarget;
+                btn.classList.add('copied');
+                setTimeout(() => btn.classList.remove('copied'), 2000);
+            }
+            setTimeout(() => setCopiedUrl(prev => (prev === url ? null : prev)), 2000);
+        }
+    };
+
     const formatTime = (timestamp) => {
         if (!timestamp) return '-';
         const diff = Date.now() - (typeof timestamp === 'string' ? new Date(timestamp).getTime() : timestamp);
@@ -1324,7 +1452,13 @@ export default function Verify() {
 
 
     const maskEmail = (email) => {
-        return email || '';
+        if (!email) return '';
+        if (email.startsWith('http')) {
+            const vidMatch = email.match(/verificationId=([a-fA-F0-9]+)/i);
+            if (vidMatch) return `SheerID: ${vidMatch[1].slice(0, 8)}...${vidMatch[1].slice(-4)}`;
+            if (email.length > 36) return `${email.slice(0, 24)}...${email.slice(-8)}`;
+        }
+        return email;
     };
 
 
@@ -1371,10 +1505,12 @@ export default function Verify() {
                 <div className="welcome-section">
                     <div className="welcome-content">
                         <h1 className="welcome-title">
-                            <span className="gradient-text">{t('welcomeTitle')}</span>
+                            <span className="gradient-text">
+                                {geminiTutorialMode === 'sheerid' && serviceTab === 'pixel' ? t('welcomeTitleSheerId') : t('welcomeTitle')}
+                            </span>
                         </h1>
                         <p className="welcome-desc">
-                            {t('welcomeDesc')}
+                            {geminiTutorialMode === 'sheerid' && serviceTab === 'pixel' ? t('welcomeDescSheerId') : t('welcomeDesc')}
                         </p>
                     </div>
                     <div className="quick-actions">
@@ -1468,6 +1604,15 @@ export default function Verify() {
                                             <span className="credits-price-val">-2 {t('credits')}</span>
                                         </div>
                                     )}
+                                    {!isSheerIdHidden && (
+                                        <div className="credits-price-item">
+                                            <div className="credits-price-service">
+                                                <span className="credits-dot sheerid"></span>
+                                                {t('sheerIdVerify')}
+                                            </div>
+                                            <span className="credits-price-val">-{serviceStatus?.upixel?.sheeridCost !== undefined ? serviceStatus.upixel.sheeridCost : 3} {t('credits')}</span>
+                                        </div>
+                                    )}
                                     {showGptRechargeTab && (
                                         <>
                                             {!isGptHidden && (
@@ -1507,133 +1652,205 @@ export default function Verify() {
                         {serviceTab === 'pixel' ? (
                             <div className="guide-card guide-card-gemini">
                                 <div className="guide-card-header">
-                                    <span className="guide-card-icon">📡</span>
-                                    <h3>{t('geminiServiceTitle')}</h3>
+                                    <div className="guide-card-title-group">
+                                        <span className="guide-card-icon">{geminiTutorialMode === 'sheerid' ? '🎓' : '📡'}</span>
+                                        <h3>{geminiTutorialMode === 'sheerid' ? t('geminiStudentServiceTitle') : t('geminiServiceTitle')}</h3>
+                                    </div>
+                                    <button
+                                        className="guide-mode-switch-btn"
+                                        type="button"
+                                        onClick={() => setGeminiTutorialMode(prev => prev === 'sheerid' ? 'pixel' : 'sheerid')}
+                                        title="点击切换教程模式"
+                                    >
+                                        {geminiTutorialMode === 'sheerid' ? t('switchToPixelGuide') : t('switchToSheerIdGuide')}
+                                    </button>
                                 </div>
                                 <div className="guide-card-body">
-                                    <p className="guide-desc" dangerouslySetInnerHTML={{ __html: t('geminiServiceDesc') }} />
-                                    <p style={{
-                                        background: 'rgba(239,68,68,0.08)', color: '#dc2626',
-                                        border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px',
-                                        padding: '8px 12px', fontSize: '12px', fontWeight: 500, marginBottom: '12px',
-                                    }}>
-                                        {t('commonErrorsWarning')}
-                                        <a href="https://ocnklud9ghxt.feishu.cn/wiki/HVq2wiNPhiLX4FkctcDcftaFnHb"
-                                            target="_blank" rel="noopener noreferrer"
-                                            style={{
-                                                background: 'rgba(239,68,68,0.15)', color: '#dc2626',
-                                                border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px',
-                                                padding: '1px 8px', fontSize: '11px', fontWeight: 600,
-                                                textDecoration: 'none', marginLeft: '8px', verticalAlign: 'middle',
-                                            }}
-                                        >{t('tutorialsAndErrors')} ▸</a>
-                                    </p>
-                                    <ul className="guide-checklist">
-                                        <li>
-                                            <span className="check-icon required">🔐</span>
-                                            <span><strong>{t('guide2faTitle')}</strong>{t('guide2faDesc')}
-                                                <a href="https://ocnklud9ghxt.feishu.cn/wiki/LFCSweRWuiz5oxkgeNQc0htwn2d?from=from_copylink"
+                                    {geminiTutorialMode === 'sheerid' ? (
+                                        /* Gemini Student SheerID 认证教程 (精简版) */
+                                        <div className="sheerid-guide-container">
+                                            <p className="guide-desc" dangerouslySetInnerHTML={{ __html: t('geminiStudentServiceDesc') }} />
+                                            <ul className="guide-checklist sheerid-checklist">
+                                                <li>
+                                                    <span className="check-icon step-badge">1</span>
+                                                    <span>
+                                                        <strong>{t('guideSheerIdStep1Title')}</strong>
+                                                        {t('guideSheerIdStep1Desc')}
+                                                        <a
+                                                            href={GEMINI_STUDENT_PORTAL_URL}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="sheerid-portal-btn"
+                                                        >
+                                                            {t('guideSheerIdPortalBtn')}
+                                                        </a>
+                                                    </span>
+                                                </li>
+                                                <li>
+                                                    <span className="check-icon step-badge">2</span>
+                                                    <span>
+                                                        <strong>{t('guideSheerIdStep2Title')}</strong>
+                                                        <span dangerouslySetInnerHTML={{ __html: t('guideSheerIdStep2Desc') }} />
+                                                    </span>
+                                                </li>
+                                                <li>
+                                                    <span className="check-icon step-badge">3</span>
+                                                    <span>
+                                                        <strong>{t('guideSheerIdStep3Title')}</strong>
+                                                        <span dangerouslySetInnerHTML={{ __html: t('guideSheerIdStep3Desc') }} />
+                                                    </span>
+                                                </li>
+                                                <li>
+                                                    <span className="check-icon step-badge">4</span>
+                                                    <span>
+                                                        <strong>{t('guideSheerIdStep4Title')}</strong>
+                                                        <span dangerouslySetInnerHTML={{ __html: t('guideSheerIdStep4Desc') }} />
+                                                        <a
+                                                            href={BIND_CARD_TUTORIAL_URL}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="sheerid-portal-btn"
+                                                        >
+                                                            {t('tutorialBindCardBtn')}
+                                                        </a>
+                                                    </span>
+                                                </li>
+                                            </ul>
+                                            <div className="sheerid-guide-footer-tip">
+                                                <span className="tip-icon">💡</span>
+                                                <span className="tip-text">
+                                                    <strong>{t('guideSheerIdTipTitle')}</strong>
+                                                    {t('guideSheerIdTipDesc')}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* 原版 Pixel 验证教程 (完整保留) */
+                                        <div className="pixel-guide-container">
+                                            <p className="guide-desc" dangerouslySetInnerHTML={{ __html: t('geminiServiceDesc') }} />
+                                            <p style={{
+                                                background: 'rgba(239,68,68,0.08)', color: '#dc2626',
+                                                border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px',
+                                                padding: '8px 12px', fontSize: '12px', fontWeight: 500, marginBottom: '12px',
+                                            }}>
+                                                {t('commonErrorsWarning')}
+                                                <a href="https://ocnklud9ghxt.feishu.cn/wiki/HVq2wiNPhiLX4FkctcDcftaFnHb"
                                                     target="_blank" rel="noopener noreferrer"
                                                     style={{
-                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
-                                                        fontSize: '11px', fontWeight: 600, textDecoration: 'none',
-                                                        marginLeft: '6px', verticalAlign: 'middle',
+                                                        background: 'rgba(239,68,68,0.15)', color: '#dc2626',
+                                                        border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px',
+                                                        padding: '1px 8px', fontSize: '11px', fontWeight: 600,
+                                                        textDecoration: 'none', marginLeft: '8px', verticalAlign: 'middle',
                                                     }}
-                                                >{t('guide2faTutorial')}</a>
-                                            </span>
-                                        </li>
-                                        <li>
-                                            <span className="check-icon required">🌍</span>
-                                            <span>
-                                                <strong>{t('guideRegion')}</strong>{t('guideRegionDesc')}
-                                                <button
-                                                    onClick={(e) => { e.preventDefault(); document.querySelector('.region-popover').classList.toggle('show'); document.querySelector('.region-backdrop').classList.toggle('show'); }}
-                                                    style={{
-                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
-                                                        fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                                        marginLeft: '6px', verticalAlign: 'middle',
-                                                    }}
-                                                >{t('guideRegionBtn')}</button>
-                                                <div className="region-backdrop" onClick={() => { document.querySelector('.region-popover').classList.remove('show'); document.querySelector('.region-backdrop').classList.remove('show'); }} />
-                                                <div className="region-popover">
-                                                    <div className="region-popover-title">
-                                                        <span>{t('guideRegionTitle')}</span>
-                                                        <small>{t('guideRegionCount')}</small>
+                                                >{t('tutorialsAndErrors')} ▸</a>
+                                            </p>
+                                            <ul className="guide-checklist">
+                                                <li>
+                                                    <span className="check-icon required">🔐</span>
+                                                    <span><strong>{t('guide2faTitle')}</strong>{t('guide2faDesc')}
+                                                        <a href="https://ocnklud9ghxt.feishu.cn/wiki/LFCSweRWuiz5oxkgeNQc0htwn2d?from=from_copylink"
+                                                            target="_blank" rel="noopener noreferrer"
+                                                            style={{
+                                                                background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                                border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                                fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                                marginLeft: '6px', verticalAlign: 'middle',
+                                                            }}
+                                                        >{t('guide2faTutorial')}</a>
+                                                    </span>
+                                                </li>
+                                                <li>
+                                                    <span className="check-icon required">🌍</span>
+                                                    <span>
+                                                        <strong>{t('guideRegion')}</strong>{t('guideRegionDesc')}
+                                                        <button
+                                                            onClick={(e) => { e.preventDefault(); document.querySelector('.region-popover').classList.toggle('show'); document.querySelector('.region-backdrop').classList.toggle('show'); }}
+                                                            style={{
+                                                                background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                                border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                                fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                                                                marginLeft: '6px', verticalAlign: 'middle',
+                                                            }}
+                                                        >{t('guideRegionBtn')}</button>
+                                                        <div className="region-backdrop" onClick={() => { document.querySelector('.region-popover').classList.remove('show'); document.querySelector('.region-backdrop').classList.remove('show'); }} />
+                                                        <div className="region-popover">
+                                                            <div className="region-popover-title">
+                                                                <span>{t('guideRegionTitle')}</span>
+                                                                <small>{t('guideRegionCount')}</small>
+                                                            </div>
+                                                            <div className="region-tags-grid">
+                                                                {['regionAustralia', 'regionAustria', 'regionBelgium', 'regionCanada', 'regionCzechia', 'regionDenmark', 'regionEstonia', 'regionFinland',
+                                                                    'regionFrance', 'regionGermany', 'regionHungary', 'regionIndia', 'regionIreland', 'regionItaly', 'regionJapan', 'regionLatvia',
+                                                                    'regionLithuania', 'regionMalaysia', 'regionMexico', 'regionNetherlands', 'regionNorway', 'regionPoland', 'regionPortugal', 'regionRomania',
+                                                                    'regionSingapore', 'regionSlovakia', 'regionSlovenia', 'regionSpain', 'regionSweden', 'regionSwitzerland', 'regionTaiwan', 'regionUK', 'regionUS'
+                                                                ].map((key, i) => (
+                                                                    <span key={i} className="region-tag">{t(key)}</span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </span>
+                                                </li>
+                                                <li>
+                                                    <span className="check-icon required">👨‍👩‍👦</span>
+                                                    <span><strong>{t('guideFamily')}</strong>{t('guideFamilyDesc')}</span>
+                                                </li>
+                                                <li>
+                                                    <span className="check-icon warn">💡</span>
+                                                    <span><strong>{t('guideAccount')}</strong>{t('guideAccountDesc')}</span>
+                                                </li>
+                                                <li>
+                                                    <span className="check-icon warn">🌐</span>
+                                                    <span><strong>{t('guideBindCard')}</strong>{t('guideBindCardDesc')}
+                                                        <a href={BIND_CARD_TUTORIAL_URL}
+                                                            target="_blank" rel="noopener noreferrer"
+                                                            style={{
+                                                                background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                                border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                                fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                                marginLeft: '6px', verticalAlign: 'middle',
+                                                            }}
+                                                        >{t('tutorialBindCardBtn')}</a>
+                                                    </span>
+                                                </li>
+                                            </ul>
+                                            <div className="guide-tier-info">
+                                                {!isStdHidden && (
+                                                    <div className="tier-item">
+                                                        <span className="tier-badge normal">{t('tierNormal')}</span>
+                                                        <span dangerouslySetInnerHTML={{ __html: t('tierNormalDesc') }} />
+                                                        {showSubscriptionTool && (
+                                                            <a href="/ghelper.html" target="_blank" rel="noopener noreferrer"
+                                                                style={{
+                                                                    background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                                                                    border: 'none', borderRadius: '6px', padding: '1px 8px',
+                                                                    fontSize: '11px', fontWeight: 600, textDecoration: 'none',
+                                                                    marginLeft: '6px', verticalAlign: 'middle', whiteSpace: 'nowrap',
+                                                                }}
+                                                            >自行绑卡点击订阅工具 ▸</a>
+                                                        )}
                                                     </div>
-                                                    <div className="region-tags-grid">
-                                                        {['regionAustralia', 'regionAustria', 'regionBelgium', 'regionCanada', 'regionCzechia', 'regionDenmark', 'regionEstonia', 'regionFinland',
-                                                            'regionFrance', 'regionGermany', 'regionHungary', 'regionIndia', 'regionIreland', 'regionItaly', 'regionJapan', 'regionLatvia',
-                                                            'regionLithuania', 'regionMalaysia', 'regionMexico', 'regionNetherlands', 'regionNorway', 'regionPoland', 'regionPortugal', 'regionRomania',
-                                                            'regionSingapore', 'regionSlovakia', 'regionSlovenia', 'regionSpain', 'regionSweden', 'regionSwitzerland', 'regionTaiwan', 'regionUK', 'regionUS'
-                                                        ].map((key, i) => (
-                                                            <span key={i} className="region-tag">{t(key)}</span>
-                                                        ))}
+                                                )}
+                                                {!isProHidden && (
+                                                    <div className="tier-item">
+                                                        <span className="tier-badge pro">{t('tierPro')}</span>
+                                                        <span dangerouslySetInnerHTML={{ __html: t('tierProDesc') }} />
                                                     </div>
-                                                </div>
-                                            </span>
-                                        </li>
-                                        <li>
-                                            <span className="check-icon required">👨‍👩‍👦</span>
-                                            <span><strong>{t('guideFamily')}</strong>{t('guideFamilyDesc')}</span>
-                                        </li>
-                                        <li>
-                                            <span className="check-icon warn">💡</span>
-                                            <span><strong>{t('guideAccount')}</strong>{t('guideAccountDesc')}</span>
-                                        </li>
-                                        <li>
-                                            <span className="check-icon warn">🌐</span>
-                                            <span><strong>{t('guideBindCard')}</strong>{t('guideBindCardDesc')}
-                                                <a href="https://ocnklud9ghxt.feishu.cn/wiki/GnW6wJI8givrSIk77Jtcp5Wjnxe"
-                                                    target="_blank" rel="noopener noreferrer"
-                                                    style={{
-                                                        background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                                                        border: 'none', borderRadius: '6px', padding: '1px 8px',
-                                                        fontSize: '11px', fontWeight: 600, textDecoration: 'none',
-                                                        marginLeft: '6px', verticalAlign: 'middle',
-                                                    }}
-                                                >{t('tutorialBindCardBtn')}</a>
-                                            </span>
-                                        </li>
-                                    </ul>
-                                    <div className="guide-tier-info">
-                                        {!isStdHidden && (
-                                            <div className="tier-item">
-                                                <span className="tier-badge normal">{t('tierNormal')}</span>
-                                                <span dangerouslySetInnerHTML={{ __html: t('tierNormalDesc') }} />
-                                                {showSubscriptionTool && (
-                                                    <a href="/ghelper.html" target="_blank" rel="noopener noreferrer"
-                                                        style={{
-                                                            background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                                                            border: 'none', borderRadius: '6px', padding: '1px 8px',
-                                                            fontSize: '11px', fontWeight: 600, textDecoration: 'none',
-                                                            marginLeft: '6px', verticalAlign: 'middle', whiteSpace: 'nowrap',
-                                                        }}
-                                                    >自行绑卡点击订阅工具 ▸</a>
+                                                )}
+                                                {!isJioHidden && (
+                                                    <div className="tier-item">
+                                                        <span className="tier-badge jio">{t('tierJio')}</span>
+                                                        <span dangerouslySetInnerHTML={{ __html: t('tierJioDesc') }} />
+                                                    </div>
+                                                )}
+                                                {!isThreeMonthHidden && (
+                                                    <div className="tier-item">
+                                                        <span className="tier-badge three-month">{t('tierThreeMonth')}</span>
+                                                        <span dangerouslySetInnerHTML={{ __html: t('tierThreeMonthDesc') }} />
+                                                    </div>
                                                 )}
                                             </div>
-                                        )}
-                                        {!isProHidden && (
-                                            <div className="tier-item">
-                                                <span className="tier-badge pro">{t('tierPro')}</span>
-                                                <span dangerouslySetInnerHTML={{ __html: t('tierProDesc') }} />
-                                            </div>
-                                        )}
-                                        {!isJioHidden && (
-                                            <div className="tier-item">
-                                                <span className="tier-badge jio">{t('tierJio')}</span>
-                                                <span dangerouslySetInnerHTML={{ __html: t('tierJioDesc') }} />
-                                            </div>
-                                        )}
-                                        {!isThreeMonthHidden && (
-                                            <div className="tier-item">
-                                                <span className="tier-badge three-month">{t('tierThreeMonth')}</span>
-                                                <span dangerouslySetInnerHTML={{ __html: t('tierThreeMonthDesc') }} />
-                                            </div>
-                                        )}
-                                    </div>
-
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -1675,7 +1892,7 @@ export default function Verify() {
                                 <div className="panel-header">
                                     <div className="panel-title">
                                         <span className="panel-icon">📡</span>
-                                        <span>{verifyTier === 'threeMonth' ? t('panelTitleThreeMonth') : (verifyTier === 'jio' ? t('panelTitleJio') : (verifyTier === 'pro' ? t('panelTitlePro') : t('panelTitleStandard')))}</span>
+                                        <span>{verifyTier === 'sheerid' ? t('panelTitleSheerId') : (verifyTier === 'threeMonth' ? t('panelTitleThreeMonth') : (verifyTier === 'jio' ? t('panelTitleJio') : (verifyTier === 'pro' ? t('panelTitlePro') : t('panelTitleStandard'))))}</span>
                                     </div>
                                 </div>
 
@@ -1746,6 +1963,22 @@ export default function Verify() {
                                                 )}
                                             </button>
                                         )}
+                                        {!isSheerIdHidden && (
+                                            <button
+                                                className={`tier-tab tier-tab-sheerid ${verifyTier === 'sheerid' ? 'active' : ''} ${serviceStatus?.upixel?.sheeridAvailable === false ? 'is-maint' : ''}`}
+                                                onClick={() => {
+                                                    const sheeridAvail = serviceStatus?.upixel?.sheeridAvailable !== false;
+                                                    if (sheeridAvail) setVerifyTier('sheerid');
+                                                }}
+                                                disabled={serviceStatus?.upixel?.sheeridAvailable === false}
+                                            >
+                                                <span className="tier-cost">{serviceStatus?.upixel?.sheeridCost || 3} {t('credits')}</span>
+                                                <span className="tier-tab-title">{t('tierSheerIdTab')}</span>
+                                                {serviceStatus?.upixel?.sheeridAvailable === false && (
+                                                    <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Submit Mode Tabs */}
@@ -1767,64 +2000,125 @@ export default function Verify() {
                                     {/* Single Mode */}
                                     {submitMode === 'single' && (
                                         <div className="single-input-form">
-                                            <div className="pixel-input-group">
-                                                <label className="pixel-input-label">
-                                                    <span className="label-icon">📧</span> {t('emailLabel')}
-                                                </label>
-                                                <input
-                                                    type="email"
-                                                    className={`input pixel-field${emailError ? ' field-error' : ''}`}
-                                                    placeholder="user@gmail.com"
-                                                    value={singleEmail}
-                                                    onChange={e => {
-                                                        setSingleEmail(e.target.value);
-                                                        if (emailError) setEmailError('');
-                                                    }}
-                                                    disabled={verifyStatus === 'processing'}
-                                                    autoComplete="off"
-                                                />
-                                                {emailError && (
-                                                    <div className="field-error-msg">
-                                                        <span className="error-icon">⚠️</span> {emailError}
+                                            {verifyTier === 'sheerid' ? (
+                                                <div className="sheerid-input-card">
+                                                    <div className="sheerid-label-bar">
+                                                        <label className="pixel-input-label">
+                                                            <span className="label-icon">🔗</span> {t('sheerIdUrlLabel')}
+                                                        </label>
+                                                        <span className="sheerid-status-pill">
+                                                            <span className="sheerid-pill-dot" />
+                                                            人工核验 · 失败自动退款
+                                                        </span>
                                                     </div>
-                                                )}
-                                            </div>
-                                            <div className="pixel-input-group">
-                                                <label className="pixel-input-label">
-                                                    <span className="label-icon">🔒</span> {t('passwordLabel')}
-                                                </label>
-                                                <input
-                                                    type="password"
-                                                    className="input pixel-field"
-                                                    placeholder="••••••••"
-                                                    value={singlePassword}
-                                                    onChange={e => setSinglePassword(e.target.value)}
-                                                    disabled={verifyStatus === 'processing'}
-                                                    autoComplete="one-time-code"
-                                                />
-                                            </div>
-                                            <div className="pixel-input-group">
-                                                <label className="pixel-input-label">
-                                                    <span className="label-icon">🔑</span> {t('totpLabel')}
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    className={`input pixel-field${totpError ? ' field-error' : ''}`}
-                                                    placeholder="JBSWY3DPEHPK3PXP (Base32)"
-                                                    value={singleTotp}
-                                                    onChange={e => {
-                                                        setSingleTotp(e.target.value.toUpperCase());
-                                                        if (totpError) setTotpError('');
-                                                    }}
-                                                    disabled={verifyStatus === 'processing'}
-                                                    autoComplete="off"
-                                                />
-                                                {totpError && (
-                                                    <div className="field-error-msg">
-                                                        <span className="error-icon">⚠️</span> {totpError}
+                                                    <div className="sheerid-input-box">
+                                                        <input
+                                                            type="text"
+                                                            className="input pixel-field sheerid-field"
+                                                            placeholder={t('sheerIdUrlPlaceholder')}
+                                                            value={singleSheerIdUrl}
+                                                            onChange={e => setSingleSheerIdUrl(e.target.value)}
+                                                            disabled={verifyStatus === 'processing'}
+                                                            autoComplete="off"
+                                                        />
+                                                        {singleSheerIdUrl && (
+                                                            <button
+                                                                type="button"
+                                                                className="sheerid-clear-btn"
+                                                                onClick={() => setSingleSheerIdUrl('')}
+                                                                title="清空"
+                                                            >✕</button>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
+                                                    {(() => {
+                                                        const vidMatch = singleSheerIdUrl.match(/verificationId=([a-fA-F0-9]{16,64})/i);
+                                                        if (vidMatch) {
+                                                            const vid = vidMatch[1];
+                                                            return (
+                                                                <div className="sheerid-feedback-row is-valid">
+                                                                    <span className="feedback-icon">✓</span>
+                                                                    <span>已识别验证 ID: <code>{vid.slice(0, 8)}...{vid.slice(-4)}</code></span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        if (singleSheerIdUrl.trim() && !singleSheerIdUrl.includes('verificationId=')) {
+                                                            return (
+                                                                <div className="sheerid-feedback-row is-warn">
+                                                                    <span className="feedback-icon">⚠️</span>
+                                                                    <span>提示：链接中未检测到 <code>verificationId=</code> 参数，请确认是否为最终验证页面</span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <div className="sheerid-feedback-row">
+                                                                <span className="feedback-icon">💡</span>
+                                                                <span>请粘贴包含 verificationId 参数的完整验证链接，提交后自动进入处理队列</span>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="pixel-input-group">
+                                                        <label className="pixel-input-label">
+                                                            <span className="label-icon">📧</span> {t('emailLabel')}
+                                                        </label>
+                                                        <input
+                                                            type="email"
+                                                            className={`input pixel-field${emailError ? ' field-error' : ''}`}
+                                                            placeholder="user@gmail.com"
+                                                            value={singleEmail}
+                                                            onChange={e => {
+                                                                setSingleEmail(e.target.value);
+                                                                if (emailError) setEmailError('');
+                                                            }}
+                                                            disabled={verifyStatus === 'processing'}
+                                                            autoComplete="off"
+                                                        />
+                                                        {emailError && (
+                                                            <div className="field-error-msg">
+                                                                <span className="error-icon">⚠️</span> {emailError}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="pixel-input-group">
+                                                        <label className="pixel-input-label">
+                                                            <span className="label-icon">🔒</span> {t('passwordLabel')}
+                                                        </label>
+                                                        <input
+                                                            type="password"
+                                                            className="input pixel-field"
+                                                            placeholder="••••••••"
+                                                            value={singlePassword}
+                                                            onChange={e => setSinglePassword(e.target.value)}
+                                                            disabled={verifyStatus === 'processing'}
+                                                            autoComplete="one-time-code"
+                                                        />
+                                                    </div>
+                                                    <div className="pixel-input-group">
+                                                        <label className="pixel-input-label">
+                                                            <span className="label-icon">🔑</span> {t('totpLabel')}
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            className={`input pixel-field${totpError ? ' field-error' : ''}`}
+                                                            placeholder="JBSWY3DPEHPK3PXP (Base32)"
+                                                            value={singleTotp}
+                                                            onChange={e => {
+                                                                setSingleTotp(e.target.value.toUpperCase());
+                                                                if (totpError) setTotpError('');
+                                                            }}
+                                                            disabled={verifyStatus === 'processing'}
+                                                            autoComplete="off"
+                                                        />
+                                                        {totpError && (
+                                                            <div className="field-error-msg">
+                                                                <span className="error-icon">⚠️</span> {totpError}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     )}
 
@@ -1833,13 +2127,13 @@ export default function Verify() {
                                         <div className="batch-input-form">
                                             <textarea
                                                 className="input textarea verify-input"
-                                                placeholder={t('batchPlaceholder')}
+                                                placeholder={verifyTier === 'sheerid' ? t('sheerIdBatchPlaceholder') : t('batchPlaceholder')}
                                                 value={batchInput}
                                                 onChange={e => setBatchInput(e.target.value)}
                                                 disabled={verifyStatus === 'processing'}
                                             />
                                             <div className="batch-count-hint">
-                                                {t('batchRecognized')} <strong>{batchCount}</strong> {t('accountUnit')}
+                                                {t('batchRecognized')} <strong>{batchCount}</strong> {verifyTier === 'sheerid' ? t('sheerIdUnit') : t('accountUnit')}
                                             </div>
                                         </div>
                                     )}
@@ -1847,7 +2141,7 @@ export default function Verify() {
                                     <div className="input-footer">
                                         <div className="input-info">
                                             <span className="id-count">
-                                                {submitMode === 'single' ? `1 ${t('accountUnit')}` : `${batchCount} ${t('accountUnit')}`}
+                                                {submitMode === 'single' ? `1 ${verifyTier === 'sheerid' ? t('sheerIdUnit') : t('accountUnit')}` : `${batchCount} ${verifyTier === 'sheerid' ? t('sheerIdUnit') : t('accountUnit')}`}
                                             </span>
                                             <span className="slots-info">{t('remaining')} {user ? `${typeof user.credits === 'number' ? user.credits.toFixed(1) : user.credits} ${t('credits')}` : t('notLoggedIn')}</span>
                                         </div>
@@ -1856,7 +2150,7 @@ export default function Verify() {
                                             <button
                                                 className="btn btn-primary btn-lg"
                                                 onClick={handleVerify}
-                                                disabled={verifyStatus === 'processing' || isCurrentTierInMaint || !user || (user.credits || 0) < tierCost || (submitMode === 'single' ? (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim()) : batchCount === 0)}
+                                                disabled={verifyStatus === 'processing' || isCurrentTierInMaint || !user || (user.credits || 0) < tierCost || (submitMode === 'single' ? (verifyTier === 'sheerid' ? !singleSheerIdUrl.trim() : (!singleEmail.trim() || !singlePassword.trim() || !singleTotp.trim())) : batchCount === 0)}
                                                 style={isCurrentTierInMaint ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                             >
                                                 {verifyStatus === 'processing' ? (
@@ -1916,7 +2210,7 @@ export default function Verify() {
                                                 <p className="empty-hint">{t('noHistoryHint')}</p>
                                             </div>
                                         ) : (
-                                            <div className="results-list">
+                                            <div className="results-list" key="history-results-list">
                                                 {historyData.map((item) => {
                                                     let displayStatus = item.status === 'pass' ? 'success' : item.status;
                                                     let displayMsg = item.message || '';
@@ -1948,65 +2242,117 @@ export default function Verify() {
                                                         displayMsg = '凭证库存不足';
                                                     }
 
+                                                    const isSheerId = (item.via === 'pixel_sheerid' || item.tier === 'sheerid' || item.isSheerId || (item.email && item.email.startsWith('sheerid_')) || (displayUrl && displayUrl.includes('sheerid.com')) || (displayMsg && displayMsg.includes('SheerID')));
+
+                                                    let sheerIdCode = '';
+                                                    if (displayUrl) {
+                                                        const m = displayUrl.match(/verificationId=([a-fA-F0-9]+)/i);
+                                                        if (m) sheerIdCode = m[1].slice(0, 12);
+                                                    }
+                                                    if (!sheerIdCode && item.email && item.email.startsWith('sheerid_')) {
+                                                        sheerIdCode = item.email.replace('sheerid_', '');
+                                                    }
+
                                                     // Determine what to show as the primary line
                                                     const maskedEmail = maskEmail(item.email);
-                                                    // For success: prefer email, fallback to '验证成功'
-                                                    // For failed: prefer email, fallback to cleaned error message
-                                                    const primaryText = maskedEmail
-                                                        || (displayStatus === 'failed' ? (displayMsg || '验证失败') : '验证成功');
-                                                    // Show message as secondary line only if:
-                                                    // 1. We have an email (so primary line is email)
-                                                    // 2. displayMsg is not empty
-                                                    // 3. For success: only show if msg is not just generic success text
-                                                    const isGenericSuccess = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(displayMsg);
-                                                    const showSecondaryMsg = maskedEmail && displayMsg && !(displayStatus === 'success' && isGenericSuccess);
+                                                    const primaryText = isSheerId
+                                                        ? (displayStatus === 'failed'
+                                                            ? (displayMsg || 'SheerID 认证未通过')
+                                                            : displayStatus === 'processing'
+                                                            ? (t('sheerIdProcessingTitle') || 'SheerID 认证中')
+                                                            : (t('sheerIdSuccessTitle') || 'SheerID 认证成功'))
+                                                        : (maskedEmail || (displayStatus === 'failed' ? (displayMsg || '验证失败') : '验证成功'));
 
-                                                    return (
-                                                    <div key={item.id} className={`result-item history ${displayStatus}`}>
-                                                        <div className="result-status">
-                                                            {displayStatus === 'success' && <span className="status-icon success">✓</span>}
-                                                            {displayStatus === 'failed' && <span className="status-icon failed">✕</span>}
-                                                        </div>
-                                                        <div className="result-info">
-                                                            <div className="result-main-row">
-                                                                <span className="result-id">{primaryText}</span>
-                                                            </div>
-                                                            {showSecondaryMsg && (
-                                                                <span className="result-message">{displayMsg}</span>
-                                                            )}
-                                                            {displayStatus === 'success' && displayUrl && (
-                                                                <div className="result-url-row">
-                                                                    <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        {displayUrl}
-                                                                    </a>
-                                                                    <button
-                                                                        className="copy-url-btn"
-                                                                        onClick={(e) => {
-                                                                            navigator.clipboard.writeText(displayUrl);
-                                                                            const btn = e.currentTarget;
-                                                                            btn.classList.add('copied');
-                                                                            setTimeout(() => btn.classList.remove('copied'), 1800);
-                                                                        }}
-                                                                        title={t('copyLink')}
-                                                                    >
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="result-meta">
-                                                            {item.elapsed > 0 && (
-                                                                <span className="result-elapsed">{item.elapsed}s</span>
-                                                            )}
-                                                            <span className="result-time">
-                                                                {item.timestamp ? new Date(item.timestamp).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                )})}
+                                                     const isGenericSuccess = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(displayMsg);
+                                                     const showSecondaryMsg = !isSheerId && maskedEmail && displayMsg && !(displayStatus === 'success' && isGenericSuccess);
+
+                                                     return (
+                                                     <div key={item.id} className={`result-item history ${displayStatus}`}>
+                                                         <div className="result-status">
+                                                             {displayStatus === 'success' && <span className="status-icon success">✓</span>}
+                                                             {displayStatus === 'failed' && <span className="status-icon failed">✕</span>}
+                                                         </div>
+                                                         <div className="result-info">
+                                                             <div className="result-main-row">
+                                                                 <span
+                                                                     className="result-id"
+                                                                     title="点击复制"
+                                                                     onClick={(e) => handleCopyUrl(primaryText, e)}
+                                                                     style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                                                 >
+                                                                     {primaryText}
+                                                                     {isSheerId && sheerIdCode && (
+                                                                         <span
+                                                                             className="sheerid-code-pill"
+                                                                             title="点击复制 ID"
+                                                                             onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
+                                                                         >
+                                                                             #{sheerIdCode}
+                                                                         </span>
+                                                                     )}
+                                                                 </span>
+                                                             </div>
+                                                             {showSecondaryMsg && (
+                                                                 <span className="result-message">{displayMsg}</span>
+                                                             )}
+                                                             {displayStatus === 'success' && displayUrl && (
+                                                                 <div className="result-url-row">
+                                                                     <a
+                                                                         href={displayUrl}
+                                                                         target="_blank"
+                                                                         rel="noopener noreferrer"
+                                                                         className="result-url-link"
+                                                                         title={`${displayUrl}\n(点击直接打开)`}
+                                                                     >
+                                                                         {isSheerId ? `🔗 ${formatDisplayUrl(displayUrl, 50)}` : displayUrl}
+                                                                     </a>
+                                                                     <button
+                                                                         className={`copy-url-btn ${copiedUrl === displayUrl ? 'copied' : ''}`}
+                                                                         onClick={(e) => handleCopyUrl(displayUrl, e)}
+                                                                         title={copiedUrl === displayUrl ? (t('copied') || '已复制') : (t('copyLink') || '复制链接')}
+                                                                         type="button"
+                                                                     >
+                                                                         {copiedUrl === displayUrl ? (
+                                                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                                 <polyline points="20 6 9 17 4 12"></polyline>
+                                                                             </svg>
+                                                                         ) : (
+                                                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                                             </svg>
+                                                                         )}
+                                                                     </button>
+                                                                     {isSheerId && (
+                                                                         <a
+                                                                             href={displayUrl}
+                                                                             target="_blank"
+                                                                             rel="noopener noreferrer"
+                                                                             className="copy-url-btn"
+                                                                             title="在新标签页中打开"
+                                                                             style={{ textDecoration: 'none' }}
+                                                                         >
+                                                                             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                                                                 <polyline points="15 3 21 3 21 9"></polyline>
+                                                                                 <line x1="21" y1="3" x2="14" y2="10"></line>
+                                                                             </svg>
+                                                                         </a>
+                                                                     )}
+                                                                 </div>
+                                                             )}
+                                                         </div>
+                                                         <div className="result-meta">
+                                                             {item.elapsed > 0 && (
+                                                                 <span className="result-elapsed">{item.elapsed}s</span>
+                                                             )}
+                                                             <span className="result-time">
+                                                                 {item.timestamp ? new Date(item.timestamp).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                             </span>
+                                                         </div>
+                                                     </div>
+                                                 );
+                                             })}
                                             </div>
                                         )
                                     ) : (
@@ -2018,8 +2364,26 @@ export default function Verify() {
                                                 <p className="empty-hint">{t('noResultsHintAlt')}</p>
                                             </div>
                                         ) : (
-                                            <div className="results-list">
-                                                {results.map((result) => (
+                                            <div className="results-list" key="active-results-list">
+                                                {results.map((result) => {
+                                                    const isSheerId = (result.tier === 'sheerid' || result.isSheerId || result.via === 'pixel_sheerid' || (result.email && result.email.startsWith('sheerid_')) || (result.url && result.url.includes('sheerid.com')) || (result.message && result.message.includes('SheerID')));
+
+                                                    let sheerIdCode = '';
+                                                    if (result.url) {
+                                                        const m = result.url.match(/verificationId=([a-fA-F0-9]+)/i);
+                                                        if (m) sheerIdCode = m[1].slice(0, 12);
+                                                    }
+                                                    if (!sheerIdCode && result.email && result.email.startsWith('sheerid_')) {
+                                                        sheerIdCode = result.email.replace('sheerid_', '');
+                                                    }
+
+                                                    const sheerIdTitle = result.status === 'failed'
+                                                        ? (result.message?.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '') || t('verifyFailed') || 'SheerID 认证未通过')
+                                                        : result.status === 'processing'
+                                                        ? (t('sheerIdProcessingTitle') || 'SheerID 认证中')
+                                                        : (t('sheerIdSuccessTitle') || 'SheerID 认证成功');
+
+                                                    return (
                                                     <div key={result.id} ref={el => { if (el) resultItemRefs.current[result.id] = el; }} className={`result-item ${result.status}`}>
                                                         <div className="result-status">
                                                             {result.status === 'processing' && (() => {
@@ -2048,7 +2412,23 @@ export default function Verify() {
                                                         </div>
                                                         <div className="result-info">
                                                             <div className="result-main-row">
-                                                                <span className="result-id">{maskEmail(result.email)}</span>
+                                                                <span
+                                                                    className="result-id"
+                                                                    title="点击复制"
+                                                                    onClick={(e) => handleCopyUrl(isSheerId ? sheerIdTitle : result.email, e)}
+                                                                    style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                                                >
+                                                                    {isSheerId ? sheerIdTitle : maskEmail(result.email)}
+                                                                    {isSheerId && sheerIdCode && (
+                                                                        <span
+                                                                            className="sheerid-code-pill"
+                                                                            title="点击复制 ID"
+                                                                            onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
+                                                                        >
+                                                                            #{sheerIdCode}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
                                                                 {result.status === 'failed' && result.accountData && (
                                                                     <button
                                                                         className="btn-resubmit"
@@ -2096,27 +2476,51 @@ export default function Verify() {
                                                             ) : null}
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
-                                                                    <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-url-link">
-                                                                        {result.url}
+                                                                    <a
+                                                                        href={result.url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="result-url-link"
+                                                                        title={`${result.url}\n(点击直接打开)`}
+                                                                    >
+                                                                        {isSheerId ? `🔗 ${formatDisplayUrl(result.url, 50)}` : result.url}
                                                                     </a>
                                                                     <button
-                                                                        className="copy-url-btn"
-                                                                        onClick={(e) => {
-                                                                            navigator.clipboard.writeText(result.url);
-                                                                            const btn = e.currentTarget;
-                                                                            btn.classList.add('copied');
-                                                                            setTimeout(() => btn.classList.remove('copied'), 1800);
-                                                                        }}
-                                                                        title={t('copyLink')}
+                                                                        className={`copy-url-btn ${copiedUrl === result.url ? 'copied' : ''}`}
+                                                                        onClick={(e) => handleCopyUrl(result.url, e)}
+                                                                        title={copiedUrl === result.url ? (t('copied') || '已复制') : (t('copyLink') || '复制链接')}
+                                                                        type="button"
                                                                     >
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                                                        </svg>
+                                                                        {copiedUrl === result.url ? (
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                                                            </svg>
+                                                                        ) : (
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                                            </svg>
+                                                                        )}
                                                                     </button>
+                                                                    {isSheerId && (
+                                                                        <a
+                                                                            href={result.url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="copy-url-btn"
+                                                                            title="在新标签页中打开"
+                                                                            style={{ textDecoration: 'none' }}
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                                                                <polyline points="15 3 21 3 21 9"></polyline>
+                                                                                <line x1="21" y1="3" x2="14" y2="10"></line>
+                                                                            </svg>
+                                                                        </a>
+                                                                    )}
                                                                 </div>
                                                             )}
-                                                            {result.status !== 'processing' && (() => {
+                                                            {result.status !== 'processing' && !isSheerId && (() => {
                                                                 let msg = (result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed')));
                                                                 msg = msg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
                                                                 msg = msg.replace(/^获取成功(\s*[（(][^）)]*[）)])?[:：]?\s*/i, '').trim();
@@ -2142,7 +2546,8 @@ export default function Verify() {
                                                             <span className="result-time">{formatTime(result.timestamp)}</span>
                                                         </div>
                                                     </div>
-                                                ))}
+                                                );
+                                            })}
                                             </div>
                                         )
                                     )}

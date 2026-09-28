@@ -2269,8 +2269,20 @@ export default function Verify() {
                                                      return (
                                                      <div key={item.id} className={`result-item history ${displayStatus}${isSheerId ? ' sheerid-compact-result' : ''}`}>
                                                          <div className="result-status">
-                                                             {displayStatus === 'success' && <span className="status-icon success">✓</span>}
-                                                             {displayStatus === 'failed' && <span className="status-icon failed">✕</span>}
+                                                             {displayStatus === 'success' ? (
+                                                                 <span className="status-icon success" aria-label="成功">
+                                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                         <polyline points="20 6 9 17 4 12"></polyline>
+                                                                     </svg>
+                                                                 </span>
+                                                             ) : (
+                                                                 <span className="status-icon failed" aria-label="失败">
+                                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                         <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                         <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                     </svg>
+                                                                 </span>
+                                                             )}
                                                          </div>
                                                          <div className="result-info">
                                                              <div className={`result-main-row${isSheerId ? ' sheerid-result-main-row' : ''}`}>
@@ -2282,20 +2294,28 @@ export default function Verify() {
                                                                  >
                                                                      <span className="result-primary-text">{primaryText}</span>
                                                                  </span>
-                                                                {isSheerId && sheerIdCode && (
+                                                             </div>
+                                                             {((isSheerId && sheerIdCode) || showSecondaryMsg) && (
+                                                                 <div className="result-sub-row">
+                                                                     {isSheerId && sheerIdCode && (
                                                                          <button
                                                                              type="button"
-                                                                            className="sheerid-code-pill"
+                                                                             className="sheerid-code-pill"
                                                                              title="点击复制 ID"
                                                                              onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
                                                                          >
-                                                                             #{sheerIdCode}
-                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></svg>
+                                                                             <span className="sheerid-code-prefix">ID:</span>
+                                                                             <span className="sheerid-code-val">#{sheerIdCode}</span>
+                                                                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                                                                 <rect x="8" y="8" width="12" height="12" rx="2" />
+                                                                                 <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+                                                                             </svg>
                                                                          </button>
                                                                      )}
-                                                             </div>
-                                                             {showSecondaryMsg && (
-                                                                 <span className="result-message">{displayMsg}</span>
+                                                                     {showSecondaryMsg && (
+                                                                         <span className="result-message">{displayMsg}</span>
+                                                                     )}
+                                                                 </div>
                                                              )}
                                                              {displayStatus === 'success' && displayUrl && (
                                                                  <div className="result-url-row">
@@ -2345,12 +2365,14 @@ export default function Verify() {
                                                              )}
                                                          </div>
                                                          <div className="result-meta">
-                                                             {item.elapsed > 0 && (
-                                                                 <span className="result-elapsed">{item.elapsed}s</span>
-                                                             )}
-                                                             <span className="result-time">
-                                                                 {item.timestamp ? new Date(item.timestamp).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
-                                                             </span>
+                                                             <div className="result-meta-time">
+                                                                 {item.elapsed > 0 && (
+                                                                     <span className="result-elapsed">{item.elapsed}s</span>
+                                                                 )}
+                                                                 <span className="result-time">
+                                                                     {item.timestamp ? new Date(item.timestamp).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                                 </span>
+                                                             </div>
                                                          </div>
                                                      </div>
                                                  );
@@ -2409,8 +2431,21 @@ export default function Verify() {
                                                                     </div>
                                                                 );
                                                             })()}
-                                                            {result.status === 'success' && <span className="status-icon success">✓</span>}
-                                                            {result.status === 'failed' && <span className="status-icon failed">✕</span>}
+                                                            {result.status === 'success' && (
+                                                                <span className="status-icon success" aria-label="成功">
+                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                                                    </svg>
+                                                                </span>
+                                                            )}
+                                                            {result.status === 'failed' && (
+                                                                <span className="status-icon failed" aria-label="失败">
+                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                    </svg>
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <div className="result-info">
                                                             <div className={`result-main-row${isSheerId ? ' sheerid-result-main-row' : ''}`}>
@@ -2422,30 +2457,24 @@ export default function Verify() {
                                                                 >
                                                                     <span className="result-primary-text">{isSheerId ? sheerIdTitle : maskEmail(result.email)}</span>
                                                                 </span>
-                                                                {isSheerId && sheerIdCode && (
-                                                                        <button
-                                                                            type="button"
-                                                                            className="sheerid-code-pill"
-                                                                            title="点击复制 ID"
-                                                                            onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
-                                                                        >
-                                                                            #{sheerIdCode}
-                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></svg>
-                                                                        </button>
-                                                                    )}
-                                                                {result.status === 'failed' && result.accountData && (
-                                                                    <button
-                                                                        className="btn-resubmit"
-                                                                        onClick={() => handleResubmit(result)}
-                                                                    >
-                                                                        <svg className="icon-resubmit" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <polyline points="23 4 23 10 17 10"></polyline>
-                                                                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                                                                        </svg>
-                                                                        <span>{t('resubmitBtn')}</span>
-                                                                    </button>
-                                                                )}
                                                             </div>
+                                                            {isSheerId && sheerIdCode && (
+                                                                <div className="result-sub-row">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="sheerid-code-pill"
+                                                                        title="点击复制 ID"
+                                                                        onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
+                                                                    >
+                                                                        <span className="sheerid-code-prefix">ID:</span>
+                                                                        <span className="sheerid-code-val">#{sheerIdCode}</span>
+                                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                                                            <rect x="8" y="8" width="12" height="12" rx="2" />
+                                                                            <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                             {result.status === 'processing' && result.totalStages > 0 && !(result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) ? (() => {
                                                                 const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
                                                                 return (
@@ -2544,10 +2573,24 @@ export default function Verify() {
                                                             })()}
                                                         </div>
                                                         <div className="result-meta">
-                                                            {result.elapsed > 0 && (
-                                                                <span className="result-elapsed">{result.elapsed}s</span>
+                                                            {result.status === 'failed' && result.accountData && (
+                                                                <button
+                                                                    className="btn-resubmit"
+                                                                    onClick={() => handleResubmit(result)}
+                                                                >
+                                                                    <svg className="icon-resubmit" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                                                    </svg>
+                                                                    <span>{t('resubmitBtn')}</span>
+                                                                </button>
                                                             )}
-                                                            <span className="result-time">{formatTime(result.timestamp)}</span>
+                                                            <div className="result-meta-time">
+                                                                {result.elapsed > 0 && (
+                                                                    <span className="result-elapsed">{result.elapsed}s</span>
+                                                                )}
+                                                                <span className="result-time">{formatTime(result.timestamp)}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
@@ -2889,9 +2932,20 @@ export default function Verify() {
                                                         return (
                                                             <div key={item.id} className={`result-item history ${displayStatus}`}>
                                                                 <div className="result-status">
-                                                                    {displayStatus === 'success'
-                                                                        ? <span className="status-icon success">✓</span>
-                                                                        : <span className="status-icon failed">✕</span>}
+                                                                    {displayStatus === 'success' ? (
+                                                                        <span className="status-icon success" aria-label="成功">
+                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                                                            </svg>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="status-icon failed" aria-label="失败">
+                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                            </svg>
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <div className="result-info">
                                                                     <div className="result-main-row">
@@ -2901,7 +2955,9 @@ export default function Verify() {
                                                                     {!showMsg && displayStatus !== 'success' && <span className="result-message">{t('rechargeFailed')}</span>}
                                                                 </div>
                                                                 <div className="result-meta">
-                                                                    <span className="result-time">{formatTime(item.timestamp)}</span>
+                                                                    <div className="result-meta-time">
+                                                                        <span className="result-time">{formatTime(item.timestamp)}</span>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         );

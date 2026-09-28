@@ -442,6 +442,7 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         contactCustomerService: '联系客服',
         scanQrContact: '扫码联系客服',
         csAccountLabel: '客服账号',
+        extractLink: '提取链接',
 
         // Verify Page
         tutorialsAndErrors: '教程和常见错误',
@@ -1013,6 +1014,7 @@ Failed verification does not consume quota.`,
         contactCustomerService: 'Contact Support',
         scanQrContact: 'Scan QR code to contact support',
         csAccountLabel: 'Support ID',
+        extractLink: '提取链接',
 
         // Verify Page
         tutorialsAndErrors: 'Tutorials & Common Errors',

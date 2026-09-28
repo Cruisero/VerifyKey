@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学生优惠 SheerID 验证助手 - 导航中心</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 10%, #172554 0%, #090d16 80%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 16px;
+    }
+
+    .container {
+      max-width: 680px;
+      width: 100%;
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 40px 32px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 40%, #93c5fd 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .tool-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 24px 20px;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tool-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+    }
+
+    .tool-card.google:hover {
+      border-color: rgba(96, 165, 250, 0.5);
+      background: rgba(37, 99, 235, 0.08);
+      box-shadow: 0 16px 36px rgba(37, 99, 235, 0.2);
+    }
+
+    .tool-card.chatgpt:hover {
+      border-color: rgba(52, 211, 153, 0.5);
+      background: rgba(16, 163, 127, 0.08);
+      box-shadow: 0 16px 36px rgba(16, 163, 127, 0.2);
+    }
+
+    .icon-box {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 14px;
+    }
+
+    .google .icon-box {
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(96, 165, 250, 0.3);
+      color: #60a5fa;
+    }
+
+    .chatgpt .icon-box {
+      background: rgba(16, 163, 127, 0.15);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      color: #34d399;
+    }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .enter-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .google .enter-btn {
+      background: rgba(37, 99, 235, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(96, 165, 250, 0.3);
+    }
+
+    .google:hover .enter-btn {
+      background: #2563eb;
+      color: #ffffff;
+    }
+
+    .chatgpt .enter-btn {
+      background: rgba(16, 163, 127, 0.2);
+      color: #a7f3d0;
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+
+    .chatgpt:hover .enter-btn {
+      background: #10a37f;
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">⚡ VerifyKey 辅助工具</div>
+    <h1>SheerID 验证链接提取工具集</h1>
+    <p class="subtitle">无需繁琐 F12 抓包，点击对应平台一键安装书签即可快速提取</p>
+
+    <div class="grid">
+      <!-- Google One -->
+      <a href="bookmarklet.html" class="tool-card google">
+        <div class="icon-box">🌐</div>
+        <div class="card-title">Google One 学生验证</div>
+        <div class="card-desc">针对 one.google.com/ai-student 页面定制，快速捕获 Google AI 学生验证链接</div>
+        <div class="enter-btn">进入安装页 →</div>
+      </a>
+
+      <!-- ChatGPT -->
+      <a href="chatgpt.html" class="tool-card chatgpt">
+        <div class="icon-box">🤖</div>
+        <div class="card-title">ChatGPT 学生验证</div>
+        <div class="card-desc">针对 chatgpt.com/students/verify 页面定制，直接抓取 iframe SheerID 链接</div>
+        <div class="enter-btn">进入安装页 →</div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

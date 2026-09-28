@@ -1025,3 +1025,91 @@
 .cs-copy-btn:active {
     transform: translateY(0) scale(0.95);
 }
+
+/* Extract Link Floating Button (Left) */
+.extract-link-float-container {
+    position: fixed;
+    left: 24px;
+    bottom: 96px;
+    z-index: var(--z-modal);
+}
+
+.extract-link-float-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+    color: white !important;
+    text-decoration: none;
+    box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+/* Pulsing outer glow animation */
+.extract-link-float-btn::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid #0284c7;
+    opacity: 0;
+    animation: extractFloatBtnPulse 2.4s infinite cubic-bezier(0.25, 0, 0, 1);
+    pointer-events: none;
+}
+
+@keyframes extractFloatBtnPulse {
+    0% {
+        transform: scale(0.95);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1.25);
+        opacity: 0;
+    }
+}
+
+.extract-link-float-btn:hover {
+    transform: translateY(-4px) scale(1.06);
+    box-shadow: 0 8px 24px rgba(14, 165, 233, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+    color: white !important;
+}
+
+.extract-link-float-btn:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+.extract-link-float-svg {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+    transition: transform 0.3s ease;
+}
+
+.extract-link-float-btn:hover .extract-link-float-svg {
+    transform: rotate(15deg) scale(1.05);
+}
+
+.extract-link-float-text {
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 2px;
+    letter-spacing: 0.3px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.1;
+    color: white;
+}
+
+@media (max-width: 768px) {
+    .extract-link-float-container {
+        left: 16px;
+        bottom: 85px;
+    }
+}

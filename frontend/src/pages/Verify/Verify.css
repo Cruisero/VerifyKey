@@ -4336,94 +4336,100 @@
 }
 
 .result-item.sheerid-compact-result {
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr);
-    align-items: start;
-    padding: 14px;
-    gap: 8px 10px;
-    border: 1px solid var(--border-primary);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
     border-radius: 12px;
+    box-sizing: border-box;
+    min-height: 52px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
     box-shadow: none;
+    position: relative;
+}
+
+.result-item.sheerid-compact-result.failed {
+    background: var(--color-error-bg);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.result-item.sheerid-compact-result.success {
+    background: var(--color-success-bg);
+    border-color: rgba(16, 185, 129, 0.2);
 }
 
 .sheerid-compact-result > .result-status {
-    grid-column: 1;
-    grid-row: 1;
-    padding-top: 2px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-top: 1px;
 }
 
 .sheerid-compact-result > .result-info {
-    grid-column: 2;
+    flex: 1;
     min-width: 0;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-/* Keep timestamps out of the content column, including on narrow cards. */
 .sheerid-compact-result > .result-meta {
-    grid-column: 2;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px;
-    min-width: 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    margin-left: auto;
+    padding-top: 2px;
 }
 
 .sheerid-result-main-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
     align-items: center;
-    gap: 10px 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
 }
 
 .sheerid-result-main-row .result-id {
-    grid-column: 1 / -1;
-    min-width: 0;
-    max-width: 100%;
-    white-space: normal;
-    overflow: visible;
-    font-family: inherit;
     font-size: 13px;
-    font-weight: 500;
-    line-height: 1.65;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.5;
+    word-break: break-word;
+    display: inline-flex;
+    align-items: center;
 }
 
 .sheerid-result-main-row .result-primary-text {
-    min-width: 0;
-    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .sheerid-result-main-row .sheerid-code-pill {
-    justify-self: start;
-}
-
-@media (max-width: 380px) {
-    .sheerid-result-main-row {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .sheerid-result-main-row .btn-resubmit {
-        justify-self: start;
-    }
+    flex-shrink: 0;
 }
 
 .sheerid-code-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    min-width: 0;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    white-space: normal;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 6px;
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
-    line-height: 1.5;
+    font-weight: 500;
+    line-height: 1.4;
     color: var(--text-secondary);
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
-    padding: 5px 9px;
-    border-radius: 7px;
     cursor: pointer;
+    white-space: nowrap;
     transition: all var(--transition-fast);
+    vertical-align: middle;
 }
 
 .sheerid-code-pill svg {
@@ -4439,9 +4445,10 @@
 }
 
 .sheerid-result-main-row .btn-resubmit {
-    min-height: 29px;
-    padding: 5px 10px;
-    border-radius: 7px;
+    min-height: 26px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 11px;
     box-shadow: none;
 }
 

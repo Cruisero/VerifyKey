@@ -3258,6 +3258,7 @@ export default function Admin() {
     const [activeTab, setActiveTab] = useState('overview');
     const [siteStats, setSiteStats] = useState({});
     const [verifyLog, setVerifyLog] = useState([]);
+    const [copiedSheerId, setCopiedSheerId] = useState('');
     const [vLogPage, setVLogPage] = useState(1);
     const [vLogTotalPages, setVLogTotalPages] = useState(1);
     const [vLogTotal, setVLogTotal] = useState(0);
@@ -4993,8 +4994,22 @@ export default function Admin() {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{isSubmissionFailure ? `ATTEMPT: ${shortVid}` : `${r.via === 'pixel_sheerid' ? '任务 ID' : 'VID'}: ${shortVid}`}</span>
                                                     {r.sheerIdVerificationId && (
-                                                        <span style={{ fontSize: '13px', overflowWrap: 'anywhere', userSelect: 'all' }}>
-                                                            SheerID VID: {r.sheerIdVerificationId}
+                                                        <span style={{ fontSize: '13px', overflowWrap: 'anywhere' }}>
+                                                            <span style={{ userSelect: 'none' }}>SheerID VID: </span>
+                                                            <span style={{ userSelect: 'all' }}>{r.sheerIdVerificationId}</span>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-sm btn-ghost"
+                                                                style={{ marginLeft: '6px', padding: '2px 6px', fontSize: '12px', userSelect: 'none' }}
+                                                                aria-label="复制 SheerID ID"
+                                                                onClick={async () => {
+                                                                    const ok = await copyToClipboard(r.sheerIdVerificationId);
+                                                                    if (ok) setCopiedSheerId(r.sheerIdVerificationId);
+                                                                }}
+                                                                onBlur={() => setCopiedSheerId('')}
+                                                            >
+                                                                {copiedSheerId === r.sheerIdVerificationId ? '✓ 已复制' : '复制'}
+                                                            </button>
                                                         </span>
                                                     )}
                                                     {isProcessing && (

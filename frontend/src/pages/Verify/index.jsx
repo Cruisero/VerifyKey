@@ -2008,7 +2008,7 @@ export default function Verify() {
                                                         </label>
                                                         <span className="sheerid-status-pill">
                                                             <span className="sheerid-pill-dot" />
-                                                            人工核验 · 失败自动退款
+                                                            自动化验证
                                                         </span>
                                                     </div>
                                                     <div className="sheerid-input-box">

@@ -202,6 +202,8 @@ https://services.sheerid.com/verify/...?verificationId=699528d723c407520aeadc45
         verifySuccess: '验证成功',
         verifyFailed: '验证失败',
         resubmitBtn: '重新提交',
+        processingBadge: '认证中',
+        stageStep: '步骤',
 
         // Backend messageKey translations
         msgLinkFailed: '该链接已失败，请刷新页面获取新链接',
@@ -774,6 +776,8 @@ Failed verification does not consume quota.`,
         verifySuccess: 'Verification passed',
         verifyFailed: 'Verification failed',
         resubmitBtn: 'Re-submit',
+        processingBadge: 'Processing',
+        stageStep: 'Step',
 
         // Backend messageKey translations
         msgLinkFailed: 'Link already failed, please refresh for a new link',

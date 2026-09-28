@@ -2458,55 +2458,57 @@ export default function Verify() {
                                                                     <span className="result-primary-text">{isSheerId ? sheerIdTitle : maskEmail(result.email)}</span>
                                                                 </span>
                                                             </div>
-                                                            {isSheerId && sheerIdCode && (
+                                                            {((isSheerId && sheerIdCode) || result.status === 'processing' || (result.status !== 'processing' && !isSheerId && !result.url)) && (
                                                                 <div className="result-sub-row">
-                                                                    <button
-                                                                        type="button"
-                                                                        className="sheerid-code-pill"
-                                                                        title="点击复制 ID"
-                                                                        onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
-                                                                    >
-                                                                        <span className="sheerid-code-prefix">ID:</span>
-                                                                        <span className="sheerid-code-val">#{sheerIdCode}</span>
-                                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                                                                            <rect x="8" y="8" width="12" height="12" rx="2" />
-                                                                            <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                            {result.status === 'processing' && result.totalStages > 0 && !(result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) ? (() => {
-                                                                const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
-                                                                return (
-                                                                    <div className="progress-bar-container">
-                                                                        <div className="progress-bar-track">
-                                                                            <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
-                                                                        </div>
-                                                                        <span className="progress-bar-label">{pct}%</span>
-                                                                    </div>
-                                                                );
-                                                            })() : result.status === 'processing' ? (
-                                                                <div className="result-message-row">
-                                                                    <span className="result-message">
-                                                                        {(() => {
-                                                                            const raw = (result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
-                                                                            const isQueueMsg = result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0);
-                                                                            if (isQueueMsg && result.queuePosition >= 0) return `排队中 (第 ${result.queuePosition + 1} 位)`;
-                                                                            return raw;
-                                                                        })()}
-                                                                    </span>
-                                                                    {result.jobId && (result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) && (
+                                                                    {isSheerId && sheerIdCode && (
                                                                         <button
-                                                                            className="cancel-job-btn"
-                                                                            onClick={() => handleCancelJob(result.jobId, result.id)}
-                                                                            disabled={cancellingJobs.has(result.jobId)}
-                                                                            title={t('cancelJob')}
+                                                                            type="button"
+                                                                            className="sheerid-code-pill"
+                                                                            title="点击复制 ID"
+                                                                            onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
                                                                         >
-                                                                            {cancellingJobs.has(result.jobId) ? t('cancelling') : t('cancelJob')}
+                                                                            <span className="sheerid-code-prefix">ID:</span>
+                                                                            <span className="sheerid-code-val">#{sheerIdCode}</span>
+                                                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                                                                <rect x="8" y="8" width="12" height="12" rx="2" />
+                                                                                <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+                                                                            </svg>
                                                                         </button>
                                                                     )}
+                                                                    {result.status === 'processing' && (
+                                                                        result.totalStages > 0 && !(result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) ? (() => {
+                                                                            const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
+                                                                            return (
+                                                                                <div className="progress-bar-container">
+                                                                                    <div className="progress-bar-track">
+                                                                                        <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+                                                                                    </div>
+                                                                                    <span className="progress-bar-label">{pct}%</span>
+                                                                                </div>
+                                                                            );
+                                                                        })() : (() => {
+                                                                            const raw = (result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
+                                                                            const isQueueMsg = result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0);
+                                                                            const displayMsg = (isQueueMsg && result.queuePosition >= 0) ? `排队中 (第 ${result.queuePosition + 1} 位)` : raw;
+                                                                            return displayMsg ? <span className={isQueueMsg ? "result-queue-badge" : "result-message"}>{displayMsg}</span> : null;
+                                                                        })()
+                                                                    )}
+                                                                    {result.status !== 'processing' && !isSheerId && !result.url && (() => {
+                                                                        let msg = (result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed')));
+                                                                        msg = msg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
+                                                                        msg = msg.replace(/^获取成功(\s*[（(][^）)]*[）)])?[:：]?\s*/i, '').trim();
+                                                                        msg = msg.replace(/^(失败|成功)[:：]\s*/i, '').trim();
+                                                                        msg = msg.replace(/^订阅(成功|失败)[:：]?\s*/i, '').trim();
+                                                                        msg = msg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
+                                                                        if (msg.includes('Jio 优惠链接') || msg.includes('Jio 服务提交失败') || msg.includes('No available Jio link') || msg.includes('JIO_FAILED')) {
+                                                                            msg = '凭证库存不足';
+                                                                        }
+                                                                        const isGeneric = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(msg);
+                                                                        if (result.status === 'success' && isGeneric) msg = t('verifySuccess');
+                                                                        return msg ? <span className="result-message">{msg}</span> : null;
+                                                                    })()}
                                                                 </div>
-                                                            ) : null}
+                                                            )}
                                                             {result.status === 'success' && result.url && (
                                                                 <div className="result-url-row">
                                                                     <a
@@ -2553,24 +2555,6 @@ export default function Verify() {
                                                                     )}
                                                                 </div>
                                                             )}
-                                                            {result.status !== 'processing' && !isSheerId && (() => {
-                                                                let msg = (result.message || (result.status === 'success' ? t('verifySuccess') : t('verifyFailed')));
-                                                                msg = msg.replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
-                                                                msg = msg.replace(/^获取成功(\s*[（(][^）)]*[）)])?[:：]?\s*/i, '').trim();
-                                                                msg = msg.replace(/^(失败|成功)[:：]\s*/i, '').trim();
-                                                                msg = msg.replace(/^订阅(成功|失败)[:：]?\s*/i, '').trim();
-                                                                msg = msg.replace(/[（(]已修正[^）)]*[）)]/g, '').trim();
-                                                                if (msg.includes('Jio 优惠链接') || msg.includes('Jio 服务提交失败') || msg.includes('No available Jio link') || msg.includes('JIO_FAILED')) {
-                                                                    msg = '凭证库存不足';
-                                                                }
-                                                                const isGeneric = /^(验证成功|订阅成功|获取成功|Subscription successful|Success)$/i.test(msg);
-                                                                if (result.status === 'success' && isGeneric) msg = t('verifySuccess');
-                                                                return (
-                                                                    <div className="result-message-row">
-                                                                        {msg ? <span className="result-message">{msg}</span> : null}
-                                                                    </div>
-                                                                );
-                                                            })()}
                                                         </div>
                                                         <div className="result-meta">
                                                             {result.status === 'failed' && result.accountData && (
@@ -2584,6 +2568,23 @@ export default function Verify() {
                                                                     </svg>
                                                                     <span>{t('resubmitBtn')}</span>
                                                                 </button>
+                                                            )}
+                                                            {result.status === 'processing' && (
+                                                                result.jobId && (result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) ? (
+                                                                    <button
+                                                                        className="cancel-job-btn"
+                                                                        onClick={() => handleCancelJob(result.jobId, result.id)}
+                                                                        disabled={cancellingJobs.has(result.jobId)}
+                                                                        title={t('cancelJob')}
+                                                                    >
+                                                                        {cancellingJobs.has(result.jobId) ? t('cancelling') : t('cancelJob')}
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="processing-badge">
+                                                                        <span className="pulse-dot" />
+                                                                        <span>{result.stage && result.totalStages > 1 ? `${t('stageStep') || '步骤'} ${result.stage}/${result.totalStages}` : (t('processingBadge') || '认证中')}</span>
+                                                                    </span>
+                                                                )
                                                             )}
                                                             <div className="result-meta-time">
                                                                 {result.elapsed > 0 && (

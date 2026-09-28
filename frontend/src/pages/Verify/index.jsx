@@ -2267,7 +2267,7 @@ export default function Verify() {
                                                      const showSecondaryMsg = !isSheerId && maskedEmail && displayMsg && !(displayStatus === 'success' && isGenericSuccess);
 
                                                      return (
-                                                     <div key={item.id} className={`result-item history ${displayStatus}`}>
+                                                     <div key={item.id} className={`result-item history ${displayStatus}${isSheerId ? ' sheerid-compact-result' : ''}`}>
                                                          <div className="result-status">
                                                              {displayStatus === 'success' && <span className="status-icon success">✓</span>}
                                                              {displayStatus === 'failed' && <span className="status-icon failed">✕</span>}
@@ -2281,16 +2281,18 @@ export default function Verify() {
                                                                      style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                                                                  >
                                                                      <span className="result-primary-text">{primaryText}</span>
-                                                                     {isSheerId && sheerIdCode && (
-                                                                         <span
-                                                                             className="sheerid-code-pill"
+                                                                 </span>
+                                                                {isSheerId && sheerIdCode && (
+                                                                         <button
+                                                                             type="button"
+                                                                            className="sheerid-code-pill"
                                                                              title="点击复制 ID"
                                                                              onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
                                                                          >
                                                                              #{sheerIdCode}
-                                                                         </span>
+                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></svg>
+                                                                         </button>
                                                                      )}
-                                                                 </span>
                                                              </div>
                                                              {showSecondaryMsg && (
                                                                  <span className="result-message">{displayMsg}</span>
@@ -2384,7 +2386,7 @@ export default function Verify() {
                                                         : (t('sheerIdSuccessTitle') || 'SheerID 认证成功');
 
                                                     return (
-                                                    <div key={result.id} ref={el => { if (el) resultItemRefs.current[result.id] = el; }} className={`result-item ${result.status}`}>
+                                                    <div key={result.id} ref={el => { if (el) resultItemRefs.current[result.id] = el; }} className={`result-item ${result.status}${isSheerId ? ' sheerid-compact-result' : ''}`}>
                                                         <div className="result-status">
                                                             {result.status === 'processing' && (() => {
                                                                 const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);
@@ -2419,16 +2421,18 @@ export default function Verify() {
                                                                     style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                                                                 >
                                                                     <span className="result-primary-text">{isSheerId ? sheerIdTitle : maskEmail(result.email)}</span>
-                                                                    {isSheerId && sheerIdCode && (
-                                                                        <span
+                                                                </span>
+                                                                {isSheerId && sheerIdCode && (
+                                                                        <button
+                                                                            type="button"
                                                                             className="sheerid-code-pill"
                                                                             title="点击复制 ID"
                                                                             onClick={(e) => { e.stopPropagation(); handleCopyUrl(sheerIdCode, e); }}
                                                                         >
                                                                             #{sheerIdCode}
-                                                                        </span>
+                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></svg>
+                                                                        </button>
                                                                     )}
-                                                                </span>
                                                                 {result.status === 'failed' && result.accountData && (
                                                                     <button
                                                                         className="btn-resubmit"
@@ -2883,7 +2887,7 @@ export default function Verify() {
                                                         const isGenericSuccess = /^(充值成功|Plus\s*充值成功|ChatGPT\s*(Plus\s*)?充值成功|Team\s*邀请成功|邀请成功|Recharge successful|Success)$/i.test(displayMsg);
                                                         const showMsg = displayMsg && !(displayStatus === 'success' && isGenericSuccess);
                                                         return (
-                                                            <div key={item.id} className={`result-item history ${displayStatus}`}>
+                                                            <div key={item.id} className={`result-item history ${displayStatus}${isSheerId ? ' sheerid-compact-result' : ''}`}>
                                                                 <div className="result-status">
                                                                     {displayStatus === 'success'
                                                                         ? <span className="status-icon success">✓</span>

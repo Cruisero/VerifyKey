@@ -1030,7 +1030,7 @@
 .extract-link-float-container {
     position: fixed;
     right: 24px;
-    bottom: 168px;
+    bottom: 200px;
     z-index: calc(var(--z-modal) - 1);
 }
 
@@ -1111,6 +1111,6 @@
     .extract-link-float-container {
         right: 16px;
         left: auto;
-        bottom: 155px;
+        bottom: 200px;
     }
 }

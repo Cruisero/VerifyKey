@@ -2487,10 +2487,30 @@ export default function Verify() {
                                                                                 </div>
                                                                             );
                                                                         })() : (() => {
-                                                                            const raw = (result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '');
+                                                                            const raw = (result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '').trim();
                                                                             const isQueueMsg = result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0);
-                                                                            const displayMsg = (isQueueMsg && result.queuePosition >= 0) ? `排队中 (第 ${result.queuePosition + 1} 位)` : raw;
-                                                                            return displayMsg ? <span className={isQueueMsg ? "result-queue-badge" : "result-message"}>{displayMsg}</span> : null;
+                                                                            let displayMsg = (isQueueMsg && result.queuePosition >= 0) ? `排队中 (第 ${result.queuePosition + 1} 位)` : raw;
+                                                                            if (!isQueueMsg) {
+                                                                                if (raw.includes('自动化核验') || (raw.includes('SheerID') && (raw.includes('自动') || raw.includes('对接')))) {
+                                                                                    displayMsg = '已提交，正在自动对接处理...';
+                                                                                } else if (raw.includes('等待人工处理')) {
+                                                                                    displayMsg = '已提交，等待处理中...';
+                                                                                } else if (raw.includes('等待 SheerID 审核')) {
+                                                                                    displayMsg = '已提交，等待审核中...';
+                                                                                } else if (raw.includes('等待设备处理')) {
+                                                                                    displayMsg = '已提交，等待设备处理...';
+                                                                                } else if (raw.startsWith('已提交') && raw.length > 16) {
+                                                                                    displayMsg = '已提交，正在处理中...';
+                                                                                }
+                                                                            }
+                                                                            return displayMsg ? (
+                                                                                <span
+                                                                                    className={isQueueMsg ? "result-queue-badge" : "result-message"}
+                                                                                    title={raw !== displayMsg ? raw : undefined}
+                                                                                >
+                                                                                    {displayMsg}
+                                                                                </span>
+                                                                            ) : null;
                                                                         })()
                                                                     )}
                                                                     {result.status !== 'processing' && !isSheerId && !result.url && (() => {

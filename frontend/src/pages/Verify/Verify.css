@@ -4335,7 +4335,30 @@
     letter-spacing: -0.2px;
 }
 
+.sheerid-result-main-row {
+    flex-wrap: wrap;
+}
+
+.sheerid-result-main-row .result-id {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow: visible;
+}
+
+.sheerid-result-main-row .result-primary-text {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .sheerid-code-pill {
+    flex-shrink: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
     color: var(--text-secondary);
@@ -4492,4 +4515,3 @@
         justify-content: flex-end;
     }
 }
-

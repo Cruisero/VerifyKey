@@ -2273,14 +2273,14 @@ export default function Verify() {
                                                              {displayStatus === 'failed' && <span className="status-icon failed">✕</span>}
                                                          </div>
                                                          <div className="result-info">
-                                                             <div className="result-main-row">
+                                                             <div className={`result-main-row${isSheerId ? ' sheerid-result-main-row' : ''}`}>
                                                                  <span
                                                                      className="result-id"
                                                                      title="点击复制"
                                                                      onClick={(e) => handleCopyUrl(primaryText, e)}
                                                                      style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                                                                  >
-                                                                     {primaryText}
+                                                                     <span className="result-primary-text">{primaryText}</span>
                                                                      {isSheerId && sheerIdCode && (
                                                                          <span
                                                                              className="sheerid-code-pill"
@@ -2411,14 +2411,14 @@ export default function Verify() {
                                                             {result.status === 'failed' && <span className="status-icon failed">✕</span>}
                                                         </div>
                                                         <div className="result-info">
-                                                            <div className="result-main-row">
+                                                            <div className={`result-main-row${isSheerId ? ' sheerid-result-main-row' : ''}`}>
                                                                 <span
                                                                     className="result-id"
                                                                     title="点击复制"
                                                                     onClick={(e) => handleCopyUrl(isSheerId ? sheerIdTitle : result.email, e)}
                                                                     style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                                                                 >
-                                                                    {isSheerId ? sheerIdTitle : maskEmail(result.email)}
+                                                                    <span className="result-primary-text">{isSheerId ? sheerIdTitle : maskEmail(result.email)}</span>
                                                                     {isSheerId && sheerIdCode && (
                                                                         <span
                                                                             className="sheerid-code-pill"
@@ -2890,7 +2890,7 @@ export default function Verify() {
                                                                         : <span className="status-icon failed">✕</span>}
                                                                 </div>
                                                                 <div className="result-info">
-                                                                    <div className="result-main-row">
+                                                                    <div className={`result-main-row${isSheerId ? ' sheerid-result-main-row' : ''}`}>
                                                                         <span className="result-id">{item.email || 'ChatGPT'}</span>
                                                                     </div>
                                                                     {showMsg && <span className="result-message">{displayMsg}</span>}

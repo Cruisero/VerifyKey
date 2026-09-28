@@ -6,6 +6,7 @@ Database file: /app/data/onepass.db
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 import threading
@@ -217,6 +218,7 @@ def init_db():
         _add_has_consumed_column_to_users(conn)
         _add_credit_fields_to_verification_history(conn)
         _migrate_credit_fields(conn)
+        _add_sheerid_verification_id(conn)
 
         conn.commit()
         _initialized = True
@@ -565,3 +567,29 @@ def start_auto_backup():
     t = threading.Thread(target=_backup_loop, daemon=True, name="db-auto-backup")
     t.start()
     print("[DB Backup] Auto-backup scheduled (every 24h)")
+
+
+def _add_sheerid_verification_id(conn: sqlite3.Connection):
+    """Keep the original SheerID ID independently of the upstream job ID."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(verification_history)")}
+    if "sheerid_verification_id" not in columns:
+        conn.execute("ALTER TABLE verification_history ADD COLUMN sheerid_verification_id TEXT DEFAULT ''")
+    # Recover old records only where the full original ID is still available.
+    for row in conn.execute("SELECT id, message FROM verification_history WHERE via = 'pixel_sheerid' AND COALESCE(sheerid_verification_id, '') = ''").fetchall():
+        match = re.search(r"verificationId=([a-f0-9]{20,32})(?![a-f0-9])", row["message"] or "", re.I)
+        if match:
+            conn.execute("UPDATE verification_history SET sheerid_verification_id = ? WHERE id = ?", (match.group(1), row["id"]))
+    pending_path = os.path.join(os.path.dirname(__file__), "data", "pending_async_tasks.json")
+    if os.path.exists(pending_path):
+        try:
+            with open(pending_path) as pending_file:
+                pending = json.load(pending_file)
+            for task in pending.values():
+                if task.get("type") != "pixel":
+                    continue
+                payload = task.get("payload") or {}
+                vid = payload.get("verification_id", "")
+                if re.fullmatch(r"[a-f0-9]{20,32}", vid, re.I):
+                    conn.execute("UPDATE verification_history SET sheerid_verification_id = ? WHERE verification_id = ? AND COALESCE(sheerid_verification_id, '') = ''", (vid, task.get("task_id")))
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            print(f"[DB] Could not recover pending SheerID IDs: {exc}")

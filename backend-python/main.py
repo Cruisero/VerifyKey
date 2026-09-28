@@ -9822,8 +9822,8 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             # Lock the cost into the DB row for the credit ledger
             conn = database.get_connection()
             conn.execute(
-                "UPDATE verification_history SET cost = ? WHERE verification_id = ?",
-                (cost, job_id)
+                "UPDATE verification_history SET cost = ?, sheerid_verification_id = ? WHERE verification_id = ?",
+                (cost, extracted_vid, job_id)
             )
             conn.commit()
 
@@ -9832,6 +9832,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
             broadcast_verify_event({
                 "type": "progress",
                 "vid": job_id,
+                "sheerIdVerificationId": extracted_vid,
                 "step": "submitted",
                 "message": init_msg,
                 **event_meta,
@@ -9892,8 +9893,8 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                         # Lock cost and is_refunded=0 into the DB row
                         conn = database.get_connection()
                         conn.execute(
-                            "UPDATE verification_history SET cost = ?, is_refunded = 0 WHERE verification_id = ?",
-                            (cost, ap_job_id)
+                            "UPDATE verification_history SET cost = ?, is_refunded = 0, sheerid_verification_id = ? WHERE verification_id = ?",
+                            (cost, extracted_vid, ap_job_id)
                         )
                         conn.commit()
 

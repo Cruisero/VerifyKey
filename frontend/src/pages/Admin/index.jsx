@@ -3645,6 +3645,7 @@ export default function Admin() {
                         const newEntry = {
                             id: existingIdx >= 0 ? prev[existingIdx].id : `sse-${Date.now()}-${Math.random()}`,
                             verificationId: vid,
+                            sheerIdVerificationId: data.sheerIdVerificationId || existingEntry?.sheerIdVerificationId || '',
                             status: entryStatus,
                             message: data.message || (entryStatus === 'processing' ? '处理中...' : ''),
                             timestamp: new Date().toISOString(),
@@ -4915,7 +4916,7 @@ export default function Admin() {
                                     <input
                                         type="text"
                                         className="input"
-                                        placeholder="搜索 VID、邮箱、消息、来源、状态..."
+                                        placeholder="搜索 SheerID ID / 完整链接、任务 ID、邮箱、消息..."
                                         value={vLogSearch}
                                         onChange={e => handleVLogSearch(e.target.value)}
                                         style={{
@@ -4990,7 +4991,12 @@ export default function Admin() {
                                             }}>{icon}</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{isSubmissionFailure ? `ATTEMPT: ${shortVid}` : `VID: ${shortVid}`}</span>
+                                                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{isSubmissionFailure ? `ATTEMPT: ${shortVid}` : `${r.via === 'pixel_sheerid' ? '任务 ID' : 'VID'}: ${shortVid}`}</span>
+                                                    {r.sheerIdVerificationId && (
+                                                        <span style={{ fontSize: '13px', overflowWrap: 'anywhere', userSelect: 'all' }}>
+                                                            SheerID VID: {r.sheerIdVerificationId}
+                                                        </span>
+                                                    )}
                                                     {isProcessing && (
                                                         <span style={{
                                                             fontSize: '11px', padding: '1px 8px', borderRadius: '10px',

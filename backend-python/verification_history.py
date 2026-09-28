@@ -5,6 +5,7 @@ Storage: SQLite database at /app/data/onepass.db
 """
 
 import uuid
+import re
 from datetime import datetime
 from typing import Dict, List
 
@@ -191,9 +192,10 @@ def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: boo
 
     # Add search filter
     if search and search.strip():
-        keyword = f"%{search.strip()}%"
-        where += " AND (verification_id LIKE ? OR message LIKE ? OR cdk LIKE ? OR via LIKE ? OR email LIKE ? OR status LIKE ?)"
-        params_base.extend([keyword, keyword, keyword, keyword, keyword, keyword])
+        match = re.search(r"verificationId=([a-f0-9]{20,32})(?![a-f0-9])", search, re.I)
+        keyword = f"%{match.group(1) if match else search.strip()}%"
+        where += " AND (verification_id LIKE ? OR message LIKE ? OR cdk LIKE ? OR via LIKE ? OR email LIKE ? OR status LIKE ? OR sheerid_verification_id LIKE ?)"
+        params_base.extend([keyword] * 7)
 
     # Total count
     count_cursor = conn.execute(
@@ -207,7 +209,7 @@ def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: boo
 
     # Paginated query (newest first)
     cursor = conn.execute(
-        f"SELECT id, status, verification_id, message, cdk, timestamp, via, email, cost, is_refunded FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
+        f"SELECT id, status, sheerid_verification_id, verification_id, message, cdk, timestamp, via, email, cost, is_refunded FROM verification_history {where} ORDER BY rowid DESC LIMIT ? OFFSET ?",
         params_base + [page_size, offset]
     )
 
@@ -216,6 +218,7 @@ def get_paginated_history(page: int = 1, page_size: int = 100, ignore_reset: boo
             "id": r["id"],
             "status": r["status"],
             "verificationId": r["verification_id"],
+            "sheerIdVerificationId": r["sheerid_verification_id"],
             "message": r["message"],
             "cdk": r["cdk"],
             "via": r["via"] if "via" in r.keys() else "",

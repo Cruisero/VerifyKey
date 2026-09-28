@@ -2887,14 +2887,14 @@ export default function Verify() {
                                                         const isGenericSuccess = /^(充值成功|Plus\s*充值成功|ChatGPT\s*(Plus\s*)?充值成功|Team\s*邀请成功|邀请成功|Recharge successful|Success)$/i.test(displayMsg);
                                                         const showMsg = displayMsg && !(displayStatus === 'success' && isGenericSuccess);
                                                         return (
-                                                            <div key={item.id} className={`result-item history ${displayStatus}${isSheerId ? ' sheerid-compact-result' : ''}`}>
+                                                            <div key={item.id} className={`result-item history ${displayStatus}`}>
                                                                 <div className="result-status">
                                                                     {displayStatus === 'success'
                                                                         ? <span className="status-icon success">✓</span>
                                                                         : <span className="status-icon failed">✕</span>}
                                                                 </div>
                                                                 <div className="result-info">
-                                                                    <div className={`result-main-row${isSheerId ? ' sheerid-result-main-row' : ''}`}>
+                                                                    <div className="result-main-row">
                                                                         <span className="result-id">{item.email || 'ChatGPT'}</span>
                                                                     </div>
                                                                     {showMsg && <span className="result-message">{displayMsg}</span>}

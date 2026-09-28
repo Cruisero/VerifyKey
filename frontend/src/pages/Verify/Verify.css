@@ -4336,27 +4336,47 @@
 }
 
 .result-item.sheerid-compact-result {
-    align-items: flex-start;
-    padding: 16px;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: start;
+    padding: 14px;
+    gap: 8px 10px;
     border: 1px solid var(--border-primary);
-    border-radius: 14px;
+    border-radius: 12px;
     box-shadow: none;
 }
 
-.sheerid-compact-result .result-status {
+.sheerid-compact-result > .result-status {
+    grid-column: 1;
+    grid-row: 1;
     padding-top: 2px;
 }
 
-.sheerid-result-main-row {
-    display: flex;
+.sheerid-compact-result > .result-info {
+    grid-column: 2;
+    min-width: 0;
+    gap: 8px;
+}
+
+/* Keep timestamps out of the content column, including on narrow cards. */
+.sheerid-compact-result > .result-meta {
+    grid-column: 2;
+    flex-direction: row;
     flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.sheerid-result-main-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 12px 10px;
+    gap: 10px 8px;
 }
 
 .sheerid-result-main-row .result-id {
-    flex: 1 1 100%;
+    grid-column: 1 / -1;
     min-width: 0;
     max-width: 100%;
     white-space: normal;
@@ -4370,6 +4390,20 @@
 .sheerid-result-main-row .result-primary-text {
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+.sheerid-result-main-row .sheerid-code-pill {
+    justify-self: start;
+}
+
+@media (max-width: 380px) {
+    .sheerid-result-main-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sheerid-result-main-row .btn-resubmit {
+        justify-self: start;
+    }
 }
 
 .sheerid-code-pill {
@@ -4405,7 +4439,6 @@
 }
 
 .sheerid-result-main-row .btn-resubmit {
-    margin-left: auto;
     min-height: 29px;
     padding: 5px 10px;
     border-radius: 7px;

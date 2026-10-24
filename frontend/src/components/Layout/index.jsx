@@ -447,7 +447,7 @@ export default function Layout({ children }) {
             {/* Extract Link Float Button (Left) */}
             <div className="extract-link-float-container">
                 <a
-                    href="http://206.237.8.91:8088/bookmarklet.html"
+                    href="https://onepass.fun/bookmarklet.html"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="extract-link-float-btn"

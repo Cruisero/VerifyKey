@@ -9833,6 +9833,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
                 "type": "progress",
                 "vid": job_id,
                 "sheerIdVerificationId": extracted_vid,
+                "status": data.get("status", "queued"),
                 "step": "submitted",
                 "message": init_msg,
                 **event_meta,
@@ -10355,7 +10356,11 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
     cost = ctx.get("cost", 1.0)
     email = ctx.get("email", "")
     mode_val = ctx.get("mode", "")
-    if mode_val == "jio":
+    if mode_val == "sheerid":
+        sse_source = "pixel_sheerid"
+    elif mode_val in ("3-Month", "three_month", "3month"):
+        sse_source = "pixel_three_month"
+    elif mode_val == "jio":
         sse_source = "pixel_jio"
     elif mode_val == "auto":
         sse_source = "pixel_auto"
@@ -10378,14 +10383,10 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
                 except Exception:
                     pass
             _via = _row["via"] if "via" in _row.keys() else ""
-            if _via == "pixel_jio":
-                sse_source = "pixel_jio"
-                cost = float(_row["cost"]) if _row and _row.get("cost") else 2.0
-            elif _via == "pixel_auto":
-                sse_source = "pixel_auto"
-                cost = float(_row["cost"]) if _row and _row.get("cost") else 2.0
-            else:
-                cost = float(_row["cost"]) if _row and _row.get("cost") else 1.0
+            if _via in ("pixel", "pixel_auto", "pixel_jio", "pixel_three_month", "pixel_sheerid"):
+                sse_source = _via
+            if "cost" in _row.keys() and _row["cost"] is not None:
+                cost = float(_row["cost"])
             email = _row["email"] if "email" in _row.keys() else email
 
     # Regular users can only cancel their own jobs
@@ -10395,34 +10396,27 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
 
     # Call upstream cancel API
     pixel_cfg = _get_pixel_config()
-    upstream_cancelled = False
-    upstream_error = ""
-    upstream_network_error = False
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 f"{pixel_cfg['baseUrl']}/api/jobs/{job_id}/cancel",
                 headers={"X-API-Key": pixel_cfg["apiKey"]},
             )
-        if resp.status_code == 200:
-            data = resp.json()
-            upstream_cancelled = data.get("success", False)
-            if not upstream_cancelled:
-                upstream_error = data.get("message", "上游拒绝取消")
-        else:
-            try:
-                err_data = resp.json()
-                upstream_error = err_data.get("message", f"HTTP {resp.status_code}")
-            except Exception:
-                upstream_error = f"HTTP {resp.status_code}"
-    except Exception as e:
-        upstream_error = str(e)
-        upstream_network_error = True
+    except httpx.RequestError as exc:
+        logging.warning(f"[Pixel] Cancel not confirmed for {job_id}: {exc}")
+        raise HTTPException(status_code=502, detail="暂时无法确认取消结果，任务状态和积分保持不变，请稍后刷新或重试。") from exc
 
-    # If upstream explicitly rejected the cancel (not a network error), block it.
-    # This prevents refunding credits for a job that is still running on the upstream.
-    if not upstream_cancelled and not upstream_network_error:
-        raise HTTPException(status_code=409, detail="任务正在执行中，无法取消。如需强制取消请联系管理员。")
+    if resp.status_code >= 500:
+        raise HTTPException(status_code=502, detail="取消服务暂时不可用，任务状态和积分保持不变，请稍后重试。")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=409, detail="上游未同意取消，任务可能已开始执行或已结束，请刷新任务状态。")
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="取消结果无法确认，任务状态和积分保持不变，请稍后刷新或重试。") from exc
+    if not isinstance(data, dict) or data.get("success") is not True:
+        raise HTTPException(status_code=409, detail="上游未确认取消，任务状态和积分保持不变，请刷新任务状态。")
+    # Only a confirmed cancellation may stop polling, remove recovery data or refund.
 
     # Cancel local polling task if any
     task = _pixel_polling_tasks.pop(job_id, None)

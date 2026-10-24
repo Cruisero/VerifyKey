@@ -4,6 +4,7 @@ import { useLang } from '../../stores/LanguageContext';
 import { useAuth } from '../../stores/AuthContext';
 import { copyToClipboard, formatDisplayUrl } from '../../utils/clipboard';
 import ConfettiBurst from './ConfettiBurst';
+import { isQueuedJob, canCancelPixelJob } from '../../utils/jobStatus';
 import './Verify.css';
 
 // API base URL
@@ -735,6 +736,7 @@ export default function Verify() {
                         url: r.url || data.url || account.url || '',
                         tier: verifyTier,
                         source: jobSource,
+                        upstreamStatus: data.status || undefined,
                         message: data.message || t('submitted'),
                         queuePosition: data.queue_position >= 0 ? data.queue_position : -1,
                         estimatedWait: data.estimated_wait_seconds,
@@ -876,6 +878,7 @@ export default function Verify() {
     };
 
     const pollJob = (jobId, resultId) => {
+        if (pollingRefs.current[resultId]) return;
         const intervalId = setInterval(async () => {
             try {
                 const resp = await fetch(`${API_BASE}/api/pixel/jobs/${jobId}`);
@@ -947,6 +950,7 @@ export default function Verify() {
                             totalStages,
                             stageLabel,
                             elapsed: Math.round(elapsed),
+                            upstreamStatus: status,
                             queuePosition: data.queue_position,
                             estimatedWait: data.estimated_wait_seconds,
                             message: status === 'running'
@@ -994,6 +998,7 @@ export default function Verify() {
             email: event.submitEmail || event.link || '',
             source: event.source || 'pixel',
             status: mappedStatus,
+            upstreamStatus: ['queued', 'running', 'success', 'failed', 'cancelled'].includes(event.status) ? event.status : undefined,
             timestamp: new Date().toISOString(),
             message: msg,
             stage: event.stage != null ? event.stage : undefined,
@@ -1116,6 +1121,12 @@ export default function Verify() {
                     queuePosition: typeof item.queuePosition === 'number' ? item.queuePosition : -1,
                     estimatedWait: item.estimatedWait || 0,
                 }));
+
+                for (const item of restored) {
+                    if (item.source === 'pixel' || item.source.startsWith('pixel_')) {
+                        pollJob(item.jobId, item.id);
+                    }
+                }
 
                 setResults(prev => {
                     const existingKeys = new Set(prev.map(item => item.verificationId || item.jobId || item.id));
@@ -2412,7 +2423,7 @@ export default function Verify() {
                                                         <div className="result-status">
                                                             {result.status === 'processing' && (() => {
                                                                 const pct = visualProgress[result.id] ?? (result.totalStages > 0 ? Math.min(Math.round((result.stage / result.totalStages) * 100), 99) : 0);
-                                                                const isQueued = result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0);
+                                                                const isQueued = isQueuedJob(result);
                                                                 return isQueued ? (
                                                                     <div className="progress-ring indeterminate">
                                                                         <svg viewBox="0 0 36 36" className="progress-ring-svg">
@@ -2476,7 +2487,7 @@ export default function Verify() {
                                                                         </button>
                                                                     )}
                                                                     {result.status === 'processing' && (
-                                                                        result.totalStages > 0 && !(result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) ? (() => {
+                                                                        result.totalStages > 0 && !(isQueuedJob(result)) ? (() => {
                                                                             const pct = visualProgress[result.id] ?? Math.min(Math.round((result.stage / result.totalStages) * 100), 99);
                                                                             return (
                                                                                 <div className="progress-bar-container">
@@ -2488,7 +2499,7 @@ export default function Verify() {
                                                                             );
                                                                         })() : (() => {
                                                                             const raw = (result.message || t('processingMsg')).replace(/^[❌✅✓✕❗⚠️🔴🟢☑️☒🔄⏳◈💎⚡✨🔗\u200d\ufe0f\s]+/, '').trim();
-                                                                            const isQueueMsg = result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0);
+                                                                            const isQueueMsg = isQueuedJob(result);
                                                                             let displayMsg = (isQueueMsg && result.queuePosition >= 0) ? `排队中 (第 ${result.queuePosition + 1} 位)` : raw;
                                                                             if (!isQueueMsg) {
                                                                                 if (raw.includes('自动化核验') || (raw.includes('SheerID') && (raw.includes('自动') || raw.includes('对接')))) {
@@ -2590,7 +2601,7 @@ export default function Verify() {
                                                                 </button>
                                                             )}
                                                             {result.status === 'processing' && (
-                                                                result.jobId && (result.queuePosition > 0 || (result.message?.includes('排队') && result.queuePosition >= 0)) ? (
+                                                                canCancelPixelJob(result) ? (
                                                                     <button
                                                                         className="cancel-job-btn"
                                                                         onClick={() => handleCancelJob(result.jobId, result.id)}

@@ -197,7 +197,7 @@
     <div class="action-box">
       <!-- 核心书签链接 -->
       <a class="bookmark-button"
-        href="javascript:(function(){try{const r=document.documentElement.innerHTML,m=r.match(/(https?:(?:\\\/|\/){2}services\.sheerid\.com(?:\\\/|\/)verify(?:\\\/|\/)[0-9a-f]{24}(?:\\\/|\/)\?[^\s&quot;'`&lt;&gt;]+)/i);if(!m){alert('❌ 未找到 SheerID 验证链接！\n\n请确认：\n1. 是否已打开 Google One 学生优惠页面？\n2. 页面是否已完全加载？');return;}let u=m[1].replace(/\\\//g,'/').replace(/\\u003d/gi,'=').replace(/\\u0026/gi,'&').replace(/\\u002f/gi,'/').replace(/[\\&quot;'\]\}]+$/g,'');if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(u).then(()=>alert('🎉 提取成功并已复制到剪贴板！\n\n'+u)).catch(()=>prompt('✅ 提取成功！请按 Ctrl+C 复制链接：',u));}else{prompt('✅ 提取成功！请按 Ctrl+C 复制链接：',u);}}catch(e){alert('❌ 出错：'+e.message);}})();">
+        href="javascript:(function(){try{const frames=[...document.querySelectorAll('iframe[src]')].filter(f=>{try{const url=new URL(f.getAttribute('src'),document.baseURI);return url.hostname==='services.sheerid.com'&amp;&amp;/^\/verify\/[0-9a-f]{24}\//i.test(url.pathname)&amp;&amp;f.getClientRects().length&gt;0&amp;&amp;getComputedStyle(f).visibility!=='hidden';}catch(e){return false;}});let u=frames.length?frames[frames.length-1].src:'';if(!u){const r=/(https?:(?:\\\/|\/){2}services\.sheerid\.com(?:\\\/|\/)verify(?:\\\/|\/)[0-9a-f]{24}(?:\\\/|\/)\?[^\s&quot;'`&lt;&gt;]+)/gi;const urls=[...document.documentElement.innerHTML.matchAll(r)].map(m=>m[1].replace(/\\\//g,'/').replace(/\\u003d/gi,'=').replace(/\\u0026/gi,'&amp;').replace(/\\u002f/gi,'/').replace(/&amp;quot;.*$/i,'').replace(/&amp;amp;/g,'&amp;').replace(/[\\&quot;'\]\}]+$/g,''));const distinct=[...new Set(urls)];if(distinct.length&gt;1){alert('❌ 页面中找到多个不同的 SheerID 链接，无法确定哪个是当前链接。\n\n请等待新表单加载完成后再试。');return;}u=distinct[0]||'';}if(!u){alert('❌ 未找到 SheerID 验证链接！\n\n请确认页面已完全加载。');return;}if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(u).then(()=>alert('🎉 提取成功并已复制到剪贴板！\n\n'+u)).catch(()=>prompt('✅ 提取成功！请按 Ctrl+C 复制链接：',u));}else{prompt('✅ 提取成功！请按 Ctrl+C 复制链接：',u);}}catch(e){alert('❌ 出错：'+e.message);}})();">
         <span>提取 SheerID 链接</span>
       </a>
       <div class="drag-tip">👆 按住上面按钮，直接拖到你的浏览器书签栏即可！</div>
@@ -208,7 +208,7 @@
         <div class="step-num">1</div>
         <div class="step-content">
           <b>添加书签</b>：如果看到上方按钮，直接<b>拖拽</b>到浏览器的书签栏。如果书签栏未显示，按 <code>Ctrl + Shift + B</code>（Mac 为
-          <code>Cmd + Shift + B</code>）调出。
+          <code>Cmd + Shift + B</code>）调出。此前添加过的书签需重新拖拽，才能使用更新后的提取逻辑。
         </div>
       </div>
       <div class="step-item">

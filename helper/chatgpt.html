@@ -235,7 +235,7 @@
     <div class="action-box">
       <!-- 书签按钮，包含专为 ChatGPT 优化的提取逻辑 -->
       <a class="bookmark-button"
-        href="javascript:(function(){try{const f=document.querySelector('iframe[src*=&quot;services.sheerid.com/verify&quot;]');let u=f?(f.src||f.getAttribute('src')):'';if(!u){const m=document.documentElement.innerHTML.match(/(https?:(?:\\\/|\/){2}services\.sheerid\.com(?:\\\/|\/)verify(?:\\\/|\/)[0-9a-f]{24}(?:\\\/|\/)\?[^\s&quot;'`&lt;&gt;]+)/i);if(m)u=m[1];}if(!u){alert('❌ 未找到 ChatGPT 验证表单！\n\n请确认：\n1. 是否在 chatgpt.com/students/verify 页面？\n2. 页面中的学生验证表单（表格）是否已加载出来？');return;}u=u.replace(/&amp;amp;/g,'&amp;').replace(/&amp;/g,'&amp;').replace(/\\\//g,'/').replace(/[\\&quot;'\]\}]+$/g,'');if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(u).then(()=>alert('🎉 提取成功，已自动复制到剪贴板！\n\n可以直接粘贴到助手中使用。')).catch(()=>prompt('✅ 提取成功！请按 Ctrl+C 复制以下链接：',u));}else{prompt('✅ 提取成功！请按 Ctrl+C 复制以下链接：',u);}}catch(e){alert('❌ 出错：'+e.message);}})();">
+        href="javascript:(function(){try{const frames=[...document.querySelectorAll('iframe[src]')].filter(f=>{try{const url=new URL(f.getAttribute('src'),document.baseURI);return url.hostname==='services.sheerid.com'&amp;&amp;/^\/verify\/[0-9a-f]{24}\//i.test(url.pathname)&amp;&amp;f.getClientRects().length&gt;0&amp;&amp;getComputedStyle(f).visibility!=='hidden';}catch(e){return false;}});const f=frames[frames.length-1];if(!f){alert('❌ 未找到当前显示的 ChatGPT 验证表单！\n\n请等待新表单加载完成后再试。');return;}const u=f.src;if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(u).then(()=>alert('🎉 提取成功，已自动复制到剪贴板！\n\n可以直接粘贴到助手中使用。')).catch(()=>prompt('✅ 提取成功！请按 Ctrl+C 复制以下链接：',u));}else{prompt('✅ 提取成功！请按 Ctrl+C 复制以下链接：',u);}}catch(e){alert('❌ 出错：'+e.message);}})();">
         <span>提取GPT Sheerid链接</span>
       </a>
 
@@ -245,7 +245,7 @@
       <div class="step-item">
         <div class="step-num">1</div>
         <div class="step-content">
-          <b>添加书签</b>：按住上方按钮<b>拖拽到书签栏</b>。如未见书签栏，按 <code>Ctrl + Shift + B</code>（Mac 按 <code>Cmd + Shift + B</code>）调出。
+          <b>添加书签</b>：按住上方按钮<b>拖拽到书签栏</b>。如未见书签栏，按 <code>Ctrl + Shift + B</code>（Mac 按 <code>Cmd + Shift + B</code>）调出。此前添加过的书签需重新拖拽，才能使用更新后的提取逻辑。
         </div>
       </div>
       <div class="step-item">

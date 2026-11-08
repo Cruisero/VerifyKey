@@ -32,7 +32,7 @@ export default function Verify() {
     const { user, getToken, refreshUser } = useAuth();
     const navigate = useNavigate();
 
-    // Verify tier: 'standard' (UPixel 1pt) | 'pro' (2pt) | 'jio' (2pt) | 'threeMonth' (2pt) | 'sheerid'
+    // Verify tier: 'standard' (UPixel 2pt) | 'pro' (2pt) | 'jio' (2pt) | 'threeMonth' (2pt) | 'sheerid'
     const [verifyTier, setVerifyTier] = useState(() => {
         try {
             const cached = localStorage.getItem('onepass_service_status');
@@ -1585,7 +1585,7 @@ export default function Verify() {
                                                 <span className="credits-dot gemini"></span>
                                                 {t('geminiStandard')}
                                             </div>
-                                            <span className="credits-price-val">-1 {t('credits')}</span>
+                                            <span className="credits-price-val">-2 {t('credits')}</span>
                                         </div>
                                     )}
                                     {!isProHidden && (

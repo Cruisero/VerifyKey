@@ -558,7 +558,7 @@ def broadcast_verify_event(event: dict):
             if event.get("success") and "creditCost" not in event:
                 _source = event.get("source", "")
                 _COST_BY_SOURCE = {
-                    "pixel": 1.0, "pixel_auto": 2.0, "pixel_jio": 2.0,
+                    "pixel": 2.0, "pixel_auto": 2.0, "pixel_jio": 2.0,
                     "pixel_three_month": 2.0, "pixel_sheerid": 3.0,
                     "kpixel": 2.0, "vpixel": 2.0, "ypixel": 1.0,
                     "pro_submit": 2.0,
@@ -9223,7 +9223,7 @@ async def _repair_timeout_failed_tasks():
                 sweep_cost = float(pixel.get("autoCost", 2.0))
             else:
                 sse_source = "pixel"
-                sweep_cost = float(pixel.get("creditCost", 1.0))
+                sweep_cost = float(pixel.get("creditCost", 2.0))
 
             try:
                 async with httpx.AsyncClient(timeout=15) as client:
@@ -9414,7 +9414,7 @@ def _complete_async_task(task_type: str, task_id: str):
 
 async def _resume_pending_pixel_task(task_id: str, payload: dict):
     """Recover a pending Pixel task after service restart: one-shot upstream query to finalize."""
-    cost = payload.get("cost", 1.0)
+    cost = payload.get("cost", 2.0)
     mode = payload.get("mode", "semi-auto")
     user_id = int(payload.get("user_id", 0) or 0)
     email = payload.get("email", "")
@@ -9665,7 +9665,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
         cost = float(pixel_cfg.get("autoCost", 2.0))
         sse_source = "pixel_auto"
     else:
-        cost = float(pixel_cfg.get("creditCost", 1.0))
+        cost = float(pixel_cfg.get("creditCost", 2.0))
         sse_source = "pixel"
 
     import verification_history
@@ -10049,7 +10049,7 @@ async def pixel_get_job(job_id: str):
                         except ValueError:
                             pass
                     if uid_from_db:
-                        # Determine cost by via/mode: pixel_sheerid=3.0, pixel_jio=2.0, pixel_auto=2.0, pixel=1.0
+                        # Determine cost by via/mode: pixel_sheerid=3.0, pixel_jio=2.0, pixel_auto=2.0, pixel=2.0
                         row_via = row["via"] if "via" in row.keys() else ""
                         if "sheerid" in (row_via or ""):
                             recover_cost = float(pixel_cfg.get("sheeridCost", 3.0))
@@ -10064,14 +10064,14 @@ async def pixel_get_job(job_id: str):
                             recover_cost = float(pixel_cfg.get("autoCost", 2.0))
                             recover_mode = "auto"
                         else:
-                            recover_cost = float(pixel_cfg.get("creditCost", 1.0))
+                            recover_cost = float(pixel_cfg.get("creditCost", 2.0))
                             recover_mode = "semi-auto"
                         ctx = {"user_id": uid_from_db, "email": db_email, "cost": recover_cost, "mode": recover_mode}
                         _pixel_job_context[job_id] = ctx
             except Exception:
                 pass
 
-        cost = ctx.get("cost", 1.0)
+        cost = ctx.get("cost", 2.0)
         user_id = ctx.get("user_id")
         email = ctx.get("email", "")
         mode_val = ctx.get("mode", "")
@@ -10232,7 +10232,7 @@ async def pixel_get_job(job_id: str):
                         elif "auto" in (row_via or ""):
                             recovered_cost = float(pixel_cfg.get("autoCost", 2.0))
                         else:
-                            recovered_cost = float(pixel_cfg.get("creditCost", 1.0))
+                            recovered_cost = float(pixel_cfg.get("creditCost", 2.0))
 
                 if upstream_status == "success":
                     url = data.get("url", "")
@@ -10299,7 +10299,7 @@ async def pixel_confirm_job(job_id: str, authorization: Optional[str] = Header(N
     data = resp.json()
     status = data.get("status", "")
     ctx = _pixel_job_context.get(job_id) or {}
-    cost = ctx.get("cost", 1.0)
+    cost = ctx.get("cost", 2.0)
     mode_val = ctx.get("mode", "")
     if mode_val == "jio":
         sse_source = "pixel_jio"
@@ -10353,7 +10353,7 @@ async def pixel_cancel_job(job_id: str, authorization: Optional[str] = Header(No
 
     ctx = _pixel_job_context.get(job_id) or {}
     user_id = ctx.get("user_id", 0)
-    cost = ctx.get("cost", 1.0)
+    cost = ctx.get("cost", 2.0)
     email = ctx.get("email", "")
     mode_val = ctx.get("mode", "")
     if mode_val == "sheerid":
@@ -10769,7 +10769,7 @@ async def admin_recover_timeout_jobs(authorization: Optional[str] = Header(None)
                             recover_cost = float(pixel_cfg.get("autoCost", 2.0))
                             recover_mode = "auto"
                         else:
-                            recover_cost = float(pixel_cfg.get("creditCost", 1.0))
+                            recover_cost = float(pixel_cfg.get("creditCost", 2.0))
                             recover_mode = "semi-auto"
                         _pixel_job_context[vid] = {"email": email, "user_id": user_id, "cost": recover_cost, "mode": recover_mode}
                         conn.execute(

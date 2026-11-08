@@ -38,7 +38,7 @@ const ENDPOINTS = [
                 desc: '提交 Gemini 账号验证或 SheerID 零凭据认证任务',
                 params: [
                     { name: 'Authorization', type: 'Header', required: true, desc: 'Bearer {your_api_token}' },
-                    { name: 'mode', type: 'string', required: false, desc: '验证模式：semi-auto (普通验证，扣1分) / auto (高级验证，扣2分) / jio (极速订阅，扣2分) / 3-Month (3-Month 订阅，扣2分) / sheerid (SheerID 认证，扣3分)。默认 semi-auto' },
+                    { name: 'mode', type: 'string', required: false, desc: '验证模式：semi-auto (普通验证，扣2分) / auto (高级验证，扣2分) / jio (极速订阅，扣2分) / 3-Month (3-Month 订阅，扣2分) / sheerid (SheerID 认证，扣3分)。默认 semi-auto' },
                     { name: 'email', type: 'string', required: false, desc: 'Google 账号邮箱 (mode 为 semi-auto / auto / jio / 3-Month 时必填)' },
                     { name: 'password', type: 'string', required: false, desc: '账号密码 (mode 为 semi-auto / auto / jio / 3-Month 时必填)' },
                     { name: 'totp_secret', type: 'string', required: false, desc: '2FA TOTP 密钥 Base32 编码 (上述账号密码模式必填)' },
@@ -268,7 +268,7 @@ const ENDPOINTS = [
 ];
 
 const CREDITS_TABLE = [
-    { service: 'UPixel 普通验证 (semi-auto)', cost: '-1.0 积分', zeroCred: '否', note: '登录 Google 账号获取 Google One 优惠链接，不自动绑卡' },
+    { service: 'UPixel 普通验证 (semi-auto)', cost: '-2.0 积分', zeroCred: '否', note: '登录 Google 账号获取 Google One 优惠链接，不自动绑卡' },
     { service: 'UPixel 高级验证 (auto)', cost: '-2.0 积分', zeroCred: '否', note: '登录 + 自动绑卡 + 确认订阅' },
     { service: 'Gemini 极速订阅 (jio)', cost: '-2.0 积分', zeroCred: '否', note: '免卡自动升级订阅流程' },
     { service: 'Gemini 3-Month 订阅 (3-Month)', cost: '-2.0 积分', zeroCred: '否', note: '自动分配 3-Month 优惠试用链接 + 信用卡自动订阅' },

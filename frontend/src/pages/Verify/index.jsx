@@ -129,7 +129,7 @@ export default function Verify() {
 
     const tierCost = verifyTier === 'sheerid'
         ? (serviceStatus?.upixel?.sheeridCost || 3)
-        : ((verifyTier === 'pro' || verifyTier === 'jio' || verifyTier === 'threeMonth') ? 2 : 1);
+        : 2;
 
     const isStdHidden = !!(serviceStatus?.upixel?.standardHidden || serviceStatus?.hidden?.gemini_normal || serviceStatus?.manual?.gemini_normal === 'hidden');
     const isProHidden = !!(serviceStatus?.upixel?.advancedHidden || serviceStatus?.hidden?.gemini_advanced || serviceStatus?.manual?.gemini_advanced === 'hidden');
@@ -1919,7 +1919,7 @@ export default function Verify() {
                                                 }}
                                                 disabled={serviceStatus?.upixel?.standardAvailable === false}
                                             >
-                                                <span className="tier-cost">1 {t('credits')}</span>
+                                                <span className="tier-cost">2 {t('credits')}</span>
                                                 <span className="tier-tab-title">{t('tierStandardTab')}</span>
                                                 {serviceStatus?.upixel?.standardAvailable === false && (
                                                     <span className="tier-maint-badge">{t('underMaintenance') || '维护中'}</span>

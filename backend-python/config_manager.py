@@ -370,7 +370,7 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "apiKey": "",  # ak_XXXX-XXXX-... format
         "baseUrl": "https://iqless.icu",
-        "creditCost": 1.0,
+        "creditCost": 2.0,
         "autoCost": 2.0,
         "jioCost": 2.0,
         "threeMonthCost": 2.0,
@@ -418,11 +418,13 @@ def load_config() -> dict:
             # Merge with defaults to ensure all fields exist
             merged = _deep_merge(DEFAULT_CONFIG, config)
             _migrate_pro_credit_cost(merged)
+            _migrate_standard_credit_cost(merged)
             return merged
     except Exception as e:
         print(f"[Config] Error loading config: {e}")
     config = DEFAULT_CONFIG.copy()
     _migrate_pro_credit_cost(config)
+    _migrate_standard_credit_cost(config)
     return config
 
 
@@ -432,6 +434,13 @@ def _migrate_pro_credit_cost(config: dict) -> None:
         api_config = config.get(key)
         if isinstance(api_config, dict) and api_config.get("creditCost") == 1.5:
             api_config["creditCost"] = 2.0
+
+
+def _migrate_standard_credit_cost(config: dict) -> None:
+    """Upgrade the stored Gemini standard price from 1 to 2 credits."""
+    pixel_config = config.get("pixelApi")
+    if isinstance(pixel_config, dict) and pixel_config.get("creditCost") == 1.0:
+        pixel_config["creditCost"] = 2.0
 
 
 def save_config(config: dict) -> bool:

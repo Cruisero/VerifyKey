@@ -70,7 +70,7 @@ Authorization: Bearer <your_access_token>
   "email": "user@gmail.com",
   "password": "your_password",
   "totp_secret": "JBSWY3DPEHPK3PXP", // 2FA TOTP 密钥 (Base32 编码)
-  "mode": "semi-auto", // semi-auto (普通验证，扣1分) / auto (高级验证，扣2分) / jio (极速订阅，扣2分) / 3-Month (3-Month 订阅，扣2分)
+  "mode": "semi-auto", // semi-auto (普通验证，扣2分) / auto (高级验证，扣2分) / jio (极速订阅，扣2分) / 3-Month (3-Month 订阅，扣2分)
   "priority": 0 // 优先级 (可选，默认 0)
 }
 ```
@@ -84,7 +84,7 @@ Authorization: Bearer <your_access_token>
 }
 ```
 
-* **普通验证 (semi-auto) 扣减 1.0 积分**：登录 Google 账号获取 Google One 优惠链接，不执行自动绑卡。任务成功后返回 `url`。
+* **普通验证 (semi-auto) 扣减 2.0 积分**：登录 Google 账号获取 Google One 优惠链接，不执行自动绑卡。任务成功后返回 `url`。
 * **高级验证 (auto) 扣减 2.0 积分**：登录 + 自动绑卡 + 完成订阅。任务成功后返回 `result_msg: "订阅成功"`。
 * **极速订阅 (jio) 扣减 2.0 积分**：登录 + 自动免卡升级订阅流程。任务成功后返回 `result_msg: "激活成功"`。
 * **3-Month 订阅 (3-Month) 扣减 2.0 积分**：自动分配 3-Month 优惠试用链接 + 信用卡自动订阅。任务成功后返回 `result_msg: "3-Month 订阅成功"`。
@@ -302,7 +302,7 @@ Authorization: Bearer <your_access_token>
 
 | 业务服务名称 | 积分消耗 | 零凭据要求 | 说明与交付形式 |
 | :--- | :--- | :---: | :--- |
-| **UPixel 普通验证 (semi-auto)** | **-1.0 积分** | 否 | 登录 Google 账号获取 Google One 优惠链接，不自动绑卡 |
+| **UPixel 普通验证 (semi-auto)** | **-2.0 积分** | 否 | 登录 Google 账号获取 Google One 优惠链接，不自动绑卡 |
 | **UPixel 高级验证 (auto)** | **-2.0 积分** | 否 | 登录 + 自动绑卡 + 确认订阅 |
 | **Gemini 极速订阅 (jio)** | **-2.0 积分** | 否 | 免卡自动升级订阅流程 |
 | **Gemini 3-Month 订阅 (3-Month)** | **-2.0 积分** | 否 | 自动分配 3-Month 优惠试用链接 + 信用卡自动订阅 |

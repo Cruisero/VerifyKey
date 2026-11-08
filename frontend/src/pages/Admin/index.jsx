@@ -6359,7 +6359,7 @@ export default function Admin() {
                                     手动控制各服务的在线、维护或下架状态。设为「维护中」用户端将提示维护角标且无法提交；设为「下架」后前端选项栏（tier-tabs）、使用教程与积分规则中将彻底隐藏该模式。
                                 </p>
                                 {[
-                                    { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '控制 Gemini 普通验证（1 积分）' },
+                                    { key: 'gemini_normal', label: '📦 Gemini 普通验证', desc: '控制 Gemini 普通验证（2 积分）' },
                                     { key: 'gemini_advanced', label: '⚡ Gemini 高级验证', desc: '控制 Gemini 高级验证（2 积分）' },
                                     { key: 'gemini_jio', label: 'Gemini 极速订阅', desc: '控制 Gemini 极速订阅（2 积分）' },
                                     { key: 'gemini_three_month', label: 'Gemini 3-Month 订阅', desc: '控制 Gemini 3-Month 订阅（2 积分）' },

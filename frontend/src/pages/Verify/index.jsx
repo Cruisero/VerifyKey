@@ -8,13 +8,13 @@ import { isQueuedJob, canCancelPixelJob } from '../../utils/jobStatus';
 import './Verify.css';
 
 // API base URL
-const API_BASE = import.meta.env.DEV ? 'http://localhost:3003' : '';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // Gemini / Google One Student SheerID Portal URL
 const GEMINI_STUDENT_PORTAL_URL = 'https://one.google.com/ai-student?plans=1%2C2&icid=advmktgsite&utm_source=gemini&utm_medium=web&utm_campaign=gemini_students_landing_page&_gl=1*172ds2l*_gcl_aw*R0NMLjE3ODc4ODY0NTkuQ2p3S0NBand3TF9VQmhBakVpd0FFaHVUNUVtVXNpVzA0Ml9OamdDZ0pZTWRQT29EVmlwNzRPWTUyemFRbkFSOG9hSWRRN0pqOFhMU1FCb0M5eGtRQXZEX0J3RQ..*_gcl_dc*R0NMLjE3ODc4ODY0NTkuQ2p3S0NBand3TF9VQmhBakVpd0FFaHVUNUVtVXNpVzA0Ml9OamdDZ0pZTWRQT29EVmlwNzRPWTUyemFRbkFSOG9hSWRRN0pqOFhMU1FCb0M5eGtRQXZEX0J3RQ..*_gcl_au*MTYzNTI5NTQ2Ny4xNzg3ODg2Mzgw*_ga*MTY0MjI2Njg2Ny4xNzg3ODg2NDU5*_ga_WC57KJ50ZZ*czE3ODkyMTk2NDAkbzIkZzAkdDE3ODkyMTk2NDAkajYwJGwwJGgw&g1_landing_page=75';
 
 // Card binding tutorial URL (Feishu)
-const BIND_CARD_TUTORIAL_URL = 'https://ocnklud9ghxt.feishu.cn/wiki/GnW6wJI8givrSIk77Jtcp5Wjnxe';
+const BIND_CARD_TUTORIAL_URL = 'https://ocnklud9ghxt.feishu.cn/wiki/Btahw4E4AiXWjOkMTIacoD2Zn7o?from=from_copylink';
 
 const normalizeGmailEmail = (email) => {
     const trimmed = (email || '').trim();

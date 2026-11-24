@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useLang } from '../../stores/LanguageContext';
 import './Bypass.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3003' : '');
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 function Bypass() {
     const { lang, t } = useLang();

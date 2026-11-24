@@ -8,7 +8,7 @@ import logoDarkImg from '../../assets/logo-dark.png';
 import { copyToClipboard } from '../../utils/clipboard';
 import './Layout.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3003' : '');
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function Layout({ children }) {
     const { theme, toggleTheme } = useTheme();

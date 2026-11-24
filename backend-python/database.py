@@ -183,7 +183,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 inviter_id INTEGER NOT NULL,
                 invitee_id INTEGER NOT NULL,
-                reward_amount REAL NOT NULL DEFAULT 0.2,
+                reward_amount REAL NOT NULL DEFAULT 1.0,
                 created_at TEXT DEFAULT (datetime('now'))
             );
             CREATE INDEX IF NOT EXISTS idx_ir_inviter ON invitation_rewards(inviter_id);

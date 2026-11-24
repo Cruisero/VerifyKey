@@ -2049,7 +2049,7 @@ async def get_invite_stats(authorization: Optional[str] = Header(None)):
         ).fetchone()
         total_rewards = reward_row["total"] if reward_row else 0
     except Exception:
-        total_rewards = count * 0.2  # fallback
+        total_rewards = count * 1.0  # fallback
     
     return {"invitedCount": count, "totalRewards": total_rewards, "details": details}
 
@@ -8663,7 +8663,7 @@ async def get_service_status():
         except Exception:
             ypixel_reason = "数据库查询失败"
 
-    # --- Gemini 普通验证: purely manual toggle ---
+    # --- Pixel验证: purely manual toggle ---
     standard_available = not normal_maint
     standard_reason = ("该服务已下架" if normal_hidden else "管理员手动维护中") if normal_maint else ""
 
@@ -9627,7 +9627,7 @@ async def pixel_submit_job(request: PixelJobRequest, authorization: Optional[str
 
     val_norm = _pixel_maint.get("gemini_normal") or _pixel_maint.get("upixel_normal")
     if not is_sheerid and not is_3m and request.mode not in ("auto", "jio") and _is_maint_or_hidden(val_norm):
-        raise HTTPException(status_code=503, detail=_get_err_msg(val_norm, "UPixel 普通验证"))
+        raise HTTPException(status_code=503, detail=_get_err_msg(val_norm, "Pixel验证"))
 
     pixel_cfg = _get_pixel_config()
     if not pixel_cfg["enabled"] or not pixel_cfg["apiKey"]:

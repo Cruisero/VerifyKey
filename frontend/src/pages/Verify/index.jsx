@@ -228,7 +228,7 @@ export default function Verify() {
                     const elapsed = (Date.now() - currentSnap.ts) / 1000;
 
                     const isStandard = r.tier === 'standard' || r.via === 'pixel' || r.source === 'pixel';
-                    // 普通验证约 90-110 秒 (每阶段约 18 秒)
+                    // Pixel验证约 90-110 秒 (每阶段约 18 秒)
                     // 高级验证约 210 秒 (每阶段约 35 秒)
                     const avgStageTime = isStandard ? 18 : 35;
                     const progress = Math.min(elapsed / avgStageTime, 1);

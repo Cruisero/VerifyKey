@@ -552,7 +552,7 @@ def deduct_credits(user_id: int, amount: float, reason: str = "", ref_id: str = 
 def trigger_invite_reward(user_id: int) -> Optional[dict]:
     """
     Trigger invite reward when invitee redeems a CDK (i.e. purchases credits).
-    Awards +0.2 credits to the inviter. Only triggers once per invitee.
+    Awards +1 credit to the inviter. Only triggers once per invitee.
     Returns the inviter's updated user data if reward was given, None otherwise.
     """
     conn = get_db()
@@ -574,7 +574,7 @@ def trigger_invite_reward(user_id: int) -> Optional[dict]:
         return None
     
     inviter_id = user_dict["invited_by"]
-    reward_amount = 0.2
+    reward_amount = 1.0
     
     # Mark as consumed
     cursor.execute("UPDATE users SET has_consumed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))

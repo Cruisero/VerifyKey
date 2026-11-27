@@ -2826,7 +2826,7 @@ function PixelApiTab() {
     );
 }
 // CDK Management Component
-function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkGenerating, setCdkGenerating, cdkGenQuota, setCdkGenQuota, cdkGenCount, setCdkGenCount, cdkGenNote, setCdkGenNote, cdkFilter, setCdkFilter, cdkNewCodes, setCdkNewCodes }) {
+function CDKManagement({ token, canManageCdk, cdkList, setCdkList, cdkStats, setCdkStats, cdkGenerating, setCdkGenerating, cdkGenQuota, setCdkGenQuota, cdkGenCount, setCdkGenCount, cdkGenNote, setCdkGenNote, cdkFilter, setCdkFilter, cdkNewCodes, setCdkNewCodes }) {
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
     const [expandedCdk, setExpandedCdk] = useState(null);
     const [cdkHistory, setCdkHistory] = useState([]);
@@ -2840,19 +2840,30 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
     const [cdkTotal, setCdkTotal] = useState(0);
     const [cdkTotalPages, setCdkTotalPages] = useState(1);
     const [cdkSearchInput, setCdkSearchInput] = useState('');
-    const cdkSearchRef = useRef('');
+    const [cdkListReady, setCdkListReady] = useState(false);
+    const cdkQuery = useRef({ page: 1, filter: cdkFilter, search: '' });
     const cdkSearchTimer = useRef(null);
+    const cdkListRequest = useRef(0);
+    const cdkStatusLabels = { all: '全部', unused: '未使用', active: '使用中', used: '已用完' };
 
-    const fetchCDKs = async (page = cdkPage, filter = cdkFilter) => {
+    const fetchCDKs = async (page = cdkQuery.current.page, filter = cdkQuery.current.filter) => {
+        clearTimeout(cdkSearchTimer.current);
+        const search = cdkQuery.current.search;
+        cdkQuery.current = { page, filter, search };
+        setCdkPage(page);
+        const request = ++cdkListRequest.current;
+        setCdkListReady(false);
         try {
-            const searchParam = cdkSearchRef.current ? `&search=${encodeURIComponent(cdkSearchRef.current)}` : '';
+            const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
             const res = await fetch(`${API_BASE}/api/cdk/list?page=${page}&per_page=${cdkPerPage}&status=${filter}${searchParam}`, { headers: authHeaders });
             if (res.ok) {
                 const data = await res.json();
+                if (request !== cdkListRequest.current) return;
                 setCdkList(data.cdks || []);
                 setCdkStats(data.stats || {});
                 setCdkTotal(data.pagination?.total || 0);
                 setCdkTotalPages(data.pagination?.totalPages || 1);
+                setCdkListReady(true);
             }
         } catch (e) { console.error('Failed to fetch CDKs:', e); }
     };
@@ -2871,7 +2882,13 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
         finally { setCdkHistoryLoading(false); }
     };
 
-    useEffect(() => { fetchCDKs(1, cdkFilter); }, []);
+    useEffect(() => {
+        fetchCDKs();
+        return () => {
+            clearTimeout(cdkSearchTimer.current);
+            cdkListRequest.current++;
+        };
+    }, []);
 
     const handleGenerate = async () => {
         const quota = Number(cdkGenQuota);
@@ -2895,8 +2912,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                 const data = await res.json();
                 setCdkNewCodes(data.codes || []);
                 setCdkGenNote('');
-                setCdkPage(1);
-                await fetchCDKs(1, cdkFilter);
+                await fetchCDKs(1);
             } else {
                 const err = await res.json();
                 alert(err.detail || '生成失败');
@@ -2912,27 +2928,40 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                 method: 'POST', headers: authHeaders,
                 body: JSON.stringify({ code })
             });
-            if (res.ok) { setSelectedCdks(prev => { const next = new Set(prev); next.delete(code); return next; }); await fetchCDKs(cdkPage, cdkFilter); }
+            if (res.ok) { setSelectedCdks(prev => { const next = new Set(prev); next.delete(code); return next; }); await fetchCDKs(); }
             else alert('删除失败');
         } catch (e) { alert('删除失败: ' + e.message); }
     };
 
-    const handleBatchDelete = async () => {
-        if (selectedCdks.size === 0) return;
-        if (!confirm(`确定删除选中的 ${selectedCdks.size} 个 CDK？此操作不可恢复！`)) return;
+    const handleBatchDelete = async (deleteAll) => {
+        if (batchDeleting || !cdkListReady) return;
+        const count = deleteAll ? cdkTotal : selectedCdks.size;
+        if (count === 0) return;
+        const { filter, search } = cdkQuery.current;
+        const confirmation = deleteAll
+            ? `确定跨页删除全部 ${count} 个匹配的 CDK？\n状态：${cdkStatusLabels[filter]}\n搜索：${search || '无'}`
+            : `确定删除选中的 ${count} 个 CDK？`;
+        if (!confirm(`${confirmation}\n此操作不可恢复！`)) return;
         setBatchDeleting(true);
         try {
-            const res = await fetch(`${API_BASE}/api/cdk/batch-delete`, {
+            const endpoint = deleteAll ? 'delete-matching' : 'batch-delete';
+            const payload = deleteAll
+                ? { status: filter, search, expected_count: count }
+                : { codes: Array.from(selectedCdks) };
+            const res = await fetch(`${API_BASE}/api/cdk/${endpoint}`, {
                 method: 'POST', headers: authHeaders,
-                body: JSON.stringify({ codes: Array.from(selectedCdks) })
+                body: JSON.stringify(payload)
             });
             if (res.ok) {
                 const data = await res.json();
                 setSelectedCdks(new Set());
-                await fetchCDKs(cdkPage, cdkFilter);
+                await fetchCDKs(1);
                 alert(`✅ ${data.message}`);
             } else {
                 const err = await res.json();
+                if (res.status === 409) {
+                    await fetchCDKs(1);
+                }
                 alert('批量删除失败: ' + (err.detail || '未知错误'));
             }
         } catch (e) { alert('批量删除失败: ' + e.message); }
@@ -2948,12 +2977,16 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
         });
     };
 
+    const pageSelected = cdkList.length > 0 && cdkList.every(c => selectedCdks.has(c.code));
     const toggleSelectAll = () => {
-        if (selectedCdks.size === cdkList.length) {
-            setSelectedCdks(new Set());
-        } else {
-            setSelectedCdks(new Set(cdkList.map(c => c.code)));
-        }
+        setSelectedCdks(prev => {
+            const next = new Set(prev);
+            for (const { code } of cdkList) {
+                if (pageSelected) next.delete(code);
+                else next.add(code);
+            }
+            return next;
+        });
     };
 
     const handleConsume = async (code) => {
@@ -2966,7 +2999,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
             if (res.ok) {
                 const data = await res.json();
                 alert(`✅ ${data.message}`);
-                await fetchCDKs(cdkPage, cdkFilter);
+                await fetchCDKs();
             } else {
                 const err = await res.json();
                 alert('消耗失败: ' + (err.detail || '未知错误'));
@@ -3037,7 +3070,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                         <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>备注（可选）</label>
                         <input className="input" type="text" placeholder="例如：测试用" value={cdkGenNote} onChange={e => setCdkGenNote(e.target.value)} style={{ width: '100%' }} />
                     </div>
-                    <button className="btn btn-primary" onClick={handleGenerate} disabled={cdkGenerating}>
+                    <button className="btn btn-primary" onClick={handleGenerate} disabled={cdkGenerating || batchDeleting}>
                         {cdkGenerating ? '⏳ 生成中...' : `🎲 生成 ${cdkGenCount} 个`}
                     </button>
                 </div>
@@ -3075,24 +3108,35 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                             type="text"
                             placeholder="搜索代码、备注或用户ID..."
                             value={cdkSearchInput}
+                            disabled={batchDeleting}
                             onChange={(e) => {
                                 const val = e.target.value;
                                 setCdkSearchInput(val);
-                                cdkSearchRef.current = val;
-                                if (cdkSearchTimer.current) clearTimeout(cdkSearchTimer.current);
-                                cdkSearchTimer.current = setTimeout(() => {
-                                    setCdkPage(1);
-                                    fetchCDKs(1, cdkFilter);
-                                }, 500);
+                                cdkQuery.current.page = 1;
+                                cdkQuery.current.search = val.trim();
+                                cdkListRequest.current++;
+                                setCdkListReady(false);
+                                setCdkPage(1);
+                                setSelectedCdks(new Set());
+                                clearTimeout(cdkSearchTimer.current);
+                                cdkSearchTimer.current = setTimeout(() => fetchCDKs(), 500);
                             }}
                             style={{ width: '220px', height: '32px', padding: '0 8px', fontSize: 'var(--text-sm)', borderRadius: '6px' }}
                         />
-                        {['all', 'unused', 'active', 'used'].map(f => (
-                            <button key={f} className={`btn btn-sm ${cdkFilter === f ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setCdkFilter(f); setCdkPage(1); setSelectedCdks(new Set()); fetchCDKs(1, f); }}>
-                                {f === 'all' ? '全部' : f === 'unused' ? '未使用' : f === 'active' ? '使用中' : '已用完'}
+                        {Object.entries(cdkStatusLabels).map(([status, label]) => (
+                            <button key={status} className={`btn btn-sm ${cdkFilter === status ? 'btn-primary' : 'btn-secondary'}`} disabled={batchDeleting}
+                                onClick={() => { setCdkFilter(status); setSelectedCdks(new Set()); fetchCDKs(1, status); }}>
+                                {label}
                             </button>
                         ))}
-                        <button className="btn btn-sm btn-secondary" onClick={() => fetchCDKs(cdkPage, cdkFilter)}>🔄</button>
+                        <button className="btn btn-sm btn-secondary" disabled={batchDeleting} onClick={() => fetchCDKs()}>🔄</button>
+                        {canManageCdk && (
+                            <button className="btn btn-sm btn-outline" onClick={() => handleBatchDelete(true)}
+                                disabled={batchDeleting || cdkGenerating || !cdkListReady || cdkTotal === 0}
+                                style={{ color: 'var(--color-danger)' }}>
+                                删除全部匹配 ({cdkTotal})
+                            </button>
+                        )}
                     </div>
                 </div>
                 <div className="users-table">
@@ -3100,7 +3144,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                         <thead>
                             <tr>
                                 <th style={{ width: '36px', textAlign: 'center' }}>
-                                    <input type="checkbox" checked={cdkList.length > 0 && selectedCdks.size === cdkList.length} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
+                                    <input type="checkbox" aria-label="全选本页 CDK" checked={pageSelected} disabled={batchDeleting || !cdkListReady} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
                                 </th>
                                 <th>CDK 代码</th>
                                 <th>积分</th>
@@ -3117,7 +3161,7 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                 <React.Fragment key={c.code}>
                                     <tr style={{ background: selectedCdks.has(c.code) ? 'rgba(99, 102, 241, 0.06)' : undefined }}>
                                         <td style={{ textAlign: 'center' }}>
-                                            <input type="checkbox" checked={selectedCdks.has(c.code)} onChange={() => toggleSelectCdk(c.code)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
+                                            <input type="checkbox" checked={selectedCdks.has(c.code)} disabled={batchDeleting || !cdkListReady} onChange={() => toggleSelectCdk(c.code)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
                                         </td>
                                         <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 'var(--text-sm)' }}>{c.code}</td>
                                         <td>{c.quota} 积分</td>
@@ -3149,10 +3193,10 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                                                     style={{ background: expandedCdk === c.code ? 'var(--color-primary)' : undefined, color: expandedCdk === c.code ? 'white' : undefined }}
                                                 >👁️</button>
                                                 <button className="btn btn-sm btn-secondary" onClick={() => copyToClipboard(c.code)}>📋</button>
-                                                <button className="btn btn-sm btn-warning" onClick={() => handleConsume(c.code)} title="手动消耗 1 个额度" disabled={c.remaining <= 0}
+                                                <button className="btn btn-sm btn-warning" onClick={() => handleConsume(c.code)} title="手动消耗 1 个额度" disabled={batchDeleting || !cdkListReady || c.remaining <= 0}
                                                     style={{ opacity: c.remaining <= 0 ? 0.4 : 1 }}
                                                 >🔥</button>
-                                                <button className="btn btn-sm btn-outline" onClick={() => handleDelete(c.code)} style={{ color: 'var(--color-danger)' }}>🗑️</button>
+                                                <button className="btn btn-sm btn-outline" onClick={() => handleDelete(c.code)} disabled={batchDeleting || !cdkListReady} style={{ color: 'var(--color-danger)' }}>🗑️</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -3224,10 +3268,10 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                             已选中 <strong style={{ color: 'var(--color-danger)' }}>{selectedCdks.size}</strong> 个 CDK
                         </span>
                         <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                            <button className="btn btn-sm btn-secondary" onClick={() => setSelectedCdks(new Set())}>
+                            <button className="btn btn-sm btn-secondary" onClick={() => setSelectedCdks(new Set())} disabled={batchDeleting}>
                                 取消选择
                             </button>
-                            <button className="btn btn-sm" onClick={handleBatchDelete} disabled={batchDeleting}
+                            <button className="btn btn-sm" onClick={() => handleBatchDelete(false)} disabled={batchDeleting || cdkGenerating || !cdkListReady}
                                 style={{ background: 'var(--color-danger)', color: '#fff', border: 'none' }}>
                                 {batchDeleting ? '⏳ 删除中...' : `🗑️ 批量删除 (${selectedCdks.size})`}
                             </button>
@@ -3238,9 +3282,9 @@ function CDKManagement({ token, cdkList, setCdkList, cdkStats, setCdkStats, cdkG
                 <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>共 {cdkTotal} 条</span>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-sm btn-secondary" disabled={cdkPage <= 1} onClick={() => { const np = Math.max(1, cdkPage - 1); setCdkPage(np); fetchCDKs(np, cdkFilter); }}>上一页</button>
+                        <button className="btn btn-sm btn-secondary" disabled={batchDeleting || !cdkListReady || cdkPage <= 1} onClick={() => fetchCDKs(cdkPage - 1)}>上一页</button>
                         <span style={{ alignSelf: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{cdkPage} / {cdkTotalPages}</span>
-                        <button className="btn btn-sm btn-secondary" disabled={cdkPage >= cdkTotalPages} onClick={() => { const np = cdkPage + 1; setCdkPage(np); fetchCDKs(np, cdkFilter); }}>下一页</button>
+                        <button className="btn btn-sm btn-secondary" disabled={batchDeleting || !cdkListReady || cdkPage >= cdkTotalPages} onClick={() => fetchCDKs(cdkPage + 1)}>下一页</button>
                     </div>
                 </div>
             </div>
@@ -5411,6 +5455,7 @@ export default function Admin() {
                 {activeTab === 'cdk' && (
                     <CDKManagement
                         token={user?.token || localStorage.getItem('verifykey-token')}
+                        canManageCdk={can('manage_cdk')}
                         cdkList={cdkList}
                         setCdkList={setCdkList}
                         cdkStats={cdkStats}

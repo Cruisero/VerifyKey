@@ -16,7 +16,7 @@ import re
 import contextlib
 import time
 import base64
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from datetime import datetime, timedelta
 import logging
 import uuid
@@ -24,7 +24,7 @@ import uuid
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from verifier import SheerIDVerifier, parse_verification_id, poll_verification_status
@@ -5892,6 +5892,23 @@ async def batch_delete_cdk_endpoint(request: CDKBatchDeleteRequest, authorizatio
         raise HTTPException(status_code=400, detail="No codes provided")
     
     deleted = cdk_manager.batch_delete_cdks(request.codes)
+    return {"success": True, "deleted": deleted, "message": f"已删除 {deleted} 个 CDK"}
+
+
+class CDKDeleteMatchingRequest(BaseModel):
+    status: Literal["all", "unused", "active", "used"]
+    search: str
+    expected_count: int = Field(gt=0)
+
+
+@app.post("/api/cdk/delete-matching")
+async def delete_matching_cdk_endpoint(request: CDKDeleteMatchingRequest, authorization: Optional[str] = Header(None)):
+    """Delete every CDK matching the confirmed list filters."""
+    _verify_admin_token(authorization, "manage_cdk")
+
+    deleted = cdk_manager.delete_matching_cdks(request.status, request.search, request.expected_count)
+    if deleted is None:
+        raise HTTPException(status_code=409, detail="匹配数量已变化，请核对刷新后的列表再删除")
     return {"success": True, "deleted": deleted, "message": f"已删除 {deleted} 个 CDK"}
 
 

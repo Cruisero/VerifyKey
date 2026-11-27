@@ -8,7 +8,7 @@ import string
 import random
 import threading
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import database
 
@@ -280,14 +280,7 @@ def get_all_cdks() -> List[Dict]:
     ]
 
 
-def get_cdks_paginated(
-    page: int = 1,
-    limit: int = 50,
-    status: str = "all",
-    search: str = ""
-) -> Tuple[List[Dict], int]:
-    """Get a paginated list of CDKs, filtered by status and search term, and return (cdks, total_count)"""
-    conn = database.get_connection()
+def _cdk_filter(status: str, search: str) -> Tuple[str, list]:
     where_clauses = []
     params = []
     
@@ -314,6 +307,19 @@ def get_cdks_paginated(
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
         
+    return where_sql, params
+
+
+def get_cdks_paginated(
+    page: int = 1,
+    limit: int = 50,
+    status: str = "all",
+    search: str = ""
+) -> Tuple[List[Dict], int]:
+    """Get a paginated list of CDKs, filtered by status and search term, and return (cdks, total_count)"""
+    conn = database.get_connection()
+    where_sql, params = _cdk_filter(status, search)
+
     # Get total count matching criteria
     count_query = f"SELECT COUNT(*) FROM cdkeys {where_sql}"
     total_count = conn.execute(count_query, params).fetchone()[0]
@@ -370,6 +376,18 @@ def batch_delete_cdks(codes: List[str]) -> int:
             deleted += cursor.rowcount
         conn.commit()
     return deleted
+
+
+def delete_matching_cdks(status: str, search: str, expected_count: int) -> Optional[int]:
+    """Delete all matching CDKs, or return None if the confirmed count changed."""
+    conn = database.get_connection()
+    where_sql, params = _cdk_filter(status, search)
+    with _lock, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        count = conn.execute(f"SELECT COUNT(*) FROM cdkeys {where_sql}", params).fetchone()[0]
+        if count != expected_count:
+            return None
+        return conn.execute(f"DELETE FROM cdkeys {where_sql}", params).rowcount
 
 
 def get_cdk_stats() -> Dict:
